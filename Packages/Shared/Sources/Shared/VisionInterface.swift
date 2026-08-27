@@ -123,6 +123,86 @@ public struct GIFResponse: Codable, Sendable, Hashable {
     }
 }
 
+/// A scrolling capture to stitch (docs/03 §1.6).
+///
+/// Paths, not pixels: a scroll of a long page is a hundred full-screen frames, and moving
+/// those across XPC to stitch them would cost more than the stitch. The agent writes them
+/// to a session directory and hands over the directory's contents in order.
+public struct ScrollStitchRequest: Codable, Sendable, Hashable {
+    /// The captured frames, in the order they were taken.
+    public var framePaths: [String]
+    public var destinationPath: String
+    /// Beyond this many rows the strip is assembled in a memory-mapped scratch file
+    /// rather than a heap bitmap, so a 30,000-pixel page does not become 140 MB of RSS
+    /// (docs/03 §1.6 accept list).
+    public var memoryMappedThreshold: Int
+    /// Frames the user asked to leave out after reviewing a bad seam, by index.
+    public var excludedFrames: [Int]
+
+    public init(
+        framePaths: [String],
+        destinationPath: String,
+        memoryMappedThreshold: Int = 16000,
+        excludedFrames: [Int] = []
+    ) {
+        self.framePaths = framePaths
+        self.destinationPath = destinationPath
+        self.memoryMappedThreshold = memoryMappedThreshold
+        self.excludedFrames = excludedFrames
+    }
+}
+
+/// One join between two frames, and how much it should be trusted.
+public struct ScrollSeam: Codable, Sendable, Hashable {
+    /// The index of the frame joined onto what came before it.
+    public var frameIndex: Int
+    /// Where the seam falls in the finished image, in pixels from the top.
+    public var y: Int
+    /// Rows of new content this frame contributed.
+    public var offset: Int
+    public var confidence: Double
+
+    public init(frameIndex: Int, y: Int, offset: Int, confidence: Double) {
+        self.frameIndex = frameIndex
+        self.y = y
+        self.offset = offset
+        self.confidence = confidence
+    }
+
+    /// Worth showing the user rather than silently trusting (docs/03 §1.6).
+    public var isUncertain: Bool {
+        confidence < 0.55
+    }
+}
+
+/// What came back from a stitch.
+public struct ScrollStitchResponse: Codable, Sendable, Hashable {
+    public var path: String
+    public var pixelSize: PixelSize
+    public var seams: [ScrollSeam]
+    /// Rows of chrome that stayed put and were kept only once (docs/03 §1.6).
+    public var stickyHeader: Int
+    public var stickyFooter: Int
+
+    public init(
+        path: String,
+        pixelSize: PixelSize,
+        seams: [ScrollSeam],
+        stickyHeader: Int = 0,
+        stickyFooter: Int = 0
+    ) {
+        self.path = path
+        self.pixelSize = pixelSize
+        self.seams = seams
+        self.stickyHeader = stickyHeader
+        self.stickyFooter = stickyFooter
+    }
+
+    public var uncertainSeams: [ScrollSeam] {
+        seams.filter(\.isUncertain)
+    }
+}
+
 /// The XPC interface the helper vends.
 ///
 /// `@objc` because `NSXPCConnection` requires it, and JSON on both sides because encoding
@@ -152,6 +232,16 @@ public protocol VisionServiceProtocol {
         requestData: Data,
         reply: @escaping @Sendable (Data?, (any Error)?) -> Void
     )
+
+    /// Stitches a scrolling capture into one tall image (docs/03 §1.6, docs/04 §4.4).
+    ///
+    /// In the helper for the same reason as the GIF encoder: the stitch holds frames and
+    /// a full-page bitmap, and that memory should die with a process rather than linger
+    /// in a menu bar app (docs/04 §1, §7 rule 4).
+    func stitchScroll(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
 }
 
 /// The service name the helper listens on and the agent connects to.
@@ -166,12 +256,16 @@ public enum VisionServiceError: Int, Error, Sendable, Codable {
     case couldNotDecodeImage = 1
     case recognitionFailed = 2
     case invalidRequest = 3
+    case stitchFailed = 4
+    case notEnoughFrames = 5
 
     public var localizedDescription: String {
         switch self {
         case .couldNotDecodeImage: "Kadr could not read the captured image."
         case .recognitionFailed: "Text recognition failed."
         case .invalidRequest: "The text recognition request was malformed."
+        case .stitchFailed: "Kadr could not stitch the scrolling capture."
+        case .notEnoughFrames: "A scrolling capture needs at least two frames."
         }
     }
 }

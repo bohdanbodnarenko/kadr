@@ -67,9 +67,17 @@ struct CaptureCommandTests {
         #expect(Set(defaults).count == defaults.count)
     }
 
-    @Test("The menu lists the four capture actions from docs/03 §8.1")
+    @Test("The menu lists the capture actions from docs/03 §8.1")
     func menuCommands() {
-        #expect(CaptureCommand.menuCommands == [.captureArea, .captureWindow, .captureFullscreen, .captureText])
+        #expect(CaptureCommand.menuCommands == [
+            .captureArea,
+            .captureWindow,
+            .captureFullscreen,
+            .captureScrolling,
+            .captureText
+        ])
         #expect(CaptureCommand.menuCommands.allSatisfy { !$0.title.isEmpty })
+        // Repeating the last region is a hotkey, not a menu item (docs/03 §8.1).
+        #expect(!CaptureCommand.menuCommands.contains(.capturePreviousArea))
     }
 }

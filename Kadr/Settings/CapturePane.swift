@@ -29,6 +29,37 @@ struct CapturePane: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Scrolling Capture") {
+                Toggle("Let Kadr do the scrolling", isOn: $settings.scrollAutoScroll)
+                Text("Off, you scroll the page yourself and Kadr grabs frames as you go — "
+                    + "which needs no permission beyond Screen Recording. On, Kadr sends "
+                    + "scroll events to the window instead, which macOS only allows with "
+                    + "Accessibility permission. It asks the first time you use it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                Stepper(
+                    "Scroll step: \(settings.scrollStepPoints) pt",
+                    value: $settings.scrollStepPoints,
+                    in: 40 ... 400,
+                    step: 20
+                )
+                .disabled(!settings.scrollAutoScroll)
+
+                Stepper(
+                    "Capture \(settings.scrollFrameRate) frames a second",
+                    value: $settings.scrollFrameRate,
+                    in: 2 ... 30
+                )
+
+                Toggle("Show me joins Kadr is unsure about", isOn: $settings.scrollReviewsSeams)
+                Text("A page with a banner that follows the scroll, or scrolling faster "
+                    + "than the frames can follow, can leave a join Kadr cannot verify. "
+                    + "It offers to keep it, retry, or hand you the raw frames.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Self-timer") {
                 Picker("Wait before capturing", selection: $settings.selfTimer) {
                     ForEach(SelfTimer.allCases, id: \.self) { timer in

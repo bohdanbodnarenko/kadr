@@ -69,6 +69,29 @@ private struct CanvasRepresentable: NSViewRepresentable {
         // The document may have changed under us — undo, an inspector edit, a menu
         // command — so the layer tree is rebuilt from the model.
         context.coordinator.canvas?.documentChangedExternally()
+
+        if !context.coordinator.hasChosenInitialZoom, scrollView.bounds.width > 1 {
+            context.coordinator.hasChosenInitialZoom = true
+            fitToWidthIfTall(scrollView)
+        }
+    }
+
+    /// Scrolled-canvas mode: a stitched page opens fitted to the width, at the top
+    /// (docs/03 §1.6).
+    ///
+    /// A scrolling capture is thousands of pixels tall and a few hundred wide, and opening
+    /// it at 100% shows a corner of it. Fitting the width is the only view of such a page
+    /// that means anything; ordinary captures are left alone, because shrinking a normal
+    /// screenshot to fit is worse than showing it as it is.
+    private func fitToWidthIfTall(_ scrollView: NSScrollView) {
+        let width = CGFloat(baseImage.width)
+        let height = CGFloat(baseImage.height)
+        guard width > 0, height > width * 2 else { return }
+
+        let magnification = min(1, scrollView.contentSize.width / width)
+        scrollView.magnification = magnification
+        // The canvas is flipped, so the top of the page is y = 0.
+        scrollView.documentView?.scroll(.zero)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -78,5 +101,8 @@ private struct CanvasRepresentable: NSViewRepresentable {
     @MainActor
     final class Coordinator {
         var canvas: AnnotationCanvasView?
+        /// The initial zoom is chosen once, from the first real layout; after that the
+        /// magnification belongs to the user.
+        var hasChosenInitialZoom = false
     }
 }

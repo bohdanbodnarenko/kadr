@@ -83,6 +83,26 @@ final class QuickAccessManager {
         }
     }
 
+    /// Shows a card for a stitched scrolling capture and opens it (docs/03 §1.6).
+    ///
+    /// Both, deliberately: doc 03 §1.6 says the output goes to the editor's scrolled
+    /// canvas, and a card is how every other capture offers Save, Copy and drag. Opening
+    /// the editor also finalises the staged file, so the page cannot be swept away from
+    /// underneath the window showing it.
+    func showScrollingCapture(at fileURL: URL, pixelSize: PixelSize) {
+        let item = QuickAccessItem(
+            fileURL: fileURL,
+            isStaged: true,
+            pixelSize: pixelSize,
+            capturedAt: Date(),
+            displayID: nil
+        )
+        present(item)
+        if editor.isAvailable {
+            annotate(item)
+        }
+    }
+
     /// Brings back the most recently dismissed card (docs/03 §2).
     func restoreRecentlyClosed() {
         guard let item = recentlyClosed.first else { return }

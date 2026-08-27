@@ -16,12 +16,15 @@ public enum SelectionMode: Sendable {
 public enum SelectionPurpose: Sendable {
     case capture
     case recognizeText
+    /// Choosing the window onto a long page, which Kadr then scrolls through (docs/03 §1.6).
+    case scrollingCapture
 
     /// A badge shown by the crosshair.
     public var badge: String? {
         switch self {
         case .capture: nil
         case .recognizeText: "TEXT"
+        case .scrollingCapture: "SCROLL"
         }
     }
 }

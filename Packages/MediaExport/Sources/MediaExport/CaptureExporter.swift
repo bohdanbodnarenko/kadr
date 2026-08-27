@@ -92,6 +92,26 @@ public struct CaptureExporter: Sendable {
         return result
     }
 
+    /// A free path in the staging area for a file this exporter is not going to write.
+    ///
+    /// The scrolling stitcher writes its own PNG, in the helper process, and hands back a
+    /// path — but the result should still land in staging and be finalised on the user's
+    /// first action like any other capture (docs/03 §1.6, §2). So the naming and the
+    /// collision handling stay here, and only the bytes come from somewhere else.
+    public func stagingDestination(
+        template: FilenameTemplate = .default,
+        context: FilenameContext = FilenameContext(),
+        fileExtension: String = "png"
+    ) throws -> URL {
+        try staging.prepare()
+        return try writer.availableURL(
+            in: staging.directory,
+            template: template,
+            context: context,
+            fileExtension: fileExtension
+        )
+    }
+
     /// Moves a staged capture into the save folder on the user's first action (docs/03 §2).
     @discardableResult
     public func finalizeStaged(_ url: URL, into folder: URL) throws -> URL {

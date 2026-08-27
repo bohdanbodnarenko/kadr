@@ -93,6 +93,27 @@ struct CaptureOutput {
         }
     }
 
+    /// Where a file written by something other than the encoder should land.
+    ///
+    /// The scrolling stitcher runs in the helper and writes its own PNG (docs/03 §1.6), so
+    /// it needs the path up front. It still goes to staging, gets the templated name, and
+    /// is finalised on the user's first action exactly like any other capture.
+    func stagingURL(pixelSize: PixelSize, applicationName: String? = nil) -> URL? {
+        do {
+            return try exporter.stagingDestination(
+                template: FilenameTemplate(settings.filenameTemplate),
+                context: FilenameContext(
+                    applicationName: applicationName,
+                    width: pixelSize.width,
+                    height: pixelSize.height
+                )
+            )
+        } catch {
+            logger.error("Could not name a staged file: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Clears stale staged files. Called once at launch (docs/03 §2).
     func sweepStaging() {
         exporter.sweepStaging()

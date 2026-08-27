@@ -165,6 +165,18 @@ public enum SettingKeys {
     )
     public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
 
+    // MARK: Scrolling capture (docs/03 §1.6)
+
+    /// Let Kadr do the scrolling. Off by default: it needs Accessibility, and the
+    /// assisted tier needs no permission at all.
+    public static let scrollAutoScroll = SettingKey("scroll.autoScroll", default: false)
+    /// Points per synthesized scroll step. Smaller means more overlap and a safer stitch.
+    public static let scrollStepPoints = SettingKey("scroll.stepPoints", default: 120)
+    /// Frames a second while the user scrolls.
+    public static let scrollFrameRate = SettingKey("scroll.frameRate", default: 8)
+    /// Show the seam review when the stitch is not sure (docs/03 §1.6 failure mode).
+    public static let scrollReviewsSeams = SettingKey("scroll.reviewsSeams", default: true)
+
     // Overlay pane (docs/03 §2, §8.3).
     public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
     public static let overlayCardWidth = SettingKey("overlay.cardWidth", default: 220)
@@ -271,6 +283,22 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingShowsWebcam] = recordingShowsWebcam }
     }
 
+    public var scrollAutoScroll: Bool {
+        didSet { store[SettingKeys.scrollAutoScroll] = scrollAutoScroll }
+    }
+
+    public var scrollStepPoints: Int {
+        didSet { store[SettingKeys.scrollStepPoints] = scrollStepPoints }
+    }
+
+    public var scrollFrameRate: Int {
+        didSet { store[SettingKeys.scrollFrameRate] = scrollFrameRate }
+    }
+
+    public var scrollReviewsSeams: Bool {
+        didSet { store[SettingKeys.scrollReviewsSeams] = scrollReviewsSeams }
+    }
+
     public var selfTimer: SelfTimer {
         didSet { store[SettingKeys.selfTimer] = selfTimer }
     }
@@ -358,6 +386,10 @@ public final class AppSettings {
         recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]
         recordingKeystrokesShortcutsOnly = store[SettingKeys.recordingKeystrokesShortcutsOnly]
         recordingShowsWebcam = store[SettingKeys.recordingShowsWebcam]
+        scrollAutoScroll = store[SettingKeys.scrollAutoScroll]
+        scrollStepPoints = store[SettingKeys.scrollStepPoints]
+        scrollFrameRate = store[SettingKeys.scrollFrameRate]
+        scrollReviewsSeams = store[SettingKeys.scrollReviewsSeams]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
         overlayCorner = store[SettingKeys.overlayCorner]
@@ -398,6 +430,10 @@ public final class AppSettings {
         recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
         recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
+        scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
+        scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
+        scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue
+        scrollReviewsSeams = SettingKeys.scrollReviewsSeams.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         overlayCorner = SettingKeys.overlayCorner.defaultValue

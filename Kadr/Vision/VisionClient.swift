@@ -155,6 +155,59 @@ final class VisionClient {
         }
     }
 
+    /// Stitches a scrolling capture, in the helper (docs/03 §1.6).
+    ///
+    /// Paths again, for the same reason as the GIF encoder and then some: a long scroll is
+    /// a hundred full-screen frames, and the finished strip can be a hundred megabytes.
+    /// None of that should pass through — or be held by — the menu bar agent.
+    func stitchScroll(_ request: ScrollStitchRequest) async throws -> ScrollStitchResponse {
+        let state = signposter.beginInterval("scroll stitch")
+        defer { signposter.endInterval("scroll stitch", state) }
+
+        let requestData = try JSONEncoder().encode(request)
+        let connection = connection ?? makeConnection()
+        self.connection = connection
+
+        let boxed = UncheckedSendableBox(connection)
+        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await Self.requestStitch(requestData, on: boxed.value) }
+            group.addTask {
+                try await Task.sleep(for: .seconds(300))
+                throw ClientError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ClientError.timedOut }
+            return first
+        }
+        return try JSONDecoder().decode(ScrollStitchResponse.self, from: resultData)
+    }
+
+    private nonisolated static func requestStitch(
+        _ requestData: Data,
+        on connection: NSXPCConnection
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            let resume = ResumeOnce(continuation)
+            let service = connection.remoteObjectProxyWithErrorHandler { error in
+                resume(.failure(error))
+            } as? any VisionServiceProtocol
+
+            guard let service else {
+                resume(.failure(ClientError.helperUnavailable))
+                return
+            }
+            service.stitchScroll(requestData: requestData) { data, error in
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(VisionServiceError.stitchFailed))
+                }
+            }
+        }
+    }
+
     /// Drops the connection so the helper can start its idle countdown.
     func disconnect() {
         connection?.invalidate()

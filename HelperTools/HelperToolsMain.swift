@@ -17,6 +17,7 @@ import VisionServices
 final class VisionService: NSObject, VisionServiceProtocol {
     private let recognizer = TextRecognizer()
     private let gifEncoder = ImageIOGIFEncoder()
+    private let stitcher = ScrollStitcher()
     private let logger = KadrLog.logger(.capture)
 
     func encodeGIF(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
@@ -54,6 +55,43 @@ final class VisionService: NSObject, VisionServiceProtocol {
                 try reply(JSONEncoder().encode(response), nil)
             } catch {
                 reply(nil, error)
+            }
+        }
+    }
+
+    func stitchScroll(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+
+        let request: ScrollStitchRequest
+        do {
+            request = try JSONDecoder().decode(ScrollStitchRequest.self, from: requestData)
+        } catch {
+            IdleTerminator.shared.endTransaction()
+            reply(nil, VisionServiceError.invalidRequest)
+            return
+        }
+
+        let stitcher = stitcher
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            let excluded = Set(request.excludedFrames)
+            let frames = request.framePaths.enumerated()
+                .filter { !excluded.contains($0.offset) }
+                .map { URL(fileURLWithPath: $0.element) }
+            guard frames.count >= 2 else {
+                reply(nil, VisionServiceError.notEnoughFrames)
+                return
+            }
+
+            do {
+                let response = try stitcher.stitch(
+                    frames: frames,
+                    to: URL(fileURLWithPath: request.destinationPath),
+                    memoryMappedThreshold: request.memoryMappedThreshold
+                )
+                try reply(JSONEncoder().encode(response), nil)
+            } catch {
+                reply(nil, VisionServiceError.stitchFailed)
             }
         }
     }

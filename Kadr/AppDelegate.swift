@@ -44,6 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissions: permissions,
         settings: settings
     )
+    private lazy var scrollCapture = ScrollCaptureCoordinator(
+        captureEngine: captureEngine,
+        permissions: permissions,
+        settings: settings,
+        output: CaptureOutput(settings: settings)
+    )
     private lazy var recording = RecordingCoordinator(
         captureEngine: captureEngine,
         permissions: permissions,
@@ -105,6 +111,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recording.onFinished = { [weak self] result in
             self?.areaCapture.showRecording(at: result.fileURL)
         }
+        // A stitched page goes to the overlay and the editor (docs/03 §1.6).
+        scrollCapture.onFinished = { [weak self] url, size in
+            self?.areaCapture.showScrollingCapture(at: url, pixelSize: size)
+        }
         // The menu bar shows the recording's state and elapsed time (docs/03 §8.1).
         recording.onStateChanged = { [weak self] in
             self?.refreshStatusItemIcon()
@@ -159,6 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             areaCapture.captureAllDisplays()
         case .captureText:
             areaCapture.beginTextCapture()
+        case .captureScrolling:
+            scrollCapture.begin()
         case .recordRegion:
             recording.beginRegionRecording()
         case .recordDisplay:

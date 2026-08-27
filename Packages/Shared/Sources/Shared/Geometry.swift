@@ -165,7 +165,7 @@ public struct DisplayRect: Hashable, Sendable {
 // MARK: - Pixels
 
 /// An integral size in a display's backing store.
-public struct PixelSize: Hashable, Sendable {
+public struct PixelSize: Hashable, Sendable, Codable {
     public var width: Int
     public var height: Int
 

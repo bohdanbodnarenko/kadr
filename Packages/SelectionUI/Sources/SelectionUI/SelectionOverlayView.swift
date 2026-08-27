@@ -111,6 +111,7 @@ final class SelectionOverlayView: NSView {
         dimLayer.fillColor = switch purpose {
         case .capture: NSColor.black.withAlphaComponent(0.45).cgColor
         case .recognizeText: NSColor.systemIndigo.withAlphaComponent(0.35).cgColor
+        case .scrollingCapture: NSColor.systemTeal.withAlphaComponent(0.35).cgColor
         }
         dimLayer.fillRule = .evenOdd
         root.addSublayer(dimLayer)
