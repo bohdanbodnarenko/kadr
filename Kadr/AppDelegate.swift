@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import SelectionUI
 import SettingsKit
 import Shared
 
@@ -37,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (docs/04 §7.1).
     private lazy var captureEngine = CaptureEngine()
     private lazy var permissions = PermissionCoordinator()
+    private lazy var areaCapture = AreaCaptureCoordinator(engine: captureEngine, permissions: permissions)
 
     // Settings state is Foundation-only and cheap; the window that presents it is not,
     // and is built on first use.
@@ -97,8 +99,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Commands
 
     private func perform(_ command: CaptureCommand) {
-        // M1 lands CaptureCore and M2 the selection overlay; until then commands log.
         logger.info("Command requested: \(command.rawValue, privacy: .public)")
+        switch command {
+        case .captureArea:
+            areaCapture.beginAreaCapture()
+        case .capturePreviousArea:
+            areaCapture.capturePreviousArea()
+        // M3 brings window and screen capture, M8 brings OCR.
+        case .captureWindow, .captureFullscreen, .captureText:
+            break
+        }
     }
 
     private func openSettings() {

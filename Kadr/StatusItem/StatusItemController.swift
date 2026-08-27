@@ -53,8 +53,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.target = self
             item.representedObject = command.rawValue
             item.setShortcut(for: command.shortcutName)
-            // Nothing captures yet — M1 lands CaptureCore, M2 the selection overlay.
-            item.isEnabled = false
+            item.isEnabled = command.isAvailable
             menu.addItem(item)
         }
 
