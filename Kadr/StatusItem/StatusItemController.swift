@@ -17,10 +17,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private let perform: (CaptureCommand) -> Void
     private let openSettings: () -> Void
+    /// Extra menu items contributed by debug builds; empty in release.
+    private let additionalItems: () -> [NSMenuItem]
 
-    init(perform: @escaping (CaptureCommand) -> Void, openSettings: @escaping () -> Void) {
+    init(
+        perform: @escaping (CaptureCommand) -> Void,
+        openSettings: @escaping () -> Void,
+        additionalItems: @escaping () -> [NSMenuItem] = { [] }
+    ) {
         self.perform = perform
         self.openSettings = openSettings
+        self.additionalItems = additionalItems
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
@@ -62,6 +69,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // Sparkle is wired up in M11; until then this advertises the update path honestly.
         updatesItem.isEnabled = false
         menu.addItem(updatesItem)
+
+        let extras = additionalItems()
+        if !extras.isEmpty {
+            menu.addItem(.separator())
+            for item in extras {
+                menu.addItem(item)
+            }
+        }
 
         menu.addItem(.separator())
 

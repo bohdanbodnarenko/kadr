@@ -1,4 +1,5 @@
 import AppKit
+import CaptureCore
 import os
 import SettingsKit
 import Shared
@@ -31,6 +32,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController?
     private var hotkeyCenter: HotkeyCenter?
 
+    /// The capture layer. Constructing it touches no framework — ScreenCaptureKit is
+    /// not messaged until the first capture, which is what keeps the idle budget
+    /// (docs/04 §7.1).
+    private lazy var captureEngine = CaptureEngine()
+    private lazy var permissions = PermissionCoordinator()
+
     // Settings state is Foundation-only and cheap; the window that presents it is not,
     // and is built on first use.
     private lazy var settings = AppSettings()
@@ -39,6 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings: settings,
         loginItem: loginItem
     )
+
+    #if DEBUG
+        private var debugCaptureMenu: DebugCaptureMenu?
+    #endif
 
     // MARK: - Launch
 
@@ -52,7 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItemController = StatusItemController(
             perform: { [weak self] command in self?.perform(command) },
-            openSettings: { [weak self] in self?.openSettings() }
+            openSettings: { [weak self] in self?.openSettings() },
+            additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()
 
@@ -91,6 +103,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         settingsWindowController.show()
+    }
+
+    /// Debug builds get a submenu that drives CaptureCore directly (docs/06 M1).
+    private func debugMenuItems() -> [NSMenuItem] {
+        #if DEBUG
+            if debugCaptureMenu == nil {
+                debugCaptureMenu = DebugCaptureMenu(engine: captureEngine, permissions: permissions)
+            }
+            return [debugCaptureMenu].compactMap { $0?.makeMenuItem() }
+        #else
+            return []
+        #endif
     }
 
     // MARK: - Lifecycle
