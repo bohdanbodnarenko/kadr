@@ -1,0 +1,18 @@
+# Kadr — SwiftFormat configuration
+--swiftversion 6.0
+--maxwidth 120
+--indent 4
+--tabwidth 4
+--semicolons never
+--commas inline
+--trimwhitespace always
+--stripunusedargs closure-only
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+--self remove
+--importgrouping testable-bottom
+--header ignore
+
+--exclude .build,build,DerivedData,docs,**/.build
