@@ -1,21 +1,62 @@
 import Foundation
+import MediaExport
 import os
 import Shared
 import VisionServices
 
-/// The Vision helper (docs/04 §1).
+/// The helper process (docs/04 §1).
 ///
 /// A separate process whose entire reason for existing is that it can *stop* existing.
-/// Vision's models cost tens of megabytes on first load; nothing in AppKit gives that
-/// back. Process exit does, so the helper counts its in-flight work and terminates once
-/// it has been idle for 30 seconds.
+/// Vision's models cost tens of megabytes on first load and a GIF encode holds every
+/// frame it is working on; nothing in AppKit gives that back. Process exit does, so the
+/// helper counts its in-flight work and terminates once it has been idle for 30 seconds.
 ///
-/// It receives pixels and returns text. It never touches ScreenCaptureKit — every capture
-/// call stays in the agent so the Screen Recording grant attaches to the app the user
-/// actually sees (docs/04 §1).
+/// It receives pixels and file paths, and returns text and files. It never touches
+/// ScreenCaptureKit — every capture call stays in the agent so the Screen Recording grant
+/// attaches to the app the user actually sees (docs/04 §1).
 final class VisionService: NSObject, VisionServiceProtocol {
     private let recognizer = TextRecognizer()
+    private let gifEncoder = ImageIOGIFEncoder()
     private let logger = KadrLog.logger(.capture)
+
+    func encodeGIF(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+
+        let request: GIFRequest
+        do {
+            request = try JSONDecoder().decode(GIFRequest.self, from: requestData)
+        } catch {
+            IdleTerminator.shared.endTransaction()
+            reply(nil, VisionServiceError.invalidRequest)
+            return
+        }
+
+        let encoder = gifEncoder
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            let source = URL(fileURLWithPath: request.sourcePath)
+            let destination = URL(fileURLWithPath: request.destinationPath)
+            let options = GIFOptions(frameRate: request.frameRate, maximumWidth: request.maximumWidth)
+
+            do {
+                let response: GIFResponse = if request.estimateOnly {
+                    try await GIFResponse(
+                        path: nil,
+                        byteCount: encoder.estimatedSize(ofMovieAt: source, options: options)
+                    )
+                } else {
+                    try await {
+                        let url = try await encoder.encode(movieAt: source, to: destination, options: options)
+                        let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                        return GIFResponse(path: url.path, byteCount: bytes)
+                    }()
+                }
+                try reply(JSONEncoder().encode(response), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
 
     func analyze(
         imageData: Data,

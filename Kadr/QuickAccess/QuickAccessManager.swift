@@ -18,6 +18,8 @@ final class QuickAccessManager {
     private let output: CaptureOutput
     private let pins: PinManager
     private let editor = EditorLauncher()
+    /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
+    private let vision = VisionClient()
     private let logger = KadrLog.logger(.overlay)
 
     private var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
@@ -181,7 +183,52 @@ final class QuickAccessManager {
         actions.pinAvailable = true
         actions.annotate = { [weak self] in self?.annotate(item) }
         actions.annotateAvailable = editor.isAvailable
+        actions.exportGIF = { [weak self] in self?.exportGIF(item) }
         return actions
+    }
+
+    /// Turns a recording into a GIF, asking first if it is going to be large (docs/03 §1.8).
+    ///
+    /// The encode happens in the helper process, so the agent never holds a single frame
+    /// of it (docs/04 §1).
+    private func exportGIF(_ item: QuickAccessItem) {
+        let destination = item.fileURL.deletingPathExtension().appendingPathExtension("gif")
+        Task { [weak self] in
+            guard let self else { return }
+            defer { vision.disconnect() }
+
+            do {
+                let estimate = try await vision.encodeGIF(GIFRequest(
+                    sourcePath: item.fileURL.path,
+                    destinationPath: destination.path,
+                    estimateOnly: true
+                ))
+                guard confirmExport(estimatedBytes: estimate.byteCount) else { return }
+
+                let result = try await vision.encodeGIF(GIFRequest(
+                    sourcePath: item.fileURL.path,
+                    destinationPath: destination.path
+                ))
+                guard let path = result.path else { return }
+                logger.info("Exported \(URL(fileURLWithPath: path).lastPathComponent, privacy: .public)")
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            } catch {
+                logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Shows the estimate before committing, because a large GIF takes real time to make.
+    private func confirmExport(estimatedBytes: Int) -> Bool {
+        let size = ByteCountFormatter.string(fromByteCount: Int64(estimatedBytes), countStyle: .file)
+        let alert = NSAlert()
+        alert.messageText = "Export this recording as a GIF?"
+        alert.informativeText = "The GIF will be roughly \(size). GIFs are much larger than "
+            + "video, so long recordings get big quickly."
+        alert.addButton(withTitle: "Export")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     func copy(_ item: QuickAccessItem) {

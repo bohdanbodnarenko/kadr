@@ -100,6 +100,61 @@ final class VisionClient {
         }
     }
 
+    /// Turns a recording into a GIF, in the helper (docs/03 §1.8).
+    ///
+    /// Paths cross the wire rather than data: a recording can be hundreds of megabytes,
+    /// and the point of doing this in the helper is that the agent never holds the frames.
+    func encodeGIF(_ request: GIFRequest) async throws -> GIFResponse {
+        let state = signposter.beginInterval("gif")
+        defer { signposter.endInterval("gif", state) }
+
+        let requestData = try JSONEncoder().encode(request)
+        let connection = connection ?? makeConnection()
+        self.connection = connection
+
+        let boxed = UncheckedSendableBox(connection)
+        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await Self.requestGIF(requestData, on: boxed.value) }
+            group.addTask {
+                // Encoding a long recording legitimately takes a while, so this bound is
+                // far more generous than the recognition one — it exists to catch a dead
+                // helper, not a slow encode.
+                try await Task.sleep(for: .seconds(600))
+                throw ClientError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ClientError.timedOut }
+            return first
+        }
+        return try JSONDecoder().decode(GIFResponse.self, from: resultData)
+    }
+
+    private nonisolated static func requestGIF(
+        _ requestData: Data,
+        on connection: NSXPCConnection
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            let resume = ResumeOnce(continuation)
+            let service = connection.remoteObjectProxyWithErrorHandler { error in
+                resume(.failure(error))
+            } as? any VisionServiceProtocol
+
+            guard let service else {
+                resume(.failure(ClientError.helperUnavailable))
+                return
+            }
+            service.encodeGIF(requestData: requestData) { data, error in
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(VisionServiceError.recognitionFailed))
+                }
+            }
+        }
+    }
+
     /// Drops the connection so the helper can start its idle countdown.
     func disconnect() {
         connection?.invalidate()

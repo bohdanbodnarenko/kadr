@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreGraphics
 import CoreText
 import Foundation
@@ -142,5 +143,103 @@ struct VisionHelperLifetimeTests {
         try? process.run()
         process.waitUntilExit()
         return process.terminationStatus == 0
+    }
+}
+
+/// GIF encoding over the real XPC path (docs/03 §1.8).
+@MainActor
+@Suite("GIF export through the helper", .serialized)
+struct GIFExportTests {
+    /// A short movie for the helper to chew on.
+    private func makeMovie(at url: URL) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: 320,
+            AVVideoHeightKey: 240
+        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: 320,
+                kCVPixelBufferHeightKey as String: 240
+            ]
+        )
+        writer.add(input)
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+
+        for frame in 0 ..< 30 {
+            while !input.isReadyForMoreMediaData {
+                try await Task.sleep(for: .milliseconds(2))
+            }
+            guard let pool = adaptor.pixelBufferPool else { break }
+            var pixelBuffer: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+            guard let pixelBuffer else { break }
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
+                memset(base, Int32(frame * 8 % 255), CVPixelBufferGetDataSize(pixelBuffer))
+            }
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+    }
+
+    @Test("The helper encodes a GIF and hands back where it put it")
+    func encodesThroughTheHelper() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-gif-xpc-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movie = directory.appendingPathComponent("clip.mp4")
+        try await makeMovie(at: movie)
+
+        let client = VisionClient()
+        defer { client.disconnect() }
+
+        let destination = directory.appendingPathComponent("clip.gif")
+        let response = try await client.encodeGIF(GIFRequest(
+            sourcePath: movie.path,
+            destinationPath: destination.path,
+            frameRate: 10,
+            maximumWidth: 320
+        ))
+
+        #expect(response.path == destination.path)
+        #expect(response.byteCount > 0)
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    @Test("An estimate comes back without writing a file")
+    func estimatesWithoutWriting() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-gif-est-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let movie = directory.appendingPathComponent("clip.mp4")
+        try await makeMovie(at: movie)
+
+        let client = VisionClient()
+        defer { client.disconnect() }
+
+        let destination = directory.appendingPathComponent("clip.gif")
+        let response = try await client.encodeGIF(GIFRequest(
+            sourcePath: movie.path,
+            destinationPath: destination.path,
+            estimateOnly: true
+        ))
+
+        #expect(response.path == nil)
+        #expect(response.byteCount > 0)
+        #expect(
+            FileManager.default.fileExists(atPath: destination.path) == false,
+            "an estimate must not leave a file behind"
+        )
     }
 }

@@ -14,6 +14,8 @@ struct QuickAccessCardActions {
     var delete: () -> Void = {}
     var dismiss: () -> Void = {}
     var dragStarted: () -> Void = {}
+    /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
+    var exportGIF: () -> Void = {}
     /// Whether Annotate, Pin and OCR do anything yet.
     var annotateAvailable = false
     var pinAvailable = false
@@ -115,13 +117,19 @@ struct QuickAccessCardView: View {
                 enabled: actions.annotateAvailable,
                 action: actions.annotate
             )
-            action("Pin", systemImage: "pin", enabled: actions.pinAvailable, action: actions.pin)
-            action(
-                "Copy Text",
-                systemImage: "text.viewfinder",
-                enabled: actions.textAvailable,
-                action: actions.recognizeText
-            )
+            if item.isVideo {
+                // A recording gets GIF where a screenshot gets Pin and OCR; neither of
+                // those means anything for a movie (docs/03 §1.8, §2).
+                action("Export GIF", systemImage: "square.stack.3d.down.right", action: actions.exportGIF)
+            } else {
+                action("Pin", systemImage: "pin", enabled: actions.pinAvailable, action: actions.pin)
+                action(
+                    "Copy Text",
+                    systemImage: "text.viewfinder",
+                    enabled: actions.textAvailable,
+                    action: actions.recognizeText
+                )
+            }
             ShareLink(item: item.fileURL) {
                 Image(systemName: "square.and.arrow.up")
                     .frame(width: 26, height: 26)

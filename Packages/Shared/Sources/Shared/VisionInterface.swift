@@ -86,6 +86,43 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     }
 }
 
+/// How a GIF should be encoded. Mirrors MediaExport's own options across the wire,
+/// because the agent cannot import MediaExport's encoder without doing the work itself.
+public struct GIFRequest: Codable, Sendable, Hashable {
+    public var sourcePath: String
+    public var destinationPath: String
+    public var frameRate: Int
+    public var maximumWidth: Int
+    /// Measure rather than encode, for the size shown before committing (docs/03 §1.8).
+    public var estimateOnly: Bool
+
+    public init(
+        sourcePath: String,
+        destinationPath: String,
+        frameRate: Int = 15,
+        maximumWidth: Int = 800,
+        estimateOnly: Bool = false
+    ) {
+        self.sourcePath = sourcePath
+        self.destinationPath = destinationPath
+        self.frameRate = frameRate
+        self.maximumWidth = maximumWidth
+        self.estimateOnly = estimateOnly
+    }
+}
+
+/// What came back from a GIF request.
+public struct GIFResponse: Codable, Sendable, Hashable {
+    /// Where the GIF was written, or nil for an estimate.
+    public var path: String?
+    public var byteCount: Int
+
+    public init(path: String?, byteCount: Int) {
+        self.path = path
+        self.byteCount = byteCount
+    }
+}
+
 /// The XPC interface the helper vends.
 ///
 /// `@objc` because `NSXPCConnection` requires it, and JSON on both sides because encoding
@@ -102,6 +139,17 @@ public protocol VisionServiceProtocol {
     func analyze(
         imageData: Data,
         optionsData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Encodes a recording as a GIF, or estimates its size.
+    ///
+    /// In the helper because an encode holds the frames it is working on, and that is
+    /// exactly the memory the agent must not be spending (docs/04 §1, §7 rule 4). Paths
+    /// rather than data: a recording can be hundreds of megabytes, and copying it across
+    /// XPC to encode it would be absurd.
+    func encodeGIF(
+        requestData: Data,
         reply: @escaping @Sendable (Data?, (any Error)?) -> Void
     )
 }
