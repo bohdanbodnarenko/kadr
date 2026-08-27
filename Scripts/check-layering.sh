@@ -1,0 +1,127 @@
+#!/bin/bash
+#
+# Kadr — architectural guardrails (docs/04-swift-architecture.md §2 and §11).
+#
+# Three checks, all static:
+#   A. Zero network. No networking imports or symbols anywhere except the Sparkle
+#      integration — this is what makes the PRD §4 "no upload surface exists"
+#      promise machine-verified rather than a README claim.
+#   B. The agent app target never links EditorUI or VisionServices. Those live in
+#      the editor app and the XPC helper so their RAM dies with those processes
+#      (docs/04 §1, §7.4).
+#   C. Package dependencies respect the layering: a package may only depend on
+#      packages in a strictly lower layer, per the module list in docs/04 §2.
+#
+# Usage: Scripts/check-layering.sh
+set -uo pipefail
+
+cd "$(dirname "$0")/.." || exit 1
+
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; DIM=$'\033[2m'; OFF=$'\033[0m'
+[ -t 1 ] || { RED=""; GREEN=""; DIM=""; OFF=""; }
+
+failures=0
+fail() { printf '%s✘ %s%s\n' "$RED" "$1" "$OFF"; failures=$((failures + 1)); }
+pass() { printf '%s✔ %s%s\n' "$GREEN" "$1" "$OFF"; }
+note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
+
+# Swift sources we own. Sparkle's own sources (once vendored) are never in these paths.
+swift_sources() {
+    find Kadr KadrTests Packages/*/Sources Packages/*/Tests \
+        -name '*.swift' -not -path '*/.build/*' 2>/dev/null | sort
+}
+
+# The one place networking code is allowed to live (docs/04 §10, PRD §9).
+# Nothing lives here yet; it is created in M11 when Sparkle is integrated.
+SPARKLE_PATHS='^Kadr/Updates/'
+
+# ---------------------------------------------------------------- A. zero network
+NETWORK_SYMBOLS='import Network|import NetworkExtension|import CFNetwork|URLSession|NSURLConnection|NSURLSession|URLRequest|NWConnection|NWListener|NWBrowser|CFSocket|CFStream|Socket\(|getaddrinfo|CFHTTP'
+
+net_hits=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    case "$file" in
+        Kadr/Updates/*) continue ;;
+    esac
+    hit=$(grep -nE "$NETWORK_SYMBOLS" "$file" 2>/dev/null)
+    [ -n "$hit" ] && net_hits="${net_hits}${file}: ${hit}"$'\n'
+done <<< "$(swift_sources)"
+
+if [ -n "$net_hits" ]; then
+    fail "networking code found outside the Sparkle integration ($SPARKLE_PATHS)"
+    printf '%s' "$net_hits" | sed 's/^/    /'
+else
+    pass "zero network: no networking imports or symbols outside the Sparkle integration"
+fi
+
+# ---------------------------------------------------------------- B. agent linkage
+PBXPROJ=Kadr.xcodeproj/project.pbxproj
+FORBIDDEN_IN_AGENT="EditorUI VisionServices"
+
+# Every product the app targets link, read out of the packageProductDependencies lists.
+linked=$(awk '/packageProductDependencies = \(/,/\);/' "$PBXPROJ" \
+    | sed -n 's|.*/\* \([A-Za-z]*\) \*/,|\1|p' | sort -u)
+
+for module in $FORBIDDEN_IN_AGENT; do
+    if printf '%s\n' "$linked" | grep -qx "$module"; then
+        fail "$module is linked into the agent app target (docs/04 §1: it must not be)"
+    elif grep -rqE "^\s*(@testable )?import $module\b" Kadr KadrTests 2>/dev/null; then
+        fail "$module is imported by the agent app sources (docs/04 §1: it must not be)"
+    else
+        pass "agent app target does not link or import $module"
+    fi
+done
+
+# ---------------------------------------------------------------- C. package layering
+# Source of truth: docs/04 §2. Layer N may only depend on layers < N.
+layer_of() {
+    case "$1" in
+        Shared) echo 0 ;;
+        CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit) echo 1 ;;
+        RecordingCore|SelectionUI|AnnotationRender|HistoryKit) echo 2 ;;
+        EditorUI) echo 3 ;;
+        *) echo "" ;;
+    esac
+}
+
+for manifest in Packages/*/Package.swift; do
+    package=$(basename "$(dirname "$manifest")")
+    package_layer=$(layer_of "$package")
+    if [ -z "$package_layer" ]; then
+        fail "$package is not in the module list of docs/04 §2 — add it there first"
+        continue
+    fi
+
+    # Declared edges (Package.swift) plus real edges (import statements) must agree.
+    declared=$(sed -n 's|.*\.package(path: "\.\./\([A-Za-z]*\)").*|\1|p' "$manifest" | sort -u)
+    imported=$(grep -rhE '^import [A-Za-z]+' "Packages/$package/Sources" 2>/dev/null \
+        | sed 's/^import //' | sort -u)
+
+    for dep in $declared; do
+        dep_layer=$(layer_of "$dep")
+        if [ -z "$dep_layer" ]; then
+            fail "$package depends on unknown package $dep"
+        elif [ "$dep_layer" -ge "$package_layer" ]; then
+            fail "$package (layer $package_layer) depends on $dep (layer $dep_layer) — lower layers only"
+        fi
+    done
+
+    for imp in $imported; do
+        # Only our own packages are layered; system frameworks are not.
+        if [ -n "$(layer_of "$imp")" ] && ! printf '%s\n' "$declared" | grep -qx "$imp"; then
+            fail "$package imports $imp without declaring it in Package.swift"
+        fi
+    done
+done
+[ "$failures" -eq 0 ] && pass "package layering matches docs/04 §2"
+
+# ----------------------------------------------------------------
+echo
+if [ "$failures" -eq 0 ]; then
+    printf '%slayering check passed%s\n' "$GREEN" "$OFF"
+    exit 0
+fi
+printf '%s%d layering violation(s)%s\n' "$RED" "$failures" "$OFF"
+note "The rules live in CLAUDE.md and docs/04-swift-architecture.md §2/§11."
+exit 1

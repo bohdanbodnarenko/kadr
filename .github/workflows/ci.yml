@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # docs/04 §2: "CI builds packages in parallel."
+  packages:
+    name: ${{ matrix.package }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - Shared
+          - CaptureCore
+          - OverlayKit
+          - AnnotationModel
+          - MediaExport
+          - VisionServices
+          - AutomationKit
+          - SettingsKit
+          - RecordingCore
+          - SelectionUI
+          - AnnotationRender
+          - HistoryKit
+          - EditorUI
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+      - name: Test ${{ matrix.package }}
+        working-directory: Packages/${{ matrix.package }}
+        run: swift test
+
+  app:
+    name: Build agent app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show toolchain
+        run: xcodebuild -version
+      - name: Build workspace
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace Kadr.xcworkspace \
+            -scheme Kadr \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+      - name: App bundle size budget (PRD §8)
+        run: Scripts/check-size.sh --require-build
+
+  static:
+    name: Lint and architecture checks
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint and SwiftFormat
+        run: brew install swiftlint swiftformat
+      - name: SwiftLint
+        run: swiftlint lint --strict
+      - name: SwiftFormat (lint only)
+        run: swiftformat --lint .
+      - name: Layering, zero-network and agent-linkage checks (docs/04 §11)
+        run: Scripts/check-layering.sh
+      - name: Size check runs clean without a build product
+        run: Scripts/check-size.sh
