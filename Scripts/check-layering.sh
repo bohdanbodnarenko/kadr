@@ -9,7 +9,9 @@
 #   B. The agent app target never links EditorUI or VisionServices. Those live in
 #      the editor app and the XPC helper so their RAM dies with those processes
 #      (docs/04 §1, §7.4).
-#   C. Package dependencies respect the layering: a package may only depend on
+#   C. The built agent binary links no networking framework — docs/03 §9 asks for
+#      exactly this grep over the linked frameworks. Skipped when nothing is built.
+#   D. Package dependencies respect the layering: a package may only depend on
 #      packages in a strictly lower layer, per the module list in docs/04 §2.
 #
 # Usage: Scripts/check-layering.sh
@@ -72,6 +74,31 @@ for module in $FORBIDDEN_IN_AGENT; do
         pass "agent app target does not link or import $module"
     fi
 done
+
+# ---------------------------------------------------------------- C. linked frameworks
+# The source grep above cannot see what a dependency drags in; this can.
+agent_binary=""
+for candidate in build/Build/Products/Release/Kadr.app/Contents/MacOS/Kadr \
+                 build/Build/Products/Debug/Kadr.app/Contents/MacOS/Kadr; do
+    [ -f "$candidate" ] && agent_binary="$candidate" && break
+done
+if [ -z "$agent_binary" ]; then
+    agent_binary=$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 6 -type f \
+        -path '*/Build/Products/*/Kadr.app/Contents/MacOS/Kadr' 2>/dev/null | head -1)
+fi
+
+if [ -n "$agent_binary" ] && [ -f "$agent_binary" ]; then
+    linked_network=$(otool -L "$agent_binary" | grep -iE '/(Network|CFNetwork|NetworkExtension)\.framework')
+    if [ -n "$linked_network" ]; then
+        fail "the agent binary links a networking framework"
+        printf '%s\n' "$linked_network" | sed 's/^/    /'
+    else
+        pass "agent binary links no networking framework"
+        note "checked $agent_binary"
+    fi
+else
+    note "no built agent binary found — linked-framework check skipped"
+fi
 
 # ---------------------------------------------------------------- C. package layering
 # Source of truth: docs/04 §2. Layer N may only depend on layers < N.

@@ -14,7 +14,7 @@ jobs:
   # docs/04 §2: "CI builds packages in parallel."
   packages:
     name: ${{ matrix.package }}
-    runs-on: macos-15
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +42,7 @@ jobs:
 
   app:
     name: Build agent app
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Show toolchain
@@ -63,10 +63,12 @@ jobs:
             DEVELOPMENT_TEAM=""
       - name: App bundle size budget (PRD §8)
         run: Scripts/check-size.sh --require-build
+      - name: Linked frameworks contain no networking (docs/03 §9)
+        run: Scripts/check-layering.sh
 
   static:
     name: Lint and architecture checks
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Install SwiftLint and SwiftFormat
