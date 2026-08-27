@@ -71,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             perform: { [weak self] command in self?.perform(command) },
             openSettings: { [weak self] in self?.openSettings() },
             restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
+            closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()

@@ -16,6 +16,7 @@ import Shared
 final class QuickAccessManager {
     private let settings: AppSettings
     private let output: CaptureOutput
+    private let pins: PinManager
     private let logger = KadrLog.logger(.overlay)
 
     private var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
@@ -27,9 +28,10 @@ final class QuickAccessManager {
     private static let screenMargin: CGFloat = 16
     private static let maximumRecentlyClosed = 10
 
-    init(settings: AppSettings, output: CaptureOutput) {
+    init(settings: AppSettings, output: CaptureOutput, pins: PinManager) {
         self.settings = settings
         self.output = output
+        self.pins = pins
     }
 
     var hasRecentlyClosed: Bool {
@@ -154,6 +156,8 @@ final class QuickAccessManager {
         actions.delete = { [weak self] in self?.delete(item) }
         actions.dismiss = { [weak self] in self?.dismiss(item) }
         actions.dragStarted = { [weak self] in self?.dragStarted(item) }
+        actions.pin = { [weak self] in self?.pin(item) }
+        actions.pinAvailable = true
         return actions
     }
 
@@ -163,6 +167,29 @@ final class QuickAccessManager {
         pasteboard.clearContents()
         pasteboard.setData(data, forType: .png)
         finalizeIfStaged(item)
+    }
+
+    /// Pinning counts as acting on a staged capture, so it is finalised first — a pin
+    /// pointing at a file that the staging sweep later deletes would go blank.
+    func pin(_ item: QuickAccessItem) {
+        finalizeIfStaged(item)
+        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        pins.pin(
+            url,
+            copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
+            save: { [weak self] fileURL in self?.revealInFinder(fileURL) }
+        )
+    }
+
+    private func copyFile(at url: URL) {
+        guard let data = try? Data(contentsOf: url) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setData(data, forType: .png)
+    }
+
+    private func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     private func save(_ item: QuickAccessItem) {

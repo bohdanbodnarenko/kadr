@@ -64,7 +64,7 @@ private func makeManager(saveFolder: URL, stagingFolder: URL) -> TestHarness {
         exporter: CaptureExporter(staging: StagingArea(directory: stagingFolder))
     )
     return TestHarness(
-        manager: QuickAccessManager(settings: settings, output: output),
+        manager: QuickAccessManager(settings: settings, output: output, pins: PinManager()),
         settings: settings,
         output: output
     )

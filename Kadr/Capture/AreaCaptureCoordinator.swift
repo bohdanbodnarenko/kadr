@@ -19,6 +19,7 @@ final class AreaCaptureCoordinator {
     private let timer = CaptureCountdown()
     private let output: CaptureOutput
     private let quickAccess: QuickAccessManager
+    private let pins = PinManager()
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
@@ -45,7 +46,7 @@ final class AreaCaptureCoordinator {
         self.overlay = overlay
         let output = CaptureOutput(settings: settings)
         self.output = output
-        quickAccess = QuickAccessManager(settings: settings, output: output)
+        quickAccess = QuickAccessManager(settings: settings, output: output, pins: pins)
     }
 
     var hasPreviousRegion: Bool {
@@ -263,6 +264,15 @@ final class AreaCaptureCoordinator {
     /// Brings back the most recently dismissed card (docs/03 §2).
     func restoreRecentlyClosed() {
         quickAccess.restoreRecentlyClosed()
+    }
+
+    /// The "Close all pins" global command (docs/03 §4).
+    func closeAllPins() {
+        pins.closeAll()
+    }
+
+    var pinCount: Int {
+        pins.count
     }
 
     /// The frontmost app right now, as a value.

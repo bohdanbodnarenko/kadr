@@ -18,6 +18,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let perform: (CaptureCommand) -> Void
     private let openSettings: () -> Void
     private let restoreRecentlyClosed: () -> Void
+    private let closeAllPins: () -> Void
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
 
@@ -25,11 +26,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         perform: @escaping (CaptureCommand) -> Void,
         openSettings: @escaping () -> Void,
         restoreRecentlyClosed: @escaping () -> Void = {},
+        closeAllPins: @escaping () -> Void = {},
         additionalItems: @escaping () -> [NSMenuItem] = { [] }
     ) {
         self.perform = perform
         self.openSettings = openSettings
         self.restoreRecentlyClosed = restoreRecentlyClosed
+        self.closeAllPins = closeAllPins
         self.additionalItems = additionalItems
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -70,6 +73,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         restoreItem.keyEquivalentModifierMask = [.command, .shift]
         restoreItem.target = self
         menu.addItem(restoreItem)
+
+        let closePinsItem = NSMenuItem(
+            title: "Close All Pins",
+            action: #selector(didSelectCloseAllPins),
+            keyEquivalent: ""
+        )
+        closePinsItem.target = self
+        menu.addItem(closePinsItem)
 
         menu.addItem(.separator())
 
@@ -112,6 +123,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc
     private func didSelectRestore() {
         restoreRecentlyClosed()
+    }
+
+    @objc
+    private func didSelectCloseAllPins() {
+        closeAllPins()
     }
 
     @objc

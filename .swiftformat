@@ -12,6 +12,9 @@
 --wrapcollections before-first
 --closingparen balanced
 --self remove
+# os.Logger messages are autoclosures, so a property reference inside one needs an
+# explicit `self.`. Without this, SwiftFormat strips it and the build stops compiling.
+--selfrequired log,trace,debug,info,notice,warning,error,fault,critical,beginInterval,endInterval,emitEvent
 --importgrouping testable-bottom
 --header ignore
 
