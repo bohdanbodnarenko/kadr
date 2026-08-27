@@ -18,6 +18,7 @@ final class AreaCaptureCoordinator {
     private let settings: AppSettings
     private let timer = CaptureCountdown()
     private let output: CaptureOutput
+    private let quickAccess: QuickAccessManager
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
@@ -42,7 +43,9 @@ final class AreaCaptureCoordinator {
         self.permissions = permissions
         self.settings = settings
         self.overlay = overlay
-        output = CaptureOutput(settings: settings)
+        let output = CaptureOutput(settings: settings)
+        self.output = output
+        quickAccess = QuickAccessManager(settings: settings, output: output)
     }
 
     var hasPreviousRegion: Bool {
@@ -72,7 +75,9 @@ final class AreaCaptureCoordinator {
                         includesCursor: settings.includesCursor
                     )
                     permissions.noteCaptureSuccess()
-                    output.deliver(captures)
+                    for capture in captures {
+                        deliver(capture)
+                    }
                 } catch {
                     handle(error)
                 }
@@ -178,7 +183,7 @@ final class AreaCaptureCoordinator {
                 do {
                     let capture = try await engine.captureWindow(selection.window.id, options: options)
                     permissions.noteCaptureSuccess()
-                    output.deliver(capture)
+                    deliver(capture)
                 } catch {
                     handle(error)
                 }
@@ -218,7 +223,7 @@ final class AreaCaptureCoordinator {
 
         // Metadata for the crop, not the whole display: the filename template and the
         // history index both read the size from here.
-        output.deliver(Capture(
+        deliver(Capture(
             image: image,
             metadata: CaptureMetadata(
                 source: .region(display: result.display.displayID),
@@ -242,11 +247,22 @@ final class AreaCaptureCoordinator {
                     includesCursor: settings.includesCursor
                 )
                 permissions.noteCaptureSuccess()
-                output.deliver(capture)
+                deliver(capture)
             } catch {
                 handle(error)
             }
         }
+    }
+
+    /// Exports a capture and puts a card up for it (docs/03 §2).
+    private func deliver(_ capture: Capture) {
+        guard let result = output.deliver(capture) else { return }
+        quickAccess.show(result, capture: capture)
+    }
+
+    /// Brings back the most recently dismissed card (docs/03 §2).
+    func restoreRecentlyClosed() {
+        quickAccess.restoreRecentlyClosed()
     }
 
     /// The frontmost app right now, as a value.

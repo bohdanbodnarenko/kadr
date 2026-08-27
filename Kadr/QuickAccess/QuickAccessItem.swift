@@ -1,0 +1,36 @@
+import CaptureCore
+import CoreGraphics
+import Foundation
+import Shared
+
+/// One capture, as the overlay knows it (docs/03 §2).
+///
+/// Note what is *not* here: the full-resolution image. The card holds a file URL and a
+/// small thumbnail, and everything else — copying, dragging, annotating — goes back to
+/// the file. That is doc 04 §7 rule 2, and it is why five cards cost megabytes rather
+/// than hundreds.
+struct QuickAccessItem: Identifiable, Sendable {
+    let id = UUID()
+    /// Where the capture lives right now: the staging area, or the save folder.
+    var fileURL: URL
+    /// True while the file is still in staging and has not been finalised (docs/03 §2).
+    var isStaged: Bool
+    let pixelSize: PixelSize
+    let capturedAt: Date
+    let displayID: CGDirectDisplayID?
+
+    var filename: String {
+        fileURL.lastPathComponent
+    }
+
+    /// "1280 × 960" for the hover readout.
+    var dimensionsText: String {
+        "\(pixelSize.width) × \(pixelSize.height)"
+    }
+
+    /// File size on disk, formatted, or nil while the file is missing.
+    var fileSizeText: String? {
+        guard let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return nil }
+        return ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+}

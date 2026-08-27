@@ -52,6 +52,18 @@ public extension SettingValue where Self: RawRepresentable, Self.RawValue == Str
     }
 }
 
+/// Int-backed enums get the same treatment, storing the raw number so the value stays
+/// readable with `defaults read`.
+public extension SettingValue where Self: RawRepresentable, Self.RawValue == Int {
+    static func read(from defaults: UserDefaults, forKey key: String) -> Self? {
+        (defaults.object(forKey: key) as? Int).flatMap(Self.init(rawValue:))
+    }
+
+    func write(to defaults: UserDefaults, forKey key: String) {
+        defaults.set(rawValue, forKey: key)
+    }
+}
+
 /// A `UserDefaults` key with its type and default value attached.
 public struct SettingKey<Value: SettingValue>: Sendable {
     public let name: String

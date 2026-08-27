@@ -195,3 +195,47 @@ struct DefaultActionMigrationTests {
         #expect(action.savesToFolder == saves)
     }
 }
+
+@MainActor
+@Suite("Overlay settings")
+struct OverlaySettingsTests {
+    @Test("Defaults match doc 03 §2: bottom left, no timeout, five cards")
+    func defaults() {
+        let settings = AppSettings(store: makeStore())
+        #expect(settings.overlayCorner == .bottomLeft)
+        #expect(settings.overlayTimeout == .never)
+        #expect(settings.overlayMaxVisibleCards == 5)
+        #expect(settings.overlayDismissOnDrag)
+    }
+
+    @Test("Card width is clamped to something usable")
+    func clampsCardWidth() {
+        let settings = AppSettings(store: makeStore())
+        settings.overlayCardWidth = 10000
+        #expect(settings.overlayCardWidth == 420)
+
+        settings.overlayCardWidth = 1
+        #expect(settings.overlayCardWidth == 140)
+    }
+
+    @Test("The visible card count is clamped too")
+    func clampsCardCount() {
+        let settings = AppSettings(store: makeStore())
+        settings.overlayMaxVisibleCards = 0
+        #expect(settings.overlayMaxVisibleCards == 1)
+
+        settings.overlayMaxVisibleCards = 99
+        #expect(settings.overlayMaxVisibleCards == 10)
+    }
+
+    @Test("Corners know which edges they hug", arguments: [
+        (OverlayCorner.bottomLeft, true, true),
+        (OverlayCorner.bottomRight, false, true),
+        (OverlayCorner.topLeft, true, false),
+        (OverlayCorner.topRight, false, false)
+    ])
+    func cornerEdges(corner: OverlayCorner, leading: Bool, bottom: Bool) {
+        #expect(corner.isLeading == leading)
+        #expect(corner.isBottom == bottom)
+    }
+}

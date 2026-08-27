@@ -52,14 +52,50 @@ public enum SelfTimer: Int, CaseIterable, Sendable {
     }
 }
 
-extension SelfTimer: SettingValue {
-    public static func read(from defaults: UserDefaults, forKey key: String) -> SelfTimer? {
-        guard let raw = defaults.object(forKey: key) as? Int else { return nil }
-        return SelfTimer(rawValue: raw)
+extension SelfTimer: SettingValue {}
+
+/// Where the Quick Access Overlay sits (docs/03 §2, §8.3).
+public enum OverlayCorner: String, CaseIterable, SettingValue {
+    case bottomLeft
+    case bottomRight
+    case topLeft
+    case topRight
+
+    public var title: String {
+        switch self {
+        case .bottomLeft: "Bottom Left"
+        case .bottomRight: "Bottom Right"
+        case .topLeft: "Top Left"
+        case .topRight: "Top Right"
+        }
     }
 
-    public func write(to defaults: UserDefaults, forKey key: String) {
-        defaults.set(rawValue, forKey: key)
+    public var isLeading: Bool {
+        self == .bottomLeft || self == .topLeft
+    }
+
+    public var isBottom: Bool {
+        self == .bottomLeft || self == .bottomRight
+    }
+}
+
+/// How long a card waits before dismissing itself (docs/03 §2).
+public enum OverlayTimeout: Int, CaseIterable, SettingValue {
+    /// Never — the default, because a card vanishing mid-drag is maddening.
+    case never = 0
+    case fiveSeconds = 5
+    case tenSeconds = 10
+    case thirtySeconds = 30
+
+    public var seconds: Int {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .never: "Never"
+        default: "After \(rawValue) seconds"
+        }
     }
 }
 
@@ -80,6 +116,17 @@ public enum SettingKeys {
     /// round-trip through the presets picker.
     public static let selfTimer = SettingKey("capture.selfTimer", default: SelfTimer.off)
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
+
+    // Overlay pane (docs/03 §2, §8.3).
+    public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
+    public static let overlayCardWidth = SettingKey("overlay.cardWidth", default: 220)
+    public static let overlayTimeout = SettingKey("overlay.timeout", default: OverlayTimeout.never)
+    /// Cards visible before older ones collapse behind the stack (docs/03 §2).
+    public static let overlayMaxVisibleCards = SettingKey("overlay.maxVisibleCards", default: 5)
+    /// Always show cards on the primary display instead of the capture's display.
+    public static let overlayOnPrimaryDisplay = SettingKey("overlay.onPrimaryDisplay", default: false)
+    /// Remove the card when its file is dragged out (docs/03 §2).
+    public static let overlayDismissOnDrag = SettingKey("overlay.dismissOnDrag", default: true)
 }
 
 /// Observable façade over `UserDefaults` (docs/04 §9: plain `@Observable`, no TCA).
@@ -137,6 +184,56 @@ public final class AppSettings {
         didSet { store[SettingKeys.customTimerSeconds] = max(0, customTimerSeconds) }
     }
 
+    public var overlayCorner: OverlayCorner {
+        didSet { store[SettingKeys.overlayCorner] = overlayCorner }
+    }
+
+    /// Card width in points, clamped so a stray value cannot produce an unusable card.
+    ///
+    /// Computed rather than stored with a `didSet`: assigning to a property inside its
+    /// own observer crashes the `@Observable` macro's generated accessors, so clamping
+    /// goes through the manual observation API instead.
+    public var overlayCardWidth: Int {
+        get {
+            access(keyPath: \.overlayCardWidth)
+            return Self.clamp(store[SettingKeys.overlayCardWidth], to: 140 ... 420)
+        }
+        set {
+            withMutation(keyPath: \.overlayCardWidth) {
+                store[SettingKeys.overlayCardWidth] = Self.clamp(newValue, to: 140 ... 420)
+            }
+        }
+    }
+
+    public var overlayTimeout: OverlayTimeout {
+        didSet { store[SettingKeys.overlayTimeout] = overlayTimeout }
+    }
+
+    /// Cards shown before older ones collapse behind the stack (docs/03 §2).
+    public var overlayMaxVisibleCards: Int {
+        get {
+            access(keyPath: \.overlayMaxVisibleCards)
+            return Self.clamp(store[SettingKeys.overlayMaxVisibleCards], to: 1 ... 10)
+        }
+        set {
+            withMutation(keyPath: \.overlayMaxVisibleCards) {
+                store[SettingKeys.overlayMaxVisibleCards] = Self.clamp(newValue, to: 1 ... 10)
+            }
+        }
+    }
+
+    private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
+        min(max(value, range.lowerBound), range.upperBound)
+    }
+
+    public var overlayOnPrimaryDisplay: Bool {
+        didSet { store[SettingKeys.overlayOnPrimaryDisplay] = overlayOnPrimaryDisplay }
+    }
+
+    public var overlayDismissOnDrag: Bool {
+        didSet { store[SettingKeys.overlayDismissOnDrag] = overlayDismissOnDrag }
+    }
+
     /// How long a capture waits, taking the custom value into account (docs/03 §1.5).
     public var timerSeconds: Int {
         customTimerSeconds > 0 ? customTimerSeconds : selfTimer.seconds
@@ -155,6 +252,10 @@ public final class AppSettings {
         transparentWindowBackground = store[SettingKeys.transparentWindowBackground]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
+        overlayCorner = store[SettingKeys.overlayCorner]
+        overlayTimeout = store[SettingKeys.overlayTimeout]
+        overlayOnPrimaryDisplay = store[SettingKeys.overlayOnPrimaryDisplay]
+        overlayDismissOnDrag = store[SettingKeys.overlayDismissOnDrag]
     }
 
     /// Where captures are written. Falls back to the Desktop until the user picks a folder.
@@ -180,5 +281,11 @@ public final class AppSettings {
         transparentWindowBackground = SettingKeys.transparentWindowBackground.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
+        overlayCorner = SettingKeys.overlayCorner.defaultValue
+        overlayCardWidth = SettingKeys.overlayCardWidth.defaultValue
+        overlayTimeout = SettingKeys.overlayTimeout.defaultValue
+        overlayMaxVisibleCards = SettingKeys.overlayMaxVisibleCards.defaultValue
+        overlayOnPrimaryDisplay = SettingKeys.overlayOnPrimaryDisplay.defaultValue
+        overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
     }
 }

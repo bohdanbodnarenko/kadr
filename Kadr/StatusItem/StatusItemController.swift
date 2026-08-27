@@ -17,16 +17,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private let perform: (CaptureCommand) -> Void
     private let openSettings: () -> Void
+    private let restoreRecentlyClosed: () -> Void
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
         openSettings: @escaping () -> Void,
+        restoreRecentlyClosed: @escaping () -> Void = {},
         additionalItems: @escaping () -> [NSMenuItem] = { [] }
     ) {
         self.perform = perform
         self.openSettings = openSettings
+        self.restoreRecentlyClosed = restoreRecentlyClosed
         self.additionalItems = additionalItems
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -56,6 +59,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.isEnabled = command.isAvailable
             menu.addItem(item)
         }
+
+        menu.addItem(.separator())
+
+        let restoreItem = NSMenuItem(
+            title: "Restore Recently Closed",
+            action: #selector(didSelectRestore),
+            keyEquivalent: "t"
+        )
+        restoreItem.keyEquivalentModifierMask = [.command, .shift]
+        restoreItem.target = self
+        menu.addItem(restoreItem)
 
         menu.addItem(.separator())
 
@@ -93,6 +107,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
               let command = CaptureCommand(rawValue: rawValue)
         else { return }
         perform(command)
+    }
+
+    @objc
+    private func didSelectRestore() {
+        restoreRecentlyClosed()
     }
 
     @objc

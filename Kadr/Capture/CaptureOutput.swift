@@ -25,13 +25,18 @@ struct CaptureOutput {
     }
 
     /// Exports a capture according to the current settings.
+    ///
+    /// The full-resolution `CGImage` arrives, is encoded, and is gone when this returns:
+    /// nothing here stores it (doc 04 §7 rule 2). `CaptureOutputMemoryTests` holds a weak
+    /// reference across an export to prove it, which is the deterministic version of the
+    /// "RSS returns to baseline" check.
     @discardableResult
     func deliver(_ capture: Capture) -> ExportResult? {
         let state = signposter.beginInterval("exportCapture")
         defer { signposter.endInterval("exportCapture", state) }
 
         do {
-            let result = try exporter.export(
+            return try exporter.export(
                 capture.image,
                 policy: policy,
                 saveFolder: settings.saveFolder,
@@ -40,8 +45,6 @@ struct CaptureOutput {
                 options: encodingOptions(for: capture),
                 copyData: copyToClipboard
             )
-            assertNoFullResolutionImageRetained()
-            return result
         } catch {
             logger.error("Export failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -97,12 +100,18 @@ struct CaptureOutput {
 
     // MARK: - Policy
 
+    /// Every capture produces a file, whatever the policy.
+    ///
+    /// The Quick Access Overlay's whole point is dragging the capture into another app
+    /// (docs/03 §2), and a drag needs something on disk. So a policy that does not save
+    /// to the folder stages instead: the file exists, the Desktop stays clean, and it is
+    /// finalised only if the user acts on it.
     private var policy: ExportPolicy {
         let action = settings.defaultAction
         return ExportPolicy(
             copiesToClipboard: action.copiesToClipboard,
             savesToFolder: action.savesToFolder,
-            staging: action == .overlayOnly
+            staging: !action.savesToFolder
         )
     }
 
@@ -151,21 +160,5 @@ struct CaptureOutput {
             logger.info("Copied \(data.count, privacy: .public) bytes to the clipboard")
         }
         return wrote
-    }
-
-    /// Debug-only check that export did not park a full-resolution bitmap somewhere
-    /// (doc 04 §7 rule 2).
-    ///
-    /// `CaptureOutput` is a struct holding only settings and an exporter, both of which
-    /// are value types with no image storage. The assertion pins that: if someone later
-    /// adds a cache here, this fires and points at the rule rather than at a memory graph
-    /// three weeks later.
-    private func assertNoFullResolutionImageRetained() {
-        #if DEBUG
-            assert(
-                MemoryLayout<CaptureOutput>.size <= 64,
-                "CaptureOutput has grown storage — check it is not holding a capture (doc 04 §7)"
-            )
-        #endif
     }
 }

@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController = StatusItemController(
             perform: { [weak self] command in self?.perform(command) },
             openSettings: { [weak self] in self?.openSettings() },
+            restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()
