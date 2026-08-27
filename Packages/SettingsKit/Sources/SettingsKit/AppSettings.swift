@@ -1,41 +1,37 @@
 import Foundation
 import Shared
 
-/// What Kadr does with a capture the moment it is taken (docs/03 §8.3, §8.2).
+/// What Kadr does with a capture the moment it is taken (docs/03 §2, §8.3).
 public enum DefaultCaptureAction: String, CaseIterable, SettingValue {
     case copyToClipboard
     case saveToFolder
-    case openInEditor
+    case copyAndSave
+    /// Nothing is written to the save folder yet: the file waits in the staging area and
+    /// is finalised on the first thing the user does with it, which keeps the Desktop
+    /// clean (docs/03 §2).
+    case overlayOnly
 
     public var title: String {
         switch self {
         case .copyToClipboard: "Copy to Clipboard"
         case .saveToFolder: "Save to Folder"
-        case .openInEditor: "Open in Editor"
+        case .copyAndSave: "Copy and Save"
+        case .overlayOnly: "Keep in the Overlay Only"
         }
+    }
+
+    public var copiesToClipboard: Bool {
+        self == .copyToClipboard || self == .copyAndSave
+    }
+
+    public var savesToFolder: Bool {
+        self == .saveToFolder || self == .copyAndSave
     }
 }
 
-/// Still-image export formats (docs/03 §8.3, PRD §5 Phase 1).
-public enum ImageFormat: String, CaseIterable, SettingValue {
-    case png
-    case jpeg
-    case heic
-    case webp
-
-    public var fileExtension: String {
-        rawValue
-    }
-
-    public var title: String {
-        switch self {
-        case .png: "PNG"
-        case .jpeg: "JPEG"
-        case .heic: "HEIC"
-        case .webp: "WebP"
-        }
-    }
-}
+/// `ImageFormat` lives in Shared because the setting that picks it and the writer that
+/// honours it are sibling packages that cannot import each other (docs/04 §2).
+extension ImageFormat: SettingValue {}
 
 /// What a self-timer counts down before capturing (docs/03 §1.5).
 public enum SelfTimer: Int, CaseIterable, Sendable {

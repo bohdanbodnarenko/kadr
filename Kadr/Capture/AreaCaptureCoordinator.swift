@@ -17,7 +17,7 @@ final class AreaCaptureCoordinator {
     private let overlay: SelectionOverlayController
     private let settings: AppSettings
     private let timer = CaptureCountdown()
-    private let output = CaptureOutput()
+    private let output: CaptureOutput
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
@@ -25,6 +25,12 @@ final class AreaCaptureCoordinator {
 
     /// The last committed region, for "capture previous area" (docs/03 §1.1).
     private var lastRegion: (rect: DisplayRect, displayID: CGDirectDisplayID)?
+
+    /// The app that was in front when the hotkey fired.
+    ///
+    /// Sampled then, not at capture time: by the time the overlay is up the frontmost app
+    /// is Kadr, which makes a useless `{app}` in the filename.
+    private var frontmostAtHotkey: AppIdentity?
 
     init(
         engine: CaptureEngine,
@@ -36,6 +42,7 @@ final class AreaCaptureCoordinator {
         self.permissions = permissions
         self.settings = settings
         self.overlay = overlay
+        output = CaptureOutput(settings: settings)
     }
 
     var hasPreviousRegion: Bool {
@@ -74,6 +81,7 @@ final class AreaCaptureCoordinator {
     }
 
     private func beginOverlayCapture(mode: SelectionMode) {
+        frontmostAtHotkey = Self.currentFrontmostApp()
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
         inFlight?.cancel()
 
@@ -170,7 +178,7 @@ final class AreaCaptureCoordinator {
                 do {
                     let capture = try await engine.captureWindow(selection.window.id, options: options)
                     permissions.noteCaptureSuccess()
-                    output.copyToClipboard(capture.image)
+                    output.deliver(capture)
                 } catch {
                     handle(error)
                 }
@@ -208,7 +216,20 @@ final class AreaCaptureCoordinator {
             return
         }
 
-        output.copyToClipboard(image)
+        // Metadata for the crop, not the whole display: the filename template and the
+        // history index both read the size from here.
+        output.deliver(Capture(
+            image: image,
+            metadata: CaptureMetadata(
+                source: .region(display: result.display.displayID),
+                displayID: result.display.displayID,
+                scale: result.display.scale,
+                pointRect: result.rect,
+                pixelSize: PixelSize(width: image.width, height: image.height),
+                colorSpaceName: image.colorSpace?.name as String?,
+                frontmostApp: frontmostAtHotkey
+            )
+        ))
     }
 
     private func captureRegionLive(_ rect: DisplayRect, on displayID: CGDirectDisplayID) {
@@ -221,11 +242,17 @@ final class AreaCaptureCoordinator {
                     includesCursor: settings.includesCursor
                 )
                 permissions.noteCaptureSuccess()
-                output.copyToClipboard(capture.image)
+                output.deliver(capture)
             } catch {
                 handle(error)
             }
         }
+    }
+
+    /// The frontmost app right now, as a value.
+    private static func currentFrontmostApp() -> AppIdentity? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        return AppIdentity(name: app.localizedName, bundleIdentifier: app.bundleIdentifier)
     }
 
     private func handle(_ error: any Error) {

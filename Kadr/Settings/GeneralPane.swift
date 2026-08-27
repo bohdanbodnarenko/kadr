@@ -1,4 +1,5 @@
 import AppKit
+import MediaExport
 import os
 import SettingsKit
 import Shared
@@ -48,8 +49,10 @@ struct GeneralPane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
+                // Only formats ImageIO can write: macOS reads WebP but cannot encode it,
+                // and offering it would produce a failed export rather than a file.
                 Picker("Format", selection: $settings.imageFormat) {
-                    ForEach(ImageFormat.allCases, id: \.self) { format in
+                    ForEach(ImageFormat.writable, id: \.self) { format in
                         Text(format.title).tag(format)
                     }
                 }

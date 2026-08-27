@@ -9,7 +9,7 @@ import Shared
 /// silently discard preferences written by a later version.
 public enum SettingsMigrator {
     /// The schema this build writes.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     /// A single forward step: takes a store at `fromVersion` to `fromVersion + 1`.
     struct Step {
@@ -17,11 +17,19 @@ public enum SettingsMigrator {
         let apply: @Sendable (UserDefaults) -> Void
     }
 
-    /// Version 0 is "never written by Kadr". There is nothing to move yet, so the
-    /// first step only stamps the version; it exists so the machinery is exercised
-    /// and tested before the first real migration needs it.
+    /// Version 0 is "never written by Kadr", so its step only stamps the version.
+    ///
+    /// Version 1 → 2 retires the `openInEditor` default action. A stored value the enum
+    /// no longer knows would silently fall back to the default; mapping it explicitly
+    /// keeps the user's intent — they wanted the capture in front of them, and copying
+    /// to the clipboard is the closest surviving behaviour.
     static let steps: [Step] = [
-        Step(fromVersion: 0, apply: { _ in })
+        Step(fromVersion: 0, apply: { _ in }),
+        Step(fromVersion: 1, apply: { store in
+            let key = SettingKeys.defaultAction.name
+            guard store.object(forKey: key) as? String == "openInEditor" else { return }
+            store.set(DefaultCaptureAction.copyToClipboard.rawValue, forKey: key)
+        })
     ]
 
     @discardableResult

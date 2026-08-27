@@ -3,7 +3,7 @@ import Testing
 @testable import SettingsKit
 
 /// A throwaway defaults suite so tests never touch the real preferences.
-private func makeStore(_ name: String = UUID().uuidString) -> UserDefaults {
+func makeStore(_ name: String = UUID().uuidString) -> UserDefaults {
     guard let store = UserDefaults(suiteName: name) else {
         fatalError("Could not open a throwaway defaults suite named \(name)")
     }
@@ -70,14 +70,14 @@ struct AppSettingsTests {
     func mutationsPersist() {
         let store = makeStore()
         let settings = AppSettings(store: store)
-        settings.defaultAction = .openInEditor
+        settings.defaultAction = .copyAndSave
         settings.filenameTemplate = "{app}"
         settings.imageFormat = .webp
         settings.downscaleRetinaCaptures = true
         settings.saveFolderPath = "/tmp/kadr-captures"
 
         let reloaded = AppSettings(store: store)
-        #expect(reloaded.defaultAction == .openInEditor)
+        #expect(reloaded.defaultAction == .copyAndSave)
         #expect(reloaded.filenameTemplate == "{app}")
         #expect(reloaded.imageFormat == .webp)
         #expect(reloaded.downscaleRetinaCaptures == true)
@@ -149,5 +149,49 @@ struct SettingsMigratorTests {
             version = step.fromVersion + 1
         }
         #expect(version == SettingsMigrator.currentVersion)
+    }
+}
+
+@Suite("Retiring the openInEditor default action")
+struct DefaultActionMigrationTests {
+    @Test("A stored openInEditor becomes copy-to-clipboard rather than silently resetting")
+    func migratesOpenInEditor() {
+        let store = makeStore()
+        store.set(1, forKey: SettingKeys.schemaVersion.name)
+        store.set("openInEditor", forKey: SettingKeys.defaultAction.name)
+
+        SettingsMigrator.migrate(store)
+
+        #expect(store[SettingKeys.defaultAction] == .copyToClipboard)
+        #expect(store[SettingKeys.schemaVersion] == SettingsMigrator.currentVersion)
+    }
+
+    @Test("Other stored actions are left alone")
+    func leavesOtherActions() {
+        let store = makeStore()
+        store.set(1, forKey: SettingKeys.schemaVersion.name)
+        store.set("saveToFolder", forKey: SettingKeys.defaultAction.name)
+
+        SettingsMigrator.migrate(store)
+
+        #expect(store[SettingKeys.defaultAction] == .saveToFolder)
+    }
+
+    @Test("A fresh store never sees the migration and gets the default")
+    func freshStore() {
+        let store = makeStore()
+        SettingsMigrator.migrate(store)
+        #expect(store[SettingKeys.defaultAction] == .copyToClipboard)
+    }
+
+    @Test("Default actions describe what they do to the clipboard and the folder", arguments: [
+        (DefaultCaptureAction.copyToClipboard, true, false),
+        (DefaultCaptureAction.saveToFolder, false, true),
+        (DefaultCaptureAction.copyAndSave, true, true),
+        (DefaultCaptureAction.overlayOnly, false, false)
+    ])
+    func actionBehaviour(action: DefaultCaptureAction, copies: Bool, saves: Bool) {
+        #expect(action.copiesToClipboard == copies)
+        #expect(action.savesToFolder == saves)
     }
 }

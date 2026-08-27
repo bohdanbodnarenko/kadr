@@ -1,104 +1,171 @@
 import AppKit
 import CaptureCore
-import ImageIO
+import MediaExport
 import os
+import SettingsKit
 import Shared
 import UniformTypeIdentifiers
 
-/// Where a finished capture goes.
+/// Applies the user's default-action policy to a finished capture (docs/03 §2, §8.3).
 ///
-/// A stub until M4 brings MediaExport and M5 the Quick Access Overlay: for now every
-/// capture lands on the clipboard, which is the clipboard-first default from docs/03
-/// §8.3 and enough to prove the pipeline end to end.
+/// The full-resolution `CGImage` is passed in, encoded, and dropped: nothing here holds
+/// onto it. That is rule 2 of doc 04 §7 — a 5K capture is roughly 59 MB decoded, and the
+/// agent's entire idle budget is half of that, so full-res bitmaps must not survive the
+/// export that consumed them.
 @MainActor
 struct CaptureOutput {
+    private let settings: AppSettings
+    private let exporter: CaptureExporter
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
-    /// Puts a capture on the clipboard as PNG.
-    ///
-    /// PNG rather than TIFF because that is what other apps paste losslessly, and as
-    /// data rather than an `NSImage` so no resampling can creep in.
+    init(settings: AppSettings, exporter: CaptureExporter = CaptureExporter()) {
+        self.settings = settings
+        self.exporter = exporter
+    }
+
+    /// Exports a capture according to the current settings.
     @discardableResult
-    func copyToClipboard(_ image: CGImage) -> Bool {
-        let state = signposter.beginInterval("copyToClipboard")
-        defer { signposter.endInterval("copyToClipboard", state) }
+    func deliver(_ capture: Capture) -> ExportResult? {
+        let state = signposter.beginInterval("exportCapture")
+        defer { signposter.endInterval("exportCapture", state) }
 
-        guard let data = pngData(from: image) else {
-            logger.error("Could not encode the capture as PNG")
-            return false
+        do {
+            let result = try exporter.export(
+                capture.image,
+                policy: policy,
+                saveFolder: settings.saveFolder,
+                template: FilenameTemplate(settings.filenameTemplate),
+                context: context(for: capture),
+                options: encodingOptions(for: capture),
+                copyData: copyToClipboard
+            )
+            assertNoFullResolutionImageRetained()
+            return result
+        } catch {
+            logger.error("Export failed: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
+    }
 
+    /// Exports several captures at once, which is what a multi-display screen capture
+    /// produces (docs/03 §1.3).
+    ///
+    /// Only one image can go on the clipboard, so the rest are saved regardless of the
+    /// clipboard-only policy — losing three of four monitors would be worse than a file
+    /// the user did not strictly ask for.
+    func deliver(_ captures: [Capture]) {
+        guard let first = captures.first else { return }
+        deliver(first)
+
+        guard captures.count > 1 else { return }
+        for capture in captures.dropFirst() {
+            do {
+                _ = try exporter.export(
+                    capture.image,
+                    policy: ExportPolicy(
+                        copiesToClipboard: false,
+                        savesToFolder: !policy.staging,
+                        staging: policy.staging
+                    ),
+                    saveFolder: settings.saveFolder,
+                    template: FilenameTemplate(settings.filenameTemplate),
+                    context: context(for: capture),
+                    options: encodingOptions(for: capture)
+                )
+            } catch {
+                logger.error("Export failed for one display: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Moves a staged capture into the save folder on the user's first action.
+    @discardableResult
+    func finalizeStaged(_ url: URL) -> URL? {
+        do {
+            return try exporter.finalizeStaged(url, into: settings.saveFolder)
+        } catch {
+            logger.error("Could not finalise a staged capture: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Clears stale staged files. Called once at launch (docs/03 §2).
+    func sweepStaging() {
+        exporter.sweepStaging()
+    }
+
+    // MARK: - Policy
+
+    private var policy: ExportPolicy {
+        let action = settings.defaultAction
+        return ExportPolicy(
+            copiesToClipboard: action.copiesToClipboard,
+            savesToFolder: action.savesToFolder,
+            staging: action == .overlayOnly
+        )
+    }
+
+    private func encodingOptions(for capture: Capture) -> EncodingOptions {
+        var format = settings.imageFormat
+        // A transparent window capture written as JPEG would be silently composited onto
+        // black; PNG keeps what the user was promised (docs/03 §1.2).
+        let isTransparentWindow = {
+            guard case .window = capture.metadata.source else { return false }
+            return settings.transparentWindowBackground && !format.supportsTransparency
+        }()
+        if isTransparentWindow {
+            logger.info("Falling back to PNG so the window's transparency survives")
+            format = .png
+        }
+        return EncodingOptions(
+            format: format,
+            scale: capture.metadata.scale,
+            downscaleToOneToOne: settings.downscaleRetinaCaptures
+        )
+    }
+
+    private func context(for capture: Capture) -> FilenameContext {
+        FilenameContext(
+            applicationName: capture.metadata.frontmostApp?.name,
+            width: capture.metadata.pixelSize.width,
+            height: capture.metadata.pixelSize.height,
+            date: capture.metadata.capturedAt
+        )
+    }
+
+    // MARK: - Clipboard
+
+    /// PNG rather than TIFF, because that is what other apps paste losslessly, and as
+    /// data rather than an `NSImage` so no resampling can creep in.
+    private func copyToClipboard(_ data: Data, format: ImageFormat) -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        let wrote = pasteboard.setData(data, forType: .png)
-        logger.info("Copied \(image.width, privacy: .public)×\(image.height, privacy: .public) px to the clipboard")
+
+        let type: NSPasteboard.PasteboardType = switch format {
+        case .png: .png
+        case .jpeg, .heic, .webp: NSPasteboard.PasteboardType(format.contentType.identifier)
+        }
+        let wrote = pasteboard.setData(data, forType: type)
+        if wrote {
+            logger.info("Copied \(data.count, privacy: .public) bytes to the clipboard")
+        }
         return wrote
     }
 
-    /// Delivers a whole-screen capture, which on a multi-display desk is several images
-    /// (docs/03 §1.3).
+    /// Debug-only check that export did not park a full-resolution bitmap somewhere
+    /// (doc 04 §7 rule 2).
     ///
-    /// One image can go on the clipboard, so the rest are written to the save folder.
-    /// M4 replaces this with MediaExport's format, template and policy handling; the
-    /// behaviour here is deliberately the simplest thing that loses no capture.
-    func deliver(_ captures: [Capture]) {
-        guard let first = captures.first else { return }
-        copyToClipboard(first.image)
-
-        guard captures.count > 1 else { return }
-        for capture in captures {
-            write(capture)
-        }
-    }
-
-    /// Writes a PNG next to the user's other screenshots, never overwriting.
-    @discardableResult
-    func write(_ capture: Capture, to folder: URL? = nil) -> URL? {
-        let directory = folder ?? FileManager.default
-            .urls(for: .desktopDirectory, in: .userDomainMask)
-            .first ?? URL(fileURLWithPath: NSHomeDirectory())
-
-        guard let data = pngData(from: capture.image) else {
-            logger.error("Could not encode a capture as PNG")
-            return nil
-        }
-
-        let stamp = Self.filenameFormatter.string(from: capture.metadata.capturedAt)
-        var url = directory.appendingPathComponent("Kadr \(stamp).png")
-        var counter = 2
-        while FileManager.default.fileExists(atPath: url.path) {
-            url = directory.appendingPathComponent("Kadr \(stamp) (\(counter)).png")
-            counter += 1
-        }
-
-        do {
-            // Atomic, so a crash mid-write never leaves a truncated screenshot.
-            try data.write(to: url, options: .atomic)
-            logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
-            return url
-        } catch {
-            logger.error("Could not write the capture: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    private static let filenameFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return formatter
-    }()
-
-    private func pngData(from image: CGImage) -> Data? {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else { return nil }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return data as Data
+    /// `CaptureOutput` is a struct holding only settings and an exporter, both of which
+    /// are value types with no image storage. The assertion pins that: if someone later
+    /// adds a cache here, this fires and points at the rule rather than at a memory graph
+    /// three weeks later.
+    private func assertNoFullResolutionImageRetained() {
+        #if DEBUG
+            assert(
+                MemoryLayout<CaptureOutput>.size <= 64,
+                "CaptureOutput has grown storage — check it is not holding a capture (doc 04 §7)"
+            )
+        #endif
     }
 }

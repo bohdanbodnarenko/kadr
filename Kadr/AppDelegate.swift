@@ -77,6 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyCenter = HotkeyCenter(perform: { [weak self] command in self?.perform(command) })
         hotkeyCenter?.start()
 
+        // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
+        // never on a timer.
+        CaptureOutput(settings: settings).sweepStaging()
+
         // docs/04 §3.3: the user can flip this in System Settings, so never cache it
         // across launches. Deliberately after the status item, so ServiceManagement
         // loading cannot eat into the launch budget.
