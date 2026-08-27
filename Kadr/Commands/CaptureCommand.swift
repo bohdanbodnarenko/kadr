@@ -11,6 +11,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case captureFullscreen
     case captureText
     case capturePreviousArea
+    case recordRegion
+    case recordDisplay
 
     /// Menu title (docs/03 §8.1).
     var title: String {
@@ -20,6 +22,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .captureFullscreen: "Capture Screen"
         case .captureText: "Capture Text (OCR)"
         case .capturePreviousArea: "Capture Previous Area"
+        case .recordRegion: "Record Region…"
+        case .recordDisplay: "Record Screen"
         }
     }
 
@@ -34,7 +38,9 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// honest map of the app rather than a list that grows unpredictably.
     var isAvailable: Bool {
         switch self {
-        case .captureArea, .capturePreviousArea, .captureWindow, .captureFullscreen, .captureText: true
+        case .captureArea, .capturePreviousArea, .captureWindow, .captureFullscreen, .captureText,
+             .recordRegion, .recordDisplay:
+            true
         }
     }
 
@@ -42,5 +48,10 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// repeat of the last region, so it stays off the menu (docs/03 §8.1).
     static var menuCommands: [CaptureCommand] {
         [.captureArea, .captureWindow, .captureFullscreen, .captureText]
+    }
+
+    /// The recording commands, which the menu groups separately (docs/03 §1.8).
+    static var recordingCommands: [CaptureCommand] {
+        [.recordRegion, .recordDisplay]
     }
 }

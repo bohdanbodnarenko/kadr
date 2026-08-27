@@ -327,6 +327,11 @@ final class AreaCaptureCoordinator {
         pins.count
     }
 
+    /// Puts a finished recording into the Quick Access Overlay (docs/03 §1.8).
+    func showRecording(at fileURL: URL) {
+        quickAccess.showRecording(at: fileURL)
+    }
+
     /// The frontmost app right now, as a value.
     private static func currentFrontmostApp() -> AppIdentity? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }

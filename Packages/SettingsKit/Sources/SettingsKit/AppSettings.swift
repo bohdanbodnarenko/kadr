@@ -99,6 +99,31 @@ public enum OverlayTimeout: Int, CaseIterable, SettingValue {
     }
 }
 
+/// Recording settings (docs/03 §1.8). Mirrors `RecordingCore`'s own types as raw values,
+/// because SettingsKit and RecordingCore are sibling packages that cannot import each
+/// other (docs/04 §2) — the app maps between them.
+public enum RecordingQuality: Int, CaseIterable, SettingValue {
+    case twentyFour = 24
+    case thirty = 30
+    case sixty = 60
+
+    public var title: String {
+        "\(rawValue) fps"
+    }
+}
+
+public enum RecordingVideoCodec: String, CaseIterable, SettingValue {
+    case hevc
+    case h264
+
+    public var title: String {
+        switch self {
+        case .hevc: "HEVC (smaller files)"
+        case .h264: "H.264 (most compatible)"
+        }
+    }
+}
+
 /// The typed key set. Names are namespaced so `defaults read app.kadr.Kadr` stays legible.
 public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
@@ -120,6 +145,15 @@ public enum SettingKeys {
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
     /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
+
+    // Recording pane (docs/03 §1.8, §8.3).
+    public static let recordingFrameRate = SettingKey("recording.frameRate", default: RecordingQuality.sixty)
+    public static let recordingCodec = SettingKey("recording.codec", default: RecordingVideoCodec.hevc)
+    public static let recordsSystemAudio = SettingKey("recording.systemAudio", default: true)
+    public static let recordsMicrophone = SettingKey("recording.microphone", default: false)
+    public static let recordingShowsCursor = SettingKey("recording.showsCursor", default: true)
+    /// Turn on Do Not Disturb while recording, so notifications stay out of the file.
+    public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
 
     // Overlay pane (docs/03 §2, §8.3).
     public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
@@ -185,6 +219,30 @@ public final class AppSettings {
 
     public var ocrPreservesLineBreaks: Bool {
         didSet { store[SettingKeys.ocrPreservesLineBreaks] = ocrPreservesLineBreaks }
+    }
+
+    public var recordingFrameRate: RecordingQuality {
+        didSet { store[SettingKeys.recordingFrameRate] = recordingFrameRate }
+    }
+
+    public var recordingCodec: RecordingVideoCodec {
+        didSet { store[SettingKeys.recordingCodec] = recordingCodec }
+    }
+
+    public var recordsSystemAudio: Bool {
+        didSet { store[SettingKeys.recordsSystemAudio] = recordsSystemAudio }
+    }
+
+    public var recordsMicrophone: Bool {
+        didSet { store[SettingKeys.recordsMicrophone] = recordsMicrophone }
+    }
+
+    public var recordingShowsCursor: Bool {
+        didSet { store[SettingKeys.recordingShowsCursor] = recordingShowsCursor }
+    }
+
+    public var recordingEnablesFocus: Bool {
+        didSet { store[SettingKeys.recordingEnablesFocus] = recordingEnablesFocus }
     }
 
     public var selfTimer: SelfTimer {
@@ -264,6 +322,12 @@ public final class AppSettings {
         windowShadow = store[SettingKeys.windowShadow]
         transparentWindowBackground = store[SettingKeys.transparentWindowBackground]
         ocrPreservesLineBreaks = store[SettingKeys.ocrPreservesLineBreaks]
+        recordingFrameRate = store[SettingKeys.recordingFrameRate]
+        recordingCodec = store[SettingKeys.recordingCodec]
+        recordsSystemAudio = store[SettingKeys.recordsSystemAudio]
+        recordsMicrophone = store[SettingKeys.recordsMicrophone]
+        recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
+        recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
         overlayCorner = store[SettingKeys.overlayCorner]
@@ -294,6 +358,12 @@ public final class AppSettings {
         windowShadow = SettingKeys.windowShadow.defaultValue
         transparentWindowBackground = SettingKeys.transparentWindowBackground.defaultValue
         ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
+        recordingFrameRate = SettingKeys.recordingFrameRate.defaultValue
+        recordingCodec = SettingKeys.recordingCodec.defaultValue
+        recordsSystemAudio = SettingKeys.recordsSystemAudio.defaultValue
+        recordsMicrophone = SettingKeys.recordsMicrophone.defaultValue
+        recordingShowsCursor = SettingKeys.recordingShowsCursor.defaultValue
+        recordingEnablesFocus = SettingKeys.recordingEnablesFocus.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         overlayCorner = SettingKeys.overlayCorner.defaultValue

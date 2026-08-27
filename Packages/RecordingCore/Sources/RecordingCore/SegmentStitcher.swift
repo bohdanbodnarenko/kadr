@@ -1,0 +1,80 @@
+import AVFoundation
+import Foundation
+import os
+import Shared
+
+/// Joins pause/resume segments into one file (docs/04 §4.3).
+///
+/// Passthrough, not re-encode. The segments already contain exactly the frames the user
+/// recorded, in the codec they chose; decoding and re-encoding them would cost minutes on
+/// a long recording and lose quality for nothing. Stitching is a container operation.
+public struct SegmentStitcher: Sendable {
+    private let logger = KadrLog.logger(.recording)
+
+    public init() {}
+
+    /// Joins segments in order. One segment is moved rather than copied.
+    public func stitch(_ segments: [URL], to destination: URL) async throws -> URL {
+        guard !segments.isEmpty else { throw RecordingError.noFramesCaptured }
+
+        // The common case: no pause happened, so there is nothing to join.
+        if segments.count == 1 {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: segments[0], to: destination)
+            return destination
+        }
+
+        let composition = AVMutableComposition()
+        guard let videoTrack = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            throw RecordingError.writingFailed("could not create a video track")
+        }
+        var audioTrack: AVMutableCompositionTrack?
+
+        var cursor = CMTime.zero
+        for segment in segments {
+            let asset = AVURLAsset(url: segment)
+            let duration = try await asset.load(.duration)
+            let range = CMTimeRange(start: .zero, duration: duration)
+
+            if let source = try await asset.loadTracks(withMediaType: .video).first {
+                try videoTrack.insertTimeRange(range, of: source, at: cursor)
+            }
+            if let source = try await asset.loadTracks(withMediaType: .audio).first {
+                if audioTrack == nil {
+                    audioTrack = composition.addMutableTrack(
+                        withMediaType: .audio,
+                        preferredTrackID: kCMPersistentTrackID_Invalid
+                    )
+                }
+                try audioTrack?.insertTimeRange(range, of: source, at: cursor)
+            }
+            // Butt the next segment against this one: the gap while paused is time the
+            // user chose not to record, so it must not appear in the result.
+            cursor = CMTimeAdd(cursor, duration)
+        }
+
+        guard let export = AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetPassthrough
+        ) else {
+            throw RecordingError.writingFailed("could not create an export session")
+        }
+
+        try? FileManager.default.removeItem(at: destination)
+        do {
+            try await export.export(to: destination, as: .mp4)
+        } catch {
+            throw RecordingError.writingFailed(error.localizedDescription)
+        }
+
+        for segment in segments {
+            try? FileManager.default.removeItem(at: segment)
+        }
+        let count = segments.count
+        logger.info("Stitched \(count, privacy: .public) segments")
+        return destination
+    }
+}

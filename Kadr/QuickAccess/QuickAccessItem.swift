@@ -18,6 +18,9 @@ struct QuickAccessItem: Identifiable, Sendable {
     let pixelSize: PixelSize
     let capturedAt: Date
     let displayID: CGDirectDisplayID?
+    /// True for a screen recording, whose card shows a poster frame and a play badge
+    /// rather than a thumbnail (docs/03 §1.8).
+    var isVideo = false
 
     var filename: String {
         fileURL.lastPathComponent

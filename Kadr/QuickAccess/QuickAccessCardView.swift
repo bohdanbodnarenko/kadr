@@ -60,7 +60,7 @@ struct QuickAccessCardView: View {
     }
 
     private var thumbnail: some View {
-        ThumbnailImage(url: item.fileURL, maxPixelSize: Int(width * 2))
+        ThumbnailImage(url: item.fileURL, maxPixelSize: Int(width * 2), isVideo: item.isVideo)
             .frame(height: Self.thumbnailHeight)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(RoundedRectangle(cornerRadius: 8))
@@ -152,9 +152,13 @@ struct QuickAccessCardView: View {
 
 /// A thumbnail loaded through HistoryKit's downsampling pipeline, so the card never
 /// decodes a full-resolution capture (doc 04 §7 rule 2).
+///
+/// A recording gets a poster frame instead, which ImageIO cannot produce — hence the
+/// two paths.
 private struct ThumbnailImage: View {
     let url: URL
     let maxPixelSize: Int
+    let isVideo: Bool
 
     @State private var image: CGImage?
 
@@ -169,8 +173,17 @@ private struct ThumbnailImage: View {
                     .fill(Color.secondary.opacity(0.15))
             }
         }
+        .overlay {
+            if isVideo {
+                Image(systemName: "play.circle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.white, .black.opacity(0.4))
+            }
+        }
         .task(id: url) {
-            image = ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
+            image = isVideo
+                ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
+                : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
         }
     }
 }

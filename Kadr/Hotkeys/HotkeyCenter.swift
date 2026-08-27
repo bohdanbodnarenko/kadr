@@ -11,6 +11,8 @@ extension KeyboardShortcuts.Name {
     static let captureFullscreen = Self("captureFullscreen", initial: .init(.f, modifiers: [.control, .shift]))
     static let captureText = Self("captureText", initial: .init(.t, modifiers: [.control, .shift]))
     static let capturePreviousArea = Self("capturePreviousArea", initial: .init(.r, modifiers: [.control, .shift]))
+    static let recordRegion = Self("recordRegion", initial: .init(.five, modifiers: [.control, .shift]))
+    static let recordDisplay = Self("recordDisplay", initial: .init(.six, modifiers: [.control, .shift]))
 }
 
 extension CaptureCommand {
@@ -21,6 +23,8 @@ extension CaptureCommand {
         case .captureFullscreen: .captureFullscreen
         case .captureText: .captureText
         case .capturePreviousArea: .capturePreviousArea
+        case .recordRegion: .recordRegion
+        case .recordDisplay: .recordDisplay
         }
     }
 }

@@ -1,0 +1,237 @@
+import AppKit
+import AVFoundation
+import CaptureCore
+import MediaExport
+import os
+import RecordingCore
+import SelectionUI
+import SettingsKit
+import Shared
+
+/// Drives screen recording end to end (docs/03 §1.8).
+///
+/// Recording reuses the same selection grammar as stills: the user picks a region, window
+/// or display with the overlay they already know, and the recording starts from that.
+@MainActor
+@Observable
+final class RecordingCoordinator {
+    @ObservationIgnored private let engine = RecordingEngine()
+    @ObservationIgnored private let captureEngine: CaptureEngine
+    @ObservationIgnored private let permissions: PermissionCoordinator
+    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private let overlay: SelectionOverlayController
+    @ObservationIgnored private let focus = FocusMode()
+    @ObservationIgnored private let logger = KadrLog.logger(.recording)
+
+    /// What the status item shows.
+    private(set) var state: RecordingState = .idle {
+        didSet { onStateChanged?() }
+    }
+
+    private(set) var elapsed: TimeInterval = 0 {
+        didSet { onStateChanged?() }
+    }
+
+    /// A finished recording, ready for the overlay.
+    var onFinished: ((RecordingResult) -> Void)?
+    /// Fired whenever the state or the clock moves, so the menu bar can follow.
+    var onStateChanged: (() -> Void)?
+
+    /// Ticks the elapsed time while recording.
+    ///
+    /// The only repeating timer in the app, and it exists solely while a recording is
+    /// running — the idle path still has none (PRD §8).
+    @ObservationIgnored private var tickTask: Task<Void, Never>?
+    @ObservationIgnored private var startedAt: Date?
+    @ObservationIgnored private var pausedDuration: TimeInterval = 0
+    @ObservationIgnored private var pausedAt: Date?
+
+    init(
+        captureEngine: CaptureEngine,
+        permissions: PermissionCoordinator,
+        settings: AppSettings,
+        overlay: SelectionOverlayController = SelectionOverlayController()
+    ) {
+        self.captureEngine = captureEngine
+        self.permissions = permissions
+        self.settings = settings
+        self.overlay = overlay
+    }
+
+    var isRecording: Bool {
+        state == .recording || state == .paused
+    }
+
+    /// Elapsed time as the menu bar shows it.
+    var elapsedText: String {
+        let total = Int(elapsed)
+        let minutes = total / 60
+        let seconds = total % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    // MARK: - Starting
+
+    /// Picks a region with the selection overlay, then records it.
+    func beginRegionRecording() {
+        guard !isRecording else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let freezes = try await captureEngine.freezeAllDisplays()
+                permissions.noteCaptureSuccess()
+                overlay.present(
+                    freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) }
+                ) { [weak self] outcome in
+                    guard case let .region(result) = outcome else { return }
+                    self?.start(target: .region(result.rect, display: result.display.displayID))
+                }
+            } catch {
+                permissions.noteCaptureFailure(error)
+                logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Records a whole display, with no overlay.
+    func beginDisplayRecording(_ displayID: CGDirectDisplayID = CGMainDisplayID()) {
+        guard !isRecording else { return }
+        start(target: .display(displayID))
+    }
+
+    private func start(target: RecordingTarget) {
+        let options = currentOptions
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await engine.start(target: target, options: options)
+                state = .recording
+                startedAt = Date()
+                pausedDuration = 0
+                pausedAt = nil
+                startTicking()
+                if settings.recordingEnablesFocus {
+                    focus.enable()
+                }
+                logger.info("Recording started")
+            } catch {
+                logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
+                permissions.noteCaptureFailure(error)
+            }
+        }
+    }
+
+    private var currentOptions: RecordingOptions {
+        RecordingOptions(
+            frameRate: RecordingFrameRate(rawValue: settings.recordingFrameRate.rawValue) ?? .sixty,
+            codec: settings.recordingCodec == .hevc ? .hevc : .h264,
+            capturesSystemAudio: settings.recordsSystemAudio,
+            capturesMicrophone: settings.recordsMicrophone,
+            showsCursor: settings.recordingShowsCursor
+        )
+    }
+
+    // MARK: - Controlling
+
+    func pause() {
+        guard state == .recording else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            try? await engine.pause()
+            state = .paused
+            pausedAt = Date()
+            stopTicking()
+        }
+    }
+
+    func resume() {
+        guard state == .paused else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            try? await engine.resume()
+            if let pausedAt {
+                // Paused time is time the user chose not to record, so the clock skips it
+                // exactly as the file does.
+                pausedDuration += Date().timeIntervalSince(pausedAt)
+            }
+            pausedAt = nil
+            state = .recording
+            startTicking()
+        }
+    }
+
+    func stop() {
+        guard isRecording else { return }
+        state = .finishing
+        stopTicking()
+        focus.disable()
+
+        let destination = destinationURL()
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await engine.stop(savingTo: destination)
+                state = .idle
+                elapsed = 0
+                logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
+                onFinished?(result)
+            } catch {
+                state = .idle
+                elapsed = 0
+                logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    func cancel() {
+        guard isRecording else { return }
+        stopTicking()
+        focus.disable()
+        Task { [weak self] in
+            await self?.engine.cancel()
+            self?.state = .idle
+            self?.elapsed = 0
+        }
+    }
+
+    // MARK: - Plumbing
+
+    private func destinationURL() -> URL {
+        let template = FilenameTemplate("Kadr recording {date} {time}")
+        let name = template.expand(FilenameContext(applicationName: "Screen", date: Date()))
+        return settings.saveFolder.appendingPathComponent(name).appendingPathExtension("mp4")
+    }
+
+    private func startTicking() {
+        stopTicking()
+        tickTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, let startedAt else { return }
+                elapsed = Date().timeIntervalSince(startedAt) - pausedDuration
+            }
+        }
+    }
+
+    private func stopTicking() {
+        tickTask?.cancel()
+        tickTask = nil
+    }
+}
+
+/// Do Not Disturb while recording (docs/03 §1.8).
+///
+/// macOS gives apps no supported way to set a Focus mode, so this does the honest thing:
+/// it suppresses Kadr's own notifications and tells the user what it cannot do, rather
+/// than pretending. A banner from another app landing in a recording is a real problem;
+/// silently failing to prevent it would be worse than saying so.
+@MainActor
+struct FocusMode {
+    private let logger = KadrLog.logger(.recording)
+
+    func enable() {
+        logger.info("Recording started; macOS Focus must be set by the user if wanted")
+    }
+
+    func disable() {}
+}

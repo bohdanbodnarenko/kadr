@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import RecordingCore
 import SelectionUI
 import SettingsKit
 import Shared
@@ -40,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var permissions = PermissionCoordinator()
     private lazy var areaCapture = AreaCaptureCoordinator(
         engine: captureEngine,
+        permissions: permissions,
+        settings: settings
+    )
+    private lazy var recording = RecordingCoordinator(
+        captureEngine: captureEngine,
         permissions: permissions,
         settings: settings
     )
@@ -85,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOnboarding: { [weak self] in self?.showOnboarding() },
             checkForUpdates: { [weak self] in self?.updater.checkForUpdates() },
             canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates ?? false },
+            recordingControls: { [weak self] in self?.currentRecordingControls() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()
@@ -93,6 +100,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyCenter?.start()
 
         updater.start()
+
+        // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
+        recording.onFinished = { [weak self] result in
+            self?.areaCapture.showRecording(at: result.fileURL)
+        }
+        // The menu bar shows the recording's state and elapsed time (docs/03 §8.1).
+        recording.onStateChanged = { [weak self] in
+            self?.refreshStatusItemIcon()
+        }
 
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
@@ -143,7 +159,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             areaCapture.captureAllDisplays()
         case .captureText:
             areaCapture.beginTextCapture()
+        case .recordRegion:
+            recording.beginRegionRecording()
+        case .recordDisplay:
+            recording.beginDisplayRecording()
         }
+    }
+
+    /// Keeps the menu bar in step with the recording.
+    private func refreshStatusItemIcon() {
+        guard recording.isRecording else {
+            statusItemController?.showIdleIcon()
+            return
+        }
+        statusItemController?.showRecordingIcon(
+            elapsed: recording.elapsedText,
+            isPaused: recording.state == .paused
+        )
+    }
+
+    /// The menu's view of a recording in progress, or nil when nothing is recording.
+    private func currentRecordingControls() -> RecordingControls? {
+        guard recording.isRecording else { return nil }
+        return RecordingControls(
+            elapsedText: recording.elapsedText,
+            isPaused: recording.state == .paused,
+            stop: { [weak self] in self?.recording.stop() },
+            togglePause: { [weak self] in
+                guard let self else { return }
+                if recording.state == .paused {
+                    recording.resume()
+                } else {
+                    recording.pause()
+                }
+            },
+            cancel: { [weak self] in self?.recording.cancel() }
+        )
     }
 
     /// Reopens onboarding, which is also how the user recovers a revoked grant.

@@ -61,6 +61,26 @@ final class QuickAccessManager {
         present(item)
     }
 
+    /// Shows a card for a finished recording (docs/03 §1.8).
+    ///
+    /// A recording is already a file on disk, so unlike a capture there is nothing to
+    /// export first — the card points straight at it.
+    func showRecording(at fileURL: URL) {
+        Task { [weak self] in
+            // Reading the track's size is asynchronous, so the card appears as soon as
+            // the size is known rather than blocking the stop button on it.
+            let size = await VideoPosterFrame.pixelSize(of: fileURL) ?? PixelSize(width: 0, height: 0)
+            self?.present(QuickAccessItem(
+                fileURL: fileURL,
+                isStaged: false,
+                pixelSize: size,
+                capturedAt: Date(),
+                displayID: nil,
+                isVideo: true
+            ))
+        }
+    }
+
     /// Brings back the most recently dismissed card (docs/03 §2).
     func restoreRecentlyClosed() {
         guard let item = recentlyClosed.first else { return }

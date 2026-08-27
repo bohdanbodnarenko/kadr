@@ -7,16 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		KADR00000000000000000602 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000601 /* Sparkle */; };
-		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; };
-		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
-		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
-		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
-		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
-		KADR00000000000000000441 /* AnnotationModel in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000421 /* AnnotationModel */; };
-		KADR00000000000000000442 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000422 /* AnnotationRender */; };
-		KADR00000000000000000443 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000423 /* MediaExport */; };
-		KADR00000000000000000444 /* EditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000424 /* EditorUI */; };
 		KADR000000000000000000C8 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000064 /* Shared */; };
 		KADR000000000000000000C9 /* CaptureCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000065 /* CaptureCore */; };
 		KADR000000000000000000CA /* OverlayKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000066 /* OverlayKit */; };
@@ -29,6 +19,16 @@
 		KADR000000000000000000D1 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006D /* AnnotationRender */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
 		KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000301 /* KeyboardShortcuts */; };
+		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
+		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
+		KADR00000000000000000441 /* AnnotationModel in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000421 /* AnnotationModel */; };
+		KADR00000000000000000442 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000422 /* AnnotationRender */; };
+		KADR00000000000000000443 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000423 /* MediaExport */; };
+		KADR00000000000000000444 /* EditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000424 /* EditorUI */; };
+		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; };
+		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
+		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
+		KADR00000000000000000602 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000601 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +54,31 @@
 			remoteInfo = HelperTools;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		KADR00000000000000000409 /* Embed Editor */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Applications;
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000040A /* KadrEditor.app in Embed Editor */,
+			);
+			name = "Embed Editor";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000509 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/XPCServices;
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		F5F2A2373040394A00A5DC07 /* Kadr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kadr.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -84,31 +109,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		KADR00000000000000000409 /* Embed Editor */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "Contents/Applications";
-			dstSubfolderSpec = 1;
-			files = (
-				KADR0000000000000000040A /* KadrEditor.app in Embed Editor */,
-			);
-			name = "Embed Editor";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		KADR00000000000000000509 /* Embed XPC Services */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "Contents/XPCServices";
-			dstSubfolderSpec = 1;
-			files = (
-				KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */,
-			);
-			name = "Embed XPC Services";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F5F2A2343040394A00A5DC07 /* Frameworks */ = {
@@ -586,9 +586,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -618,9 +618,9 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -690,7 +690,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -718,7 +718,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -744,8 +744,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_FILE = "HelperTools/HelperTools-Info.plist";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -764,8 +764,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_FILE = "HelperTools/HelperTools-Info.plist";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -881,14 +881,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.6.0;
-			};
-		};
 		KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -897,42 +889,17 @@
 				minimumVersion = 3.0.1;
 			};
 		};
+		KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		KADR00000000000000000601 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
-		KADR00000000000000000520 /* Shared */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Shared;
-		};
-		KADR00000000000000000521 /* VisionServices */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = VisionServices;
-		};
-		KADR00000000000000000420 /* Shared */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Shared;
-		};
-		KADR00000000000000000421 /* AnnotationModel */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AnnotationModel;
-		};
-		KADR00000000000000000422 /* AnnotationRender */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AnnotationRender;
-		};
-		KADR00000000000000000423 /* MediaExport */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = MediaExport;
-		};
-		KADR00000000000000000424 /* EditorUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = EditorUI;
-		};
 		KADR00000000000000000064 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Shared;
@@ -981,6 +948,39 @@
 			isa = XCSwiftPackageProductDependency;
 			package = KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		KADR00000000000000000420 /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		KADR00000000000000000421 /* AnnotationModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AnnotationModel;
+		};
+		KADR00000000000000000422 /* AnnotationRender */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AnnotationRender;
+		};
+		KADR00000000000000000423 /* MediaExport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MediaExport;
+		};
+		KADR00000000000000000424 /* EditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EditorUI;
+		};
+		KADR00000000000000000520 /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		KADR00000000000000000521 /* VisionServices */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = VisionServices;
+		};
+		KADR00000000000000000601 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

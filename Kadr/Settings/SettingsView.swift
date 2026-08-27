@@ -20,6 +20,9 @@ struct SettingsView: View {
             CapturePane(settings: settings)
                 .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
 
+            RecordingPane(settings: settings)
+                .tabItem { Label("Recording", systemImage: "record.circle") }
+
             ShortcutsPane()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
 
