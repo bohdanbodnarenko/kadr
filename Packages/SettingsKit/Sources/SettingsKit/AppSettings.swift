@@ -102,6 +102,8 @@ public enum OverlayTimeout: Int, CaseIterable, SettingValue {
 /// The typed key set. Names are namespaced so `defaults read app.kadr.Kadr` stays legible.
 public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
+    /// Whether the user has been through onboarding (docs/03 §8.2).
+    public static let hasCompletedOnboarding = SettingKey("app.hasCompletedOnboarding", default: false)
     public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)
     public static let saveFolderPath = SettingKey("general.saveFolderPath", default: "")
     public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
@@ -139,6 +141,10 @@ public enum SettingKeys {
 @Observable
 public final class AppSettings {
     @ObservationIgnored private let store: UserDefaults
+
+    public var hasCompletedOnboarding: Bool {
+        didSet { store[SettingKeys.hasCompletedOnboarding] = hasCompletedOnboarding }
+    }
 
     public var defaultAction: DefaultCaptureAction {
         didSet { store[SettingKeys.defaultAction] = defaultAction }
@@ -248,6 +254,7 @@ public final class AppSettings {
     public init(store: UserDefaults = .standard) {
         SettingsMigrator.migrate(store)
         self.store = store
+        hasCompletedOnboarding = store[SettingKeys.hasCompletedOnboarding]
         defaultAction = store[SettingKeys.defaultAction]
         saveFolderPath = store[SettingKeys.saveFolderPath]
         filenameTemplate = store[SettingKeys.filenameTemplate]

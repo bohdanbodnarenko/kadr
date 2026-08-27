@@ -53,6 +53,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem: loginItem
     )
 
+    private lazy var onboarding = OnboardingWindowController(
+        model: OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem),
+        settings: settings
+    )
+
     #if DEBUG
         private var debugCaptureMenu: DebugCaptureMenu?
     #endif
@@ -72,6 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
             closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
+            captureWithPicker: { [weak self] in self?.areaCapture.captureWithSystemPicker() },
+            showOnboarding: { [weak self] in self?.showOnboarding() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()
@@ -87,6 +94,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // across launches. Deliberately after the status item, so ServiceManagement
         // loading cannot eat into the launch budget.
         loginItem.refresh()
+
+        // First launch goes straight to onboarding; every later launch just checks
+        // whether the grant is still there (docs/03 §8.2, docs/04 §4.1).
+        permissions.refresh()
+        if !settings.hasCompletedOnboarding {
+            onboarding.show()
+        }
         // Bound to a local: a log message is an autoclosure, so referring to a property
         // inside it would need an explicit `self.` that SwiftFormat then strips again.
         let loginItemState = String(describing: loginItem.state)
@@ -122,6 +136,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .captureText:
             areaCapture.beginTextCapture()
         }
+    }
+
+    /// Reopens onboarding, which is also how the user recovers a revoked grant.
+    func showOnboarding() {
+        onboarding.show()
     }
 
     private func openSettings() {

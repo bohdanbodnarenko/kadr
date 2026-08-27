@@ -19,6 +19,8 @@ final class AreaCaptureCoordinator {
     private let settings: AppSettings
     private let timer = CaptureCountdown()
     private let vision = VisionClient()
+    private let recovery = PermissionRecovery()
+    private var pickerSession: ContentSharingPickerSession?
     private let toast = TextCaptureToast()
     private let output: CaptureOutput
     private let quickAccess: QuickAccessManager
@@ -337,6 +339,38 @@ final class AreaCaptureCoordinator {
         }
         permissions.noteCaptureFailure(error)
         let mapped = CaptureError.mapping(error)
-        logger.error("Area capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
+        logger.error("Capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
+
+        // A lost grant is the one failure worth interrupting the user over: every capture
+        // will keep failing until they act (docs/03 §9).
+        guard mapped.indicatesPermissionLoss else { return }
+        switch recovery.present(state: permissions.state) {
+        case .openSettings:
+            recovery.openSystemSettings()
+        case .usePicker:
+            captureWithSystemPicker()
+        case .dismiss:
+            break
+        }
+    }
+
+    /// Captures through `SCContentSharingPicker`, which needs no permission at all
+    /// (docs/04 §4.1) — the way to stay useful before, or without, a TCC grant.
+    func captureWithSystemPicker() {
+        let session = ContentSharingPickerSession()
+        pickerSession = session
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            defer { pickerSession = nil }
+            do {
+                let capture = try await session.captureUserSelection()
+                deliver(capture)
+            } catch is CancellationError {
+                logger.info("Picker capture cancelled")
+            } catch {
+                let mapped = CaptureError.mapping(error)
+                logger.error("Picker capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
+            }
+        }
     }
 }

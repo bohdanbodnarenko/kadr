@@ -19,6 +19,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let openSettings: () -> Void
     private let restoreRecentlyClosed: () -> Void
     private let closeAllPins: () -> Void
+    private let captureWithPicker: () -> Void
+    private let showOnboarding: () -> Void
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
 
@@ -27,12 +29,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         openSettings: @escaping () -> Void,
         restoreRecentlyClosed: @escaping () -> Void = {},
         closeAllPins: @escaping () -> Void = {},
+        captureWithPicker: @escaping () -> Void = {},
+        showOnboarding: @escaping () -> Void = {},
         additionalItems: @escaping () -> [NSMenuItem] = { [] }
     ) {
         self.perform = perform
         self.openSettings = openSettings
         self.restoreRecentlyClosed = restoreRecentlyClosed
         self.closeAllPins = closeAllPins
+        self.captureWithPicker = captureWithPicker
+        self.showOnboarding = showOnboarding
         self.additionalItems = additionalItems
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -63,6 +69,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             menu.addItem(item)
         }
 
+        // Always available, grant or not (docs/04 §4.1).
+        let pickerItem = NSMenuItem(
+            title: "Capture with the macOS Picker…",
+            action: #selector(didSelectPickerCapture),
+            keyEquivalent: ""
+        )
+        pickerItem.target = self
+        menu.addItem(pickerItem)
+
         menu.addItem(.separator())
 
         let restoreItem = NSMenuItem(
@@ -88,6 +103,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let onboardingItem = NSMenuItem(
+            title: "Setup & Permissions…",
+            action: #selector(didSelectOnboarding),
+            keyEquivalent: ""
+        )
+        onboardingItem.target = self
+        menu.addItem(onboardingItem)
 
         let updatesItem = NSMenuItem(title: "Check for Updates…", action: nil, keyEquivalent: "")
         // Sparkle is wired up in M11; until then this advertises the update path honestly.
@@ -128,6 +151,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc
     private func didSelectCloseAllPins() {
         closeAllPins()
+    }
+
+    @objc
+    private func didSelectPickerCapture() {
+        captureWithPicker()
+    }
+
+    @objc
+    private func didSelectOnboarding() {
+        showOnboarding()
     }
 
     @objc
