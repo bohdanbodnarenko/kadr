@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		KADR00000000000000000602 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000601 /* Sparkle */; };
 		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; };
 		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
 		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
@@ -115,6 +116,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */,
+				KADR00000000000000000602 /* Sparkle in Frameworks */,
 				KADR000000000000000000C8 /* Shared in Frameworks */,
 				KADR000000000000000000C9 /* CaptureCore in Frameworks */,
 				KADR000000000000000000CA /* OverlayKit in Frameworks */,
@@ -207,6 +209,7 @@
 			name = Kadr;
 			packageProductDependencies = (
 				KADR00000000000000000301 /* KeyboardShortcuts */,
+				KADR00000000000000000601 /* Sparkle */,
 				KADR00000000000000000064 /* Shared */,
 				KADR00000000000000000065 /* CaptureCore */,
 				KADR00000000000000000066 /* OverlayKit */,
@@ -326,6 +329,7 @@
 			mainGroup = F5F2A22E3040394A00A5DC07;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				KADR00000000000000000000 /* XCLocalSwiftPackageReference "Packages/Shared" */,
 				KADR00000000000000000001 /* XCLocalSwiftPackageReference "Packages/CaptureCore" */,
@@ -582,6 +586,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -612,6 +618,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
+				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -873,6 +881,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
 		KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -884,6 +900,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		KADR00000000000000000601 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		KADR00000000000000000520 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Shared;

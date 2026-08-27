@@ -21,6 +21,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let closeAllPins: () -> Void
     private let captureWithPicker: () -> Void
     private let showOnboarding: () -> Void
+    private let checkForUpdates: () -> Void
+    private let canCheckForUpdates: () -> Bool
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
 
@@ -31,6 +33,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         closeAllPins: @escaping () -> Void = {},
         captureWithPicker: @escaping () -> Void = {},
         showOnboarding: @escaping () -> Void = {},
+        checkForUpdates: @escaping () -> Void = {},
+        canCheckForUpdates: @escaping () -> Bool = { false },
         additionalItems: @escaping () -> [NSMenuItem] = { [] }
     ) {
         self.perform = perform
@@ -39,6 +43,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.closeAllPins = closeAllPins
         self.captureWithPicker = captureWithPicker
         self.showOnboarding = showOnboarding
+        self.checkForUpdates = checkForUpdates
+        self.canCheckForUpdates = canCheckForUpdates
         self.additionalItems = additionalItems
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -59,7 +65,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        addCaptureItems(to: menu)
+        addOverlayItems(to: menu)
+        addApplicationItems(to: menu)
+    }
 
+    /// The capture commands, with their hotkey hints (docs/03 §8.1).
+    private func addCaptureItems(to menu: NSMenu) {
         for command in CaptureCommand.menuCommands {
             let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
             item.target = self
@@ -77,7 +89,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         pickerItem.target = self
         menu.addItem(pickerItem)
+    }
 
+    /// Commands over the surfaces a capture produces (docs/03 §2, §4).
+    private func addOverlayItems(to menu: NSMenu) {
         menu.addItem(.separator())
 
         let restoreItem = NSMenuItem(
@@ -96,6 +111,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         closePinsItem.target = self
         menu.addItem(closePinsItem)
+    }
+
+    private func addApplicationItems(to menu: NSMenu) {
+        let extras = additionalItems()
+        if !extras.isEmpty {
+            menu.addItem(.separator())
+            for item in extras {
+                menu.addItem(item)
+            }
+        }
 
         menu.addItem(.separator())
 
@@ -112,18 +137,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         onboardingItem.target = self
         menu.addItem(onboardingItem)
 
-        let updatesItem = NSMenuItem(title: "Check for Updates…", action: nil, keyEquivalent: "")
-        // Sparkle is wired up in M11; until then this advertises the update path honestly.
-        updatesItem.isEnabled = false
+        let updatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(didSelectCheckForUpdates),
+            keyEquivalent: ""
+        )
+        updatesItem.target = self
+        // Disabled while a check is already running, and in debug builds, where Sparkle
+        // deliberately does nothing.
+        updatesItem.isEnabled = canCheckForUpdates()
         menu.addItem(updatesItem)
-
-        let extras = additionalItems()
-        if !extras.isEmpty {
-            menu.addItem(.separator())
-            for item in extras {
-                menu.addItem(item)
-            }
-        }
 
         menu.addItem(.separator())
 
@@ -161,6 +184,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc
     private func didSelectOnboarding() {
         showOnboarding()
+    }
+
+    @objc
+    private func didSelectCheckForUpdates() {
+        checkForUpdates()
     }
 
     @objc

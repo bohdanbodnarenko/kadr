@@ -53,6 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem: loginItem
     )
 
+    /// Held from launch so Sparkle's controller exists before the app finishes starting,
+    /// which is what it expects.
+    private let updater = UpdaterManager.shared
+
     private lazy var onboarding = OnboardingWindowController(
         model: OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem),
         settings: settings
@@ -79,12 +83,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
             captureWithPicker: { [weak self] in self?.areaCapture.captureWithSystemPicker() },
             showOnboarding: { [weak self] in self?.showOnboarding() },
+            checkForUpdates: { [weak self] in self?.updater.checkForUpdates() },
+            canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates ?? false },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
         )
         endLaunchInterval()
 
         hotkeyCenter = HotkeyCenter(perform: { [weak self] command in self?.perform(command) })
         hotkeyCenter?.start()
+
+        updater.start()
 
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The Settings window's content (docs/03 §8.3).
 ///
-/// General, Overlay, Capture and Shortcuts exist so far; Recording, History and
+/// General, Overlay, Capture, Shortcuts and Updates exist so far; Recording, History and
 /// Advanced arrive with the features they configure.
 struct SettingsView: View {
     let settings: AppSettings
@@ -22,6 +22,9 @@ struct SettingsView: View {
 
             ShortcutsPane()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+
+            UpdatesPane(updater: .shared)
+                .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
         .frame(width: 540, height: 380)
     }

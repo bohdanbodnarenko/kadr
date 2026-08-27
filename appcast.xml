@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Kadr's Sparkle appcast.
+
+    Empty until the first signed release. `Scripts/release.sh` appends an item per
+    release, each one signed with the EdDSA private key that lives in the maintainer's
+    Keychain; the matching public key is in the app's Info.plist as SUPublicEDKey.
+
+    Sparkle refuses an update whose signature does not verify, which is what makes the
+    update channel safe to be the app's only network connection.
+-->
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Kadr</title>
+    <link>https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml</link>
+    <description>Updates for Kadr, the free native macOS screen-capture app.</description>
+    <language>en</language>
+  </channel>
+</rss>

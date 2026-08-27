@@ -66,15 +66,25 @@ struct VisionClientTests {
         defer { client.disconnect() }
         let image = makeTextImage("Warm up the helper")
 
-        // The first call pays for spawning the process and loading Vision's models; the
-        // budget in doc 03 §1.7 is about the steady state a user actually experiences.
-        _ = try? await client.analyze(image, options: TextRecognitionOptions())
+        // The first call pays for spawning the helper and loading Vision's models, which
+        // the budget in doc 03 §1.7 explicitly is not about — it describes the steady
+        // state a user experiences. The warm-up is checked rather than ignored, so a
+        // failure here cannot masquerade as a slow measurement.
+        _ = try await client.analyze(image, options: TextRecognitionOptions())
 
+        // The median of three: a single sample on a machine that happens to be busy says
+        // more about the machine than about Kadr, and taking the best would hide a real
+        // regression.
         let clock = ContinuousClock()
-        let elapsed = try await clock.measure {
-            _ = try await client.analyze(image, options: TextRecognitionOptions())
+        var samples: [Duration] = []
+        for _ in 0 ..< 3 {
+            try await samples.append(clock.measure {
+                _ = try await client.analyze(image, options: TextRecognitionOptions())
+            })
         }
-        #expect(elapsed < .seconds(1), "recognition took \(elapsed)")
+        let median = samples.sorted()[1]
+
+        #expect(median < .seconds(1), "recognition took \(samples.map(\.description))")
     }
 
     @Test("Line-break handling follows the request")
