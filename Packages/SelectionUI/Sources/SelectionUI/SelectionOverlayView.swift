@@ -22,13 +22,22 @@ final class SelectionOverlayView: NSView {
 
     // MARK: State
 
-    private(set) var interaction: SelectionInteraction
-    private var sizeEntry = NumericSizeEntry()
+    /// Which interaction the overlay is running (docs/03 §1.1, §1.2).
+    enum Mode: Equatable {
+        case area
+        case window
+    }
+
+    private(set) var mode: Mode
+    var interaction: SelectionInteraction
+    var windowPick = WindowPickInteraction()
+    var sizeEntry = NumericSizeEntry()
     private let loupe: LoupeLayerGroup
+    private let windowHighlight: WindowHighlightLayerGroup
     private let displayScale: DisplayScale
     private let logger = KadrLog.logger(.overlay)
     private var trackingArea: NSTrackingArea?
-    private var isSpaceDown = false
+    var isSpaceDown = false
 
     /// The selection was committed, in display-local points.
     var onCommit: ((CGRect) -> Void)?
@@ -36,13 +45,19 @@ final class SelectionOverlayView: NSView {
     var onCancel: (() -> Void)?
     /// The pointer entered this display, so other overlays should hide their loupes.
     var onBecameActive: (() -> Void)?
+    /// A window was picked. `togglesShadow` reports ⌥ held at click (docs/03 §1.2).
+    var onCommitWindow: ((PickableWindow, _ togglesShadow: Bool) -> Void)?
+    /// The user switched modes, so every other display's overlay should follow.
+    var onModeChanged: ((Mode) -> Void)?
 
     // MARK: Geometry constants
 
     private static let badgeHeight: CGFloat = 22
 
-    init(frozenImage: CGImage, bounds: CGRect, scale: DisplayScale) {
+    init(frozenImage: CGImage, bounds: CGRect, scale: DisplayScale, mode: Mode = .area) {
+        self.mode = mode
         interaction = SelectionInteraction(bounds: CGRect(origin: .zero, size: bounds.size))
+        windowHighlight = WindowHighlightLayerGroup(scale: scale)
         loupe = LoupeLayerGroup(sampler: LoupeSampler(image: frozenImage, scale: scale), scale: scale)
         displayScale = scale
         super.init(frame: bounds)
@@ -112,6 +127,7 @@ final class SelectionOverlayView: NSView {
         badgeTextLayer.isHidden = true
         root.addSublayer(badgeTextLayer)
 
+        root.addSublayer(windowHighlight.container)
         root.addSublayer(loupe.container)
         startMarchingAnts()
     }
@@ -162,23 +178,42 @@ final class SelectionOverlayView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        interaction.pointerMoved(to: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        interaction.pointerMoved(to: point)
+
+        if mode == .window {
+            // Only redraw when the highlighted window actually changed; most moves stay
+            // inside the same window and need no work at all.
+            if windowPick.pointerMoved(to: point) {
+                redraw()
+            }
+            return
+        }
         redraw()
     }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        guard mode == .area else { return }
         sizeEntry.reset()
         interaction.begin(at: convert(event.locationInWindow, from: nil))
         redraw()
     }
 
     override func mouseDragged(with event: NSEvent) {
+        guard mode == .area else { return }
         interaction.drag(to: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
         redraw()
     }
 
     override func mouseUp(with event: NSEvent) {
+        if mode == .window {
+            guard let window = windowPick.hovered else { return }
+            // ⌥ at click inverts the shadow setting for this capture (docs/03 §1.2).
+            onCommitWindow?(window, event.modifierFlags.contains(.option))
+            return
+        }
+
         interaction.drag(to: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
         interaction.end()
         redraw()
@@ -192,7 +227,7 @@ final class SelectionOverlayView: NSView {
         onCancel?()
     }
 
-    private func modifiers(from event: NSEvent) -> SelectionModifiers {
+    func modifiers(from event: NSEvent) -> SelectionModifiers {
         var modifiers: SelectionModifiers = []
         if event.modifierFlags.contains(.option) {
             modifiers.insert(.fromCenter)
@@ -203,143 +238,50 @@ final class SelectionOverlayView: NSView {
         return modifiers
     }
 
-    // MARK: - Keyboard (docs/03 §1.1)
-
-    /// Virtual key codes, named. `NSEvent` only offers the raw numbers.
-    private enum KeyCode {
-        static let escape: UInt16 = 53
-        static let space: UInt16 = 49
-        static let `return`: UInt16 = 36
-        static let enter: UInt16 = 76
-        static let delete: UInt16 = 51
-        static let arrowLeft: UInt16 = 123
-        static let arrowRight: UInt16 = 124
-        static let arrowDown: UInt16 = 125
-        static let arrowUp: UInt16 = 126
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if handleEditingKey(event) {
-            return
-        }
-        if handleSelectAll(event) {
-            return
-        }
-        if handleTypedSize(event) {
-            return
-        }
-        super.keyDown(with: event)
-    }
-
-    /// Esc, Space, Return and Delete, and the arrow keys.
-    private func handleEditingKey(_ event: NSEvent) -> Bool {
-        switch event.keyCode {
-        case KeyCode.escape:
-            onCancel?()
-        case KeyCode.space:
-            beginMovingIfNeeded()
-        case KeyCode.return, KeyCode.enter:
-            commitTypedSizeOrSelection()
-        case KeyCode.delete:
-            handleDelete()
-        case KeyCode.arrowLeft, KeyCode.arrowRight, KeyCode.arrowDown, KeyCode.arrowUp:
-            handleArrow(keyCode: event.keyCode, modifiers: event.modifierFlags)
-        default:
-            return false
-        }
-        return true
-    }
-
-    private func beginMovingIfNeeded() {
-        guard !isSpaceDown else { return }
-        isSpaceDown = true
-        interaction.beginMovingSelection()
-    }
-
-    /// Backspace unwinds a typed size first, and only then clears the selection.
-    private func handleDelete() {
-        if !sizeEntry.deleteBackward() {
-            interaction.cancelSelection()
-        }
-        redraw()
-    }
-
-    private func handleSelectAll(_ event: NSEvent) -> Bool {
-        guard event.modifierFlags.contains(.command),
-              event.charactersIgnoringModifiers == "a" else { return false }
-        interaction.selectAll()
-        redraw()
-        return true
-    }
-
-    /// Digits and separators typed anywhere on the overlay build up an exact size.
-    private func handleTypedSize(_ event: NSEvent) -> Bool {
-        var accepted = false
-        for character in event.charactersIgnoringModifiers ?? "" where sizeEntry.accept(character) {
-            accepted = true
-        }
-        guard accepted else { return false }
-        redraw()
-        return true
-    }
-
-    /// Arrows move the selection, ⌥-arrows resize it, ⇧ makes either coarse.
-    private func handleArrow(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
-        let direction: NudgeDirection = switch keyCode {
-        case KeyCode.arrowLeft: .left
-        case KeyCode.arrowRight: .right
-        case KeyCode.arrowDown: .down
-        default: .up
-        }
-        let coarse = modifiers.contains(.shift)
-        if modifiers.contains(.option) {
-            interaction.resize(direction, coarse: coarse)
-        } else {
-            interaction.nudge(direction, coarse: coarse)
-        }
-        redraw()
-    }
-
-    override func keyUp(with event: NSEvent) {
-        if event.keyCode == KeyCode.space {
-            isSpaceDown = false
-            interaction.endMovingSelection()
-        }
-    }
-
-    override func flagsChanged(with event: NSEvent) {
-        // Re-run the drag so ⌥ and ⇧ take effect without waiting for the next move.
-        if interaction.phase == .dragging, let pointer = interaction.pointer {
-            interaction.drag(to: pointer, modifiers: modifiers(from: event))
-            redraw()
-        }
-    }
-
-    private func commitTypedSizeOrSelection() {
-        if let size = sizeEntry.size {
-            interaction.setSize(size)
-            sizeEntry.reset()
-            redraw()
-        }
-        if let rect = interaction.rect, !rect.isEmpty {
-            onCommit?(rect)
-        }
-    }
-
     // MARK: - Drawing
 
     /// Redraws everything that changed, with implicit animation off.
     ///
+    /// Internal rather than private: the keyboard extension lives in a sibling file.
+    ///
     /// One transaction per event, no layout pass, no view redraw: this is the hot path.
-    private func redraw() {
+    func redraw() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        updateDimming()
-        updateCrosshair()
-        updateBadge()
-        updateLoupe()
+        switch mode {
+        case .area:
+            windowHighlight.hide()
+            updateDimming()
+            updateCrosshair()
+            updateBadge()
+            updateLoupe()
+        case .window:
+            updateWindowHighlight()
+        }
+    }
+
+    /// Window mode dims everything and lifts the hovered window out of it.
+    private func updateWindowHighlight() {
+        crosshairLayer.path = nil
+        selectionBorderLayer.path = nil
+        badgeBackgroundLayer.isHidden = true
+        badgeTextLayer.isHidden = true
+        loupe.hide()
+
+        let path = CGMutablePath()
+        path.addRect(bounds)
+        if let window = windowPick.hovered {
+            let frame = window.frame.intersection(bounds)
+            if !frame.isEmpty {
+                path.addRoundedRect(in: frame, cornerWidth: 6, cornerHeight: 6)
+            }
+            windowHighlight.show(window, within: bounds)
+        } else {
+            windowHighlight.hide()
+        }
+        dimLayer.path = path
     }
 
     private func updateDimming() {
@@ -412,6 +354,23 @@ final class SelectionOverlayView: NSView {
             return
         }
         loupe.update(pointer: pointer, within: bounds)
+    }
+
+    /// The windows this display can offer for picking (docs/03 §1.2).
+    func setPickableWindows(_ windows: [PickableWindow]) {
+        windowPick.setWindows(windows)
+        redraw()
+    }
+
+    func setMode(_ mode: Mode) {
+        guard mode != self.mode else { return }
+        self.mode = mode
+        interaction.cancelSelection()
+        windowPick.clearHover()
+        if mode == .window, let pointer = interaction.pointer {
+            windowPick.pointerMoved(to: pointer)
+        }
+        redraw()
     }
 
     /// Hides the pointer-following chrome on displays the pointer is not on.

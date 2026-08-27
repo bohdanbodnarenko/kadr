@@ -2,6 +2,7 @@ import AppKit
 import CaptureCore
 import os
 import SelectionUI
+import SettingsKit
 import Shared
 
 /// Drives area capture end to end: hotkey → freeze → overlay → crop → clipboard.
@@ -14,6 +15,8 @@ final class AreaCaptureCoordinator {
     private let engine: CaptureEngine
     private let permissions: PermissionCoordinator
     private let overlay: SelectionOverlayController
+    private let settings: AppSettings
+    private let timer = CaptureCountdown()
     private let output = CaptureOutput()
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
@@ -26,10 +29,12 @@ final class AreaCaptureCoordinator {
     init(
         engine: CaptureEngine,
         permissions: PermissionCoordinator,
+        settings: AppSettings,
         overlay: SelectionOverlayController = SelectionOverlayController()
     ) {
         self.engine = engine
         self.permissions = permissions
+        self.settings = settings
         self.overlay = overlay
     }
 
@@ -39,6 +44,36 @@ final class AreaCaptureCoordinator {
 
     /// Freezes every display and puts the selection overlay up.
     func beginAreaCapture() {
+        beginOverlayCapture(mode: .area)
+    }
+
+    /// Freezes every display and opens window-pick mode (docs/03 §1.2).
+    func beginWindowCapture() {
+        beginOverlayCapture(mode: .window)
+    }
+
+    /// Captures every display with no overlay at all (docs/03 §1.3).
+    func captureAllDisplays() {
+        inFlight?.cancel()
+        let seconds = settings.timerSeconds
+        timer.run(seconds: seconds) { [weak self] in
+            guard let self else { return }
+            inFlight = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let captures = try await engine.captureAllDisplays(
+                        includesCursor: settings.includesCursor
+                    )
+                    permissions.noteCaptureSuccess()
+                    output.deliver(captures)
+                } catch {
+                    handle(error)
+                }
+            }
+        }
+    }
+
+    private func beginOverlayCapture(mode: SelectionMode) {
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
         inFlight?.cancel()
 
@@ -53,11 +88,29 @@ final class AreaCaptureCoordinator {
                 guard !Task.isCancelled else { return }
                 permissions.noteCaptureSuccess()
 
+                let windows: [PickableWindowDescriptor] = if mode == .window {
+                    try await engine.shareableContent().windows
+                        .filter(\.isUserWindow)
+                        .map {
+                            PickableWindowDescriptor(
+                                id: $0.id,
+                                title: $0.title,
+                                applicationName: $0.applicationName,
+                                bundleIdentifier: $0.bundleIdentifier,
+                                globalFrame: $0.frame
+                            )
+                        }
+                } else {
+                    []
+                }
+
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
+                    mode: mode,
+                    windows: windows,
                     signpostState: interval
-                ) { [weak self] result in
-                    self?.finish(with: result, freezes: freezes)
+                ) { [weak self] outcome in
+                    self?.finish(with: outcome, freezes: freezes)
                 }
             } catch {
                 signposter.endInterval("hotkeyToOverlay", interval)
@@ -74,29 +127,68 @@ final class AreaCaptureCoordinator {
         }
 
         inFlight?.cancel()
-        inFlight = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let capture = try await engine.captureRegion(lastRegion.rect, on: lastRegion.displayID)
-                permissions.noteCaptureSuccess()
-                output.copyToClipboard(capture.image)
-            } catch {
-                handle(error)
-            }
+        let region = lastRegion
+        timer.run(seconds: settings.timerSeconds) { [weak self] in
+            self?.captureRegionLive(region.rect, on: region.displayID)
         }
     }
 
     func cancel() {
         inFlight?.cancel()
         inFlight = nil
+        timer.cancel()
         overlay.cancel()
     }
 
     // MARK: - Completion
 
-    private func finish(with result: SelectionResult?, freezes: [DisplayFreeze]) {
-        guard let result else {
-            logger.info("Area capture cancelled")
+    private func finish(with outcome: SelectionOutcome?, freezes: [DisplayFreeze]) {
+        switch outcome {
+        case nil:
+            logger.info("Capture cancelled")
+        case let .region(result):
+            finishRegion(result, freezes: freezes)
+        case let .window(selection):
+            finishWindow(selection)
+        }
+    }
+
+    /// Captures the picked window through SCK, so it comes out unoccluded rather than
+    /// cropped out of the frozen screen (docs/03 §1.2).
+    private func finishWindow(_ selection: WindowSelection) {
+        let shadow = selection.togglesShadow ? !settings.windowShadow : settings.windowShadow
+        let options = WindowCaptureOptions(
+            includesShadow: shadow,
+            transparentBackground: settings.transparentWindowBackground,
+            includesCursor: settings.includesCursor
+        )
+
+        timer.run(seconds: settings.timerSeconds) { [weak self] in
+            guard let self else { return }
+            inFlight = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let capture = try await engine.captureWindow(selection.window.id, options: options)
+                    permissions.noteCaptureSuccess()
+                    output.copyToClipboard(capture.image)
+                } catch {
+                    handle(error)
+                }
+            }
+        }
+    }
+
+    private func finishRegion(_ result: SelectionResult, freezes: [DisplayFreeze]) {
+        lastRegion = (result.rect, result.display.displayID)
+
+        // With a timer running the point is to capture what the screen looks like *after*
+        // the countdown, so the frozen image is the wrong source and the region is
+        // re-captured live (docs/03 §1.5). Without a timer, cropping the freeze is both
+        // faster and the only way to guarantee WYSIWYG (docs/03 §1.1).
+        guard settings.timerSeconds == 0 else {
+            timer.run(seconds: settings.timerSeconds) { [weak self] in
+                self?.captureRegionLive(result.rect, on: result.display.displayID)
+            }
             return
         }
 
@@ -116,8 +208,24 @@ final class AreaCaptureCoordinator {
             return
         }
 
-        lastRegion = (result.rect, result.display.displayID)
         output.copyToClipboard(image)
+    }
+
+    private func captureRegionLive(_ rect: DisplayRect, on displayID: CGDirectDisplayID) {
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let capture = try await engine.captureRegion(
+                    rect,
+                    on: displayID,
+                    includesCursor: settings.includesCursor
+                )
+                permissions.noteCaptureSuccess()
+                output.copyToClipboard(capture.image)
+            } catch {
+                handle(error)
+            }
+        }
     }
 
     private func handle(_ error: any Error) {

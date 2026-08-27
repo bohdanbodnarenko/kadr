@@ -66,11 +66,11 @@ struct SelectionOverlayLifecycleTests {
     func presentThenCancel() {
         let controller = SelectionOverlayController(screens: FakeScreens([descriptor(1)]))
         var completions = 0
-        var result: SelectionResult?
+        var outcome: SelectionOutcome?
 
         controller.present(freezes: [frozen(1)]) { selection in
             completions += 1
-            result = selection
+            outcome = selection
         }
         #expect(controller.isPresented)
 
@@ -78,7 +78,7 @@ struct SelectionOverlayLifecycleTests {
 
         #expect(controller.isPresented == false)
         #expect(completions == 1)
-        #expect(result == nil, "cancelling must not produce a selection")
+        #expect(outcome == nil, "cancelling must not produce a selection")
     }
 
     @Test("A second present replaces the first rather than stacking overlays")
@@ -145,5 +145,64 @@ struct SelectionOverlayLifecycleTests {
         let controller = SelectionOverlayController(screens: FakeScreens([descriptor(1)]))
         controller.cancel()
         #expect(controller.isPresented == false)
+    }
+}
+
+/// Window-pick mode's wiring, exercised without a Screen Recording grant.
+@MainActor
+@Suite("Window pick mode", .serialized)
+struct WindowPickModeTests {
+    @Test("Opening in window mode maps the offered windows onto the display")
+    func presentsWindowMode() {
+        let controller = SelectionOverlayController(screens: FakeScreens([descriptor(1)]))
+        controller.present(
+            freezes: [frozen(1)],
+            mode: .window,
+            windows: [PickableWindowDescriptor(
+                id: 42,
+                title: "Test",
+                applicationName: "Tester",
+                bundleIdentifier: "app.kadr.tests",
+                globalFrame: DisplayRect(x: 10, y: 10, width: 100, height: 100)
+            )]
+        ) { _ in }
+
+        #expect(controller.isPresented)
+        controller.cancel()
+        #expect(controller.isPresented == false)
+    }
+
+    @Test("Windows are mapped onto every display that shows them")
+    func mapsAcrossDisplays() {
+        let left = DisplayGeometry(
+            displayID: 1,
+            frame: DisplayRect(x: 0, y: 0, width: 1000, height: 800),
+            scale: .retina
+        )
+        let right = DisplayGeometry(
+            displayID: 2,
+            frame: DisplayRect(x: 1000, y: 0, width: 1000, height: 800),
+            scale: .oneToOne
+        )
+        let onLeft = PickableWindowDescriptor(
+            id: 1,
+            title: nil,
+            applicationName: "A",
+            bundleIdentifier: "a",
+            globalFrame: DisplayRect(x: 100, y: 100, width: 200, height: 200)
+        )
+        let straddling = PickableWindowDescriptor(
+            id: 2,
+            title: nil,
+            applicationName: "B",
+            bundleIdentifier: "b",
+            globalFrame: DisplayRect(x: 900, y: 100, width: 400, height: 200)
+        )
+
+        let mapped = SelectionOverlayController.mapWindows([onLeft, straddling], onto: [left, right])
+
+        #expect(mapped[1]?.map(\PickableWindow.id) == [1, 2], "both windows appear on the left display")
+        #expect(mapped[2]?.map(\PickableWindow.id) == [2], "only the straddling window reaches the right display")
+        #expect(mapped[2]?.first?.frame.minX == -100, "its highlight starts off the left edge")
     }
 }

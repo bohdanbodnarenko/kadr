@@ -38,7 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (docs/04 §7.1).
     private lazy var captureEngine = CaptureEngine()
     private lazy var permissions = PermissionCoordinator()
-    private lazy var areaCapture = AreaCaptureCoordinator(engine: captureEngine, permissions: permissions)
+    private lazy var areaCapture = AreaCaptureCoordinator(
+        engine: captureEngine,
+        permissions: permissions,
+        settings: settings
+    )
 
     // Settings state is Foundation-only and cheap; the window that presents it is not,
     // and is built on first use.
@@ -105,8 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             areaCapture.beginAreaCapture()
         case .capturePreviousArea:
             areaCapture.capturePreviousArea()
-        // M3 brings window and screen capture, M8 brings OCR.
-        case .captureWindow, .captureFullscreen, .captureText:
+        case .captureWindow:
+            areaCapture.beginWindowCapture()
+        case .captureFullscreen:
+            areaCapture.captureAllDisplays()
+        // M8 brings OCR.
+        case .captureText:
             break
         }
     }

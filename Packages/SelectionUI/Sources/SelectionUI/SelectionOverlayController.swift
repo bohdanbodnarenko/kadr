@@ -3,6 +3,12 @@ import os
 import OverlayKit
 import Shared
 
+/// Which interaction the overlay opens in.
+public enum SelectionMode: Sendable {
+    case area
+    case window
+}
+
 /// One display's frozen contents, handed to the overlay.
 ///
 /// SelectionUI deliberately does not depend on CaptureCore: the overlay's job is to turn
@@ -16,6 +22,26 @@ public struct FrozenDisplay: Sendable {
         self.geometry = geometry
         self.image = image
     }
+}
+
+/// A window the user picked in window mode (docs/03 §1.2).
+public struct WindowSelection: Sendable {
+    public let window: PickableWindow
+    public let display: DisplayGeometry
+    /// ⌥ was held at click, so this capture inverts the saved shadow setting.
+    public let togglesShadow: Bool
+
+    public init(window: PickableWindow, display: DisplayGeometry, togglesShadow: Bool) {
+        self.window = window
+        self.display = display
+        self.togglesShadow = togglesShadow
+    }
+}
+
+/// What the overlay resolved to.
+public enum SelectionOutcome: Sendable {
+    case region(SelectionResult)
+    case window(WindowSelection)
 }
 
 /// What the user chose.
@@ -38,12 +64,13 @@ public struct SelectionResult: Sendable {
 final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
     private let overlayView: SelectionOverlayView
 
-    init(frozen: FrozenDisplay, screen: ScreenDescriptor) {
+    init(frozen: FrozenDisplay, screen: ScreenDescriptor, mode: SelectionOverlayView.Mode) {
         let frame = screen.frame.cgRect
         overlayView = SelectionOverlayView(
             frozenImage: frozen.image,
             bounds: CGRect(origin: .zero, size: frame.size),
-            scale: frozen.geometry.scale
+            scale: frozen.geometry.scale,
+            mode: mode
         )
         super.init(
             contentRect: frame,
@@ -88,7 +115,10 @@ public final class SelectionOverlayController {
 
     private var windowSet: PerScreenWindowSet<SelectionPanel>?
     private var freezes: [CGDirectDisplayID: FrozenDisplay] = [:]
-    private var completion: ((SelectionResult?) -> Void)?
+    private var completion: ((SelectionOutcome?) -> Void)?
+    private var mode: SelectionOverlayView.Mode = .area
+    /// Windows offered for picking, keyed by the display they are shown on.
+    private var pickableWindows: [CGDirectDisplayID: [PickableWindow]] = [:]
     private var previouslyActiveApp: NSRunningApplication?
 
     public init(screens: any ScreenProviding = SystemScreens()) {
@@ -103,10 +133,16 @@ public final class SelectionOverlayController {
     ///
     /// - Parameter signpostState: the interval opened at hotkey time, closed here once
     ///   the overlay is actually on screen — that is the <100 ms budget in PRD §8.
+    /// - Parameters:
+    ///   - mode: whether to start in region or window-pick mode (docs/03 §1.1, §1.2).
+    ///   - windows: the windows available to pick, in front-to-back order and in global
+    ///     display space. Ignored in region mode.
     public func present(
         freezes: [FrozenDisplay],
+        mode: SelectionMode = .area,
+        windows: [PickableWindowDescriptor] = [],
         signpostState: OSSignpostIntervalState? = nil,
-        completion: @escaping (SelectionResult?) -> Void
+        completion: @escaping (SelectionOutcome?) -> Void
     ) {
         // A second hotkey while the overlay is up re-freezes rather than stacking
         // overlays (docs/03 §1.1 edge cases).
@@ -115,7 +151,9 @@ public final class SelectionOverlayController {
         }
 
         self.completion = completion
+        self.mode = mode == .window ? .window : .area
         self.freezes = Dictionary(uniqueKeysWithValues: freezes.map { ($0.geometry.displayID, $0) })
+        pickableWindows = Self.mapWindows(windows, onto: freezes.map(\.geometry))
         previouslyActiveApp = NSWorkspace.shared.frontmostApplication
 
         let set = PerScreenWindowSet<SelectionPanel>(screens: screens) { [weak self] descriptor in
@@ -143,7 +181,23 @@ public final class SelectionOverlayController {
 
     private func makePanel(for descriptor: ScreenDescriptor) -> SelectionPanel? {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
-        let panel = SelectionPanel(frozen: frozen, screen: descriptor)
+        let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode)
+        panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
+
+        panel.view.onModeChanged = { [weak self] newMode in
+            guard let self else { return }
+            mode = newMode
+            for panel in windowSet?.windows.values ?? [:].values {
+                panel.view.setMode(newMode)
+            }
+        }
+        panel.view.onCommitWindow = { [weak self] window, togglesShadow in
+            self?.dismiss(result: .window(WindowSelection(
+                window: window,
+                display: frozen.geometry,
+                togglesShadow: togglesShadow
+            )))
+        }
 
         panel.view.onCancel = { [weak self] in
             self?.dismiss(result: nil)
@@ -159,11 +213,11 @@ public final class SelectionOverlayController {
                 width: localRect.width,
                 height: localRect.height
             )
-            dismiss(result: SelectionResult(
+            dismiss(result: .region(SelectionResult(
                 rect: global,
                 display: frozen.geometry,
                 localRect: localRect
-            ))
+            )))
         }
         return panel
     }
@@ -176,11 +230,12 @@ public final class SelectionOverlayController {
         }
     }
 
-    private func dismiss(result: SelectionResult?) {
+    private func dismiss(result: SelectionOutcome?) {
         guard let windowSet else { return }
         windowSet.dismiss()
         self.windowSet = nil
         freezes.removeAll()
+        pickableWindows.removeAll()
 
         // Hand focus back to whatever the user was in, so the overlay is invisible in
         // the app-switching sense as well as the visual one.
@@ -190,6 +245,20 @@ public final class SelectionOverlayController {
         let completion = completion
         self.completion = nil
         completion?(result)
+    }
+
+    /// Maps global window frames onto every display that shows them, keeping the
+    /// front-to-back order each display sees.
+    /// Public so the mapping can be tested directly; it is the piece with real logic.
+    public static func mapWindows(
+        _ descriptors: [PickableWindowDescriptor],
+        onto displays: [DisplayGeometry]
+    ) -> [CGDirectDisplayID: [PickableWindow]] {
+        var result: [CGDirectDisplayID: [PickableWindow]] = [:]
+        for display in displays {
+            result[display.displayID] = descriptors.compactMap { $0.mapped(onto: display) }
+        }
+        return result
     }
 }
 

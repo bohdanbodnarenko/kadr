@@ -81,7 +81,8 @@ public actor CaptureEngine {
     /// Captures a whole display (docs/03 §1.3).
     public func captureDisplay(
         _ displayID: CGDirectDisplayID,
-        includesCursor: Bool = false
+        includesCursor: Bool = false,
+        excludesOwnWindows: Bool = true
     ) async throws -> Capture {
         let state = signposter.beginInterval("captureDisplay")
         defer { signposter.endInterval("captureDisplay", state) }
@@ -91,7 +92,10 @@ public actor CaptureEngine {
             throw CaptureError.displayNotFound(displayID)
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let excluded = excludesOwnWindows ? ownApplications(in: content) : []
+        let filter = excluded.isEmpty
+            ? SCContentFilter(display: display, excludingWindows: [])
+            : SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
         let scale = DisplayScale(CGFloat(filter.pointPixelScale))
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = includesCursor
@@ -111,6 +115,38 @@ public actor CaptureEngine {
                 frontmostApp: frontmostApplication.currentApplication()
             )
         )
+    }
+
+    /// Captures every display at once (docs/03 §1.3).
+    ///
+    /// Concurrent for the same reason the freeze is: the displays should show the same
+    /// instant, and a serial loop makes the second monitor lag the first by a frame or
+    /// more of real time.
+    public func captureAllDisplays(
+        includesCursor: Bool = false,
+        excludesOwnWindows: Bool = true
+    ) async throws -> [Capture] {
+        let content = try await content(onScreenWindowsOnly: true)
+        let displayIDs = content.displays.map(\.displayID)
+
+        return try await withThrowingTaskGroup(of: Capture.self) { group in
+            for displayID in displayIDs {
+                group.addTask {
+                    try await self.captureDisplay(
+                        displayID,
+                        includesCursor: includesCursor,
+                        excludesOwnWindows: excludesOwnWindows
+                    )
+                }
+            }
+            var captures: [Capture] = []
+            captures.reserveCapacity(displayIDs.count)
+            for try await capture in group {
+                captures.append(capture)
+            }
+            // Task groups finish out of order; keep displays in a stable order.
+            return captures.sorted { ($0.metadata.displayID ?? 0) < ($1.metadata.displayID ?? 0) }
+        }
     }
 
     /// Captures a region of one display (docs/03 §1.1).
