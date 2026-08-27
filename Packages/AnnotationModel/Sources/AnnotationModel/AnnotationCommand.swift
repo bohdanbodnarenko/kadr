@@ -1,0 +1,278 @@
+import CoreGraphics
+import Foundation
+
+/// An arrow, straight or curved (docs/03 §3).
+public struct ArrowSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var start: CGPoint
+    public var end: CGPoint
+    /// Dragging the midpoint bends the arrow; `nil` is a straight one.
+    public var controlPoint: CGPoint?
+    public var head: ArrowHead
+    public var stroke: StrokeStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        start: CGPoint,
+        end: CGPoint,
+        controlPoint: CGPoint? = nil,
+        head: ArrowHead = .filled,
+        stroke: StrokeStyle = StrokeStyle()
+    ) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.controlPoint = controlPoint
+        self.head = head
+        self.stroke = stroke
+    }
+
+    public var isCurved: Bool {
+        controlPoint != nil
+    }
+}
+
+/// A rectangle, rounded rectangle or ellipse.
+public struct ShapeSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var kind: ShapeKind
+    public var rect: CGRect
+    public var stroke: StrokeStyle
+    public var fill: FillStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        kind: ShapeKind = .rectangle,
+        rect: CGRect,
+        stroke: StrokeStyle = StrokeStyle(),
+        fill: FillStyle = .none
+    ) {
+        self.id = id
+        self.kind = kind
+        self.rect = rect
+        self.stroke = stroke
+        self.fill = fill
+    }
+}
+
+/// A straight line. Separate from `ShapeSpec` because a line has a direction and a
+/// rectangle does not — storing one as a rect loses which way it was drawn.
+public struct LineSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var start: CGPoint
+    public var end: CGPoint
+    public var stroke: StrokeStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        start: CGPoint,
+        end: CGPoint,
+        stroke: StrokeStyle = StrokeStyle()
+    ) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.stroke = stroke
+    }
+}
+
+/// A freehand pencil stroke (docs/03 §3).
+public struct FreehandSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    /// The raw sampled points. Smoothing happens at render time so the original input is
+    /// never lost and the smoothing can improve without re-editing old documents.
+    public var points: [CGPoint]
+    public var isSmoothed: Bool
+    public var stroke: StrokeStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        points: [CGPoint],
+        isSmoothed: Bool = true,
+        stroke: StrokeStyle = StrokeStyle()
+    ) {
+        self.id = id
+        self.points = points
+        self.isSmoothed = isSmoothed
+        self.stroke = stroke
+    }
+}
+
+/// A highlighter stroke, drawn with a multiply blend (docs/03 §3).
+public struct HighlighterSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var points: [CGPoint]
+    public var stroke: StrokeStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        points: [CGPoint],
+        stroke: StrokeStyle = StrokeStyle(color: .highlighterYellow, width: 20)
+    ) {
+        self.id = id
+        self.points = points
+        self.stroke = stroke
+    }
+}
+
+/// A text annotation (docs/03 §3).
+public struct TextSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var string: String
+    /// The laid-out frame. Width drives wrapping; height grows with the text.
+    public var rect: CGRect
+    public var style: TextStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        string: String = "",
+        rect: CGRect,
+        style: TextStyle = TextStyle()
+    ) {
+        self.id = id
+        self.string = string
+        self.rect = rect
+        self.style = style
+    }
+}
+
+/// A blurred or pixelated region (docs/03 §3).
+public struct RedactionSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var rect: CGRect
+    public var style: RedactionStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        rect: CGRect,
+        style: RedactionStyle = .defaultBlur
+    ) {
+        self.id = id
+        self.rect = rect
+        self.style = style
+    }
+}
+
+/// A numbered counter badge (docs/03 §3).
+///
+/// The number is stored rather than derived, so a document round-trips exactly; the
+/// document renumbers them whenever the z-order changes.
+public struct CounterSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var number: Int
+    public var center: CGPoint
+    public var radius: CGFloat
+    public var fill: AnnotationColor
+    public var textColor: AnnotationColor
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        number: Int = 1,
+        center: CGPoint,
+        radius: CGFloat = 18,
+        fill: AnnotationColor = .annotationRed,
+        textColor: AnnotationColor = .white
+    ) {
+        self.id = id
+        self.number = number
+        self.center = center
+        self.radius = max(radius, 1)
+        self.fill = fill
+        self.textColor = textColor
+    }
+}
+
+/// A non-destructive crop (docs/03 §3).
+public struct CropSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    /// The visible area, in base-image points. May extend beyond the image when the
+    /// canvas is being expanded for padding.
+    public var rect: CGRect
+    public var canExpandCanvas: Bool
+
+    public init(id: AnnotationID = AnnotationID(), rect: CGRect, canExpandCanvas: Bool = false) {
+        self.id = id
+        self.rect = rect
+        self.canExpandCanvas = canExpandCanvas
+    }
+}
+
+/// One annotation (docs/04 §6).
+///
+/// A `Codable` enum rather than a class hierarchy: annotations are values, the document
+/// is an ordered list of them, and undo is a matter of keeping old lists around.
+public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
+    case arrow(ArrowSpec)
+    case shape(ShapeSpec)
+    case line(LineSpec)
+    case freehand(FreehandSpec)
+    case highlighter(HighlighterSpec)
+    case text(TextSpec)
+    case redaction(RedactionSpec)
+    case counter(CounterSpec)
+    case crop(CropSpec)
+
+    public var id: AnnotationID {
+        switch self {
+        case let .arrow(spec): spec.id
+        case let .shape(spec): spec.id
+        case let .line(spec): spec.id
+        case let .freehand(spec): spec.id
+        case let .highlighter(spec): spec.id
+        case let .text(spec): spec.id
+        case let .redaction(spec): spec.id
+        case let .counter(spec): spec.id
+        case let .crop(spec): spec.id
+        }
+    }
+
+    /// The tool that made this annotation, used for style memory and the inspector.
+    public var tool: AnnotationTool {
+        switch self {
+        case .arrow: .arrow
+        case .shape: .shape
+        case .line: .line
+        case .freehand: .freehand
+        case .highlighter: .highlighter
+        case .text: .text
+        case .redaction: .redaction
+        case .counter: .counter
+        case .crop: .crop
+        }
+    }
+
+    /// Whether the user can select and move this annotation.
+    ///
+    /// Crop is the exception: it defines the canvas rather than sitting on it, and is
+    /// edited through its own handles.
+    public var isSelectable: Bool {
+        tool != .crop
+    }
+}
+
+/// The editor's tools (docs/03 §3).
+public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
+    case arrow
+    case shape
+    case line
+    case freehand
+    case highlighter
+    case text
+    case redaction
+    case counter
+    case crop
+
+    public var title: String {
+        switch self {
+        case .arrow: "Arrow"
+        case .shape: "Shape"
+        case .line: "Line"
+        case .freehand: "Pencil"
+        case .highlighter: "Highlighter"
+        case .text: "Text"
+        case .redaction: "Blur"
+        case .counter: "Counter"
+        case .crop: "Crop"
+        }
+    }
+}

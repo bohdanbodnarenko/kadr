@@ -14,7 +14,10 @@
 #   D. No legacy CoreGraphics screen capture. ScreenCaptureKit is the only capture
 #      path (docs/04 §4.2, §12): the CGWindowList/CGDisplay family is deprecated and
 #      triggers extra TCC alerts on Sonoma and later.
-#   E. Package dependencies respect the layering: a package may only depend on
+#   E. The pure packages import no UI framework. Doc 04 §2 says AnnotationModel has
+#      "No AppKit"; the same holds for Shared. A model that reaches for a view type
+#      cannot be tested headlessly or reused by the Rust core doc 05 contemplates.
+#   F. Package dependencies respect the layering: a package may only depend on
 #      packages in a strictly lower layer, per the module list in docs/04 §2.
 #
 # Usage: Scripts/check-layering.sh
@@ -96,6 +99,20 @@ if [ -n "$legacy_hits" ]; then
 else
     pass "all screen capture goes through ScreenCaptureKit"
 fi
+
+# ---------------------------------------------------------------- B3. pure packages
+PURE_PACKAGES="Shared AnnotationModel"
+UI_FRAMEWORKS='^import (AppKit|SwiftUI|UIKit|Cocoa)$'
+
+for package in $PURE_PACKAGES; do
+    hits=$(grep -rnE "$UI_FRAMEWORKS" "Packages/$package/Sources" 2>/dev/null)
+    if [ -n "$hits" ]; then
+        fail "$package imports a UI framework, but docs/04 §2 says it must not"
+        printf '%s\n' "$hits" | sed 's/^/    /'
+    else
+        pass "$package imports no UI framework"
+    fi
+done
 
 # ---------------------------------------------------------------- C. linked frameworks
 # The source grep above cannot see what a dependency drags in; this can.

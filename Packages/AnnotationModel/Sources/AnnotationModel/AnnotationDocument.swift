@@ -1,0 +1,247 @@
+import CoreGraphics
+import Foundation
+
+/// The immutable image an annotation document sits on (docs/04 §6).
+public struct BaseImageReference: Codable, Hashable, Sendable {
+    /// Size in points; the pixel size is this multiplied by `scale`.
+    public var size: CGSize
+    public var scale: CGFloat
+
+    public init(size: CGSize, scale: CGFloat = 2) {
+        self.size = size
+        self.scale = max(scale, 1)
+    }
+
+    public var pixelSize: CGSize {
+        CGSize(width: size.width * scale, height: size.height * scale)
+    }
+
+    public var bounds: CGRect {
+        CGRect(origin: .zero, size: size)
+    }
+}
+
+/// An annotated capture (docs/04 §6).
+///
+/// The base image never changes; every annotation is a value in an ordered list, and
+/// undo is a matter of keeping previous lists. That is what makes annotations editable
+/// forever, exports lossless, and "flatten" a thing that only happens on the way out.
+public struct AnnotationDocument: Codable, Hashable, Sendable {
+    /// Undo depth. Doc 03 §3 asks for at least 100; the extra is free because a command
+    /// list is a few hundred bytes.
+    public static let undoDepth = 128
+
+    public let baseImage: BaseImageReference
+
+    /// Every version of the command list, oldest first, with `historyIndex` pointing at
+    /// the current one.
+    private var history: [[AnnotationCommand]]
+    private var historyIndex: Int
+
+    public var selection: Set<AnnotationID>
+
+    public init(baseImage: BaseImageReference, commands: [AnnotationCommand] = []) {
+        self.baseImage = baseImage
+        history = [commands]
+        historyIndex = 0
+        selection = []
+    }
+
+    /// The annotations as they stand, in back-to-front order.
+    public var commands: [AnnotationCommand] {
+        history[historyIndex]
+    }
+
+    public var isEmpty: Bool {
+        commands.isEmpty
+    }
+
+    public func command(_ id: AnnotationID) -> AnnotationCommand? {
+        commands.first { $0.id == id }
+    }
+
+    public func index(of id: AnnotationID) -> Int? {
+        commands.firstIndex { $0.id == id }
+    }
+
+    /// The crop in force, if any. The last one wins, so a re-crop supersedes.
+    public var crop: CropSpec? {
+        commands.reversed().compactMap { command in
+            if case let .crop(spec) = command {
+                return spec
+            }
+            return nil
+        }.first
+    }
+
+    /// The canvas the export will produce: the crop, or the whole base image.
+    public var canvasRect: CGRect {
+        crop?.rect ?? baseImage.bounds
+    }
+
+    // MARK: - Editing
+
+    /// Applies a change and records it for undo.
+    ///
+    /// Everything that mutates the document funnels through here, so there is exactly one
+    /// place where history is maintained and no way to forget.
+    public mutating func perform(_ change: (inout [AnnotationCommand]) -> Void) {
+        var updated = commands
+        change(&updated)
+        guard updated != commands else { return }
+        pushHistory(updated)
+    }
+
+    public mutating func add(_ command: AnnotationCommand) {
+        perform { $0.append(command) }
+        renumberCounters()
+    }
+
+    public mutating func remove(_ ids: Set<AnnotationID>) {
+        guard !ids.isEmpty else { return }
+        perform { $0.removeAll { ids.contains($0.id) } }
+        selection.subtract(ids)
+        renumberCounters()
+    }
+
+    /// Replaces one annotation in place, keeping its z-order.
+    public mutating func update(_ command: AnnotationCommand) {
+        perform { commands in
+            guard let index = commands.firstIndex(where: { $0.id == command.id }) else { return }
+            commands[index] = command
+        }
+    }
+
+    // MARK: - Undo and redo
+
+    public var canUndo: Bool {
+        historyIndex > 0
+    }
+
+    public var canRedo: Bool {
+        historyIndex < history.count - 1
+    }
+
+    @discardableResult
+    public mutating func undo() -> Bool {
+        guard canUndo else { return false }
+        historyIndex -= 1
+        pruneSelection()
+        return true
+    }
+
+    @discardableResult
+    public mutating func redo() -> Bool {
+        guard canRedo else { return false }
+        historyIndex += 1
+        pruneSelection()
+        return true
+    }
+
+    private mutating func pushHistory(_ commands: [AnnotationCommand]) {
+        // Anything undone is discarded the moment a new edit lands, which is what every
+        // editor does and what users expect.
+        if historyIndex < history.count - 1 {
+            history.removeSubrange((historyIndex + 1)...)
+        }
+        history.append(commands)
+        if history.count > Self.undoDepth {
+            history.removeFirst(history.count - Self.undoDepth)
+        }
+        historyIndex = history.count - 1
+    }
+
+    /// Drops selected ids that no longer exist, so undoing a delete does not leave the
+    /// selection pointing at ghosts.
+    private mutating func pruneSelection() {
+        let live = Set(commands.map(\.id))
+        selection.formIntersection(live)
+    }
+
+    // MARK: - Z-order
+
+    public mutating func bringToFront(_ ids: Set<AnnotationID>) {
+        reorder(ids) { commands, moved in commands + moved }
+    }
+
+    public mutating func sendToBack(_ ids: Set<AnnotationID>) {
+        reorder(ids) { commands, moved in moved + commands }
+    }
+
+    public mutating func bringForward(_ ids: Set<AnnotationID>) {
+        shift(ids, by: 1)
+    }
+
+    public mutating func sendBackward(_ ids: Set<AnnotationID>) {
+        shift(ids, by: -1)
+    }
+
+    private mutating func reorder(
+        _ ids: Set<AnnotationID>,
+        _ combine: ([AnnotationCommand], [AnnotationCommand]) -> [AnnotationCommand]
+    ) {
+        guard !ids.isEmpty else { return }
+        perform { commands in
+            let moved = commands.filter { ids.contains($0.id) }
+            guard !moved.isEmpty else { return }
+            let rest = commands.filter { !ids.contains($0.id) }
+            commands = combine(rest, moved)
+        }
+        renumberCounters()
+    }
+
+    private mutating func shift(_ ids: Set<AnnotationID>, by offset: Int) {
+        guard !ids.isEmpty, offset != 0 else { return }
+        perform { commands in
+            // Walk from the end when moving forward so two adjacent selected items do not
+            // swap past each other.
+            let indices = commands.indices.filter { ids.contains(commands[$0].id) }
+            for index in offset > 0 ? indices.reversed() : indices {
+                let target = index + offset
+                guard commands.indices.contains(target), !ids.contains(commands[target].id) else { continue }
+                commands.swapAt(index, target)
+            }
+        }
+        renumberCounters()
+    }
+
+    // MARK: - Counters
+
+    /// Renumbers counter badges 1…n in z-order (docs/03 §3: dragging to reorder
+    /// renumbers).
+    ///
+    /// Called after anything that changes order or membership, so the numbers a user sees
+    /// are always a consequence of the stack rather than of the order they happened to
+    /// draw them in.
+    public mutating func renumberCounters() {
+        var next = 1
+        var updated = commands
+        var changed = false
+
+        for index in updated.indices {
+            guard case var .counter(spec) = updated[index] else { continue }
+            if spec.number != next {
+                spec.number = next
+                updated[index] = .counter(spec)
+                changed = true
+            }
+            next += 1
+        }
+
+        guard changed else { return }
+        // Renumbering is a consequence of another edit, not an edit in its own right, so
+        // it amends the current history entry instead of adding one. Otherwise every
+        // counter operation would need two undos.
+        history[historyIndex] = updated
+    }
+
+    /// The number the next counter badge would get.
+    public var nextCounterNumber: Int {
+        commands.reduce(0) { count, command in
+            if case .counter = command {
+                return count + 1
+            }
+            return count
+        } + 1
+    }
+}
