@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:Kadr.xcodeproj">
+   </FileRef>
+   <Group
+      location = "container:Packages"
+      name = "Packages">
+      <FileRef
+         location = "group:Shared">
+      </FileRef>
+      <FileRef
+         location = "group:CaptureCore">
+      </FileRef>
+      <FileRef
+         location = "group:RecordingCore">
+      </FileRef>
+      <FileRef
+         location = "group:OverlayKit">
+      </FileRef>
+      <FileRef
+         location = "group:SelectionUI">
+      </FileRef>
+      <FileRef
+         location = "group:AnnotationModel">
+      </FileRef>
+      <FileRef
+         location = "group:AnnotationRender">
+      </FileRef>
+      <FileRef
+         location = "group:EditorUI">
+      </FileRef>
+      <FileRef
+         location = "group:VisionServices">
+      </FileRef>
+      <FileRef
+         location = "group:MediaExport">
+      </FileRef>
+      <FileRef
+         location = "group:HistoryKit">
+      </FileRef>
+      <FileRef
+         location = "group:AutomationKit">
+      </FileRef>
+      <FileRef
+         location = "group:SettingsKit">
+      </FileRef>
+   </Group>
+</Workspace>

@@ -1,19 +1,18 @@
-//
-//  KadrTests.swift
-//  KadrTests
-//
-//  Created by Bohdan Bodnarenko on 27.08.2026.
-//
-
+import Foundation
 import Testing
 @testable import Kadr
 
+/// Scaffolding-level checks on the agent bundle itself (milestone M0.1).
+/// These run in-process in the host app, so they assert on `Bundle.main`.
+@Suite("Kadr agent bundle")
 struct KadrTests {
-
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test("The agent is an LSUIElement: no Dock icon, no main menu (docs/04 §3.1)")
+    func agentIsAccessoryApp() {
+        #expect(Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool == true)
     }
 
+    @Test("Bundle identifier is the one reserved in docs/00")
+    func bundleIdentifier() {
+        #expect(Bundle.main.bundleIdentifier == "app.kadr.Kadr")
+    }
 }
