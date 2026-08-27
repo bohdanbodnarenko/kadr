@@ -67,9 +67,15 @@ fi
 PBXPROJ=Kadr.xcodeproj/project.pbxproj
 FORBIDDEN_IN_AGENT="EditorUI VisionServices"
 
-# Every product the app targets link, read out of the packageProductDependencies lists.
-linked=$(awk '/packageProductDependencies = \(/,/\);/' "$PBXPROJ" \
-    | sed -n 's|.*/\* \([A-Za-z]*\) \*/,|\1|p' | sort -u)
+# Products linked by the *agent* target specifically. Scoped rather than searched across
+# the whole project, because KadrEditor legitimately links EditorUI — the rule is about
+# what the resident process drags in, not about the workspace.
+linked=$(awk '
+    /^\t\t[A-F0-9]+ \/\* Kadr \*\/ = \{/ { inTarget = 1 }
+    inTarget && /packageProductDependencies = \(/ { inList = 1; next }
+    inList && /\);/ { inList = 0; inTarget = 0 }
+    inList { print }
+' "$PBXPROJ" | sed -n 's|.*/\* \([A-Za-z]*\) \*/,|\1|p' | sort -u)
 
 for module in $FORBIDDEN_IN_AGENT; do
     if printf '%s\n' "$linked" | grep -qx "$module"; then

@@ -28,6 +28,7 @@ final class PinPanel: NonActivatingPanel {
     /// Fired for the menu commands the pin does not implement itself.
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
+    var onAnnotate: (() -> Void)?
     var onClose: (() -> Void)?
 
     init?(fileURL: URL, scale: CGFloat) {
@@ -228,9 +229,8 @@ private final class PinContentView: NSView {
         save.target = self
         menu.addItem(save)
 
-        // M7b brings the editor and M8 brings OCR.
-        let annotate = NSMenuItem(title: "Annotate", action: nil, keyEquivalent: "")
-        annotate.isEnabled = false
+        let annotate = NSMenuItem(title: "Annotate", action: #selector(annotatePin), keyEquivalent: "")
+        annotate.target = self
         menu.addItem(annotate)
 
         let ocr = NSMenuItem(title: "Copy Text", action: nil, keyEquivalent: "")
@@ -255,6 +255,10 @@ private final class PinContentView: NSView {
         menu.addItem(close)
 
         return menu
+    }
+
+    @objc private func annotatePin() {
+        panel?.onAnnotate?()
     }
 
     @objc private func copyPin() {

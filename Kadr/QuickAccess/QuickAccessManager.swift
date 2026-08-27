@@ -17,6 +17,7 @@ final class QuickAccessManager {
     private let settings: AppSettings
     private let output: CaptureOutput
     private let pins: PinManager
+    private let editor = EditorLauncher()
     private let logger = KadrLog.logger(.overlay)
 
     private var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
@@ -158,6 +159,8 @@ final class QuickAccessManager {
         actions.dragStarted = { [weak self] in self?.dragStarted(item) }
         actions.pin = { [weak self] in self?.pin(item) }
         actions.pinAvailable = true
+        actions.annotate = { [weak self] in self?.annotate(item) }
+        actions.annotateAvailable = editor.isAvailable
         return actions
     }
 
@@ -177,8 +180,18 @@ final class QuickAccessManager {
         pins.pin(
             url,
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
-            save: { [weak self] fileURL in self?.revealInFinder(fileURL) }
+            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
+            annotate: { [weak self] fileURL in self?.editor.open(fileURL) }
         )
+    }
+
+    /// Opens the capture in the editor. Annotating counts as acting on a staged file, so
+    /// it is finalised first — the editor must not be pointed at a file the staging sweep
+    /// will delete underneath it.
+    func annotate(_ item: QuickAccessItem) {
+        finalizeIfStaged(item)
+        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        editor.open(url)
     }
 
     private func copyFile(at url: URL) {

@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
+		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
+		KADR00000000000000000441 /* AnnotationModel in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000421 /* AnnotationModel */; };
+		KADR00000000000000000442 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000422 /* AnnotationRender */; };
+		KADR00000000000000000443 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000423 /* MediaExport */; };
+		KADR00000000000000000444 /* EditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000424 /* EditorUI */; };
 		KADR000000000000000000C8 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000064 /* Shared */; };
 		KADR000000000000000000C9 /* CaptureCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000065 /* CaptureCore */; };
 		KADR000000000000000000CA /* OverlayKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000066 /* OverlayKit */; };
@@ -29,11 +35,19 @@
 			remoteGlobalIDString = F5F2A2363040394A00A5DC07;
 			remoteInfo = Kadr;
 		};
+		KADR0000000000000000040C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KADR00000000000000000400;
+			remoteInfo = KadrEditor;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		F5F2A2373040394A00A5DC07 /* Kadr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kadr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5F2A2443040394B00A5DC07 /* KadrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		KADR00000000000000000401 /* KadrEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KadrEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -47,7 +61,26 @@
 			path = KadrTests;
 			sourceTree = "<group>";
 		};
+		KADR00000000000000000402 /* KadrEditor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KadrEditor;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		KADR00000000000000000409 /* Embed Editor */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/Applications";
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000040A /* KadrEditor.app in Embed Editor */,
+			);
+			name = "Embed Editor";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F5F2A2343040394A00A5DC07 /* Frameworks */ = {
@@ -76,6 +109,18 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000404 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KADR00000000000000000440 /* Shared in Frameworks */,
+				KADR00000000000000000441 /* AnnotationModel in Frameworks */,
+				KADR00000000000000000442 /* AnnotationRender in Frameworks */,
+				KADR00000000000000000443 /* MediaExport in Frameworks */,
+				KADR00000000000000000444 /* EditorUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				F5F2A2393040394A00A5DC07 /* Kadr */,
+				KADR00000000000000000402 /* KadrEditor */,
 				F5F2A2473040394B00A5DC07 /* KadrTests */,
 				F5F2A2383040394A00A5DC07 /* Products */,
 			);
@@ -92,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				F5F2A2373040394A00A5DC07 /* Kadr.app */,
+				KADR00000000000000000401 /* KadrEditor.app */,
 				F5F2A2443040394B00A5DC07 /* KadrTests.xctest */,
 			);
 			name = Products;
@@ -107,10 +154,12 @@
 				F5F2A2333040394A00A5DC07 /* Sources */,
 				F5F2A2343040394A00A5DC07 /* Frameworks */,
 				F5F2A2353040394A00A5DC07 /* Resources */,
+				KADR00000000000000000409 /* Embed Editor */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				KADR0000000000000000040B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F5F2A2393040394A00A5DC07 /* Kadr */,
@@ -156,6 +205,33 @@
 			productName = KadrTests;
 			productReference = F5F2A2443040394B00A5DC07 /* KadrTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		KADR00000000000000000400 /* KadrEditor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KADR00000000000000000406 /* Build configuration list for PBXNativeTarget "KadrEditor" */;
+			buildPhases = (
+				KADR00000000000000000403 /* Sources */,
+				KADR00000000000000000404 /* Frameworks */,
+				KADR00000000000000000405 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				KADR00000000000000000402 /* KadrEditor */,
+			);
+			name = KadrEditor;
+			packageProductDependencies = (
+				KADR00000000000000000420 /* Shared */,
+				KADR00000000000000000421 /* AnnotationModel */,
+				KADR00000000000000000422 /* AnnotationRender */,
+				KADR00000000000000000423 /* MediaExport */,
+				KADR00000000000000000424 /* EditorUI */,
+			);
+			productName = KadrEditor;
+			productReference = KADR00000000000000000401 /* KadrEditor.app */;
+			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
@@ -207,6 +283,7 @@
 			projectRoot = "";
 			targets = (
 				F5F2A2363040394A00A5DC07 /* Kadr */,
+				KADR00000000000000000400 /* KadrEditor */,
 				F5F2A2433040394B00A5DC07 /* KadrTests */,
 			);
 		};
@@ -221,6 +298,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F5F2A2423040394B00A5DC07 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000405 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -244,6 +328,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000403 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -251,6 +342,11 @@
 			isa = PBXTargetDependency;
 			target = F5F2A2363040394A00A5DC07 /* Kadr */;
 			targetProxy = F5F2A2453040394B00A5DC07 /* PBXContainerItemProxy */;
+		};
+		KADR0000000000000000040B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000400 /* KadrEditor */;
+			targetProxy = KADR0000000000000000040C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -491,6 +587,62 @@
 			};
 			name = Release;
 		};
+		KADR00000000000000000407 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
+				PRODUCT_NAME = KadrEditor;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		KADR00000000000000000408 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
+				PRODUCT_NAME = KadrEditor;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -517,6 +669,15 @@
 			buildConfigurations = (
 				F5F2A25C3040394B00A5DC07 /* Debug */,
 				F5F2A25D3040394B00A5DC07 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KADR00000000000000000406 /* Build configuration list for PBXNativeTarget "KadrEditor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KADR00000000000000000407 /* Debug */,
+				KADR00000000000000000408 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -590,6 +751,26 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		KADR00000000000000000420 /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		KADR00000000000000000421 /* AnnotationModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AnnotationModel;
+		};
+		KADR00000000000000000422 /* AnnotationRender */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AnnotationRender;
+		};
+		KADR00000000000000000423 /* MediaExport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MediaExport;
+		};
+		KADR00000000000000000424 /* EditorUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = EditorUI;
+		};
 		KADR00000000000000000064 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Shared;

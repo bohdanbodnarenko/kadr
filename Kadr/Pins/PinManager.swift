@@ -31,7 +31,12 @@ final class PinManager {
 
     /// Pins a capture. Returns false when the file cannot be read.
     @discardableResult
-    func pin(_ fileURL: URL, copy: @escaping (URL) -> Void, save: @escaping (URL) -> Void) -> Bool {
+    func pin(
+        _ fileURL: URL,
+        copy: @escaping (URL) -> Void,
+        save: @escaping (URL) -> Void,
+        annotate: @escaping (URL) -> Void = { _ in }
+    ) -> Bool {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let scale = screen?.backingScaleFactor ?? 2
         guard let panel = PinPanel(fileURL: fileURL, scale: scale) else {
@@ -41,6 +46,7 @@ final class PinManager {
 
         panel.onCopy = { copy(fileURL) }
         panel.onSave = { save(fileURL) }
+        panel.onAnnotate = { annotate(fileURL) }
         panel.onClose = { [weak self, weak panel] in
             guard let panel else { return }
             self?.close(panel)

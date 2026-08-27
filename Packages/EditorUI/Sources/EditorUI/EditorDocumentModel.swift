@@ -1,0 +1,422 @@
+import AnnotationModel
+import CoreGraphics
+import Foundation
+import os
+import Shared
+
+/// Modifier keys the canvas passes down. Kept as a value so the model stays free of
+/// AppKit and can be driven from a test.
+public struct EditorModifiers: OptionSet, Sendable, Hashable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// ⇧ — constrain to a square, a circle or 45° angles.
+    public static let constrain = EditorModifiers(rawValue: 1 << 0)
+    /// ⌥ — draw from the centre.
+    public static let fromCenter = EditorModifiers(rawValue: 1 << 1)
+    /// ⌘ — add to the selection rather than replacing it.
+    public static let extendSelection = EditorModifiers(rawValue: 1 << 2)
+}
+
+/// The editor's state: a document, the current tool, and the drag in progress.
+///
+/// All of the "what does this gesture mean" logic lives here rather than in the view, so
+/// every tool's behaviour is testable without a window — which for nine tools with
+/// modifier variants is the difference between covered and hoped-for.
+@MainActor
+@Observable
+public final class EditorDocumentModel {
+    @ObservationIgnored private let logger = KadrLog.logger(.overlay)
+
+    public private(set) var document: AnnotationDocument
+    public var tool: EditorTool = .select
+    public var styleMemory = StyleMemory()
+
+    /// The annotation being drawn right now. It lives outside the document until the
+    /// mouse comes up, so a half-drawn arrow never lands in the undo history.
+    public private(set) var draft: AnnotationCommand?
+    /// The marquee being dragged in select mode.
+    public private(set) var marquee: CGRect?
+
+    private var dragOrigin: CGPoint?
+    private var dragStartRects: [AnnotationID: CGRect] = [:]
+    private var isMovingSelection = false
+
+    public init(document: AnnotationDocument) {
+        self.document = document
+    }
+
+    public var selection: Set<AnnotationID> {
+        get { document.selection }
+        set { document.selection = newValue }
+    }
+
+    public var canUndo: Bool {
+        document.canUndo
+    }
+
+    public var canRedo: Bool {
+        document.canRedo
+    }
+
+    public func undo() {
+        document.undo()
+    }
+
+    public func redo() {
+        document.redo()
+    }
+
+    // MARK: - Pointer
+
+    public func pointerDown(at point: CGPoint, modifiers: EditorModifiers = []) {
+        dragOrigin = point
+
+        guard let annotationTool = tool.annotation else {
+            beginSelectionDrag(at: point, modifiers: modifiers)
+            return
+        }
+
+        if tool.isClickToPlace {
+            place(annotationTool, at: point)
+            return
+        }
+        draft = makeDraft(annotationTool, at: point)
+    }
+
+    public func pointerDragged(to point: CGPoint, modifiers: EditorModifiers = []) {
+        guard let origin = dragOrigin else { return }
+
+        if tool == .select {
+            if isMovingSelection {
+                moveSelection(by: CGSize(width: point.x - origin.x, height: point.y - origin.y))
+            } else {
+                marquee = CGRect(
+                    x: min(origin.x, point.x),
+                    y: min(origin.y, point.y),
+                    width: abs(point.x - origin.x),
+                    height: abs(point.y - origin.y)
+                )
+            }
+            return
+        }
+
+        guard var draft else { return }
+        update(&draft, from: origin, to: point, modifiers: modifiers)
+        self.draft = draft
+    }
+
+    public func pointerUp(at point: CGPoint, modifiers: EditorModifiers = []) {
+        defer {
+            dragOrigin = nil
+            dragStartRects = [:]
+            isMovingSelection = false
+            marquee = nil
+            draft = nil
+        }
+
+        if tool == .select {
+            if let marquee {
+                let enclosed = AnnotationHitTesting.enclosed(in: document.commands, by: marquee)
+                let ids = Set(enclosed.map(\.id))
+                document.selection = modifiers.contains(.extendSelection)
+                    ? document.selection.union(ids)
+                    : ids
+            }
+            return
+        }
+
+        guard let draft, Self.isWorthKeeping(draft) else { return }
+        document.add(draft)
+        document.selection = [draft.id]
+        rememberStyle(of: draft)
+    }
+
+    // MARK: - Selection
+
+    private func beginSelectionDrag(at point: CGPoint, modifiers: EditorModifiers) {
+        guard let hit = AnnotationHitTesting.topmost(in: document.commands, at: point) else {
+            // An empty click clears the selection and starts a marquee.
+            if !modifiers.contains(.extendSelection) {
+                document.selection = []
+            }
+            return
+        }
+
+        if modifiers.contains(.extendSelection) {
+            document.selection.formSymmetricDifference([hit.id])
+        } else if !document.selection.contains(hit.id) {
+            document.selection = [hit.id]
+        }
+
+        isMovingSelection = !document.selection.isEmpty
+        dragStartRects = Dictionary(
+            uniqueKeysWithValues: document.commands
+                .filter { document.selection.contains($0.id) }
+                .map { ($0.id, AnnotationHitTesting.boundingBox(of: $0)) }
+        )
+    }
+
+    /// Moves the selection by a delta from where the drag started.
+    ///
+    /// Offsets are computed from the drag's origin rather than accumulated per event, so a
+    /// fast drag cannot drift away from the pointer.
+    public func moveSelection(by delta: CGSize) {
+        // Read the selection out first: `perform` hands the command list back as `inout`,
+        // and reading another property of the same document inside that closure is an
+        // exclusive-access violation that traps at runtime.
+        let selection = document.selection
+        guard !selection.isEmpty else { return }
+        document.perform { commands in
+            for index in commands.indices where selection.contains(commands[index].id) {
+                commands[index] = Self.translated(commands[index], by: delta)
+            }
+        }
+    }
+
+    /// Arrow-key nudging (docs/03 §3).
+    public func nudgeSelection(dx: CGFloat, dy: CGFloat) {
+        moveSelection(by: CGSize(width: dx, height: dy))
+    }
+
+    public func deleteSelection() {
+        document.remove(document.selection)
+    }
+
+    public func selectAll() {
+        document.selection = Set(document.commands.filter(\.isSelectable).map(\.id))
+    }
+
+    // MARK: - Z-order
+
+    public func bringSelectionToFront() {
+        document.bringToFront(document.selection)
+    }
+
+    public func sendSelectionToBack() {
+        document.sendToBack(document.selection)
+    }
+
+    // MARK: - Drafting
+
+    private func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
+        let stroke = styleMemory.stroke(for: annotationTool)
+        switch annotationTool {
+        case .arrow:
+            return .arrow(ArrowSpec(start: point, end: point, head: styleMemory.lastArrowHead, stroke: stroke))
+        case .shape:
+            return .shape(ShapeSpec(
+                kind: styleMemory.lastShapeKind,
+                rect: CGRect(origin: point, size: .zero),
+                stroke: stroke,
+                fill: styleMemory.fill(for: .shape)
+            ))
+        case .line:
+            return .line(LineSpec(start: point, end: point, stroke: stroke))
+        case .freehand:
+            return .freehand(FreehandSpec(points: [point], stroke: stroke))
+        case .highlighter:
+            return .highlighter(HighlighterSpec(points: [point], stroke: stroke))
+        case .text:
+            return .text(TextSpec(
+                rect: CGRect(origin: point, size: CGSize(width: 200, height: 40)),
+                style: styleMemory.lastTextStyle
+            ))
+        case .redaction:
+            return .redaction(RedactionSpec(
+                rect: CGRect(origin: point, size: .zero),
+                style: styleMemory.lastRedactionStyle
+            ))
+        case .crop:
+            return .crop(CropSpec(rect: CGRect(origin: point, size: .zero)))
+        case .counter:
+            return nil
+        }
+    }
+
+    /// Counters are placed with a click, and auto-increment (docs/03 §3).
+    private func place(_ annotationTool: AnnotationTool, at point: CGPoint) {
+        guard annotationTool == .counter else { return }
+        let command = AnnotationCommand.counter(CounterSpec(
+            number: document.nextCounterNumber,
+            center: point
+        ))
+        document.add(command)
+        document.selection = [command.id]
+    }
+
+    private func update(
+        _ draft: inout AnnotationCommand,
+        from origin: CGPoint,
+        to point: CGPoint,
+        modifiers: EditorModifiers
+    ) {
+        switch draft {
+        case var .arrow(spec):
+            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
+            draft = .arrow(spec)
+        case var .line(spec):
+            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
+            draft = .line(spec)
+        case var .shape(spec):
+            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
+            draft = .shape(spec)
+        case var .redaction(spec):
+            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
+            draft = .redaction(spec)
+        case var .crop(spec):
+            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
+            draft = .crop(spec)
+        case var .text(spec):
+            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
+            draft = .text(spec)
+        case var .freehand(spec):
+            spec.points.append(point)
+            draft = .freehand(spec)
+        case var .highlighter(spec):
+            spec.points.append(point)
+            draft = .highlighter(spec)
+        case .counter:
+            break
+        }
+    }
+
+    private func rememberStyle(of command: AnnotationCommand) {
+        switch command {
+        case let .arrow(spec):
+            styleMemory.remember(spec.stroke, for: .arrow)
+            styleMemory.lastArrowHead = spec.head
+        case let .shape(spec):
+            styleMemory.remember(spec.stroke, for: .shape)
+            styleMemory.remember(spec.fill, for: .shape)
+            styleMemory.lastShapeKind = spec.kind
+        case let .line(spec):
+            styleMemory.remember(spec.stroke, for: .line)
+        case let .freehand(spec):
+            styleMemory.remember(spec.stroke, for: .freehand)
+        case let .highlighter(spec):
+            styleMemory.remember(spec.stroke, for: .highlighter)
+        case let .text(spec):
+            styleMemory.lastTextStyle = spec.style
+        case let .redaction(spec):
+            styleMemory.lastRedactionStyle = spec.style
+        case .counter, .crop:
+            break
+        }
+    }
+
+    // MARK: - Geometry
+
+    /// A rect from a drag, honouring ⇧ (square) and ⌥ (from the centre).
+    static func rect(from origin: CGPoint, to point: CGPoint, modifiers: EditorModifiers) -> CGRect {
+        var corner = point
+        if modifiers.contains(.constrain) {
+            let side = max(abs(point.x - origin.x), abs(point.y - origin.y))
+            corner = CGPoint(
+                x: origin.x + (point.x >= origin.x ? side : -side),
+                y: origin.y + (point.y >= origin.y ? side : -side)
+            )
+        }
+        if modifiers.contains(.fromCenter) {
+            return CGRect(
+                x: origin.x - abs(corner.x - origin.x),
+                y: origin.y - abs(corner.y - origin.y),
+                width: abs(corner.x - origin.x) * 2,
+                height: abs(corner.y - origin.y) * 2
+            )
+        }
+        return CGRect(
+            x: min(origin.x, corner.x),
+            y: min(origin.y, corner.y),
+            width: abs(corner.x - origin.x),
+            height: abs(corner.y - origin.y)
+        )
+    }
+
+    /// ⇧ on a line or arrow snaps to the nearest 45°.
+    static func snapped(_ point: CGPoint, from origin: CGPoint) -> CGPoint {
+        let dx = point.x - origin.x
+        let dy = point.y - origin.y
+        let angle = (atan2(dy, dx) / (.pi / 4)).rounded() * (.pi / 4)
+        let length = hypot(dx, dy)
+        return CGPoint(x: origin.x + cos(angle) * length, y: origin.y + sin(angle) * length)
+    }
+
+    /// Whether a finished drag actually drew something.
+    ///
+    /// A click with no drag leaves a zero-sized annotation. Testing the *geometry* rather
+    /// than the bounding box matters: a bounding box includes the stroke, so a zero-sized
+    /// shape with a four-point stroke looks non-empty and would be kept.
+    static func isWorthKeeping(_ command: AnnotationCommand) -> Bool {
+        // Below this a drag is a click that wobbled.
+        let minimum: CGFloat = 2
+
+        switch command {
+        case let .arrow(spec):
+            return hypot(spec.end.x - spec.start.x, spec.end.y - spec.start.y) >= minimum
+        case let .line(spec):
+            return hypot(spec.end.x - spec.start.x, spec.end.y - spec.start.y) >= minimum
+        case let .shape(spec):
+            return spec.rect.width >= minimum || spec.rect.height >= minimum
+        case let .redaction(spec):
+            return spec.rect.width >= minimum && spec.rect.height >= minimum
+        case let .crop(spec):
+            return spec.rect.width >= minimum && spec.rect.height >= minimum
+        case let .freehand(spec):
+            return spec.points.count > 1
+        case let .highlighter(spec):
+            return spec.points.count > 1
+        // A text box starts empty by design; the user types into it next.
+        case .text:
+            return true
+        case .counter:
+            return true
+        }
+    }
+
+    /// Moves an annotation, whatever its geometry.
+    static func translated(_ command: AnnotationCommand, by delta: CGSize) -> AnnotationCommand {
+        func move(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: point.x + delta.width, y: point.y + delta.height)
+        }
+        func move(_ rect: CGRect) -> CGRect {
+            rect.offsetBy(dx: delta.width, dy: delta.height)
+        }
+
+        switch command {
+        case var .arrow(spec):
+            spec.start = move(spec.start)
+            spec.end = move(spec.end)
+            spec.controlPoint = spec.controlPoint.map(move)
+            return .arrow(spec)
+        case var .line(spec):
+            spec.start = move(spec.start)
+            spec.end = move(spec.end)
+            return .line(spec)
+        case var .shape(spec):
+            spec.rect = move(spec.rect)
+            return .shape(spec)
+        case var .freehand(spec):
+            spec.points = spec.points.map(move)
+            return .freehand(spec)
+        case var .highlighter(spec):
+            spec.points = spec.points.map(move)
+            return .highlighter(spec)
+        case var .text(spec):
+            spec.rect = move(spec.rect)
+            return .text(spec)
+        case var .redaction(spec):
+            spec.rect = move(spec.rect)
+            return .redaction(spec)
+        case var .counter(spec):
+            spec.center = move(spec.center)
+            return .counter(spec)
+        case var .crop(spec):
+            spec.rect = move(spec.rect)
+            return .crop(spec)
+        }
+    }
+}

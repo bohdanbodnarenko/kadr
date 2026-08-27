@@ -1,0 +1,340 @@
+import AnnotationModel
+import CoreGraphics
+import Testing
+@testable import EditorUI
+
+@MainActor
+private func makeModel(_ commands: [AnnotationCommand] = []) -> EditorDocumentModel {
+    EditorDocumentModel(document: AnnotationDocument(
+        baseImage: BaseImageReference(size: CGSize(width: 800, height: 600), scale: 2),
+        commands: commands
+    ))
+}
+
+private func shape(_ rect: CGRect) -> AnnotationCommand {
+    .shape(ShapeSpec(rect: rect, fill: FillStyle(color: .white)))
+}
+
+@MainActor
+@Suite("Drawing with each tool")
+struct EditorDraftingTests {
+    @Test("A drag with the arrow tool makes an arrow between the two points")
+    func drawsAnArrow() {
+        let model = makeModel()
+        model.tool = .arrow
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerDragged(to: CGPoint(x: 100, y: 60))
+        model.pointerUp(at: CGPoint(x: 100, y: 60))
+
+        guard case let .arrow(spec) = try? #require(model.document.commands.first) else {
+            Issue.record("expected an arrow")
+            return
+        }
+        #expect(spec.start == CGPoint(x: 10, y: 10))
+        #expect(spec.end == CGPoint(x: 100, y: 60))
+        #expect(model.selection == [spec.id], "a freshly drawn annotation should be selected")
+    }
+
+    @Test("A half-drawn annotation is not in the document until the mouse comes up")
+    func draftIsNotCommittedEarly() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 50, y: 50))
+
+        #expect(model.document.commands.isEmpty, "a drag in progress must not be undoable yet")
+        #expect(model.draft != nil)
+
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+        #expect(model.document.commands.count == 1)
+    }
+
+    @Test("A click with no drag draws nothing")
+    func clickWithoutDragDrawsNothing() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerUp(at: CGPoint(x: 10, y: 10))
+
+        #expect(model.document.commands.isEmpty)
+    }
+
+    @Test("Shift constrains a shape to a square")
+    func shiftMakesASquare() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 100, y: 40), modifiers: .constrain)
+        model.pointerUp(at: CGPoint(x: 100, y: 40), modifiers: .constrain)
+
+        guard case let .shape(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(spec.rect == CGRect(x: 0, y: 0, width: 100, height: 100))
+    }
+
+    @Test("Option draws a shape out from its centre")
+    func optionDrawsFromCentre() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: CGPoint(x: 100, y: 100))
+        model.pointerDragged(to: CGPoint(x: 150, y: 130), modifiers: .fromCenter)
+        model.pointerUp(at: CGPoint(x: 150, y: 130), modifiers: .fromCenter)
+
+        guard case let .shape(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(spec.rect == CGRect(x: 50, y: 70, width: 100, height: 60))
+    }
+
+    @Test("Shift snaps an arrow to 45°", arguments: [
+        (CGPoint(x: 100, y: 10), CGPoint(x: 100, y: 0)),
+        (CGPoint(x: 90, y: 100), CGPoint(x: 95, y: 95)),
+        (CGPoint(x: 10, y: 100), CGPoint(x: 0, y: 100))
+    ])
+    func shiftSnapsAngles(drag: CGPoint, expected: CGPoint) {
+        let model = makeModel()
+        model.tool = .arrow
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: drag, modifiers: .constrain)
+        model.pointerUp(at: drag, modifiers: .constrain)
+
+        guard case let .arrow(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(abs(spec.end.x - expected.x) < 1)
+        #expect(abs(spec.end.y - expected.y) < 1)
+    }
+
+    @Test("A freehand stroke collects every point it passes through")
+    func freehandCollectsPoints() {
+        let model = makeModel()
+        model.tool = .freehand
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 10, y: 10))
+        model.pointerDragged(to: CGPoint(x: 20, y: 5))
+        model.pointerUp(at: CGPoint(x: 20, y: 5))
+
+        guard case let .freehand(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(spec.points.count == 3)
+    }
+
+    @Test("A counter is placed with a click and numbers itself")
+    func counterAutoIncrements() {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerUp(at: CGPoint(x: 10, y: 10))
+        model.pointerDown(at: CGPoint(x: 50, y: 50))
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+
+        let numbers = model.document.commands.compactMap { command -> Int? in
+            if case let .counter(spec) = command {
+                return spec.number
+            }
+            return nil
+        }
+        #expect(numbers == [1, 2])
+    }
+
+    @Test("Every drawing tool produces its own kind of annotation", arguments: [
+        (EditorTool.arrow, AnnotationTool.arrow),
+        (.shape, .shape),
+        (.line, .line),
+        (.freehand, .freehand),
+        (.highlighter, .highlighter),
+        (.text, .text),
+        (.redaction, .redaction),
+        (.crop, .crop)
+    ])
+    func everyToolDraws(tool: EditorTool, expected: AnnotationTool) {
+        let model = makeModel()
+        model.tool = tool
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+
+        #expect(model.document.commands.first?.tool == expected)
+    }
+
+    @Test("Drawing remembers the style for next time")
+    func stylesAreRemembered() {
+        let model = makeModel()
+        model.styleMemory.remember(StrokeStyle(color: .black, width: 9), for: .arrow)
+        model.tool = .arrow
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 50, y: 50))
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+
+        guard case let .arrow(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(spec.stroke.width == 9)
+        #expect(model.styleMemory.stroke(for: .arrow).width == 9)
+    }
+}
+
+@MainActor
+@Suite("Selecting and moving")
+struct EditorSelectionTests {
+    @Test("Clicking an annotation selects it")
+    func clickSelects() {
+        let target = shape(CGRect(x: 10, y: 10, width: 100, height: 100))
+        let model = makeModel([target])
+        model.tool = .select
+        model.pointerDown(at: CGPoint(x: 50, y: 50))
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+
+        #expect(model.selection == [target.id])
+    }
+
+    @Test("Clicking empty space clears the selection")
+    func clickEmptySpaceDeselects() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.selection = [target.id]
+        model.tool = .select
+        model.pointerDown(at: CGPoint(x: 400, y: 400))
+        model.pointerUp(at: CGPoint(x: 400, y: 400))
+
+        #expect(model.selection.isEmpty)
+    }
+
+    @Test("Command-click adds to and removes from the selection")
+    func commandClickToggles() {
+        let first = shape(CGRect(x: 0, y: 0, width: 50, height: 50))
+        let second = shape(CGRect(x: 100, y: 0, width: 50, height: 50))
+        let model = makeModel([first, second])
+        model.tool = .select
+
+        model.pointerDown(at: CGPoint(x: 25, y: 25))
+        model.pointerUp(at: CGPoint(x: 25, y: 25))
+        model.pointerDown(at: CGPoint(x: 125, y: 25), modifiers: .extendSelection)
+        model.pointerUp(at: CGPoint(x: 125, y: 25), modifiers: .extendSelection)
+
+        #expect(model.selection == [first.id, second.id])
+
+        model.pointerDown(at: CGPoint(x: 125, y: 25), modifiers: .extendSelection)
+        model.pointerUp(at: CGPoint(x: 125, y: 25), modifiers: .extendSelection)
+        #expect(model.selection == [first.id])
+    }
+
+    @Test("A marquee selects what it encloses")
+    func marqueeSelects() {
+        let inside = shape(CGRect(x: 20, y: 20, width: 30, height: 30))
+        // Well clear of the marquee, which runs from (0,0) to (100,100).
+        let outside = shape(CGRect(x: 300, y: 300, width: 30, height: 30))
+        let model = makeModel([inside, outside])
+        model.tool = .select
+
+        // Dragged bottom-right to top-left, so backwards marquees are covered too.
+        model.pointerDown(at: CGPoint(x: 100, y: 100))
+        model.pointerDragged(to: CGPoint(x: 0, y: 0))
+        model.pointerUp(at: CGPoint(x: 0, y: 0))
+
+        #expect(model.selection == [inside.id])
+    }
+
+    @Test("Dragging a selected annotation moves it")
+    func dragMoves() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.tool = .select
+
+        model.pointerDown(at: CGPoint(x: 30, y: 30))
+        model.pointerDragged(to: CGPoint(x: 130, y: 80))
+        model.pointerUp(at: CGPoint(x: 130, y: 80))
+
+        guard case let .shape(spec) = try? #require(model.document.command(target.id)) else { return }
+        #expect(spec.rect == CGRect(x: 110, y: 60, width: 50, height: 50))
+    }
+
+    @Test("Arrow keys nudge the selection")
+    func nudge() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.selection = [target.id]
+
+        model.nudgeSelection(dx: 5, dy: -3)
+
+        guard case let .shape(spec) = try? #require(model.document.command(target.id)) else { return }
+        #expect(spec.rect.origin == CGPoint(x: 15, y: 7))
+    }
+
+    @Test("Every annotation type can be moved", arguments: [
+        AnnotationCommand.arrow(ArrowSpec(start: .zero, end: CGPoint(x: 10, y: 10))),
+        .line(LineSpec(start: .zero, end: CGPoint(x: 10, y: 10))),
+        .shape(ShapeSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
+        .freehand(FreehandSpec(points: [.zero, CGPoint(x: 10, y: 10)])),
+        .highlighter(HighlighterSpec(points: [.zero, CGPoint(x: 10, y: 10)])),
+        .text(TextSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
+        .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
+        .counter(CounterSpec(center: .zero)),
+        .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10)))
+    ])
+    func everyTypeTranslates(command: AnnotationCommand) {
+        let moved = EditorDocumentModel.translated(command, by: CGSize(width: 20, height: 30))
+        let before = AnnotationHitTesting.boundingBox(of: command)
+        let after = AnnotationHitTesting.boundingBox(of: moved)
+
+        #expect(abs(after.minX - before.minX - 20) < 0.001)
+        #expect(abs(after.minY - before.minY - 30) < 0.001)
+        #expect(after.size == before.size, "moving must not resize")
+        #expect(moved.id == command.id, "moving must not change identity")
+    }
+
+    @Test("Delete removes the selection")
+    func deleteSelection() {
+        let first = shape(CGRect(x: 0, y: 0, width: 10, height: 10))
+        let second = shape(CGRect(x: 50, y: 0, width: 10, height: 10))
+        let model = makeModel([first, second])
+        model.selection = [first.id]
+
+        model.deleteSelection()
+
+        #expect(model.document.commands.map(\.id) == [second.id])
+        #expect(model.selection.isEmpty)
+    }
+
+    @Test("Select-all takes everything selectable but not the crop")
+    func selectAll() {
+        let target = shape(CGRect(x: 0, y: 0, width: 10, height: 10))
+        let crop = AnnotationCommand.crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100)))
+        let model = makeModel([target, crop])
+
+        model.selectAll()
+
+        #expect(model.selection == [target.id])
+    }
+
+    @Test("Undo reaches back through a drag")
+    func undoAfterDrag() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 50, y: 50))
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+
+        #expect(model.canUndo)
+        model.undo()
+        #expect(model.document.commands.isEmpty)
+
+        model.redo()
+        #expect(model.document.commands.count == 1)
+    }
+}
+
+@Suite("Tool metadata")
+struct EditorToolTests {
+    @Test("Every tool has a distinct keyboard shortcut")
+    func distinctShortcuts() {
+        let shortcuts = EditorTool.allCases.map(\.shortcut)
+        #expect(Set(shortcuts).count == shortcuts.count)
+    }
+
+    @Test("Select is the only tool that draws nothing")
+    func selectDrawsNothing() {
+        #expect(EditorTool.select.annotation == nil)
+        for tool in EditorTool.allCases where tool != .select {
+            #expect(tool.annotation != nil, "\(tool) should draw something")
+        }
+    }
+
+    @Test("Every annotation tool is reachable from the toolbar")
+    func everyAnnotationToolIsReachable() {
+        let reachable = Set(EditorTool.allCases.compactMap(\.annotation))
+        #expect(reachable == Set(AnnotationTool.allCases))
+    }
+}
