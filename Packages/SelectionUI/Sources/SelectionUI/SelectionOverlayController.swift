@@ -9,6 +9,23 @@ public enum SelectionMode: Sendable {
     case window
 }
 
+/// What the selection is for, which changes how the overlay looks (docs/03 §1.7).
+///
+/// Capture Text uses the same selection interaction, so the only honest way to tell the
+/// user which one they triggered is to make the overlay look different.
+public enum SelectionPurpose: Sendable {
+    case capture
+    case recognizeText
+
+    /// A badge shown by the crosshair.
+    public var badge: String? {
+        switch self {
+        case .capture: nil
+        case .recognizeText: "TEXT"
+        }
+    }
+}
+
 /// One display's frozen contents, handed to the overlay.
 ///
 /// SelectionUI deliberately does not depend on CaptureCore: the overlay's job is to turn
@@ -64,13 +81,19 @@ public struct SelectionResult: Sendable {
 final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
     private let overlayView: SelectionOverlayView
 
-    init(frozen: FrozenDisplay, screen: ScreenDescriptor, mode: SelectionOverlayView.Mode) {
+    init(
+        frozen: FrozenDisplay,
+        screen: ScreenDescriptor,
+        mode: SelectionOverlayView.Mode,
+        purpose: SelectionPurpose
+    ) {
         let frame = screen.frame.cgRect
         overlayView = SelectionOverlayView(
             frozenImage: frozen.image,
             bounds: CGRect(origin: .zero, size: frame.size),
             scale: frozen.geometry.scale,
-            mode: mode
+            mode: mode,
+            purpose: purpose
         )
         super.init(
             contentRect: frame,
@@ -117,6 +140,7 @@ public final class SelectionOverlayController {
     private var freezes: [CGDirectDisplayID: FrozenDisplay] = [:]
     private var completion: ((SelectionOutcome?) -> Void)?
     private var mode: SelectionOverlayView.Mode = .area
+    private var purpose: SelectionPurpose = .capture
     /// Windows offered for picking, keyed by the display they are shown on.
     private var pickableWindows: [CGDirectDisplayID: [PickableWindow]] = [:]
     private var previouslyActiveApp: NSRunningApplication?
@@ -140,6 +164,7 @@ public final class SelectionOverlayController {
     public func present(
         freezes: [FrozenDisplay],
         mode: SelectionMode = .area,
+        purpose: SelectionPurpose = .capture,
         windows: [PickableWindowDescriptor] = [],
         signpostState: OSSignpostIntervalState? = nil,
         completion: @escaping (SelectionOutcome?) -> Void
@@ -152,6 +177,7 @@ public final class SelectionOverlayController {
 
         self.completion = completion
         self.mode = mode == .window ? .window : .area
+        self.purpose = purpose
         self.freezes = Dictionary(uniqueKeysWithValues: freezes.map { ($0.geometry.displayID, $0) })
         pickableWindows = Self.mapWindows(windows, onto: freezes.map(\.geometry))
         previouslyActiveApp = NSWorkspace.shared.frontmostApplication
@@ -181,7 +207,7 @@ public final class SelectionOverlayController {
 
     private func makePanel(for descriptor: ScreenDescriptor) -> SelectionPanel? {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
-        let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode)
+        let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: purpose)
         panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
 
         panel.view.onModeChanged = { [weak self] newMode in

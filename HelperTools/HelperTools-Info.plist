@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	    launchd will not register an XPC service without this dictionary, and the failure
+	    mode is a lookup error rather than anything that names the cause. Xcode's
+	    INFOPLIST_KEY_ build settings cannot express a nested dictionary, so this partial
+	    plist supplies it and the generator fills in everything else.
+
+	    ServiceType Application: one instance per app that connects, which is what a
+	    per-app helper wants — not a system-wide singleton.
+	-->
+	<key>XPCService</key>
+	<dict>
+		<key>ServiceType</key>
+		<string>Application</string>
+	</dict>
+</dict>
+</plist>

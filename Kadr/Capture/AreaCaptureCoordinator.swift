@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import OverlayKit
 import SelectionUI
 import SettingsKit
 import Shared
@@ -17,6 +18,8 @@ final class AreaCaptureCoordinator {
     private let overlay: SelectionOverlayController
     private let settings: AppSettings
     private let timer = CaptureCountdown()
+    private let vision = VisionClient()
+    private let toast = TextCaptureToast()
     private let output: CaptureOutput
     private let quickAccess: QuickAccessManager
     private let pins = PinManager()
@@ -33,6 +36,7 @@ final class AreaCaptureCoordinator {
     /// Sampled then, not at capture time: by the time the overlay is up the frontmost app
     /// is Kadr, which makes a useless `{app}` in the filename.
     private var frontmostAtHotkey: AppIdentity?
+    private var purpose: SelectionPurpose = .capture
 
     init(
         engine: CaptureEngine,
@@ -63,6 +67,12 @@ final class AreaCaptureCoordinator {
         beginOverlayCapture(mode: .window)
     }
 
+    /// The same selection interaction, tinted, whose result goes to the recogniser
+    /// instead of to a file (docs/03 §1.7).
+    func beginTextCapture() {
+        beginOverlayCapture(mode: .area, purpose: .recognizeText)
+    }
+
     /// Captures every display with no overlay at all (docs/03 §1.3).
     func captureAllDisplays() {
         inFlight?.cancel()
@@ -86,8 +96,9 @@ final class AreaCaptureCoordinator {
         }
     }
 
-    private func beginOverlayCapture(mode: SelectionMode) {
+    private func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
         frontmostAtHotkey = Self.currentFrontmostApp()
+        self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
         inFlight?.cancel()
 
@@ -121,6 +132,7 @@ final class AreaCaptureCoordinator {
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     mode: mode,
+                    purpose: purpose,
                     windows: windows,
                     signpostState: interval
                 ) { [weak self] outcome in
@@ -193,6 +205,19 @@ final class AreaCaptureCoordinator {
     }
 
     private func finishRegion(_ result: SelectionResult, freezes: [DisplayFreeze]) {
+        guard let freeze = freezes.first(where: { $0.geometry.displayID == result.display.displayID }) else {
+            logger.error("The selected display's freeze went missing")
+            return
+        }
+        let frozen = FrozenDisplay(geometry: freeze.geometry, image: freeze.image)
+
+        // Capture Text reads the same crop instead of exporting it (docs/03 §1.7).
+        if purpose == .recognizeText {
+            guard let image = frozen.croppedImage(localRect: result.localRect) else { return }
+            recognizeText(in: image, on: result.display.displayID)
+            return
+        }
+
         lastRegion = (result.rect, result.display.displayID)
 
         // With a timer running the point is to capture what the screen looks like *after*
@@ -209,14 +234,8 @@ final class AreaCaptureCoordinator {
         let state = signposter.beginInterval("selectionToClipboard")
         defer { signposter.endInterval("selectionToClipboard", state) }
 
-        guard let freeze = freezes.first(where: { $0.geometry.displayID == result.display.displayID }) else {
-            logger.error("The selected display's freeze went missing")
-            return
-        }
-
         // Cropped from the frozen bitmap, never re-captured — that is what guarantees
         // the file matches what the user selected on (docs/03 §1.1).
-        let frozen = FrozenDisplay(geometry: freeze.geometry, image: freeze.image)
         guard let image = frozen.croppedImage(localRect: result.localRect) else {
             logger.error("Could not crop the selection out of the frozen image")
             return
@@ -236,6 +255,37 @@ final class AreaCaptureCoordinator {
                 frontmostApp: frontmostAtHotkey
             )
         ))
+    }
+
+    /// Sends a crop to the Vision helper and puts the result on the clipboard.
+    private func recognizeText(in image: CGImage, on displayID: CGDirectDisplayID) {
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let options = TextRecognitionOptions(
+                    preservesLineBreaks: settings.ocrPreservesLineBreaks
+                )
+                let analysis = try await vision.analyze(image, options: options)
+                let text = analysis.text(preservingLineBreaks: settings.ocrPreservesLineBreaks)
+
+                if !text.isEmpty {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                let characters = text.count
+                logger.info("Recognised \(characters, privacy: .public) characters")
+
+                let screen = NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
+                toast.show(text: text, codes: analysis.codes, on: screen)
+
+                // Let go of the connection so the helper can start its idle countdown
+                // and give its Vision models back (docs/04 §1).
+                vision.disconnect()
+            } catch {
+                logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
+                vision.disconnect()
+            }
+        }
     }
 
     private func captureRegionLive(_ rect: DisplayRect, on displayID: CGDirectDisplayID) {

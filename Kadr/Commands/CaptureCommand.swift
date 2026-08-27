@@ -34,9 +34,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// honest map of the app rather than a list that grows unpredictably.
     var isAvailable: Bool {
         switch self {
-        case .captureArea, .capturePreviousArea, .captureWindow, .captureFullscreen: true
-        // M8 brings OCR.
-        case .captureText: false
+        case .captureArea, .capturePreviousArea, .captureWindow, .captureFullscreen, .captureText: true
         }
     }
 

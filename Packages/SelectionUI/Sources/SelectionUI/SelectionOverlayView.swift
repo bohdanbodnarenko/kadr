@@ -29,6 +29,7 @@ final class SelectionOverlayView: NSView {
     }
 
     private(set) var mode: Mode
+    private let purpose: SelectionPurpose
     var interaction: SelectionInteraction
     var windowPick = WindowPickInteraction()
     var sizeEntry = NumericSizeEntry()
@@ -54,8 +55,15 @@ final class SelectionOverlayView: NSView {
 
     private static let badgeHeight: CGFloat = 22
 
-    init(frozenImage: CGImage, bounds: CGRect, scale: DisplayScale, mode: Mode = .area) {
+    init(
+        frozenImage: CGImage,
+        bounds: CGRect,
+        scale: DisplayScale,
+        mode: Mode = .area,
+        purpose: SelectionPurpose = .capture
+    ) {
         self.mode = mode
+        self.purpose = purpose
         interaction = SelectionInteraction(bounds: CGRect(origin: .zero, size: bounds.size))
         windowHighlight = WindowHighlightLayerGroup(scale: scale)
         loupe = LoupeLayerGroup(sampler: LoupeSampler(image: frozenImage, scale: scale), scale: scale)
@@ -98,7 +106,12 @@ final class SelectionOverlayView: NSView {
         root.addSublayer(frozenLayer)
 
         dimLayer.frame = bounds
-        dimLayer.fillColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        // Capture Text tints the dimming, so the user can see which hotkey they hit
+        // before they start dragging (docs/03 §1.7).
+        dimLayer.fillColor = switch purpose {
+        case .capture: NSColor.black.withAlphaComponent(0.45).cgColor
+        case .recognizeText: NSColor.systemIndigo.withAlphaComponent(0.35).cgColor
+        }
         dimLayer.fillRule = .evenOdd
         root.addSublayer(dimLayer)
 
@@ -312,13 +325,16 @@ final class SelectionOverlayView: NSView {
     }
 
     private func updateBadge() {
-        let text: String? = if !sizeEntry.isEmpty {
+        let measurement: String? = if !sizeEntry.isEmpty {
             sizeEntry.displayText
         } else if let rect = interaction.rect, !rect.isEmpty {
             DimensionFormatter.text(for: rect, scale: displayScale)
         } else {
             nil
         }
+        // The badge names the mode as well as the size, so Capture Text is unmistakable.
+        let text = [purpose.badge, measurement].compactMap(\.self).joined(separator: "  ")
+            .nilIfEmpty
 
         guard let text, let rect = interaction.rect ?? interaction.pointer.map({
             CGRect(origin: $0, size: .zero)
@@ -381,5 +397,12 @@ final class SelectionOverlayView: NSView {
         loupe.hide()
         crosshairLayer.path = nil
         CATransaction.commit()
+    }
+}
+
+private extension String {
+    /// Empty strings read as "nothing to show" rather than an empty badge.
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

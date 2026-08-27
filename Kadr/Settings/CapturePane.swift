@@ -22,6 +22,13 @@ struct CapturePane: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Capture Text") {
+                Toggle("Keep line breaks", isOn: $settings.ocrPreservesLineBreaks)
+                Text("Off folds recognised lines into spaces, which suits copying a paragraph.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Self-timer") {
                 Picker("Wait before capturing", selection: $settings.selfTimer) {
                     ForEach(SelfTimer.allCases, id: \.self) { timer in

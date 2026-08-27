@@ -119,9 +119,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             areaCapture.beginWindowCapture()
         case .captureFullscreen:
             areaCapture.captureAllDisplays()
-        // M8 brings OCR.
         case .captureText:
-            break
+            areaCapture.beginTextCapture()
         }
     }
 

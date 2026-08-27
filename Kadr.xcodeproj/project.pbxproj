@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; };
+		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
+		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
 		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
 		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
 		KADR00000000000000000441 /* AnnotationModel in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000421 /* AnnotationModel */; };
@@ -42,12 +45,20 @@
 			remoteGlobalIDString = KADR00000000000000000400;
 			remoteInfo = KadrEditor;
 		};
+		KADR0000000000000000050C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KADR00000000000000000500;
+			remoteInfo = HelperTools;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		F5F2A2373040394A00A5DC07 /* Kadr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kadr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5F2A2443040394B00A5DC07 /* KadrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000401 /* KadrEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KadrEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		KADR00000000000000000501 /* HelperTools.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = HelperTools.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -66,6 +77,11 @@
 			path = KadrEditor;
 			sourceTree = "<group>";
 		};
+		KADR00000000000000000502 /* HelperTools */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HelperTools;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -78,6 +94,17 @@
 				KADR0000000000000000040A /* KadrEditor.app in Embed Editor */,
 			);
 			name = "Embed Editor";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000509 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/XPCServices";
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -121,6 +148,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000504 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KADR00000000000000000540 /* Shared in Frameworks */,
+				KADR00000000000000000541 /* VisionServices in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -129,6 +165,7 @@
 			children = (
 				F5F2A2393040394A00A5DC07 /* Kadr */,
 				KADR00000000000000000402 /* KadrEditor */,
+				KADR00000000000000000502 /* HelperTools */,
 				F5F2A2473040394B00A5DC07 /* KadrTests */,
 				F5F2A2383040394A00A5DC07 /* Products */,
 			);
@@ -139,6 +176,7 @@
 			children = (
 				F5F2A2373040394A00A5DC07 /* Kadr.app */,
 				KADR00000000000000000401 /* KadrEditor.app */,
+				KADR00000000000000000501 /* HelperTools.xpc */,
 				F5F2A2443040394B00A5DC07 /* KadrTests.xctest */,
 			);
 			name = Products;
@@ -155,11 +193,13 @@
 				F5F2A2343040394A00A5DC07 /* Frameworks */,
 				F5F2A2353040394A00A5DC07 /* Resources */,
 				KADR00000000000000000409 /* Embed Editor */,
+				KADR00000000000000000509 /* Embed XPC Services */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				KADR0000000000000000040B /* PBXTargetDependency */,
+				KADR0000000000000000050B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F5F2A2393040394A00A5DC07 /* Kadr */,
@@ -233,6 +273,30 @@
 			productReference = KADR00000000000000000401 /* KadrEditor.app */;
 			productType = "com.apple.product-type.application";
 		};
+		KADR00000000000000000500 /* HelperTools */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KADR00000000000000000506 /* Build configuration list for PBXNativeTarget "HelperTools" */;
+			buildPhases = (
+				KADR00000000000000000503 /* Sources */,
+				KADR00000000000000000504 /* Frameworks */,
+				KADR00000000000000000505 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				KADR00000000000000000502 /* HelperTools */,
+			);
+			name = HelperTools;
+			packageProductDependencies = (
+				KADR00000000000000000520 /* Shared */,
+				KADR00000000000000000521 /* VisionServices */,
+			);
+			productName = HelperTools;
+			productReference = KADR00000000000000000501 /* HelperTools.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -284,6 +348,7 @@
 			targets = (
 				F5F2A2363040394A00A5DC07 /* Kadr */,
 				KADR00000000000000000400 /* KadrEditor */,
+				KADR00000000000000000500 /* HelperTools */,
 				F5F2A2433040394B00A5DC07 /* KadrTests */,
 			);
 		};
@@ -305,6 +370,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		KADR00000000000000000405 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000505 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -335,6 +407,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000503 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -347,6 +426,11 @@
 			isa = PBXTargetDependency;
 			target = KADR00000000000000000400 /* KadrEditor */;
 			targetProxy = KADR0000000000000000040C /* PBXContainerItemProxy */;
+		};
+		KADR0000000000000000050B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000500 /* HelperTools */;
+			targetProxy = KADR0000000000000000050C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -643,6 +727,46 @@
 			};
 			name = Release;
 		};
+		KADR00000000000000000507 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
+				INFOPLIST_FILE = "HelperTools/HelperTools-Info.plist";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
+				PRODUCT_NAME = HelperTools;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		KADR00000000000000000508 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
+				INFOPLIST_FILE = "HelperTools/HelperTools-Info.plist";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
+				PRODUCT_NAME = HelperTools;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -678,6 +802,15 @@
 			buildConfigurations = (
 				KADR00000000000000000407 /* Debug */,
 				KADR00000000000000000408 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KADR00000000000000000506 /* Build configuration list for PBXNativeTarget "HelperTools" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KADR00000000000000000507 /* Debug */,
+				KADR00000000000000000508 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -751,6 +884,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		KADR00000000000000000520 /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		KADR00000000000000000521 /* VisionServices */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = VisionServices;
+		};
 		KADR00000000000000000420 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Shared;

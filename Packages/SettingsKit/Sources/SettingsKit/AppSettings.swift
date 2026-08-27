@@ -116,6 +116,8 @@ public enum SettingKeys {
     /// round-trip through the presets picker.
     public static let selfTimer = SettingKey("capture.selfTimer", default: SelfTimer.off)
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
+    /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
+    public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
 
     // Overlay pane (docs/03 §2, §8.3).
     public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
@@ -173,6 +175,10 @@ public final class AppSettings {
     /// background, so rounded corners export as real transparency (docs/03 §1.2).
     public var transparentWindowBackground: Bool {
         didSet { store[SettingKeys.transparentWindowBackground] = transparentWindowBackground }
+    }
+
+    public var ocrPreservesLineBreaks: Bool {
+        didSet { store[SettingKeys.ocrPreservesLineBreaks] = ocrPreservesLineBreaks }
     }
 
     public var selfTimer: SelfTimer {
@@ -250,6 +256,7 @@ public final class AppSettings {
         includesCursor = store[SettingKeys.includesCursor]
         windowShadow = store[SettingKeys.windowShadow]
         transparentWindowBackground = store[SettingKeys.transparentWindowBackground]
+        ocrPreservesLineBreaks = store[SettingKeys.ocrPreservesLineBreaks]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
         overlayCorner = store[SettingKeys.overlayCorner]
@@ -279,6 +286,7 @@ public final class AppSettings {
         includesCursor = SettingKeys.includesCursor.defaultValue
         windowShadow = SettingKeys.windowShadow.defaultValue
         transparentWindowBackground = SettingKeys.transparentWindowBackground.defaultValue
+        ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         overlayCorner = SettingKeys.overlayCorner.defaultValue
