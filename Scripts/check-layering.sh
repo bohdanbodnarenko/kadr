@@ -11,7 +11,10 @@
 #      (docs/04 §1, §7.4).
 #   C. The built agent binary links no networking framework — docs/03 §9 asks for
 #      exactly this grep over the linked frameworks. Skipped when nothing is built.
-#   D. Package dependencies respect the layering: a package may only depend on
+#   D. No legacy CoreGraphics screen capture. ScreenCaptureKit is the only capture
+#      path (docs/04 §4.2, §12): the CGWindowList/CGDisplay family is deprecated and
+#      triggers extra TCC alerts on Sonoma and later.
+#   E. Package dependencies respect the layering: a package may only depend on
 #      packages in a strictly lower layer, per the module list in docs/04 §2.
 #
 # Usage: Scripts/check-layering.sh
@@ -74,6 +77,25 @@ for module in $FORBIDDEN_IN_AGENT; do
         pass "agent app target does not link or import $module"
     fi
 done
+
+# ---------------------------------------------------------------- B2. legacy capture APIs
+LEGACY_CAPTURE='CGWindowListCreateImage|CGWindowListCreateImageFromArray|CGDisplayCreateImage|CGDisplayCreateImageForRect|CGWindowListCreateDescriptionFromArray'
+
+legacy_hits=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    # Comments naming the banned APIs (including this rule's own documentation)
+    # are not calls to them.
+    hit=$(grep -nE "$LEGACY_CAPTURE" "$file" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*(//|\*|/\*)')
+    [ -n "$hit" ] && legacy_hits="${legacy_hits}${file}: ${hit}"$'\n'
+done <<< "$(swift_sources)"
+
+if [ -n "$legacy_hits" ]; then
+    fail "legacy CoreGraphics capture API used — ScreenCaptureKit only (docs/04 §4.2)"
+    printf '%s' "$legacy_hits" | sed 's/^/    /'
+else
+    pass "all screen capture goes through ScreenCaptureKit"
+fi
 
 # ---------------------------------------------------------------- C. linked frameworks
 # The source grep above cannot see what a dependency drags in; this can.
