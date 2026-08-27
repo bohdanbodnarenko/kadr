@@ -65,6 +65,14 @@ jobs:
         run: Scripts/check-size.sh --require-build
       - name: Linked frameworks contain no networking (docs/03 §9)
         run: Scripts/check-layering.sh
+      - name: Performance budgets (PRD §8)
+        run: Scripts/check-perf.sh --idle-seconds 30 --json perf-results.json
+      - name: Publish the measured budgets
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf-results.json
+          if-no-files-found: warn
 
   static:
     name: Lint and architecture checks

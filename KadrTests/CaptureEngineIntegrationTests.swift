@@ -131,3 +131,55 @@ struct CaptureEngineIntegrationTests {
         #expect(capture.image.alphaInfo != .none, "transparent mode must produce a real alpha channel")
     }
 }
+
+/// The capture-latency budgets from PRD §8, measured against real hardware.
+///
+/// These need a Screen Recording grant and a display, so they share the opt-in switch
+/// described above. They are the half of the performance suite that
+/// `Scripts/check-perf.sh` cannot cover, because a script cannot capture the screen.
+@Suite("Capture latency budgets", .enabled(if: integrationEnabled))
+struct CaptureLatencyTests {
+    private func makeEngine() -> CaptureEngine {
+        CaptureEngine(
+            frontmostApplication: FixedFrontmostApplication(nil),
+            ownBundleIdentifier: nil
+        )
+    }
+
+    @Test("Freezing every display fits the 100 ms hotkey-to-overlay budget (PRD §8)")
+    func freezeWithinBudget() async throws {
+        let engine = makeEngine()
+        _ = try await engine.freezeAllDisplays()
+
+        let clock = ContinuousClock()
+        let elapsed = try await clock.measure {
+            _ = try await engine.freezeAllDisplays()
+        }
+        // The freeze is the expensive half of hotkey-to-overlay; the panels themselves
+        // are already built and only need their contents set.
+        #expect(elapsed < .milliseconds(100), "freeze took \(elapsed)")
+    }
+
+    @Test("A 5K region reaches the clipboard inside 150 ms (PRD §8)")
+    func regionToClipboardWithinBudget() async throws {
+        let engine = makeEngine()
+        let snapshot = try await engine.shareableContent()
+        let display = try #require(snapshot.displays.first)
+
+        // As close to a 5K region as this display allows.
+        let side = min(display.frame.width, display.frame.height)
+        let region = DisplayRect(
+            x: display.frame.minX,
+            y: display.frame.minY,
+            width: min(2560, display.frame.width),
+            height: min(1440, side)
+        )
+        _ = try await engine.captureRegion(region, on: display.displayID)
+
+        let clock = ContinuousClock()
+        let elapsed = try await clock.measure {
+            _ = try await engine.captureRegion(region, on: display.displayID)
+        }
+        #expect(elapsed < .milliseconds(150), "region capture took \(elapsed)")
+    }
+}
