@@ -1,0 +1,111 @@
+import AppKit
+import os
+import OverlayKit
+import SettingsKit
+import Shared
+import SwiftUI
+
+/// Owns the one and only Settings window (docs/04 §3.1).
+///
+/// The window is built on demand and torn down on close: SwiftUI, its hosting view
+/// and the whole view tree are allocated when the user opens Settings and gone by
+/// the time the window has closed, so the agent returns to its idle footprint
+/// (PRD §8). Debug builds assert on that rather than trusting it.
+@MainActor
+final class SettingsWindowController: NSObject, NSWindowDelegate {
+    private let settings: AppSettings
+    private let loginItem: LoginItemController
+    private let juggler: ActivationJuggler
+    private let logger = KadrLog.logger(.settings)
+
+    /// Internal rather than private so tests can hold a weak reference and prove the
+    /// window really goes away on close.
+    private(set) var window: NSWindow?
+    private weak var hostingView: NSView?
+
+    init(settings: AppSettings, loginItem: LoginItemController, juggler: ActivationJuggler = .shared) {
+        self.settings = settings
+        self.loginItem = loginItem
+        self.juggler = juggler
+    }
+
+    /// Whether a window is currently on screen. Used by the deallocation tests.
+    var isOpen: Bool {
+        window != nil
+    }
+
+    func show() {
+        // The user can flip the login item in System Settings behind our back.
+        loginItem.refresh()
+
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let hosting = NSHostingView(rootView: SettingsView(settings: settings, loginItem: loginItem))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 380),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Kadr Settings"
+        window.contentView = hosting
+        window.delegate = self
+        // AppKit would otherwise release the window out from under ARC on close.
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.setFrameAutosaveName("app.kadr.Kadr.settings")
+
+        self.window = window
+        hostingView = hosting
+
+        // An .accessory app cannot make a window key on its own — docs/04 §3.1.
+        juggler.beginRegularWindow()
+        window.makeKeyAndOrderFront(nil)
+        logger.info("Settings window opened")
+    }
+
+    /// Closes the window if it is open. The teardown runs through `windowWillClose`.
+    func close() {
+        window?.close()
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window else { return }
+
+        window.delegate = nil
+        // Drop the SwiftUI tree before the window goes, so nothing outlives the close.
+        window.contentView = nil
+        self.window = nil
+
+        juggler.endRegularWindow()
+        logger.info("Settings window closed")
+
+        assertTornDown(window: window)
+    }
+
+    /// Debug-only leak check: the window and its SwiftUI tree must actually go away,
+    /// because a retain cycle in a settings pane is exactly the kind of regression
+    /// that quietly ruins the idle RSS budget (PRD §8).
+    ///
+    /// The check is delayed on purpose. AppKit tears a window down asynchronously once
+    /// it has been ordered in — measured at roughly 300 ms after `-close` — so an
+    /// immediate assertion would fire on healthy code. Two seconds is a wide margin on
+    /// that, and this fires once per close in debug builds only, never at idle.
+    private func assertTornDown(window: NSWindow) {
+        let hosting = hostingView
+        hostingView = nil
+
+        #if DEBUG
+            Task { @MainActor [weak window, weak hosting] in
+                try? await Task.sleep(for: .seconds(2))
+                assert(window == nil, "Settings window leaked — something still retains it")
+                assert(hosting == nil, "Settings hosting view leaked — check for a retain cycle in a pane")
+            }
+        #endif
+    }
+}
