@@ -85,25 +85,35 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         juggler.endRegularWindow()
         logger.info("Settings window closed")
 
-        assertTornDown(window: window)
+        assertTornDown()
     }
 
-    /// Debug-only leak check: the window and its SwiftUI tree must actually go away,
-    /// because a retain cycle in a settings pane is exactly the kind of regression
-    /// that quietly ruins the idle RSS budget (PRD §8).
+    /// Debug-only leak check on the part that actually costs memory: the SwiftUI tree.
     ///
-    /// The check is delayed on purpose. AppKit tears a window down asynchronously once
-    /// it has been ordered in — measured at roughly 300 ms after `-close` — so an
-    /// immediate assertion would fire on healthy code. Two seconds is a wide margin on
-    /// that, and this fires once per close in debug builds only, never at idle.
-    private func assertTornDown(window: NSWindow) {
+    /// A retain cycle in a settings pane would keep the whole view hierarchy, its
+    /// observation registrations and its state alive after the window closed, which is
+    /// exactly the regression that ruins the idle RSS budget (PRD §8). Measured healthy
+    /// teardown is ~100 ms.
+    ///
+    /// The `NSWindow` object itself is deliberately *not* asserted on. AppKit retains a
+    /// window that has ever been ordered in for as long as it likes — a bare window with
+    /// no delegate, no content view and no autosave name behaves identically, and was
+    /// still alive after five seconds when measured. That is AppKit's bookkeeping, not a
+    /// leak of ours, and asserting on it only produces flaky failures. What matters here
+    /// is that the controller has let go of it, which `windowWillClose` guarantees and
+    /// `isOpen` exposes.
+    private func assertTornDown() {
         let hosting = hostingView
         hostingView = nil
 
         #if DEBUG
-            Task { @MainActor [weak window, weak hosting] in
-                try? await Task.sleep(for: .seconds(2))
-                assert(window == nil, "Settings window leaked — something still retains it")
+            Task { @MainActor [weak hosting] in
+                for _ in 0 ..< 20 {
+                    if hosting == nil {
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
                 assert(hosting == nil, "Settings hosting view leaked — check for a retain cycle in a pane")
             }
         #endif
