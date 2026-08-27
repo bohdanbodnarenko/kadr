@@ -18,6 +18,7 @@
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
 		KADR000000000000000000D1 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006D /* AnnotationRender */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
+		KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000301 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +54,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */,
 				KADR000000000000000000C8 /* Shared in Frameworks */,
 				KADR000000000000000000C9 /* CaptureCore in Frameworks */,
 				KADR000000000000000000CA /* OverlayKit in Frameworks */,
@@ -115,6 +117,7 @@
 			);
 			name = Kadr;
 			packageProductDependencies = (
+				KADR00000000000000000301 /* KeyboardShortcuts */,
 				KADR00000000000000000064 /* Shared */,
 				KADR00000000000000000065 /* CaptureCore */,
 				KADR00000000000000000066 /* OverlayKit */,
@@ -181,7 +184,9 @@
 				Base,
 			);
 			mainGroup = F5F2A22E3040394A00A5DC07;
+			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				KADR00000000000000000000 /* XCLocalSwiftPackageReference "Packages/Shared" */,
 				KADR00000000000000000001 /* XCLocalSwiftPackageReference "Packages/CaptureCore" */,
 				KADR00000000000000000002 /* XCLocalSwiftPackageReference "Packages/OverlayKit" */,
@@ -196,7 +201,6 @@
 				KADR0000000000000000000B /* XCLocalSwiftPackageReference "Packages/HistoryKit" */,
 				KADR0000000000000000000C /* XCLocalSwiftPackageReference "Packages/EditorUI" */,
 			);
-			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F5F2A2383040394A00A5DC07 /* Products */;
 			projectDirPath = "";
@@ -285,6 +289,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -298,6 +303,7 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -311,14 +317,12 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 6.0;
-				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
-				DEAD_CODE_STRIPPING = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -356,6 +360,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -363,6 +368,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -374,14 +380,12 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_VERSION = 6.0;
-				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				GCC_TREAT_WARNINGS_AS_ERRORS = YES;
-				DEAD_CODE_STRIPPING = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -397,7 +401,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -411,7 +416,6 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
-				INFOPLIST_KEY_LSUIElement = YES;
 			};
 			name = Debug;
 		};
@@ -427,7 +431,8 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright \U00a9 2026 the Kadr contributors. MIT licensed.";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -441,7 +446,6 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
-				INFOPLIST_KEY_LSUIElement = YES;
 			};
 			name = Release;
 		};
@@ -574,6 +578,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		KADR00000000000000000064 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -618,6 +633,11 @@
 		KADR0000000000000000006E /* HistoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = HistoryKit;
+		};
+		KADR00000000000000000301 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
