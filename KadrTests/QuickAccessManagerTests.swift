@@ -2,6 +2,7 @@ import AppKit
 import CaptureCore
 import CoreGraphics
 import Foundation
+import HistoryKit
 import MediaExport
 import SettingsKit
 import Shared
@@ -50,7 +51,11 @@ private struct TestHarness {
 }
 
 @MainActor
-private func makeManager(saveFolder: URL, stagingFolder: URL) -> TestHarness {
+private func makeManager(
+    saveFolder: URL,
+    stagingFolder: URL,
+    history: HistoryController? = nil
+) -> TestHarness {
     let suite = UUID().uuidString
     guard let store = UserDefaults(suiteName: suite) else {
         fatalError("Could not open a throwaway defaults suite")
@@ -64,7 +69,12 @@ private func makeManager(saveFolder: URL, stagingFolder: URL) -> TestHarness {
         exporter: CaptureExporter(staging: StagingArea(directory: stagingFolder))
     )
     return TestHarness(
-        manager: QuickAccessManager(settings: settings, output: output, pins: PinManager()),
+        manager: QuickAccessManager(
+            settings: settings,
+            output: output,
+            pins: PinManager(),
+            history: history
+        ),
         settings: settings,
         output: output
     )
@@ -256,5 +266,50 @@ struct QuickAccessManagerTests {
         harness.manager.dismissAll()
 
         #expect(harness.manager.items.isEmpty)
+    }
+
+    @Test("Restore recently closed falls through to history when the overlay stack is empty")
+    func restoreFromHistory() async throws {
+        let save = temporaryDirectory("save")
+        let historyRoot = temporaryDirectory("history")
+        let store = try HistoryStore.open(root: historyRoot)
+        let suite = UUID().uuidString
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            fatalError("Could not open a throwaway defaults suite")
+        }
+        defaults.removePersistentDomain(forName: suite)
+        let settings = AppSettings(store: defaults)
+        settings.saveFolderPath = save.path
+        settings.defaultAction = .saveToFolder
+
+        let output = CaptureOutput(
+            settings: settings,
+            exporter: CaptureExporter(staging: StagingArea(directory: temporaryDirectory("stage")))
+        )
+        let capture = makeCapture()
+        let result = try #require(output.deliver(capture))
+        let fileURL = try #require(result.fileURL)
+        let record = try await store.ingest(HistoryIngest(
+            sourceURL: fileURL,
+            kind: .image,
+            pixelSize: PixelSize(width: 20, height: 10),
+            originalFilename: "from-history.png"
+        ))
+
+        let history = HistoryController(settings: settings, store: store)
+        let harness = makeManager(
+            saveFolder: save,
+            stagingFolder: temporaryDirectory("stage"),
+            history: history
+        )
+
+        harness.manager.restoreRecentlyClosed()
+        for _ in 0 ..< 20 where harness.manager.items.isEmpty {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+
+        #expect(harness.manager.items.count == 1)
+        #expect(harness.manager.items.first?.displayName == record.originalFilename)
+        harness.manager.dismissAll()
     }
 }

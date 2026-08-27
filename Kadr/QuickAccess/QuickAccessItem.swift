@@ -1,6 +1,7 @@
 import CaptureCore
 import CoreGraphics
 import Foundation
+import HistoryKit
 import Shared
 
 /// One capture, as the overlay knows it (docs/03 §2).
@@ -21,9 +22,15 @@ struct QuickAccessItem: Identifiable, Sendable {
     /// True for a screen recording, whose card shows a poster frame and a play badge
     /// rather than a thumbnail (docs/03 §1.8).
     var isVideo = false
+    /// How HistoryKit should classify this capture (docs/03 §5).
+    var historyKind: HistoryItemKind = .image
+    /// The name to show on the card when the file on disk is content-addressed.
+    var displayName: String?
+    /// App that was in front when the capture was taken, stored with the history record.
+    var applicationName: String?
 
     var filename: String {
-        fileURL.lastPathComponent
+        displayName ?? fileURL.lastPathComponent
     }
 
     /// "1280 × 960" for the hover readout.

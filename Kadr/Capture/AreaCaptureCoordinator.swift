@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import HistoryKit
 import os
 import OverlayKit
 import SelectionUI
@@ -44,7 +45,8 @@ final class AreaCaptureCoordinator {
         engine: CaptureEngine,
         permissions: PermissionCoordinator,
         settings: AppSettings,
-        overlay: SelectionOverlayController = SelectionOverlayController()
+        overlay: SelectionOverlayController = SelectionOverlayController(),
+        history: HistoryController? = nil
     ) {
         self.engine = engine
         self.permissions = permissions
@@ -52,7 +54,7 @@ final class AreaCaptureCoordinator {
         self.overlay = overlay
         let output = CaptureOutput(settings: settings)
         self.output = output
-        quickAccess = QuickAccessManager(settings: settings, output: output, pins: pins)
+        quickAccess = QuickAccessManager(settings: settings, output: output, pins: pins, history: history)
     }
 
     var hasPreviousRegion: Bool {
@@ -313,9 +315,18 @@ final class AreaCaptureCoordinator {
         quickAccess.show(result, capture: capture)
     }
 
-    /// Brings back the most recently dismissed card (docs/03 §2).
+    /// Brings back the most recently dismissed card, or the latest history item (docs/03 §5).
     func restoreRecentlyClosed() {
         quickAccess.restoreRecentlyClosed()
+    }
+
+    var canRestoreRecentlyClosed: Bool {
+        quickAccess.hasRecentlyClosed
+    }
+
+    /// Re-opens a library item as a Quick Access card (docs/03 §5).
+    func reopenFromHistory(_ record: HistoryRecord) {
+        quickAccess.presentFromHistory(record)
     }
 
     /// The "Close all pins" global command (docs/03 §4).

@@ -239,3 +239,39 @@ struct OverlaySettingsTests {
         #expect(corner.isBottom == bottom)
     }
 }
+
+@MainActor
+@Suite("History settings")
+struct HistorySettingsTests {
+    @Test("Defaults keep captures forever with a 5 GB cap (docs/03 §5)")
+    func defaults() {
+        let settings = AppSettings(store: makeStore())
+        #expect(settings.historyRetention == .forever)
+        #expect(settings.historySizeCap == .gigabytes5)
+        #expect(settings.historyRetention.maxAge == nil)
+        #expect(settings.historySizeCap.bytes == Int64(5) * 1024 * 1024 * 1024)
+    }
+
+    @Test("Retention and the size cap survive a reload")
+    func persist() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        settings.historyRetention = .sevenDays
+        settings.historySizeCap = .megabytes512
+
+        let reloaded = AppSettings(store: store)
+        #expect(reloaded.historyRetention == .sevenDays)
+        #expect(reloaded.historySizeCap == .megabytes512)
+        #expect(reloaded.historyRetention.maxAge == TimeInterval(7 * 24 * 60 * 60))
+    }
+
+    @Test("Reset restores history defaults")
+    func reset() {
+        let settings = AppSettings(store: makeStore())
+        settings.historyRetention = .session
+        settings.historySizeCap = .unlimited
+        settings.resetToDefaults()
+        #expect(settings.historyRetention == .forever)
+        #expect(settings.historySizeCap == .gigabytes5)
+    }
+}

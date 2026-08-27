@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import HistoryKit
 import MediaExport
 import os
 import OverlayKit
@@ -20,6 +21,7 @@ final class QuickAccessManager {
     private let editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
     private let vision = VisionClient()
+    private let history: HistoryController?
     private let logger = KadrLog.logger(.overlay)
 
     private var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
@@ -31,10 +33,11 @@ final class QuickAccessManager {
     private static let screenMargin: CGFloat = 16
     private static let maximumRecentlyClosed = 10
 
-    init(settings: AppSettings, output: CaptureOutput, pins: PinManager) {
+    init(settings: AppSettings, output: CaptureOutput, pins: PinManager, history: HistoryController? = nil) {
         self.settings = settings
         self.output = output
         self.pins = pins
+        self.history = history
     }
 
     var hasRecentlyClosed: Bool {
@@ -58,9 +61,11 @@ final class QuickAccessManager {
             isStaged: result.isStaged,
             pixelSize: capture.metadata.pixelSize,
             capturedAt: capture.metadata.capturedAt,
-            displayID: capture.metadata.displayID
+            displayID: capture.metadata.displayID,
+            applicationName: capture.metadata.frontmostApp?.name
         )
         present(item)
+        ingest(item)
     }
 
     /// Shows a card for a finished recording (docs/03 §1.8).
@@ -72,14 +77,17 @@ final class QuickAccessManager {
             // Reading the track's size is asynchronous, so the card appears as soon as
             // the size is known rather than blocking the stop button on it.
             let size = await VideoPosterFrame.pixelSize(of: fileURL) ?? PixelSize(width: 0, height: 0)
-            self?.present(QuickAccessItem(
+            let item = QuickAccessItem(
                 fileURL: fileURL,
                 isStaged: false,
                 pixelSize: size,
                 capturedAt: Date(),
                 displayID: nil,
-                isVideo: true
-            ))
+                isVideo: true,
+                historyKind: .video
+            )
+            self?.present(item)
+            self?.ingestRecording(item)
         }
     }
 
@@ -95,24 +103,55 @@ final class QuickAccessManager {
             isStaged: true,
             pixelSize: pixelSize,
             capturedAt: Date(),
-            displayID: nil
+            displayID: nil,
+            historyKind: .scrolling
         )
         present(item)
+        ingest(item)
         if editor.isAvailable {
             annotate(item)
         }
     }
 
-    /// Brings back the most recently dismissed card (docs/03 §2).
+    /// Brings back the most recently dismissed card, or the latest history item (docs/03 §2, §5).
     func restoreRecentlyClosed() {
-        guard let item = recentlyClosed.first else { return }
-        recentlyClosed.removeFirst()
-        // Its file may have been deleted in the meantime.
-        guard FileManager.default.fileExists(atPath: item.fileURL.path) else {
-            logger.info("The most recently closed capture is gone; nothing to restore")
+        if let item = recentlyClosed.first {
+            recentlyClosed.removeFirst()
+            // Its file may have been deleted in the meantime.
+            guard FileManager.default.fileExists(atPath: item.fileURL.path) else {
+                logger.info("The most recently closed capture is gone; nothing to restore")
+                restoreRecentlyClosed()
+                return
+            }
+            present(item)
             return
         }
-        present(item)
+        Task { [weak self] in
+            guard let self, let record = await history?.mostRecent() else { return }
+            presentFromHistory(record)
+        }
+    }
+
+    /// Re-opens a library item as a Quick Access card (docs/03 §5).
+    func presentFromHistory(_ record: HistoryRecord) {
+        guard let store = history?.store else { return }
+        let url = store.fileURL(for: record)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            logger.info("History item \(record.originalFilename, privacy: .public) is gone")
+            return
+        }
+        history?.markAccessed(record)
+        present(QuickAccessItem(
+            fileURL: url,
+            isStaged: false,
+            pixelSize: record.pixelSize,
+            capturedAt: record.capturedAt,
+            displayID: nil,
+            isVideo: record.kind == .video,
+            historyKind: record.kind,
+            displayName: record.originalFilename,
+            applicationName: record.applicationName
+        ))
     }
 
     /// Dismisses every card without deleting anything.
@@ -340,6 +379,43 @@ final class QuickAccessManager {
         recentlyClosed.insert(item, at: 0)
         if recentlyClosed.count > Self.maximumRecentlyClosed {
             recentlyClosed.removeLast()
+        }
+    }
+
+    private func ingest(_ item: QuickAccessItem, thumbnailSourceURL: URL? = nil) {
+        history?.ingest(HistoryIngest(
+            sourceURL: item.fileURL,
+            kind: item.historyKind,
+            pixelSize: item.pixelSize,
+            applicationName: item.applicationName,
+            capturedAt: item.capturedAt,
+            originalFilename: item.filename,
+            thumbnailSourceURL: thumbnailSourceURL
+        ))
+    }
+
+    /// Recordings need a still ImageIO can thumbnail; the poster is that still.
+    private func ingestRecording(_ item: QuickAccessItem) {
+        Task { [weak self] in
+            guard let self else { return }
+            let poster = await writePoster(for: item.fileURL)
+            ingest(item, thumbnailSourceURL: poster)
+        }
+    }
+
+    private func writePoster(for video: URL) async -> URL? {
+        guard let image = await VideoPosterFrame.posterFrame(
+            of: video,
+            maxPixelSize: HistoryThumbnailWriter.maxPixelSize
+        ) else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-poster-\(UUID().uuidString).jpg")
+        do {
+            try HistoryThumbnailWriter.write(image, to: url)
+            return url
+        } catch {
+            logger.error("Could not write a recording poster: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 }

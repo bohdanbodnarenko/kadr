@@ -1,4 +1,5 @@
 import AppKit
+import HistoryKit
 import KeyboardShortcuts
 import os
 import Shared
@@ -27,6 +28,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let recordingControls: () -> RecordingControls?
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
+    private let history: HistoryController?
+    private let reopenFromHistory: (HistoryRecord) -> Void
+    private let canRestore: () -> Bool
+    private let openHistory: () -> Void
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
@@ -38,7 +43,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         checkForUpdates: @escaping () -> Void = {},
         canCheckForUpdates: @escaping () -> Bool = { false },
         recordingControls: @escaping () -> RecordingControls? = { nil },
-        additionalItems: @escaping () -> [NSMenuItem] = { [] }
+        additionalItems: @escaping () -> [NSMenuItem] = { [] },
+        history: HistoryController? = nil,
+        reopenFromHistory: @escaping (HistoryRecord) -> Void = { _ in },
+        canRestore: @escaping () -> Bool = { true },
+        openHistory: @escaping () -> Void = {}
     ) {
         self.perform = perform
         self.openSettings = openSettings
@@ -50,6 +59,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.canCheckForUpdates = canCheckForUpdates
         self.recordingControls = recordingControls
         self.additionalItems = additionalItems
+        self.history = history
+        self.reopenFromHistory = reopenFromHistory
+        self.canRestore = canRestore
+        self.openHistory = openHistory
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
@@ -102,6 +115,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             addRecordingItems(controls, to: menu)
         }
         addCaptureItems(to: menu)
+        addHistoryItems(to: menu)
         addOverlayItems(to: menu)
         addApplicationItems(to: menu)
     }
@@ -167,6 +181,28 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    /// Last-8 thumbnail strip and the History window command (docs/03 §5, §8.1).
+    private func addHistoryItems(to menu: NSMenu) {
+        let recent = Array(history?.recent.prefix(HistoryController.menuStripCount) ?? [])
+        if !recent.isEmpty {
+            menu.addItem(.separator())
+            let strip = HistoryStripView(frame: .zero)
+            strip.update(records: recent) { [weak self] record in
+                guard let cgImage = self?.history?.thumbnail(for: record, maxPixelSize: 112) else {
+                    return nil
+                }
+                return NSImage(cgImage: cgImage, size: HistoryStripView.thumbnailSize)
+            }
+            strip.onSelect = { [weak self] id in
+                guard let record = self?.history?.record(id: id) else { return }
+                self?.reopenFromHistory(record)
+            }
+            let item = NSMenuItem()
+            item.view = strip
+            menu.addItem(item)
+        }
+    }
+
     /// Commands over the surfaces a capture produces (docs/03 §2, §4).
     private func addOverlayItems(to menu: NSMenu) {
         menu.addItem(.separator())
@@ -178,7 +214,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         restoreItem.keyEquivalentModifierMask = [.command, .shift]
         restoreItem.target = self
+        restoreItem.isEnabled = canRestore()
         menu.addItem(restoreItem)
+
+        let historyItem = NSMenuItem(
+            title: "History…",
+            action: #selector(didSelectHistory),
+            keyEquivalent: ""
+        )
+        historyItem.target = self
+        menu.addItem(historyItem)
 
         let closePinsItem = NSMenuItem(
             title: "Close All Pins",
@@ -245,6 +290,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc
     private func didSelectRestore() {
         restoreRecentlyClosed()
+    }
+
+    @objc
+    private func didSelectHistory() {
+        openHistory()
     }
 
     @objc

@@ -39,10 +39,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (docs/04 §7.1).
     private lazy var captureEngine = CaptureEngine()
     private lazy var permissions = PermissionCoordinator()
+    // Settings state is Foundation-only and cheap; the window that presents it is not,
+    // and is built on first use.
+    private lazy var settings = AppSettings()
+    private lazy var history = HistoryController(settings: settings)
     private lazy var areaCapture = AreaCaptureCoordinator(
         engine: captureEngine,
         permissions: permissions,
-        settings: settings
+        settings: settings,
+        history: history
     )
     private lazy var scrollCapture = ScrollCaptureCoordinator(
         captureEngine: captureEngine,
@@ -56,13 +61,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings: settings
     )
 
-    // Settings state is Foundation-only and cheap; the window that presents it is not,
-    // and is built on first use.
-    private lazy var settings = AppSettings()
     private lazy var loginItem = LoginItemController()
     private lazy var settingsWindowController = SettingsWindowController(
         settings: settings,
-        loginItem: loginItem
+        loginItem: loginItem,
+        history: history
     )
 
     /// Held from launch so Sparkle's controller exists before the app finishes starting,
@@ -98,7 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             checkForUpdates: { [weak self] in self?.updater.checkForUpdates() },
             canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates ?? false },
             recordingControls: { [weak self] in self?.currentRecordingControls() },
-            additionalItems: { [weak self] in self?.debugMenuItems() ?? [] }
+            additionalItems: { [weak self] in self?.debugMenuItems() ?? [] },
+            history: history,
+            reopenFromHistory: { [weak self] record in self?.areaCapture.reopenFromHistory(record) },
+            canRestore: { [weak self] in
+                (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
+            },
+            openHistory: { [weak self] in self?.openHistory() }
         )
         endLaunchInterval()
 
@@ -123,6 +132,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
+
+        // Open the library after the status item is up, so SQLite cannot eat into the
+        // launch budget (PRD §8). Retention (including session-only wipe) runs here.
+        history.start()
 
         // docs/04 §3.3: the user can flip this in System Settings, so never cache it
         // across launches. Deliberately after the status item, so ServiceManagement
@@ -216,6 +229,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         settingsWindowController.show()
+    }
+
+    private func openHistory() {
+        history.showWindow { [weak self] record in
+            self?.areaCapture.reopenFromHistory(record)
+        }
     }
 
     /// Debug builds get a submenu that drives CaptureCore directly (docs/06 M1).

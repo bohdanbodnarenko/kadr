@@ -187,6 +187,10 @@ public enum SettingKeys {
     public static let overlayOnPrimaryDisplay = SettingKey("overlay.onPrimaryDisplay", default: false)
     /// Remove the card when its file is dragged out (docs/03 §2).
     public static let overlayDismissOnDrag = SettingKey("overlay.dismissOnDrag", default: true)
+
+    // History pane (docs/03 §5, §8.3).
+    public static let historyRetention = SettingKey("history.retention", default: HistoryRetention.forever)
+    public static let historySizeCap = SettingKey("history.sizeCap", default: HistorySizeCap.gigabytes5)
 }
 
 /// Observable façade over `UserDefaults` (docs/04 §9: plain `@Observable`, no TCA).
@@ -358,6 +362,14 @@ public final class AppSettings {
         didSet { store[SettingKeys.overlayDismissOnDrag] = overlayDismissOnDrag }
     }
 
+    public var historyRetention: HistoryRetention {
+        didSet { store[SettingKeys.historyRetention] = historyRetention }
+    }
+
+    public var historySizeCap: HistorySizeCap {
+        didSet { store[SettingKeys.historySizeCap] = historySizeCap }
+    }
+
     /// How long a capture waits, taking the custom value into account (docs/03 §1.5).
     public var timerSeconds: Int {
         customTimerSeconds > 0 ? customTimerSeconds : selfTimer.seconds
@@ -396,6 +408,8 @@ public final class AppSettings {
         overlayTimeout = store[SettingKeys.overlayTimeout]
         overlayOnPrimaryDisplay = store[SettingKeys.overlayOnPrimaryDisplay]
         overlayDismissOnDrag = store[SettingKeys.overlayDismissOnDrag]
+        historyRetention = store[SettingKeys.historyRetention]
+        historySizeCap = store[SettingKeys.historySizeCap]
     }
 
     /// Where captures are written. Falls back to the Desktop until the user picks a folder.
@@ -442,5 +456,7 @@ public final class AppSettings {
         overlayMaxVisibleCards = SettingKeys.overlayMaxVisibleCards.defaultValue
         overlayOnPrimaryDisplay = SettingKeys.overlayOnPrimaryDisplay.defaultValue
         overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
+        historyRetention = SettingKeys.historyRetention.defaultValue
+        historySizeCap = SettingKeys.historySizeCap.defaultValue
     }
 }

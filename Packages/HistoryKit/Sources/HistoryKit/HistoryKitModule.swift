@@ -1,13 +1,9 @@
 import MediaExport
 import Shared
 
-/// Placeholder for the `HistoryKit` package.
-///
 /// Capture records, thumbnail pipeline (ImageIO downsample), SQLite index and FTS5, retention/eviction.
 ///
-/// Scaffolding only (milestone M0.1) — no behaviour lives here yet. The type exists so the
-/// package, its dependency edges and its test target are wired up and verified by CI.
-/// See `docs/04-swift-architecture.md` §2 for what belongs in this module.
+/// See `docs/04-swift-architecture.md` §2 and §9, and `docs/03-features.md` §5.
 public enum HistoryKitModule {
     /// Stable identifier for the module; matches the package and product name.
     public static let identifier = "HistoryKit"

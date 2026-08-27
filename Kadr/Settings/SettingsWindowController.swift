@@ -15,6 +15,7 @@ import SwiftUI
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let settings: AppSettings
     private let loginItem: LoginItemController
+    private let history: HistoryController?
     private let juggler: ActivationJuggler
     private let logger = KadrLog.logger(.settings)
 
@@ -23,9 +24,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private(set) var window: NSWindow?
     private weak var hostingView: NSView?
 
-    init(settings: AppSettings, loginItem: LoginItemController, juggler: ActivationJuggler = .shared) {
+    init(
+        settings: AppSettings,
+        loginItem: LoginItemController,
+        history: HistoryController? = nil,
+        juggler: ActivationJuggler = .shared
+    ) {
         self.settings = settings
         self.loginItem = loginItem
+        self.history = history
         self.juggler = juggler
     }
 
@@ -43,7 +50,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        let hosting = NSHostingView(rootView: SettingsView(settings: settings, loginItem: loginItem))
+        let hosting = NSHostingView(
+            rootView: SettingsView(settings: settings, loginItem: loginItem, history: history)
+        )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 540, height: 380),
             styleMask: [.titled, .closable, .miniaturizable],
