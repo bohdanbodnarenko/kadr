@@ -154,6 +154,16 @@ public enum SettingKeys {
     public static let recordingShowsCursor = SettingKey("recording.showsCursor", default: true)
     /// Turn on Do Not Disturb while recording, so notifications stay out of the file.
     public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
+    /// Draw a halo where the user clicks (docs/03 §1.8).
+    public static let recordingShowsClicks = SettingKey("recording.showsClicks", default: false)
+    /// Show pressed keys. Off by default and shortcuts-only by default: showing every
+    /// keystroke means showing whatever gets typed into a password field.
+    public static let recordingShowsKeystrokes = SettingKey("recording.showsKeystrokes", default: false)
+    public static let recordingKeystrokesShortcutsOnly = SettingKey(
+        "recording.keystrokesShortcutsOnly",
+        default: true
+    )
+    public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
 
     // Overlay pane (docs/03 §2, §8.3).
     public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
@@ -245,6 +255,22 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingEnablesFocus] = recordingEnablesFocus }
     }
 
+    public var recordingShowsClicks: Bool {
+        didSet { store[SettingKeys.recordingShowsClicks] = recordingShowsClicks }
+    }
+
+    public var recordingShowsKeystrokes: Bool {
+        didSet { store[SettingKeys.recordingShowsKeystrokes] = recordingShowsKeystrokes }
+    }
+
+    public var recordingKeystrokesShortcutsOnly: Bool {
+        didSet { store[SettingKeys.recordingKeystrokesShortcutsOnly] = recordingKeystrokesShortcutsOnly }
+    }
+
+    public var recordingShowsWebcam: Bool {
+        didSet { store[SettingKeys.recordingShowsWebcam] = recordingShowsWebcam }
+    }
+
     public var selfTimer: SelfTimer {
         didSet { store[SettingKeys.selfTimer] = selfTimer }
     }
@@ -328,6 +354,10 @@ public final class AppSettings {
         recordsMicrophone = store[SettingKeys.recordsMicrophone]
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
+        recordingShowsClicks = store[SettingKeys.recordingShowsClicks]
+        recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]
+        recordingKeystrokesShortcutsOnly = store[SettingKeys.recordingKeystrokesShortcutsOnly]
+        recordingShowsWebcam = store[SettingKeys.recordingShowsWebcam]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
         overlayCorner = store[SettingKeys.overlayCorner]
@@ -364,6 +394,10 @@ public final class AppSettings {
         recordsMicrophone = SettingKeys.recordsMicrophone.defaultValue
         recordingShowsCursor = SettingKeys.recordingShowsCursor.defaultValue
         recordingEnablesFocus = SettingKeys.recordingEnablesFocus.defaultValue
+        recordingShowsClicks = SettingKeys.recordingShowsClicks.defaultValue
+        recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
+        recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
+        recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         overlayCorner = SettingKeys.overlayCorner.defaultValue

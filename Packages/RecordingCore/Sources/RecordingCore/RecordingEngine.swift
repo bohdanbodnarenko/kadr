@@ -16,6 +16,7 @@ public actor RecordingEngine {
     private let logger = KadrLog.logger(.recording)
     private let signposter = KadrLog.signposter(.recording)
     private let stitcher = SegmentStitcher()
+    private let compositor = FrameCompositor()
     private let ownBundleIdentifier: String?
 
     private var stream: SCStream?
@@ -28,11 +29,23 @@ public actor RecordingEngine {
     private var segments: [URL] = []
     private var sessionDirectory: URL?
     private var accumulatedDuration: TimeInterval = 0
+    private var segmentStartTime: CMTime?
+
+    /// Supplies click halos, keystrokes and the webcam picture, frame by frame.
+    ///
+    /// Optional because a recording with no overlays should not pay for the machinery,
+    /// and because the monitors that feed it belong to the app, not to the pipeline.
+    private var overlayProvider: (any RecordingOverlayProviding)?
 
     public private(set) var state: RecordingState = .idle
 
     public init(ownBundleIdentifier: String? = Bundle.main.bundleIdentifier) {
         self.ownBundleIdentifier = ownBundleIdentifier
+    }
+
+    /// Sets what gets drawn into frames. Nil turns overlays off entirely.
+    public func setOverlayProvider(_ provider: (any RecordingOverlayProviding)?) {
+        overlayProvider = provider
     }
 
     // MARK: - Lifecycle
@@ -43,8 +56,8 @@ public actor RecordingEngine {
         self.options = options
 
         let content = try await shareableContent()
-        let (filter, size) = try makeFilter(for: target, in: content)
-        pixelSize = size
+        let capture = try makeFilter(for: target, in: content)
+        pixelSize = capture.pixelSize
 
         // Everything for this recording lives in one directory, so a crash leaves an
         // obvious place to recover segments from.
@@ -56,9 +69,11 @@ public actor RecordingEngine {
         accumulatedDuration = 0
 
         try await beginSegment()
-        try await startStream(filter: filter)
+        try await startStream(filter: capture.filter, sourceRect: capture.sourceRect)
         state = .recording
-        logger.info("Recording started at \(size.width, privacy: .public)×\(size.height, privacy: .public)")
+        logger.info(
+            "Recording started at \(self.pixelSize.width, privacy: .public)×\(self.pixelSize.height, privacy: .public)"
+        )
     }
 
     /// Pauses by closing the current segment (docs/04 §4.3).
@@ -119,6 +134,9 @@ public actor RecordingEngine {
 
     private func beginSegment() async throws {
         guard let sessionDirectory else { throw RecordingError.notRecording }
+        // Each segment carries its own timeline; overlay timing counts from the whole
+        // recording, so the segment's origin is reset and the accumulated duration added.
+        segmentStartTime = nil
         let url = sessionDirectory.appendingPathComponent("segment-\(segments.count).mp4")
         writer = try SegmentWriter(
             fileURL: url,
@@ -150,10 +168,22 @@ public actor RecordingEngine {
 
     // MARK: - Stream
 
-    private func startStream(filter: SCContentFilter) async throws {
+    private func startStream(filter: SCContentFilter, sourceRect: CGRect?) async throws {
         let configuration = SCStreamConfiguration()
         configuration.width = pixelSize.width
         configuration.height = pixelSize.height
+        if let sourceRect {
+            // Without this a region recording captures the whole display and squeezes it
+            // into the region's size. `sourceRect` is display-local points, which is why
+            // the rect is rebased in `makeFilter` rather than passed through global.
+            configuration.sourceRect = sourceRect
+            configuration.destinationRect = CGRect(
+                x: 0,
+                y: 0,
+                width: CGFloat(pixelSize.width),
+                height: CGFloat(pixelSize.height)
+            )
+        }
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(options.frameRate.rawValue))
         configuration.showsCursor = options.showsCursor
         configuration.capturesAudio = options.capturesSystemAudio
@@ -208,10 +238,32 @@ public actor RecordingEngine {
         consumeTask = nil
     }
 
-    /// Writes one buffer, if the recording is running.
+    /// Draws any overlays into the frame, then writes it.
+    ///
+    /// The compositing happens here, between SCK and the writer, which is what puts the
+    /// click halos and keystrokes in the file and nowhere else (docs/04 §4.3).
     private func consume(_ box: SampleBufferBox) async {
         guard state == .recording, let writer else { return }
+
+        if box.kind == .video, let overlayProvider {
+            composite(overlayProvider, into: box.buffer)
+        }
         await writer.append(box)
+    }
+
+    private func composite(_ provider: any RecordingOverlayProviding, into buffer: CMSampleBuffer) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
+
+        let presentation = CMSampleBufferGetPresentationTimeStamp(buffer)
+        if segmentStartTime == nil {
+            segmentStartTime = presentation
+        }
+        let elapsed = segmentStartTime.map {
+            CMTimeGetSeconds(CMTimeSubtract(presentation, $0))
+        } ?? 0
+
+        let overlay = provider.overlay(atRecordingTime: accumulatedDuration + elapsed)
+        compositor.draw(overlay, into: pixelBuffer)
     }
 
     // MARK: - Targets
@@ -224,24 +276,32 @@ public actor RecordingEngine {
         }
     }
 
+    /// What one target resolves to: what to capture, how big, and which part of it.
+    private struct CaptureSetup {
+        let filter: SCContentFilter
+        let pixelSize: PixelSize
+        /// Display-local points for a region; `nil` captures the whole filter.
+        let sourceRect: CGRect?
+    }
+
     private func makeFilter(
         for target: RecordingTarget,
         in content: SCShareableContent
-    ) throws -> (SCContentFilter, PixelSize) {
+    ) throws -> CaptureSetup {
         switch target {
         case let .display(displayID):
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
                 throw RecordingError.targetUnavailable
             }
             let filter = filterExcludingOwnWindows(display: display, in: content)
-            return (filter, pixelSize(of: filter))
+            return CaptureSetup(filter: filter, pixelSize: pixelSize(of: filter), sourceRect: nil)
 
         case let .window(windowID):
             guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
                 throw RecordingError.targetUnavailable
             }
             let filter = SCContentFilter(desktopIndependentWindow: window)
-            return (filter, pixelSize(of: filter))
+            return CaptureSetup(filter: filter, pixelSize: pixelSize(of: filter), sourceRect: nil)
 
         case let .region(rect, displayID):
             guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
@@ -255,9 +315,14 @@ public actor RecordingEngine {
                 scale: DisplayScale(scale)
             )
             guard let clamped = geometry.clamped(rect) else { throw RecordingError.targetUnavailable }
-            let pixels = geometry.pixels(for: geometry.localRect(for: clamped))
-            // Even dimensions: hardware encoders reject odd ones.
-            return (filter, PixelSize(width: even(pixels.width), height: even(pixels.height)))
+            let local = geometry.localRect(for: clamped)
+            let pixels = geometry.pixels(for: local)
+            return CaptureSetup(
+                filter: filter,
+                // Even dimensions: hardware encoders reject odd ones.
+                pixelSize: PixelSize(width: even(pixels.width), height: even(pixels.height)),
+                sourceRect: local.cgRect
+            )
         }
     }
 

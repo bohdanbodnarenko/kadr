@@ -3,6 +3,7 @@ import AVFoundation
 import CaptureCore
 import MediaExport
 import os
+import OverlayKit
 import RecordingCore
 import SelectionUI
 import SettingsKit
@@ -21,6 +22,9 @@ final class RecordingCoordinator {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let overlay: SelectionOverlayController
     @ObservationIgnored private let focus = FocusMode()
+    /// Click halos, keystrokes and the webcam. Started with the recording and stopped
+    /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
+    @ObservationIgnored private let overlaySource = RecordingOverlaySource()
     @ObservationIgnored private let logger = KadrLog.logger(.recording)
 
     /// What the status item shows.
@@ -104,9 +108,11 @@ final class RecordingCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
+                startOverlays(for: target)
                 try await engine.start(target: target, options: options)
                 state = .recording
                 startedAt = Date()
+                overlaySource.recordingStartedAt = startedAt
                 pausedDuration = 0
                 pausedAt = nil
                 startTicking()
@@ -115,9 +121,88 @@ final class RecordingCoordinator {
                 }
                 logger.info("Recording started")
             } catch {
+                stopOverlays()
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
             }
+        }
+    }
+
+    /// Turns on only the overlays the user asked for, and tells the engine where to get
+    /// them (docs/03 §1.8).
+    private func startOverlays(for target: RecordingTarget) {
+        let wantsAny = settings.recordingShowsClicks
+            || settings.recordingShowsKeystrokes
+            || settings.recordingShowsWebcam
+        guard wantsAny else {
+            Task { await engine.setOverlayProvider(nil) }
+            return
+        }
+
+        var configuration = RecordingOverlaySource.Configuration()
+        configuration.showsClicks = settings.recordingShowsClicks
+        configuration.showsKeystrokes = settings.recordingShowsKeystrokes
+        configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
+        configuration.showsWebcam = settings.recordingShowsWebcam
+        configuration.pointConverter = Self.pointConverter(for: target)
+
+        overlaySource.start(configuration: configuration)
+        let source = overlaySource
+        Task { await engine.setOverlayProvider(source) }
+    }
+
+    /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
+    private func stopOverlays() {
+        overlaySource.stop()
+        overlaySource.recordingStartedAt = nil
+        Task { await engine.setOverlayProvider(nil) }
+    }
+
+    /// Maps a screen click into the recorded frame's own pixels.
+    ///
+    /// Clicks arrive in AppKit's screen space; the frame is in the recorded area's pixels
+    /// with a top-left origin. Getting this wrong puts the halo somewhere else entirely,
+    /// which is why it goes through `Shared.Geometry` rather than ad-hoc arithmetic.
+    private static func pointConverter(
+        for target: RecordingTarget
+    ) -> @Sendable (CGPoint) -> CGPoint? {
+        let space = GlobalCoordinateSpace.current
+        let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
+
+        switch target {
+        case let .display(displayID):
+            guard let screen = screens.first(where: { $0.displayID == displayID }) else {
+                return { _ in nil }
+            }
+            let frame = screen.frame.cgRect
+            let scale = screen.backingScaleFactor
+            return { point in
+                guard frame.contains(point) else { return nil }
+                return CGPoint(
+                    x: (point.x - frame.minX) * scale,
+                    y: (frame.maxY - point.y) * scale
+                )
+            }
+
+        case let .region(rect, displayID):
+            guard let screen = screens.first(where: { $0.displayID == displayID }) else {
+                return { _ in nil }
+            }
+            let scale = screen.backingScaleFactor
+            let regionInScreenSpace = rect.inScreenSpace(space)
+            return { point in
+                guard regionInScreenSpace.cgRect.contains(point) else { return nil }
+                return CGPoint(
+                    x: (point.x - regionInScreenSpace.minX) * scale,
+                    y: (regionInScreenSpace.maxY - point.y) * scale
+                )
+            }
+
+        case .window:
+            // A window moves while being recorded, so a click's position within the frame
+            // cannot be derived from where it landed on screen. Halos are left off rather
+            // than drawn in the wrong place.
+            return { _ in nil }
         }
     }
 
@@ -165,6 +250,7 @@ final class RecordingCoordinator {
         state = .finishing
         stopTicking()
         focus.disable()
+        stopOverlays()
 
         let destination = destinationURL()
         Task { [weak self] in
@@ -187,6 +273,7 @@ final class RecordingCoordinator {
         guard isRecording else { return }
         stopTicking()
         focus.disable()
+        stopOverlays()
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle

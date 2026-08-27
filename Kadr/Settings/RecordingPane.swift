@@ -34,9 +34,30 @@ struct RecordingPane: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section {
+            Section("Overlays") {
                 Toggle("Show the pointer", isOn: $settings.recordingShowsCursor)
+                Toggle("Highlight clicks", isOn: $settings.recordingShowsClicks)
+                Toggle("Show pressed keys", isOn: $settings.recordingShowsKeystrokes)
+                Toggle(
+                    "Only show keys pressed with \u{2318}, \u{2325} or \u{2303}",
+                    isOn: $settings.recordingKeystrokesShortcutsOnly
+                )
+                .disabled(!settings.recordingShowsKeystrokes)
+                Text("Showing every keystroke also shows whatever gets typed into a "
+                    + "password field. Reading keys needs Accessibility permission, which "
+                    + "Kadr asks for the first time a recording starts with this on.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
+            }
+
+            Section {
                 Toggle("Reduce interruptions while recording", isOn: $settings.recordingEnablesFocus)
+            } footer: {
+                Text("Overlays are drawn into the recording itself, not onto the screen, so "
+                    + "nothing about them appears on other people's shared displays.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
