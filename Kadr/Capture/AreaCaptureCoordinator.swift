@@ -26,6 +26,7 @@ final class AreaCaptureCoordinator {
     private let output: CaptureOutput
     private let quickAccess: QuickAccessManager
     private let pins = PinManager()
+    private let hygiene: DesktopHygieneController?
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
@@ -46,12 +47,14 @@ final class AreaCaptureCoordinator {
         permissions: PermissionCoordinator,
         settings: AppSettings,
         overlay: SelectionOverlayController = SelectionOverlayController(),
-        history: HistoryController? = nil
+        history: HistoryController? = nil,
+        hygiene: DesktopHygieneController? = nil
     ) {
         self.engine = engine
         self.permissions = permissions
         self.settings = settings
         self.overlay = overlay
+        self.hygiene = hygiene
         let output = CaptureOutput(settings: settings)
         self.output = output
         quickAccess = QuickAccessManager(settings: settings, output: output, pins: pins, history: history)
@@ -63,6 +66,15 @@ final class AreaCaptureCoordinator {
 
     /// Freezes every display and puts the selection overlay up.
     func beginAreaCapture() {
+        beginOverlayCapture(mode: .area)
+    }
+
+    /// The P1 freeze as its own command: freeze to inspect, then capture as usual (docs/03 §7).
+    func toggleFreezeScreen() {
+        if overlay.isPresented {
+            cancel()
+            return
+        }
         beginOverlayCapture(mode: .area)
     }
 
@@ -90,9 +102,11 @@ final class AreaCaptureCoordinator {
                         includesCursor: settings.includesCursor
                     )
                     permissions.noteCaptureSuccess()
+                    hygiene?.beginCapture()
                     for capture in captures {
                         deliver(capture)
                     }
+                    hygiene?.endCapture()
                 } catch {
                     handle(error)
                 }
@@ -138,10 +152,16 @@ final class AreaCaptureCoordinator {
                     mode: mode,
                     purpose: purpose,
                     windows: windows,
+                    precisionMode: settings.capturePrecisionCrosshair,
                     signpostState: interval
                 ) { [weak self] outcome in
+                    self?.hygiene?.endCapture()
                     self?.finish(with: outcome, freezes: freezes)
                 }
+                overlay.onPrecisionModeChanged = { [weak self] enabled in
+                    self?.settings.capturePrecisionCrosshair = enabled
+                }
+                hygiene?.beginCapture()
             } catch {
                 signposter.endInterval("hotkeyToOverlay", interval)
                 handle(error)
@@ -302,7 +322,9 @@ final class AreaCaptureCoordinator {
                     includesCursor: settings.includesCursor
                 )
                 permissions.noteCaptureSuccess()
+                hygiene?.beginCapture()
                 deliver(capture)
+                hygiene?.endCapture()
             } catch {
                 handle(error)
             }

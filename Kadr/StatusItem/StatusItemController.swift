@@ -32,6 +32,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let reopenFromHistory: (HistoryRecord) -> Void
     private let canRestore: () -> Bool
     private let openHistory: () -> Void
+    private let desktopIconsHidden: () -> Bool
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
@@ -47,7 +48,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         history: HistoryController? = nil,
         reopenFromHistory: @escaping (HistoryRecord) -> Void = { _ in },
         canRestore: @escaping () -> Bool = { true },
-        openHistory: @escaping () -> Void = {}
+        openHistory: @escaping () -> Void = {},
+        desktopIconsHidden: @escaping () -> Bool = { false }
     ) {
         self.perform = perform
         self.openSettings = openSettings
@@ -63,6 +65,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.reopenFromHistory = reopenFromHistory
         self.canRestore = canRestore
         self.openHistory = openHistory
+        self.desktopIconsHidden = desktopIconsHidden
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
@@ -157,6 +160,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.representedObject = command.rawValue
             item.setShortcut(for: command.shortcutName)
             item.isEnabled = command.isAvailable
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+        for command in CaptureCommand.utilityCommands {
+            let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = command.rawValue
+            item.setShortcut(for: command.shortcutName)
+            item.isEnabled = command.isAvailable
+            if command == .toggleDesktopIcons {
+                let hidden = desktopIconsHidden()
+                item.title = hidden ? "Show Desktop Icons" : "Hide Desktop Icons"
+                item.state = hidden ? .on : .off
+            }
             menu.addItem(item)
         }
 

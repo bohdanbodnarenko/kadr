@@ -35,6 +35,8 @@ struct EditorInspector: View {
                     Button("Delete", role: .destructive) { model.deleteSelection() }
                 }
             }
+
+            EditorBeautifyInspector(model: model)
         }
         .formStyle(.grouped)
     }
@@ -108,23 +110,5 @@ struct EditorInspector: View {
                 Text(preset.name).tag(index)
             }
         }
-    }
-}
-
-private extension Color {
-    init(_ colour: AnnotationColor) {
-        self.init(.sRGB, red: colour.red, green: colour.green, blue: colour.blue, opacity: colour.alpha)
-    }
-}
-
-private extension AnnotationColor {
-    init(_ color: Color) {
-        let resolved = NSColor(color).usingColorSpace(.sRGB) ?? .red
-        self.init(
-            red: Double(resolved.redComponent),
-            green: Double(resolved.greenComponent),
-            blue: Double(resolved.blueComponent),
-            alpha: Double(resolved.alphaComponent)
-        )
     }
 }

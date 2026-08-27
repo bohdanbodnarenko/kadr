@@ -53,6 +53,7 @@ struct RecordingPane: View {
 
             Section {
                 Toggle("Reduce interruptions while recording", isOn: $settings.recordingEnablesFocus)
+                Toggle("Hide desktop icons while recording", isOn: $settings.hideDesktopDuringRecording)
             } footer: {
                 Text("Overlays are drawn into the recording itself, not onto the screen, so "
                     + "nothing about them appears on other people's shared displays.")

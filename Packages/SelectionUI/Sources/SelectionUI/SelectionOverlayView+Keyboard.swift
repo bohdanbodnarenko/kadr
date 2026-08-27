@@ -27,10 +27,30 @@ extension SelectionOverlayView {
         if handleSelectAll(event) {
             return
         }
+        if handleModeKey(event) {
+            return
+        }
+        if handlePrecisionKey(event) {
+            return
+        }
+        if mode == .window, handleWindowModeKey(event) {
+            return
+        }
         if handleTypedSize(event) {
             return
         }
         super.keyDown(with: event)
+    }
+
+    /// `C` toggles full-screen guides and coordinates (docs/03 §7).
+    func handlePrecisionKey(_ event: NSEvent) -> Bool {
+        guard !event.modifierFlags.contains(.command),
+              event.charactersIgnoringModifiers?.lowercased() == "c"
+        else { return false }
+        isPrecisionMode.toggle()
+        onPrecisionModeChanged?(isPrecisionMode)
+        redraw()
+        return true
     }
 
     /// W and A switch between picking a window and dragging a region (docs/03 §1.2).

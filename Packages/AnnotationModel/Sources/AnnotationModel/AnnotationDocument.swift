@@ -74,9 +74,73 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         }.first
     }
 
-    /// The canvas the export will produce: the crop, or the whole base image.
-    public var canvasRect: CGRect {
+    /// The beautify chrome in force, if any. The last one wins.
+    public var beautify: BeautifySpec? {
+        commands.reversed().compactMap { command in
+            if case let .beautify(spec) = command {
+                return spec
+            }
+            return nil
+        }.first
+    }
+
+    /// The capture area that is composed onto the canvas: the crop, or the whole image.
+    public var contentRect: CGRect {
         crop?.rect ?? baseImage.bounds
+    }
+
+    /// The canvas the export will produce: beautify's frame, or the crop, or the image.
+    public var canvasRect: CGRect {
+        guard let beautify else { return contentRect }
+        let layout = BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify)
+        return CGRect(origin: .zero, size: layout.canvasSize)
+    }
+
+    /// Where the capture sits on a beautified canvas, or `nil` when there is no chrome.
+    public var beautifyLayout: BeautifyLayout? {
+        guard let beautify else { return nil }
+        return BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify)
+    }
+
+    /// Replaces the current beautify command, coalescing successive inspector edits into
+    /// one undo step so dragging a slider does not flood the undo stack.
+    public mutating func setBeautify(_ spec: BeautifySpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .beautify = command {
+                return true
+            }
+            return false
+        }
+        if let spec {
+            updated.insert(.beautify(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        if shouldCoalesceBeautify(updated) {
+            history[historyIndex] = updated
+            return
+        }
+        pushHistory(updated)
+    }
+
+    private func shouldCoalesceBeautify(_ updated: [AnnotationCommand]) -> Bool {
+        guard historyIndex > 0, historyIndex == history.count - 1 else { return false }
+        func isBeautify(_ command: AnnotationCommand) -> Bool {
+            if case .beautify = command {
+                return true
+            }
+            return false
+        }
+        // Only successive inspector edits coalesce. Turning beautify on or off is its
+        // own undo step, otherwise "Add a background" and "remove it" collapse into one.
+        guard commands.contains(where: isBeautify), updated.contains(where: isBeautify) else {
+            return false
+        }
+        func withoutBeautify(_ list: [AnnotationCommand]) -> [AnnotationCommand] {
+            list.filter { !isBeautify($0) }
+        }
+        return withoutBeautify(commands) == withoutBeautify(history[historyIndex - 1])
+            && withoutBeautify(updated) == withoutBeautify(history[historyIndex - 1])
     }
 
     // MARK: - Editing

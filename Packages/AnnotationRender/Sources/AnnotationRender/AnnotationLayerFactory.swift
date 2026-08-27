@@ -28,6 +28,7 @@ public enum AnnotationLayerFactory {
         case let .redaction(spec): redactionPreviewLayer(spec)
         // The crop is chrome around the canvas, not an object on it.
         case .crop: nil
+        case .beautify: nil
         }
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
@@ -57,7 +58,7 @@ public enum AnnotationLayerFactory {
             layer.frame = counterFrame(spec)
         case let .redaction(spec):
             layer.frame = spec.rect
-        case .crop:
+        case .crop, .beautify:
             break
         }
     }

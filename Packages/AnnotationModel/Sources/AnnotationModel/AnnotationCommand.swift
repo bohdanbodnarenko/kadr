@@ -211,6 +211,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     case redaction(RedactionSpec)
     case counter(CounterSpec)
     case crop(CropSpec)
+    case beautify(BeautifySpec)
 
     public var id: AnnotationID {
         switch self {
@@ -223,6 +224,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case let .redaction(spec): spec.id
         case let .counter(spec): spec.id
         case let .crop(spec): spec.id
+        case let .beautify(spec): spec.id
         }
     }
 
@@ -238,15 +240,16 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .redaction: .redaction
         case .counter: .counter
         case .crop: .crop
+        case .beautify: .beautify
         }
     }
 
     /// Whether the user can select and move this annotation.
     ///
-    /// Crop is the exception: it defines the canvas rather than sitting on it, and is
-    /// edited through its own handles.
+    /// Crop and beautify define the canvas rather than sitting on it, so they are
+    /// edited through their own chrome rather than by clicking the drawing.
     public var isSelectable: Bool {
-        tool != .crop
+        !tool.isCanvasChrome
     }
 }
 
@@ -261,6 +264,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     case redaction
     case counter
     case crop
+    case beautify
 
     public var title: String {
         switch self {
@@ -273,6 +277,17 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
         case .redaction: "Blur"
         case .counter: "Counter"
         case .crop: "Crop"
+        case .beautify: "Beautify"
         }
+    }
+
+    /// Canvas chrome is edited through its own UI, not by dragging a shape on the image.
+    public var isCanvasChrome: Bool {
+        self == .crop || self == .beautify
+    }
+
+    /// Tools the pointer can draw with. Beautify is inspector-only.
+    public var isPointerTool: Bool {
+        self != .beautify
     }
 }

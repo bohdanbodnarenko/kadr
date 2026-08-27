@@ -370,6 +370,30 @@ public final class AppSettings {
         didSet { store[SettingKeys.historySizeCap] = historySizeCap }
     }
 
+    public var desktopIconsHidden: Bool {
+        didSet { store[SettingKeys.desktopIconsHidden] = desktopIconsHidden }
+    }
+
+    public var hideDesktopDuringCapture: Bool {
+        didSet { store[SettingKeys.hideDesktopDuringCapture] = hideDesktopDuringCapture }
+    }
+
+    public var hideDesktopDuringRecording: Bool {
+        didSet { store[SettingKeys.hideDesktopDuringRecording] = hideDesktopDuringRecording }
+    }
+
+    public var captureWallpaper: CaptureWallpaper {
+        didSet { store[SettingKeys.captureWallpaper] = captureWallpaper }
+    }
+
+    public var captureWallpaperImagePath: String {
+        didSet { store[SettingKeys.captureWallpaperImagePath] = captureWallpaperImagePath }
+    }
+
+    public var capturePrecisionCrosshair: Bool {
+        didSet { store[SettingKeys.capturePrecisionCrosshair] = capturePrecisionCrosshair }
+    }
+
     /// How long a capture waits, taking the custom value into account (docs/03 §1.5).
     public var timerSeconds: Int {
         customTimerSeconds > 0 ? customTimerSeconds : selfTimer.seconds
@@ -410,6 +434,12 @@ public final class AppSettings {
         overlayDismissOnDrag = store[SettingKeys.overlayDismissOnDrag]
         historyRetention = store[SettingKeys.historyRetention]
         historySizeCap = store[SettingKeys.historySizeCap]
+        desktopIconsHidden = store[SettingKeys.desktopIconsHidden]
+        hideDesktopDuringCapture = store[SettingKeys.hideDesktopDuringCapture]
+        hideDesktopDuringRecording = store[SettingKeys.hideDesktopDuringRecording]
+        captureWallpaper = store[SettingKeys.captureWallpaper]
+        captureWallpaperImagePath = store[SettingKeys.captureWallpaperImagePath]
+        capturePrecisionCrosshair = store[SettingKeys.capturePrecisionCrosshair]
     }
 
     /// Where captures are written. Falls back to the Desktop until the user picks a folder.
@@ -458,5 +488,11 @@ public final class AppSettings {
         overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
         historyRetention = SettingKeys.historyRetention.defaultValue
         historySizeCap = SettingKeys.historySizeCap.defaultValue
+        desktopIconsHidden = SettingKeys.desktopIconsHidden.defaultValue
+        hideDesktopDuringCapture = SettingKeys.hideDesktopDuringCapture.defaultValue
+        hideDesktopDuringRecording = SettingKeys.hideDesktopDuringRecording.defaultValue
+        captureWallpaper = SettingKeys.captureWallpaper.defaultValue
+        captureWallpaperImagePath = SettingKeys.captureWallpaperImagePath.defaultValue
+        capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
     }
 }

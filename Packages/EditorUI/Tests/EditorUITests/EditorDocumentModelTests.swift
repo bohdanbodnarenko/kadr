@@ -314,6 +314,17 @@ struct EditorSelectionTests {
         model.redo()
         #expect(model.document.commands.count == 1)
     }
+
+    @Test("Beautify is undoable canvas chrome")
+    func beautifyUndo() {
+        let model = makeModel()
+        model.applyBeautify(.cleanWhite)
+        #expect(model.document.beautify != nil)
+        model.clearBeautify()
+        #expect(model.document.beautify == nil)
+        model.undo()
+        #expect(model.document.beautify != nil)
+    }
 }
 
 @Suite("Tool metadata")
@@ -332,9 +343,9 @@ struct EditorToolTests {
         }
     }
 
-    @Test("Every annotation tool is reachable from the toolbar")
+    @Test("Every annotation tool the pointer can draw is reachable from the toolbar")
     func everyAnnotationToolIsReachable() {
         let reachable = Set(EditorTool.allCases.compactMap(\.annotation))
-        #expect(reachable == Set(AnnotationTool.allCases))
+        #expect(reachable == Set(AnnotationTool.allCases.filter(\.isPointerTool)))
     }
 }

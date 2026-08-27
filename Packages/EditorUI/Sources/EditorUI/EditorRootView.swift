@@ -38,7 +38,7 @@ public struct EditorRootView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Divider()
                 EditorInspector(model: model)
-                    .frame(width: 240)
+                    .frame(width: 260)
             }
         }
         .frame(minWidth: 720, minHeight: 480)

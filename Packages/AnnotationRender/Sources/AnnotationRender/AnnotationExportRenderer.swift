@@ -64,20 +64,27 @@ public struct AnnotationExportRenderer: Sendable {
         context.scaleBy(x: scale, y: scale)
         context.translateBy(x: 0, y: canvas.height)
         context.scaleBy(x: 1, y: -1)
-        context.translateBy(x: -canvas.minX, y: -canvas.minY)
 
-        // An expanded canvas shows through where the base image does not reach, so it
-        // needs a ground rather than transparent noise.
-        if document.crop?.canExpandCanvas == true {
-            context.setFillColor(CGColor(gray: 1, alpha: 1))
-            context.fill(canvas)
-        }
-
-        context.draw(source, in: document.baseImage.bounds)
-
-        if includeAnnotations {
-            for command in document.commands {
+        if document.beautify != nil {
+            BeautifyCompositor.compose(
+                source: source,
+                document: document,
+                includeAnnotations: includeAnnotations,
+                in: context
+            ) { command, context in
                 draw(command, in: context)
+            }
+        } else {
+            context.translateBy(x: -canvas.minX, y: -canvas.minY)
+            if document.crop?.canExpandCanvas == true {
+                context.setFillColor(CGColor(gray: 1, alpha: 1))
+                context.fill(canvas)
+            }
+            context.draw(source, in: document.baseImage.bounds)
+            if includeAnnotations {
+                for command in document.commands {
+                    draw(command, in: context)
+                }
             }
         }
 
@@ -101,6 +108,7 @@ public struct AnnotationExportRenderer: Sendable {
         case .redaction: break
         // The crop is the canvas, applied by the transform above.
         case .crop: break
+        case .beautify: break
         }
     }
 

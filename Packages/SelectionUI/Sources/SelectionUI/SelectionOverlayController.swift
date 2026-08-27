@@ -147,6 +147,9 @@ public final class SelectionOverlayController {
     /// Windows offered for picking, keyed by the display they are shown on.
     private var pickableWindows: [CGDirectDisplayID: [PickableWindow]] = [:]
     private var previouslyActiveApp: NSRunningApplication?
+    private var isPrecisionMode = false
+    /// Fired when the user toggles precision guides with `C` (docs/03 §7).
+    public var onPrecisionModeChanged: ((Bool) -> Void)?
 
     public init(screens: any ScreenProviding = SystemScreens()) {
         self.screens = screens
@@ -169,6 +172,7 @@ public final class SelectionOverlayController {
         mode: SelectionMode = .area,
         purpose: SelectionPurpose = .capture,
         windows: [PickableWindowDescriptor] = [],
+        precisionMode: Bool = false,
         signpostState: OSSignpostIntervalState? = nil,
         completion: @escaping (SelectionOutcome?) -> Void
     ) {
@@ -181,6 +185,7 @@ public final class SelectionOverlayController {
         self.completion = completion
         self.mode = mode == .window ? .window : .area
         self.purpose = purpose
+        isPrecisionMode = precisionMode
         self.freezes = Dictionary(uniqueKeysWithValues: freezes.map { ($0.geometry.displayID, $0) })
         pickableWindows = Self.mapWindows(windows, onto: freezes.map(\.geometry))
         previouslyActiveApp = NSWorkspace.shared.frontmostApplication
@@ -212,6 +217,16 @@ public final class SelectionOverlayController {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
         let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: purpose)
         panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
+        panel.view.setPrecisionMode(isPrecisionMode)
+
+        panel.view.onPrecisionModeChanged = { [weak self] enabled in
+            guard let self else { return }
+            isPrecisionMode = enabled
+            for panel in windowSet?.windows.values ?? [:].values {
+                panel.view.setPrecisionMode(enabled)
+            }
+            onPrecisionModeChanged?(enabled)
+        }
 
         panel.view.onModeChanged = { [weak self] newMode in
             guard let self else { return }

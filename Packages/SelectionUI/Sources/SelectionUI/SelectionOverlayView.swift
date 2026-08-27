@@ -50,6 +50,9 @@ final class SelectionOverlayView: NSView {
     var onCommitWindow: ((PickableWindow, _ togglesShadow: Bool) -> Void)?
     /// The user switched modes, so every other display's overlay should follow.
     var onModeChanged: ((Mode) -> Void)?
+    /// Precision crosshair was toggled with `C` (docs/03 §7).
+    var onPrecisionModeChanged: ((Bool) -> Void)?
+    var isPrecisionMode = false
 
     // MARK: Geometry constants
 
@@ -313,7 +316,7 @@ final class SelectionOverlayView: NSView {
     }
 
     private func updateCrosshair() {
-        guard interaction.phase != .selected, let pointer = interaction.pointer else {
+        guard isPrecisionMode, interaction.phase != .selected, let pointer = interaction.pointer else {
             crosshairLayer.path = nil
             return
         }
@@ -330,6 +333,8 @@ final class SelectionOverlayView: NSView {
             sizeEntry.displayText
         } else if let rect = interaction.rect, !rect.isEmpty {
             DimensionFormatter.text(for: rect, scale: displayScale)
+        } else if isPrecisionMode, let pointer = interaction.pointer {
+            String(format: "%.0f, %.0f", pointer.x, pointer.y)
         } else {
             nil
         }
@@ -387,6 +392,12 @@ final class SelectionOverlayView: NSView {
         if mode == .window, let pointer = interaction.pointer {
             windowPick.pointerMoved(to: pointer)
         }
+        redraw()
+    }
+
+    func setPrecisionMode(_ enabled: Bool) {
+        guard enabled != isPrecisionMode else { return }
+        isPrecisionMode = enabled
         redraw()
     }
 

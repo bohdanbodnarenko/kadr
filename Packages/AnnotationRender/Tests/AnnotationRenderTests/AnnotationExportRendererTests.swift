@@ -177,6 +177,99 @@ struct AnnotationExportRendererTests {
     }
 }
 
+@Suite("Beautify export")
+struct BeautifyExportTests {
+    private let renderer = AnnotationExportRenderer()
+
+    @Test("Padding grows the exported bitmap")
+    func paddingGrowsExport() throws {
+        let document = makeDocument(commands: [
+            .beautify(BeautifySpec(padding: 40, shadow: .none, aspect: .original))
+        ])
+        let image = try renderer.render(baseImage: makeStripedImage(), document: document)
+        #expect(image.width == 280)
+        #expect(image.height == 280)
+    }
+
+    @Test("A solid backdrop fills the padding")
+    func solidBackdropFillsPadding() throws {
+        let red = AnnotationColor(red: 1, green: 0, blue: 0)
+        let document = makeDocument(commands: [
+            .beautify(BeautifySpec(
+                padding: 40,
+                cornerRadius: 0,
+                backdrop: .solid(red),
+                shadow: .none,
+                aspect: .original
+            ))
+        ])
+        let image = try renderer.render(baseImage: makeStripedImage(), document: document)
+        let corner = pixels(of: image, in: CGRect(x: 0, y: 0, width: 10, height: 10))
+        #expect(corner[0] > 240, "the padding should be the red backdrop, got \(corner[0])")
+        #expect(corner[1] < 20)
+        #expect(corner[2] < 20)
+    }
+
+    @Test("Rounded corners show the backdrop, not the capture")
+    func roundedCornersClip() throws {
+        let blue = AnnotationColor(red: 0, green: 0, blue: 1)
+        let document = makeDocument(size: CGSize(width: 100, height: 100), commands: [
+            .beautify(BeautifySpec(
+                padding: 20,
+                cornerRadius: 50,
+                backdrop: .solid(blue),
+                shadow: .none,
+                aspect: .original
+            ))
+        ])
+        let image = try renderer.render(
+            baseImage: makeStripedImage(width: 100, height: 100),
+            document: document
+        )
+        // The canvas corner is padding; a pixel just inside the content's top-left is
+        // outside a fully-rounded card (radius = half the shorter side).
+        let outsideCard = pixels(of: image, in: CGRect(x: 20, y: 20, width: 4, height: 4))
+        #expect(outsideCard[2] > 240, "the rounded corner should show the blue backdrop")
+        #expect(outsideCard[0] < 20)
+    }
+
+    @Test("Social presets export at their advertised aspect", arguments: [
+        (BeautifySpec.twitter, CGFloat(16) / 9),
+        (BeautifySpec.instagram, CGFloat(4) / 5),
+        (BeautifySpec.story, CGFloat(9) / 16)
+    ])
+    func socialPresets(spec: BeautifySpec, ratio: CGFloat) throws {
+        let document = makeDocument(
+            size: CGSize(width: 400, height: 240),
+            commands: [.beautify(spec)]
+        )
+        let image = try renderer.render(
+            baseImage: makeStripedImage(width: 400, height: 240),
+            document: document
+        )
+        let actual = CGFloat(image.width) / CGFloat(image.height)
+        #expect(abs(actual - ratio) < 0.02)
+    }
+
+    @Test("Copy-without-annotations keeps the beautify chrome")
+    func withoutAnnotationsKeepsBeautify() throws {
+        let document = makeDocument(commands: [
+            .shape(ShapeSpec(
+                rect: CGRect(x: 0, y: 0, width: 200, height: 200),
+                fill: FillStyle(color: .black)
+            )),
+            .beautify(BeautifySpec(padding: 20, shadow: .none, aspect: .original))
+        ])
+        let bare = try renderer.render(
+            baseImage: makeStripedImage(),
+            document: document,
+            includeAnnotations: false
+        )
+        #expect(bare.width == 240)
+        #expect(bare.height == 240)
+    }
+}
+
 /// Doc 03 §3: "irreversible at export … not an overlay that can be removed from the PNG".
 @Suite("Redaction is irreversible")
 struct RedactionTests {

@@ -77,6 +77,22 @@ struct CapturePane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Desktop") {
+                Toggle("Hide icons while capturing", isOn: $settings.hideDesktopDuringCapture)
+                Toggle("Hide icons while recording", isOn: $settings.hideDesktopDuringRecording)
+                Picker("Wallpaper while capturing", selection: $settings.captureWallpaper) {
+                    ForEach(CaptureWallpaper.allCases, id: \.self) { wallpaper in
+                        Text(wallpaper.title).tag(wallpaper)
+                    }
+                }
+                Toggle("Precision crosshair (press C on the overlay)", isOn: $settings.capturePrecisionCrosshair)
+                Text("Hides Finder icons and widgets, and can swap the wallpaper, so a "
+                    + "screenshot does not include your Desktop. A crash restores the "
+                    + "previous wallpaper; a Hide Desktop Icons toggle survives relaunch.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

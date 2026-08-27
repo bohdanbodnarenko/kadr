@@ -26,7 +26,8 @@ private let everyCommand: [AnnotationCommand] = [
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))),
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20), style: .defaultPixelate)),
     .counter(CounterSpec(number: 3, center: CGPoint(x: 50, y: 50))),
-    .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100), canExpandCanvas: true))
+    .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100), canExpandCanvas: true)),
+    .beautify(BeautifySpec(padding: 24, aspect: .sixteenNine))
 ]
 
 @Suite("Annotation commands")
@@ -57,10 +58,10 @@ struct AnnotationCommandTests {
         #expect(tools == Set(AnnotationTool.allCases))
     }
 
-    @Test("Crop is the only annotation the user cannot select")
+    @Test("Crop and beautify are the annotations the user cannot select")
     func selectability() {
         for command in everyCommand {
-            #expect(command.isSelectable == (command.tool != .crop))
+            #expect(command.isSelectable == !command.tool.isCanvasChrome)
         }
     }
 

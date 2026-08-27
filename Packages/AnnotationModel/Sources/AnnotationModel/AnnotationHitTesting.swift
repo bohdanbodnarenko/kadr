@@ -32,8 +32,8 @@ public enum AnnotationHitTesting {
             spec.rect.contains(point)
         case let .counter(spec):
             hypot(point.x - spec.center.x, point.y - spec.center.y) <= spec.radius
-        case .crop:
-            // The crop is edited through its own handles, not by clicking the canvas.
+        case .crop, .beautify:
+            // Canvas chrome is edited through its own UI, not by clicking the drawing.
             false
         }
     }
@@ -82,6 +82,8 @@ public enum AnnotationHitTesting {
             )
         case let .crop(spec):
             spec.rect.standardized
+        case .beautify:
+            .zero
         }
     }
 

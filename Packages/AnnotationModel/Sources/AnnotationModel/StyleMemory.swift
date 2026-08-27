@@ -63,7 +63,7 @@ public struct StyleMemory: Codable, Hashable, Sendable {
         switch tool {
         case .highlighter: StrokeStyle(color: .highlighterYellow, width: 20)
         case .freehand: StrokeStyle(width: 3)
-        case .counter, .text, .redaction, .crop: StrokeStyle()
+        case .counter, .text, .redaction, .crop, .beautify: StrokeStyle()
         case .arrow, .shape, .line: StrokeStyle()
         }
     }

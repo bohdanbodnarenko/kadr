@@ -1,6 +1,7 @@
 import AnnotationModel
 import AnnotationRender
 import AppKit
+import ImageIO
 import QuartzCore
 import Shared
 
@@ -12,6 +13,10 @@ import Shared
 @MainActor
 public final class AnnotationCanvasView: NSView {
     private let model: EditorDocumentModel
+    private let backdropLayer = CALayer()
+    private let gradientLayer = CAGradientLayer()
+    private let shadowLayer = CALayer()
+    private let contentHost = CALayer()
     private let baseLayer = CALayer()
     private let annotationLayer = CALayer()
     private let draftLayer = CALayer()
@@ -32,23 +37,26 @@ public final class AnnotationCanvasView: NSView {
 
         wantsLayer = true
         guard let root = layer else { return }
-        root.backgroundColor = NSColor.textBackgroundColor.cgColor
+        root.backgroundColor = NSColor.underPageBackgroundColor.cgColor
+
+        backdropLayer.addSublayer(gradientLayer)
+        root.addSublayer(backdropLayer)
+        root.addSublayer(shadowLayer)
 
         baseLayer.contents = baseImage
-        baseLayer.frame = model.document.baseImage.bounds
         baseLayer.magnificationFilter = .trilinear
-        root.addSublayer(baseLayer)
-
+        contentHost.addSublayer(baseLayer)
         for layer in [annotationLayer, draftLayer, selectionLayer] {
-            layer.frame = bounds
-            root.addSublayer(layer)
+            contentHost.addSublayer(layer)
         }
+        root.addSublayer(contentHost)
 
         marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
         marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
         marqueeLayer.lineDashPattern = [4, 4]
         selectionLayer.addSublayer(marqueeLayer)
 
+        layoutCanvasChrome()
         rebuildAnnotationLayers()
     }
 
@@ -89,6 +97,108 @@ public final class AnnotationCanvasView: NSView {
         }
         updateSelectionHandles()
         onDocumentChanged?()
+    }
+
+    /// Sizes the view and the card so beautify chrome matches export (docs/03 §3 P2).
+    private func layoutCanvasChrome() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        let imageBounds = model.document.baseImage.bounds
+        let content = model.document.contentRect
+
+        guard let spec = model.document.beautify, let layout = model.document.beautifyLayout else {
+            setFrameSize(imageBounds.size)
+            backdropLayer.isHidden = true
+            shadowLayer.isHidden = true
+            contentHost.frame = bounds
+            contentHost.cornerRadius = 0
+            contentHost.masksToBounds = false
+            let drawing = CGRect(origin: .zero, size: imageBounds.size)
+            baseLayer.frame = drawing
+            annotationLayer.frame = drawing
+            draftLayer.frame = drawing
+            selectionLayer.frame = drawing
+            return
+        }
+
+        setFrameSize(layout.canvasSize)
+        backdropLayer.isHidden = false
+        backdropLayer.frame = bounds
+        applyBackdrop(spec.backdrop)
+
+        let radius = min(
+            spec.cornerRadius,
+            min(layout.contentRect.width, layout.contentRect.height) / 2
+        )
+
+        shadowLayer.isHidden = !spec.shadow.isEnabled
+        shadowLayer.frame = layout.contentRect
+        shadowLayer.cornerRadius = radius
+        shadowLayer.backgroundColor = NSColor.white.cgColor
+        shadowLayer.shadowOpacity = Float(spec.shadow.opacity)
+        shadowLayer.shadowRadius = spec.shadow.blur * 0.5
+        shadowLayer.shadowOffset = CGSize(width: 0, height: spec.shadow.offsetY)
+        shadowLayer.shadowColor = NSColor.black.cgColor
+
+        contentHost.frame = layout.contentRect
+        contentHost.cornerRadius = radius
+        contentHost.masksToBounds = true
+
+        let drawing = CGRect(
+            x: -content.minX,
+            y: -content.minY,
+            width: imageBounds.width,
+            height: imageBounds.height
+        )
+        baseLayer.frame = drawing
+        annotationLayer.frame = drawing
+        draftLayer.frame = drawing
+        selectionLayer.frame = drawing
+    }
+
+    private func applyBackdrop(_ backdrop: BeautifyBackdrop) {
+        gradientLayer.isHidden = true
+        backdropLayer.contents = nil
+        switch backdrop {
+        case let .solid(colour):
+            backdropLayer.backgroundColor = NSColor(
+                srgbRed: colour.red,
+                green: colour.green,
+                blue: colour.blue,
+                alpha: colour.alpha
+            ).cgColor
+        case let .gradient(start, end, _):
+            backdropLayer.backgroundColor = nil
+            gradientLayer.isHidden = false
+            gradientLayer.frame = backdropLayer.bounds
+            gradientLayer.colors = [
+                NSColor(srgbRed: start.red, green: start.green, blue: start.blue, alpha: start.alpha).cgColor,
+                NSColor(srgbRed: end.red, green: end.green, blue: end.blue, alpha: end.alpha).cgColor
+            ]
+            gradientLayer.startPoint = CGPoint(x: 0.5, y: 0)
+            gradientLayer.endPoint = CGPoint(x: 0.5, y: 1)
+        case let .image(path):
+            backdropLayer.backgroundColor = NSColor.darkGray.cgColor
+            if let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) {
+                backdropLayer.contents = CGImageSourceCreateImageAtIndex(source, 0, nil)
+                backdropLayer.contentsGravity = .resizeAspectFill
+            }
+        }
+    }
+
+    /// Maps a click on the view onto image-space points (beautify offsets the card).
+    private func imagePoint(from event: NSEvent) -> CGPoint {
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        guard model.document.beautify != nil, let layout = model.document.beautifyLayout else {
+            return viewPoint
+        }
+        let content = model.document.contentRect
+        return CGPoint(
+            x: viewPoint.x - layout.contentRect.minX + content.minX,
+            y: viewPoint.y - layout.contentRect.minY + content.minY
+        )
     }
 
     /// Refreshes the live drag preview: one layer, replaced only when the kind changes.
@@ -156,12 +266,12 @@ public final class AnnotationCanvasView: NSView {
 
     override public func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        model.pointerDown(at: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
+        model.pointerDown(at: imagePoint(from: event), modifiers: modifiers(from: event))
         refreshAfterEdit()
     }
 
     override public func mouseDragged(with event: NSEvent) {
-        model.pointerDragged(to: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
+        model.pointerDragged(to: imagePoint(from: event), modifiers: modifiers(from: event))
         // The hot path: only the draft and the handles move.
         updateDraftLayer()
         if model.tool == .select {
@@ -171,7 +281,7 @@ public final class AnnotationCanvasView: NSView {
     }
 
     override public func mouseUp(with event: NSEvent) {
-        model.pointerUp(at: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
+        model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
         updateDraftLayer()
         rebuildAnnotationLayers()
     }
@@ -236,6 +346,7 @@ public final class AnnotationCanvasView: NSView {
 
     /// Called after undo, redo or an inspector change.
     public func documentChangedExternally() {
+        layoutCanvasChrome()
         rebuildAnnotationLayers()
     }
 

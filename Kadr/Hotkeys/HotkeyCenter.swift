@@ -14,6 +14,8 @@ extension KeyboardShortcuts.Name {
     static let captureScrolling = Self("captureScrolling", initial: .init(.s, modifiers: [.control, .shift]))
     static let recordRegion = Self("recordRegion", initial: .init(.five, modifiers: [.control, .shift]))
     static let recordDisplay = Self("recordDisplay", initial: .init(.six, modifiers: [.control, .shift]))
+    static let freezeScreen = Self("freezeScreen", initial: .init(.z, modifiers: [.control, .shift]))
+    static let toggleDesktopIcons = Self("toggleDesktopIcons", initial: .init(.h, modifiers: [.control, .shift]))
 }
 
 extension CaptureCommand {
@@ -27,6 +29,8 @@ extension CaptureCommand {
         case .captureScrolling: .captureScrolling
         case .recordRegion: .recordRegion
         case .recordDisplay: .recordDisplay
+        case .freezeScreen: .freezeScreen
+        case .toggleDesktopIcons: .toggleDesktopIcons
         }
     }
 }

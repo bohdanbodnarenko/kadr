@@ -21,6 +21,7 @@ final class RecordingCoordinator {
     @ObservationIgnored private let permissions: PermissionCoordinator
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let overlay: SelectionOverlayController
+    @ObservationIgnored private let hygiene: DesktopHygieneController?
     @ObservationIgnored private let focus = FocusMode()
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
@@ -54,12 +55,14 @@ final class RecordingCoordinator {
         captureEngine: CaptureEngine,
         permissions: PermissionCoordinator,
         settings: AppSettings,
-        overlay: SelectionOverlayController = SelectionOverlayController()
+        overlay: SelectionOverlayController = SelectionOverlayController(),
+        hygiene: DesktopHygieneController? = nil
     ) {
         self.captureEngine = captureEngine
         self.permissions = permissions
         self.settings = settings
         self.overlay = overlay
+        self.hygiene = hygiene
     }
 
     var isRecording: Bool {
@@ -119,9 +122,11 @@ final class RecordingCoordinator {
                 if settings.recordingEnablesFocus {
                     focus.enable()
                 }
+                hygiene?.beginRecording()
                 logger.info("Recording started")
             } catch {
                 stopOverlays()
+                hygiene?.endRecording()
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
             }
@@ -251,6 +256,7 @@ final class RecordingCoordinator {
         stopTicking()
         focus.disable()
         stopOverlays()
+        hygiene?.endRecording()
 
         let destination = destinationURL()
         Task { [weak self] in
@@ -274,6 +280,7 @@ final class RecordingCoordinator {
         stopTicking()
         focus.disable()
         stopOverlays()
+        hygiene?.endRecording()
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle

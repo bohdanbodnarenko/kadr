@@ -200,6 +200,19 @@ public final class EditorDocumentModel {
         document.sendToBack(document.selection)
     }
 
+    /// Applies canvas chrome. Successive inspector edits coalesce into one undo step.
+    public func applyBeautify(_ spec: BeautifySpec) {
+        var spec = spec
+        if let existing = document.beautify {
+            spec.id = existing.id
+        }
+        document.setBeautify(spec)
+    }
+
+    public func clearBeautify() {
+        document.setBeautify(nil)
+    }
+
     // MARK: - Drafting
 
     private func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
@@ -232,7 +245,7 @@ public final class EditorDocumentModel {
             ))
         case .crop:
             return .crop(CropSpec(rect: CGRect(origin: point, size: .zero)))
-        case .counter:
+        case .counter, .beautify:
             return nil
         }
     }
@@ -279,7 +292,7 @@ public final class EditorDocumentModel {
         case var .highlighter(spec):
             spec.points.append(point)
             draft = .highlighter(spec)
-        case .counter:
+        case .counter, .beautify:
             break
         }
     }
@@ -303,7 +316,7 @@ public final class EditorDocumentModel {
             styleMemory.lastTextStyle = spec.style
         case let .redaction(spec):
             styleMemory.lastRedactionStyle = spec.style
-        case .counter, .crop:
+        case .counter, .crop, .beautify:
             break
         }
     }
@@ -372,7 +385,7 @@ public final class EditorDocumentModel {
         // A text box starts empty by design; the user types into it next.
         case .text:
             return true
-        case .counter:
+        case .counter, .beautify:
             return true
         }
     }
@@ -417,6 +430,8 @@ public final class EditorDocumentModel {
         case var .crop(spec):
             spec.rect = move(spec.rect)
             return .crop(spec)
+        case .beautify:
+            return command
         }
     }
 }

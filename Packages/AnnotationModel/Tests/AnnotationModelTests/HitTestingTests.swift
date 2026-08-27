@@ -147,6 +147,17 @@ struct HitTestingTests {
         #expect(hit?.id == shape.id)
     }
 
+    @Test("Beautify never intercepts a click meant for something under it")
+    func beautifyIsNotSelectable() {
+        let chrome = AnnotationCommand.beautify(BeautifySpec())
+        let shape = AnnotationCommand.shape(ShapeSpec(
+            rect: CGRect(x: 0, y: 0, width: 100, height: 100),
+            fill: FillStyle(color: .white)
+        ))
+        let hit = AnnotationHitTesting.topmost(in: [shape, chrome], at: CGPoint(x: 50, y: 50))
+        #expect(hit?.id == shape.id)
+    }
+
     @Test("Nothing under the point means nothing selected")
     func emptySpace() {
         #expect(AnnotationHitTesting.topmost(in: [Self.badge], at: CGPoint(x: 500, y: 500)) == nil)

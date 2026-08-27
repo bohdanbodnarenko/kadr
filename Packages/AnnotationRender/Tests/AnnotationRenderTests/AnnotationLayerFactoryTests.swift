@@ -28,6 +28,12 @@ struct AnnotationLayerFactoryTests {
         #expect(AnnotationLayerFactory.makeLayer(for: crop, contentsScale: 2) == nil)
     }
 
+    @Test("Beautify is chrome, not an object on the canvas")
+    func beautifyHasNoLayer() {
+        let chrome = AnnotationCommand.beautify(BeautifySpec())
+        #expect(AnnotationLayerFactory.makeLayer(for: chrome, contentsScale: 2) == nil)
+    }
+
     @Test("Dragging updates the existing layer instead of rebuilding it")
     func updateMutatesInPlace() throws {
         var spec = ShapeSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))

@@ -275,3 +275,38 @@ struct HistorySettingsTests {
         #expect(settings.historySizeCap == .gigabytes5)
     }
 }
+
+@MainActor
+@Suite("Desktop hygiene settings")
+struct DesktopHygieneSettingsTests {
+    @Test("Desktop hygiene is off until the user asks")
+    func defaults() {
+        let settings = AppSettings(store: makeStore())
+        #expect(settings.desktopIconsHidden == false)
+        #expect(settings.hideDesktopDuringCapture == false)
+        #expect(settings.hideDesktopDuringRecording == false)
+        #expect(settings.captureWallpaper == .none)
+        #expect(settings.capturePrecisionCrosshair == false)
+    }
+
+    @Test("Desktop hygiene settings survive a reload and a reset")
+    func persistAndReset() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        settings.desktopIconsHidden = true
+        settings.hideDesktopDuringRecording = true
+        settings.captureWallpaper = .black
+        settings.capturePrecisionCrosshair = true
+
+        let reloaded = AppSettings(store: store)
+        #expect(reloaded.desktopIconsHidden)
+        #expect(reloaded.hideDesktopDuringRecording)
+        #expect(reloaded.captureWallpaper == .black)
+        #expect(reloaded.capturePrecisionCrosshair)
+
+        reloaded.resetToDefaults()
+        #expect(reloaded.desktopIconsHidden == false)
+        #expect(reloaded.captureWallpaper == .none)
+        #expect(reloaded.capturePrecisionCrosshair == false)
+    }
+}

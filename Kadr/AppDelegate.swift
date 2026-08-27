@@ -43,11 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // and is built on first use.
     private lazy var settings = AppSettings()
     private lazy var history = HistoryController(settings: settings)
+    private lazy var desktopHygiene = DesktopHygieneController(settings: settings)
     private lazy var areaCapture = AreaCaptureCoordinator(
         engine: captureEngine,
         permissions: permissions,
         settings: settings,
-        history: history
+        history: history,
+        hygiene: desktopHygiene
     )
     private lazy var scrollCapture = ScrollCaptureCoordinator(
         captureEngine: captureEngine,
@@ -58,7 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var recording = RecordingCoordinator(
         captureEngine: captureEngine,
         permissions: permissions,
-        settings: settings
+        settings: settings,
+        hygiene: desktopHygiene
     )
 
     private lazy var loginItem = LoginItemController()
@@ -107,7 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             canRestore: { [weak self] in
                 (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
             },
-            openHistory: { [weak self] in self?.openHistory() }
+            openHistory: { [weak self] in self?.openHistory() },
+            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
         )
         endLaunchInterval()
 
@@ -136,6 +140,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
         history.start()
+
+        // Re-hide icons if the user left them hidden, and restore a wallpaper that
+        // outlived a crash mid-capture (docs/03 §7).
+        desktopHygiene.reassertOnLaunch()
 
         // docs/04 §3.3: the user can flip this in System Settings, so never cache it
         // across launches. Deliberately after the status item, so ServiceManagement
@@ -188,6 +196,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recording.beginRegionRecording()
         case .recordDisplay:
             recording.beginDisplayRecording()
+        case .freezeScreen:
+            areaCapture.toggleFreezeScreen()
+        case .toggleDesktopIcons:
+            desktopHygiene.toggleUserHide()
         }
     }
 
@@ -254,5 +266,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing Settings must not quit the agent.
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        desktopHygiene.prepareForTermination()
     }
 }
