@@ -231,9 +231,56 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
 
     public mutating func remove(_ ids: Set<AnnotationID>) {
         guard !ids.isEmpty else { return }
-        perform { $0.removeAll { ids.contains($0.id) } }
+        perform { commands in
+            // Freeze bound arrows before their targets go, then unbind them: an arrow that
+            // outlives its target keeps pointing where it last pointed rather than
+            // snapping back to a stale stored endpoint the user has not seen in a while
+            // (docs/09 U1.7).
+            Self.unbindArrows(from: ids, in: &commands)
+            commands.removeAll { ids.contains($0.id) }
+        }
         selection.subtract(ids)
         renumberCounters()
+    }
+
+    /// Resolves and clears every binding onto a command that is about to be removed.
+    static func unbindArrows(from doomed: Set<AnnotationID>, in commands: inout [AnnotationCommand]) {
+        for index in commands.indices {
+            guard case var .arrow(spec) = commands[index] else { continue }
+            let startDoomed = spec.startBinding.map { doomed.contains($0.targetID) } ?? false
+            let endDoomed = spec.endBinding.map { doomed.contains($0.targetID) } ?? false
+            guard startDoomed || endDoomed else { continue }
+
+            let resolved = ArrowBindingResolver.resolved(spec, in: commands)
+            if startDoomed {
+                spec.start = resolved.start
+                spec.startBinding = nil
+            }
+            if endDoomed {
+                spec.end = resolved.end
+                spec.endBinding = nil
+            }
+            commands[index] = .arrow(spec)
+        }
+    }
+
+    /// The commands as they should be drawn, with every bound arrow following its target.
+    ///
+    /// Bindings are resolved here rather than stored, so a shape can be dragged without
+    /// anything having to remember which arrows point at it — the arrows simply come out
+    /// in the right place next time anyone asks (docs/09 U1.7).
+    public var resolvedCommands: [AnnotationCommand] {
+        guard commands.contains(where: \.hasArrowBinding) else { return commands }
+        return commands.map { command in
+            guard case let .arrow(spec) = command else { return command }
+            return .arrow(ArrowBindingResolver.resolved(spec, in: commands))
+        }
+    }
+
+    /// One command as it should be drawn.
+    public func resolved(_ command: AnnotationCommand) -> AnnotationCommand {
+        guard case let .arrow(spec) = command else { return command }
+        return .arrow(ArrowBindingResolver.resolved(spec, in: commands))
     }
 
     /// Replaces one annotation in place, keeping its z-order.

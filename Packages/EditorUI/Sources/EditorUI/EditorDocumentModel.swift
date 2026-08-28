@@ -198,7 +198,7 @@ public final class EditorDocumentModel {
         }
 
         guard let draft, Self.isWorthKeeping(draft) else { return }
-        document.add(draft)
+        document.add(bindingArrowEnds(of: draft))
         document.selection = [draft.id]
         rememberStyle(of: draft)
     }

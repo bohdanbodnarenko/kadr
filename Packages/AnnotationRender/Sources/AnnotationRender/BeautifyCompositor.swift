@@ -103,7 +103,7 @@ enum BeautifyCompositor {
         }
         context.draw(contents.source, in: document.baseImage.bounds)
         if contents.includeAnnotations {
-            for command in document.commands {
+            for command in document.resolvedCommands {
                 contents.drawCommand(command, context)
             }
         }

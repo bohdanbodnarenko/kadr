@@ -26,7 +26,7 @@ extension AnnotationExportRenderer {
             }
             target.draw(source, in: document.baseImage.bounds)
             if includeAnnotations {
-                for command in document.commands {
+                for command in document.resolvedCommands {
                     draw(command, in: target, imageScale: scale)
                 }
             }

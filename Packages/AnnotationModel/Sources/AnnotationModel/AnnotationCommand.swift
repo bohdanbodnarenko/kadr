@@ -10,6 +10,12 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
     public var controlPoint: CGPoint?
     public var head: ArrowHead
     public var stroke: StrokeStyle
+    /// Endpoints attached to other annotations, which they then follow (docs/09 U1.7).
+    ///
+    /// `start` and `end` stay meaningful while bound: they are where the arrow was last
+    /// drawn, and where it goes back to if the target is deleted.
+    public var startBinding: ArrowBinding?
+    public var endBinding: ArrowBinding?
 
     public init(
         id: AnnotationID = AnnotationID(),
@@ -17,7 +23,9 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
         end: CGPoint,
         controlPoint: CGPoint? = nil,
         head: ArrowHead = .filled,
-        stroke: StrokeStyle = StrokeStyle()
+        stroke: StrokeStyle = StrokeStyle(),
+        startBinding: ArrowBinding? = nil,
+        endBinding: ArrowBinding? = nil
     ) {
         self.id = id
         self.start = start
@@ -25,10 +33,32 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
         self.controlPoint = controlPoint
         self.head = head
         self.stroke = stroke
+        self.startBinding = startBinding
+        self.endBinding = endBinding
     }
 
     public var isCurved: Bool {
         controlPoint != nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, start, end, controlPoint, head, stroke, startBinding, endBinding
+    }
+
+    /// Bindings default to absent, so an arrow written before they existed still opens
+    /// (docs/08 §2.6).
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            start: container.decode(CGPoint.self, forKey: .start),
+            end: container.decode(CGPoint.self, forKey: .end),
+            controlPoint: container.decodeIfPresent(CGPoint.self, forKey: .controlPoint),
+            head: container.decodeIfPresent(ArrowHead.self, forKey: .head) ?? .filled,
+            stroke: container.decodeIfPresent(StrokeStyle.self, forKey: .stroke) ?? StrokeStyle(),
+            startBinding: container.decodeIfPresent(ArrowBinding.self, forKey: .startBinding),
+            endBinding: container.decodeIfPresent(ArrowBinding.self, forKey: .endBinding)
+        )
     }
 }
 
@@ -341,6 +371,12 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .subjectLift: .subjectLift
         case .image: .image
         }
+    }
+
+    /// Whether this is an arrow with at least one bound end.
+    public var hasArrowBinding: Bool {
+        guard case let .arrow(spec) = self else { return false }
+        return spec.startBinding != nil || spec.endBinding != nil
     }
 
     /// Whether the user can select and move this annotation.

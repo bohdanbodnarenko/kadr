@@ -111,7 +111,9 @@ public final class AnnotationCanvasView: NSView {
         layers.removeAll()
 
         let scale = window?.backingScaleFactor ?? 2
-        for command in model.document.commands {
+        // Resolved, so a bound arrow is drawn against its target's current geometry
+        // rather than against the endpoint it was stored with (docs/09 U1.7).
+        for command in model.document.resolvedCommands {
             guard let layer = AnnotationLayerFactory.makeLayer(
                 for: command,
                 contentsScale: scale,
@@ -209,7 +211,7 @@ public final class AnnotationCanvasView: NSView {
             .filter { $0 !== marqueeLayer }
             .forEach { $0.removeFromSuperlayer() }
 
-        for command in model.document.commands where model.selection.contains(command.id) {
+        for command in model.document.resolvedCommands where model.selection.contains(command.id) {
             let box = AnnotationHitTesting.boundingBox(of: command).insetBy(dx: -4, dy: -4)
             let outline = CAShapeLayer()
             outline.path = CGPath(rect: box, transform: nil)
@@ -282,7 +284,7 @@ public final class AnnotationCanvasView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        for command in model.document.commands where model.selection.contains(command.id) {
+        for command in model.document.resolvedCommands where model.selection.contains(command.id) {
             guard let layer = layers[command.id] else { continue }
             AnnotationLayerFactory.update(layer, for: command, imageScale: imageScale)
         }
