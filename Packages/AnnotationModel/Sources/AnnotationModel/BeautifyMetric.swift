@@ -215,6 +215,17 @@ public struct BeautifyCorners: Equatable, Sendable {
         )
     }
 
+    /// Each radius reduced by `amount`, floored at zero — the inner curve of a ring whose
+    /// outer curve is this one.
+    public func inset(by amount: CGFloat) -> BeautifyCorners {
+        BeautifyCorners(
+            topLeading: topLeading - amount,
+            topTrailing: topTrailing - amount,
+            bottomTrailing: bottomTrailing - amount,
+            bottomLeading: bottomLeading - amount
+        )
+    }
+
     /// Clamped so no radius exceeds half the shorter side of `rect`.
     public func clamped(to rect: CGRect) -> BeautifyCorners {
         let limit = min(rect.width, rect.height) / 2

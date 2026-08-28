@@ -30,6 +30,7 @@ private let everyCommand: [AnnotationCommand] = [
     .beautify(BeautifySpec(padding: .points(24), aspect: .sixteenNine)),
     .camera(AnnotationCameraSpec(tiltDegrees: 18, orbitDegrees: -12, fieldOfViewDegrees: 40)),
     .progressiveBlur(ProgressiveBlurSpec(shape: .directional, extent: .scene, angleDegrees: 45)),
+    .watermark(WatermarkSpec.tiled("Confidential")),
     .measure(MeasureSpec(start: CGPoint(x: 0, y: 40), end: CGPoint(x: 120, y: 40))),
     .measure(MeasureSpec(start: .zero, end: CGPoint(x: 80, y: 60), measuresBox: true)),
     .subjectLift(SubjectLiftSpec(maskPNG: Data([0x89, 0x50, 0x4E, 0x47]))),

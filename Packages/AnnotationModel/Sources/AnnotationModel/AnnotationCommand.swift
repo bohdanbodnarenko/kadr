@@ -295,6 +295,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     case beautify(BeautifySpec)
     case camera(AnnotationCameraSpec)
     case progressiveBlur(ProgressiveBlurSpec)
+    case watermark(WatermarkSpec)
     case measure(MeasureSpec)
     case subjectLift(SubjectLiftSpec)
     case image(ImageSpec)
@@ -313,6 +314,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case let .beautify(spec): spec.id
         case let .camera(spec): spec.id
         case let .progressiveBlur(spec): spec.id
+        case let .watermark(spec): spec.id
         case let .measure(spec): spec.id
         case let .subjectLift(spec): spec.id
         case let .image(spec): spec.id
@@ -334,6 +336,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .beautify: .beautify
         case .camera: .camera
         case .progressiveBlur: .progressiveBlur
+        case .watermark: .watermark
         case .measure: .measure
         case .subjectLift: .subjectLift
         case .image: .image
@@ -363,6 +366,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     case beautify
     case camera
     case progressiveBlur
+    case watermark
     case measure
     case subjectLift
     case image
@@ -381,6 +385,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
         case .beautify: "Beautify"
         case .camera: "Perspective"
         case .progressiveBlur: "Progressive Blur"
+        case .watermark: "Watermark"
         case .measure: "Measure"
         case .subjectLift: "Remove Background"
         case .image: "Image"
@@ -390,7 +395,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     /// Canvas chrome is edited through its own UI, not by dragging a shape on the image.
     public var isCanvasChrome: Bool {
         self == .crop || self == .beautify || self == .subjectLift || self == .camera
-            || self == .progressiveBlur
+            || self == .progressiveBlur || self == .watermark
     }
 
     /// Tools the pointer can draw with.
@@ -400,6 +405,6 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     /// it is there it selects and moves like anything else (docs/06 M24).
     public var isPointerTool: Bool {
         self != .beautify && self != .subjectLift && self != .image && self != .camera
-            && self != .progressiveBlur
+            && self != .progressiveBlur && self != .watermark
     }
 }

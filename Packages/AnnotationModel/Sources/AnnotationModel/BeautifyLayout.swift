@@ -13,11 +13,17 @@ public struct BeautifyLayout: Equatable, Sendable {
     public var canvasSize: CGSize
     /// The rounded, shadowed card the capture sits on.
     public var cardRect: CGRect
-    /// Where the capture itself is drawn. Inset from the card once there is a border ring
-    /// around it; identical to `cardRect` until then.
+    /// Where the capture itself is drawn. Inset from the card by the border ring;
+    /// identical to `cardRect` when there is no ring.
     public var imageRect: CGRect
-    /// Per-corner radii, already clamped to the card.
+    /// Per-corner radii of the card, already clamped to it.
     public var corners: BeautifyCorners
+    /// Per-corner radii of the capture inside the ring.
+    ///
+    /// Smaller than the card's by the ring's thickness, which is what makes a border look
+    /// like a mount rather than like two rounded rectangles that happen to be near each
+    /// other: concentric curves need concentric radii.
+    public var imageCorners: BeautifyCorners
     /// The canvas edges the card is pressed against.
     public var stuckEdges: BeautifyEdges
 
@@ -26,12 +32,14 @@ public struct BeautifyLayout: Equatable, Sendable {
         cardRect: CGRect,
         imageRect: CGRect,
         corners: BeautifyCorners,
+        imageCorners: BeautifyCorners? = nil,
         stuckEdges: BeautifyEdges = .none
     ) {
         self.canvasSize = canvasSize
         self.cardRect = cardRect
         self.imageRect = imageRect
         self.corners = corners
+        self.imageCorners = imageCorners ?? corners
         self.stuckEdges = stuckEdges
     }
 
@@ -53,9 +61,15 @@ public struct BeautifyLayout: Equatable, Sendable {
     /// 4. The card is placed inside the *inset box*, so alignment moves it within the
     ///    padding rather than through it — otherwise "bottom" and "bottom, stuck" would
     ///    render identically and the setting would do nothing.
+    /// 5. A border ring grows the *card*, not the canvas around it. The capture keeps its
+    ///    own size and the ring is added outside it, so turning a border on does not
+    ///    shrink the screenshot.
     public static func compute(contentSize: CGSize, spec: BeautifySpec) -> BeautifyLayout {
-        let content = CGSize(width: max(contentSize.width, 1), height: max(contentSize.height, 1))
-        let shortestEdge = min(content.width, content.height)
+        let capture = CGSize(width: max(contentSize.width, 1), height: max(contentSize.height, 1))
+        let shortestEdge = min(capture.width, capture.height)
+        let border = spec.border.thickness.resolved(shortestEdge: shortestEdge)
+        // The card is what padding, alignment and the aspect ratio are measured against.
+        let content = CGSize(width: capture.width + border * 2, height: capture.height + border * 2)
 
         let padding = spec.padding.resolved(shortestEdge: shortestEdge)
         let shadowOutset = spec.shadow.outset(shortestEdge: shortestEdge)
@@ -97,11 +111,15 @@ public struct BeautifyLayout: Equatable, Sendable {
         )
 
         let radius = spec.cornerRadius.resolved(shortestEdge: shortestEdge)
+        let corners = BeautifyCorners.resolving(radius: radius, stuck: stuck).clamped(to: cardRect)
+        let imageRect = cardRect.insetBy(dx: border, dy: border)
         return BeautifyLayout(
             canvasSize: CGSize(width: canvasWidth, height: canvasHeight),
             cardRect: cardRect,
-            imageRect: cardRect,
-            corners: BeautifyCorners.resolving(radius: radius, stuck: stuck).clamped(to: cardRect),
+            imageRect: imageRect,
+            corners: corners,
+            // Concentric: each inner radius is the outer one less the ring's thickness.
+            imageCorners: corners.inset(by: border).clamped(to: imageRect),
             stuckEdges: stuck
         )
     }

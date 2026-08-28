@@ -181,3 +181,78 @@ struct EditorProgressiveBlurTests {
         #expect(model.selection.isEmpty)
     }
 }
+
+/// The watermark as the editor sees it (docs/09 U1.4).
+@MainActor
+@Suite("Editor watermark")
+struct EditorWatermarkTests {
+    private func makeModel() -> EditorDocumentModel {
+        EditorDocumentModel(document: AnnotationDocument(
+            baseImage: BaseImageReference(size: CGSize(width: 800, height: 600), scale: 2)
+        ))
+    }
+
+    @Test("Adding a watermark is one undo step")
+    func addingIsOneStep() {
+        let model = makeModel()
+        model.applyWatermark(.signature("Kadr"))
+        #expect(model.document.watermark != nil)
+
+        model.undo()
+        #expect(model.document.watermark == nil)
+    }
+
+    /// Typing into the text field commits per keystroke; the whole word must still be one
+    /// undo step, or backing out of a watermark takes as many presses as it had letters.
+    @Test("Typing a word collapses into one undo step")
+    func typingCoalesces() {
+        let model = makeModel()
+        model.applyWatermark(.signature("C"))
+        for text in ["Co", "Con", "Conf", "Confi", "Confid", "Confide", "Confiden", "Confidential"] {
+            model.applyWatermark(.signature(text))
+        }
+        #expect(model.document.watermark?.text == "Confidential")
+
+        model.undo()
+        #expect(model.document.watermark == nil)
+    }
+
+    @Test("An empty watermark is not stored at all")
+    func emptyIsNotStored() {
+        let model = makeModel()
+        model.applyWatermark(WatermarkSpec(text: "   "))
+        #expect(model.document.watermark == nil)
+    }
+
+    @Test("A watermark is canvas chrome, never selectable")
+    func isCanvasChrome() {
+        let model = makeModel()
+        model.applyWatermark(.tiled("Kadr"))
+        model.selectAll()
+        #expect(model.selection.isEmpty)
+    }
+
+    @Test("A watermark survives a document round trip")
+    func roundTrips() throws {
+        let model = makeModel()
+        model.applyWatermark(.tiled("Kadr"))
+
+        let data = try JSONEncoder().encode(model.document)
+        let decoded = try JSONDecoder().decode(AnnotationDocument.self, from: data)
+        #expect(decoded.watermark?.text == "Kadr")
+        #expect(decoded.watermark?.isTiled == true)
+    }
+
+    /// A border is part of the beautify card, so it undoes with the rest of the chrome
+    /// rather than as its own thing.
+    @Test("A border is edited through beautify")
+    func borderIsPartOfBeautify() {
+        let model = makeModel()
+        model.applyBeautify(BeautifySpec(shadow: .none))
+        model.applyBeautify(BeautifySpec(shadow: .none, border: .mount))
+        #expect(model.document.beautify?.border == .mount)
+
+        model.undo()
+        #expect(model.document.beautify == nil, "the whole chrome edit is one step")
+    }
+}

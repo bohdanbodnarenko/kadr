@@ -91,6 +91,20 @@ public struct AnnotationExportRenderer: Sendable {
             )
         }
 
+        // A watermark is drawn over everything the picture contains, but under the scene
+        // blur's remit — so it goes on before the canvas is handed off, and the blur
+        // covers it too if the user asked for that (docs/09 U1.3, U1.4).
+        if let watermark = document.watermark, includeAnnotations {
+            context.saveGState()
+            context.translateBy(x: canvas.minX, y: canvas.minY)
+            WatermarkCompositor.draw(
+                watermark,
+                in: CGRect(origin: .zero, size: canvas.size),
+                context: context
+            )
+            context.restoreGState()
+        }
+
         guard let image = context.makeImage() else { throw RenderError.couldNotCreateImage }
 
         // A scene blur is the last thing that happens: it covers the backdrop as well as

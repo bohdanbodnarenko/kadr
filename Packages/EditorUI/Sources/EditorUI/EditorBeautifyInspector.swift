@@ -52,6 +52,7 @@ struct EditorBeautifyInspector: View {
                     }
                 }
                 placement
+                border
                 BeautifyBackdropPicker(backdrop: spec.backdrop) { backdrop in
                     commit { $0.backdrop = backdrop }
                 }
@@ -79,6 +80,18 @@ struct EditorBeautifyInspector: View {
             Toggle("Bleed off the edge", isOn: sticksBinding)
                 .disabled(spec.alignment == .center)
                 .help("Removes the padding on the edges the capture touches, and squares the corners there.")
+        }
+    }
+
+    /// The ring around the capture. Part of the card, so it lives with the card's controls.
+    @ViewBuilder
+    private var border: some View {
+        Toggle("Border", isOn: borderBinding)
+        if spec.border.isEnabled {
+            Slider(value: borderThicknessBinding, in: 0.002 ... 0.06, step: 0.002) {
+                Text("Thickness \(percent(spec.border.thickness))")
+            }
+            ColorPicker("Border colour", selection: borderColourBinding)
         }
     }
 
@@ -174,6 +187,27 @@ struct EditorBeautifyInspector: View {
         Binding(
             get: { spec.sticksToEdges },
             set: { value in commit { $0.sticksToEdges = value } }
+        )
+    }
+
+    private var borderBinding: Binding<Bool> {
+        Binding(
+            get: { spec.border.isEnabled },
+            set: { on in commit { $0.border = on ? .mount : .none } }
+        )
+    }
+
+    private var borderThicknessBinding: Binding<Double> {
+        Binding(
+            get: { spec.border.thickness.fraction(shortestEdge: shortestEdge) },
+            set: { value in commit { $0.border.thickness = .relative(value) } }
+        )
+    }
+
+    private var borderColourBinding: Binding<Color> {
+        Binding(
+            get: { Color(spec.border.color) },
+            set: { value in commit { $0.border.color = AnnotationColor(value) } }
         )
     }
 

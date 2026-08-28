@@ -55,4 +55,18 @@ public extension EditorDocumentModel {
     func clearProgressiveBlur() {
         document.setProgressiveBlur(nil)
     }
+
+    /// Replaces the watermark, keeping its identity across inspector edits so the undo
+    /// stack sees one command being adjusted rather than a new one each keystroke.
+    func applyWatermark(_ spec: WatermarkSpec) {
+        var spec = spec
+        if let existing = document.watermark {
+            spec.id = existing.id
+        }
+        document.setWatermark(spec)
+    }
+
+    func clearWatermark() {
+        document.setWatermark(nil)
+    }
 }

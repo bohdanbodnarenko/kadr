@@ -96,6 +96,42 @@ public extension AnnotationDocument {
         pushHistory(updated)
     }
 
+    /// The watermark in force, if any. The last one wins.
+    var watermark: WatermarkSpec? {
+        commands.reversed().compactMap { command in
+            if case let .watermark(spec) = command {
+                return spec
+            }
+            return nil
+        }.first
+    }
+
+    /// Replaces the watermark, coalescing successive inspector edits into one undo step.
+    mutating func setWatermark(_ spec: WatermarkSpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .watermark = command {
+                return true
+            }
+            return false
+        }
+        if let spec, !spec.isIdentity {
+            updated.insert(.watermark(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        if shouldCoalesce(updated, matching: {
+            if case .watermark = $0 {
+                true
+            } else {
+                false
+            }
+        }) {
+            history[historyIndex] = updated
+            return
+        }
+        pushHistory(updated)
+    }
+
     /// The progressive blur in force, if any. The last one wins.
     var progressiveBlur: ProgressiveBlurSpec? {
         commands.reversed().compactMap { command in

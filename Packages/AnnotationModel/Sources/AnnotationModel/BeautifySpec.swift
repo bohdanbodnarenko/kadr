@@ -141,6 +141,43 @@ public struct BeautifyShadow: Codable, Hashable, Sendable {
     }
 }
 
+/// A ring drawn around the capture (docs/09 U1.4).
+///
+/// Part of the beautify spec rather than its own command, because a border is *card
+/// geometry*: it grows the shadowed, rounded card and insets the capture inside it. A
+/// separate command would have to duplicate the layout to know where the card is, and the
+/// two copies would drift. It is still undoable — `BeautifySpec` is a command.
+///
+/// Thickness is normalized like every other length here, so a preset's ring keeps its
+/// visual weight on any capture.
+public struct BeautifyBorder: Codable, Hashable, Sendable {
+    public var thickness: BeautifyMetric
+    public var color: AnnotationColor
+
+    public init(thickness: BeautifyMetric = .zero, color: AnnotationColor = .white) {
+        self.thickness = thickness
+        self.color = color
+    }
+
+    public static let none = BeautifyBorder()
+    /// The white mount a screenshot gets on a landing page.
+    public static let mount = BeautifyBorder(thickness: .relative(0.02), color: .white)
+
+    public var isEnabled: Bool {
+        !thickness.isZero
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case thickness, color
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        thickness = try container.decodeIfPresent(BeautifyMetric.self, forKey: .thickness) ?? .zero
+        color = try container.decodeIfPresent(AnnotationColor.self, forKey: .color) ?? .white
+    }
+}
+
 /// Non-destructive canvas chrome: padding, backdrop, corners, shadow, aspect, alignment
 /// (docs/03 §3 P2, docs/09 U1.1).
 ///
@@ -155,6 +192,8 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
     public var backdrop: BeautifyBackdrop
     public var shadow: BeautifyShadow
     public var aspect: BeautifyAspect
+    /// A ring around the capture, which grows the card and insets the image inside it.
+    public var border: BeautifyBorder
     /// Where the capture sits in the canvas.
     public var alignment: BeautifyAlignment
     /// Whether a non-centre alignment presses the capture against the canvas edge —
@@ -172,6 +211,7 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
         backdrop: BeautifyBackdrop = .solid(.white),
         shadow: BeautifyShadow = .soft,
         aspect: BeautifyAspect = .original,
+        border: BeautifyBorder = .none,
         alignment: BeautifyAlignment = .center,
         sticksToEdges: Bool = true
     ) {
@@ -181,6 +221,7 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
         self.backdrop = backdrop
         self.shadow = shadow
         self.aspect = aspect
+        self.border = border
         self.alignment = alignment
         self.sticksToEdges = sticksToEdges
     }
@@ -193,7 +234,7 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case id, padding, cornerRadius, backdrop, shadow, aspect, alignment, sticksToEdges
+        case id, padding, cornerRadius, backdrop, shadow, aspect, border, alignment, sticksToEdges
         /// Pre-U1.1: a bool that put aspect-ratio slack at the bottom instead of splitting
         /// it. That is what `.top` alignment means now, so it migrates rather than lingers.
         case autoBalance
@@ -208,6 +249,7 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
         backdrop = try container.decodeIfPresent(BeautifyBackdrop.self, forKey: .backdrop) ?? .solid(.white)
         shadow = try container.decodeIfPresent(BeautifyShadow.self, forKey: .shadow) ?? .soft
         aspect = try container.decodeIfPresent(BeautifyAspect.self, forKey: .aspect) ?? .original
+        border = try container.decodeIfPresent(BeautifyBorder.self, forKey: .border) ?? .none
 
         if let alignment = try container.decodeIfPresent(BeautifyAlignment.self, forKey: .alignment) {
             self.alignment = alignment
@@ -232,6 +274,7 @@ public struct BeautifySpec: Codable, Hashable, Sendable {
         try container.encode(backdrop, forKey: .backdrop)
         try container.encode(shadow, forKey: .shadow)
         try container.encode(aspect, forKey: .aspect)
+        try container.encode(border, forKey: .border)
         try container.encode(alignment, forKey: .alignment)
         try container.encode(sticksToEdges, forKey: .sticksToEdges)
     }

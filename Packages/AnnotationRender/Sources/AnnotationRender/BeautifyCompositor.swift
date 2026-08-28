@@ -56,11 +56,38 @@ enum BeautifyCompositor {
             }
         }
 
+        drawBorder(spec.border, layout: layout, cardPath: cardPath, in: context)
         context.saveGState()
-        context.addPath(cardPath)
+        context.addPath(imagePath(layout))
         context.clip()
         drawCard(contents, imageOrigin: layout.imageRect.origin, in: context)
         context.restoreGState()
+    }
+
+    /// The ring around the capture (docs/09 U1.4).
+    ///
+    /// Drawn as a filled card behind the capture rather than as a stroked outline: a stroke
+    /// straddles its path, so half of it would fall inside the image and cover the
+    /// screenshot's own edge. Filling the card and drawing the capture inset on top gives a
+    /// ring whose thickness is exactly what was asked for, and whose inner curve is
+    /// concentric with its outer one.
+    static func drawBorder(
+        _ border: BeautifyBorder,
+        layout: BeautifyLayout,
+        cardPath: CGPath,
+        in context: CGContext
+    ) {
+        guard border.isEnabled else { return }
+        context.saveGState()
+        context.setFillColor(border.color.cgColor)
+        context.addPath(cardPath)
+        context.fillPath()
+        context.restoreGState()
+    }
+
+    /// The rounded shape the capture is clipped to: the card's inner edge.
+    static func imagePath(_ layout: BeautifyLayout) -> CGPath {
+        RoundedCornerPath.path(in: layout.imageRect, corners: layout.imageCorners)
     }
 
     /// Draws the capture and everything on it, positioned so `document.contentRect` lands
@@ -162,19 +189,35 @@ enum BeautifyCompositor {
         cardContext.translateBy(x: 0, y: layout.cardRect.height)
         cardContext.scaleBy(x: 1, y: -1)
 
-        // The card's own space: its origin is the bitmap's origin, so the corner mask is
-        // built at zero and the capture is placed relative to that.
+        // The card's own space: its origin is the bitmap's origin, so the shapes are built
+        // at zero and the capture is placed relative to that.
         let localCard = CGRect(origin: .zero, size: layout.cardRect.size)
-        cardContext.addPath(RoundedCornerPath.path(in: localCard, corners: layout.corners))
+        let imageOrigin = CGPoint(
+            x: layout.imageRect.minX - layout.cardRect.minX,
+            y: layout.imageRect.minY - layout.cardRect.minY
+        )
+        let localLayout = BeautifyLayout(
+            canvasSize: layout.cardRect.size,
+            cardRect: localCard,
+            imageRect: CGRect(origin: imageOrigin, size: layout.imageRect.size),
+            corners: layout.corners,
+            imageCorners: layout.imageCorners
+        )
+        let localPath = RoundedCornerPath.path(in: localCard, corners: layout.corners)
+
+        cardContext.addPath(localPath)
         cardContext.clip()
-        drawCard(
-            contents,
-            imageOrigin: CGPoint(
-                x: layout.imageRect.minX - layout.cardRect.minX,
-                y: layout.imageRect.minY - layout.cardRect.minY
-            ),
+        drawBorder(
+            contents.document.beautify?.border ?? .none,
+            layout: localLayout,
+            cardPath: localPath,
             in: cardContext
         )
+        cardContext.saveGState()
+        cardContext.addPath(imagePath(localLayout))
+        cardContext.clip()
+        drawCard(contents, imageOrigin: imageOrigin, in: cardContext)
+        cardContext.restoreGState()
         return cardContext.makeImage()
     }
 
