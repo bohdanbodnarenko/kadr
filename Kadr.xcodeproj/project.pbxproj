@@ -30,6 +30,9 @@
 		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
 		KADR00000000000000000542 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000522 /* MediaExport */; };
 		KADR00000000000000000602 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000601 /* Sparkle */; };
+		KADR0000000000000000070A /* kadr in Embed CLI */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000701 /* kadr */; };
+		KADR00000000000000000740 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000720 /* Shared */; };
+		KADR00000000000000000741 /* AutomationKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000721 /* AutomationKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +56,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = KADR00000000000000000500;
 			remoteInfo = HelperTools;
+		};
+		KADR0000000000000000070C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KADR00000000000000000700;
+			remoteInfo = KadrCLI;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -79,6 +89,17 @@
 			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000709 /* Embed CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000070A /* kadr in Embed CLI */,
+			);
+			name = "Embed CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +107,7 @@
 		F5F2A2443040394B00A5DC07 /* KadrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000401 /* KadrEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KadrEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000501 /* HelperTools.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = HelperTools.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		KADR00000000000000000701 /* kadr */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kadr; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -107,6 +129,11 @@
 		KADR00000000000000000502 /* HelperTools */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HelperTools;
+			sourceTree = "<group>";
+		};
+		KADR00000000000000000702 /* KadrCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KadrCLI;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -161,6 +188,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000704 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KADR00000000000000000740 /* Shared in Frameworks */,
+				KADR00000000000000000741 /* AutomationKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -170,6 +206,7 @@
 				F5F2A2393040394A00A5DC07 /* Kadr */,
 				KADR00000000000000000402 /* KadrEditor */,
 				KADR00000000000000000502 /* HelperTools */,
+				KADR00000000000000000702 /* KadrCLI */,
 				F5F2A2473040394B00A5DC07 /* KadrTests */,
 				F5F2A2383040394A00A5DC07 /* Products */,
 			);
@@ -181,6 +218,7 @@
 				F5F2A2373040394A00A5DC07 /* Kadr.app */,
 				KADR00000000000000000401 /* KadrEditor.app */,
 				KADR00000000000000000501 /* HelperTools.xpc */,
+				KADR00000000000000000701 /* kadr */,
 				F5F2A2443040394B00A5DC07 /* KadrTests.xctest */,
 			);
 			name = Products;
@@ -198,12 +236,14 @@
 				F5F2A2353040394A00A5DC07 /* Resources */,
 				KADR00000000000000000409 /* Embed Editor */,
 				KADR00000000000000000509 /* Embed XPC Services */,
+				KADR00000000000000000709 /* Embed CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				KADR0000000000000000040B /* PBXTargetDependency */,
 				KADR0000000000000000050B /* PBXTargetDependency */,
+				KADR0000000000000000070B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F5F2A2393040394A00A5DC07 /* Kadr */,
@@ -303,6 +343,30 @@
 			productReference = KADR00000000000000000501 /* HelperTools.xpc */;
 			productType = "com.apple.product-type.xpc-service";
 		};
+		KADR00000000000000000700 /* KadrCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KADR00000000000000000706 /* Build configuration list for PBXNativeTarget "KadrCLI" */;
+			buildPhases = (
+				KADR00000000000000000703 /* Sources */,
+				KADR00000000000000000704 /* Frameworks */,
+				KADR00000000000000000705 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				KADR00000000000000000702 /* KadrCLI */,
+			);
+			name = KadrCLI;
+			packageProductDependencies = (
+				KADR00000000000000000720 /* Shared */,
+				KADR00000000000000000721 /* AutomationKit */,
+			);
+			productName = KadrCLI;
+			productReference = KADR00000000000000000701 /* kadr */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -356,6 +420,7 @@
 				F5F2A2363040394A00A5DC07 /* Kadr */,
 				KADR00000000000000000400 /* KadrEditor */,
 				KADR00000000000000000500 /* HelperTools */,
+				KADR00000000000000000700 /* KadrCLI */,
 				F5F2A2433040394B00A5DC07 /* KadrTests */,
 			);
 		};
@@ -384,6 +449,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		KADR00000000000000000505 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000705 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -421,6 +493,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000000703 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -438,6 +517,11 @@
 			isa = PBXTargetDependency;
 			target = KADR00000000000000000500 /* HelperTools */;
 			targetProxy = KADR0000000000000000050C /* PBXContainerItemProxy */;
+		};
+		KADR0000000000000000070B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000700 /* KadrCLI */;
+			targetProxy = KADR0000000000000000070C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -589,6 +673,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Kadr-Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
@@ -624,6 +709,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Kadr-Info.plist";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
@@ -784,6 +870,42 @@
 			};
 			name = Release;
 		};
+		KADR00000000000000000707 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
+				PRODUCT_MODULE_NAME = KadrCLI;
+				PRODUCT_NAME = kadr;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		KADR00000000000000000708 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
+				PRODUCT_MODULE_NAME = KadrCLI;
+				PRODUCT_NAME = kadr;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -828,6 +950,15 @@
 			buildConfigurations = (
 				KADR00000000000000000507 /* Debug */,
 				KADR00000000000000000508 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KADR00000000000000000706 /* Build configuration list for PBXNativeTarget "KadrCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KADR00000000000000000707 /* Debug */,
+				KADR00000000000000000708 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -994,6 +1125,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = KADR00000000000000000600 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		KADR00000000000000000720 /* Shared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Shared;
+		};
+		KADR00000000000000000721 /* AutomationKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AutomationKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

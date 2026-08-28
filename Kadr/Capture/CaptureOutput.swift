@@ -1,4 +1,5 @@
 import AppKit
+import AutomationKit
 import CaptureCore
 import MediaExport
 import os
@@ -31,14 +32,14 @@ struct CaptureOutput {
     /// reference across an export to prove it, which is the deterministic version of the
     /// "RSS returns to baseline" check.
     @discardableResult
-    func deliver(_ capture: Capture) -> ExportResult? {
+    func deliver(_ capture: Capture, overrides: CaptureOverrides = .none) -> ExportResult? {
         let state = signposter.beginInterval("exportCapture")
         defer { signposter.endInterval("exportCapture", state) }
 
         do {
             return try exporter.export(
                 capture.image,
-                policy: policy,
+                policy: policy(overrides),
                 saveFolder: settings.saveFolder,
                 template: FilenameTemplate(settings.filenameTemplate),
                 context: context(for: capture),
@@ -57,11 +58,12 @@ struct CaptureOutput {
     /// Only one image can go on the clipboard, so the rest are saved regardless of the
     /// clipboard-only policy — losing three of four monitors would be worse than a file
     /// the user did not strictly ask for.
-    func deliver(_ captures: [Capture]) {
+    func deliver(_ captures: [Capture], overrides: CaptureOverrides = .none) {
         guard let first = captures.first else { return }
-        deliver(first)
+        deliver(first, overrides: overrides)
 
         guard captures.count > 1 else { return }
+        let policy = policy(overrides)
         for capture in captures.dropFirst() {
             do {
                 _ = try exporter.export(
@@ -127,7 +129,15 @@ struct CaptureOutput {
     /// (docs/03 §2), and a drag needs something on disk. So a policy that does not save
     /// to the folder stages instead: the file exists, the Desktop stays clean, and it is
     /// finalised only if the user acts on it.
-    private var policy: ExportPolicy {
+    private func policy(_ overrides: CaptureOverrides = .none) -> ExportPolicy {
+        // An automated `action=` decides this capture only; the setting is untouched
+        // (docs/03 §8.4). `annotate` and `pin` say what to do *with* the file rather than
+        // where to put it, so they stage like the overlay-only policy does.
+        if let requested = overrides.action {
+            let copies = requested == .copy
+            let saves = requested == .save
+            return ExportPolicy(copiesToClipboard: copies, savesToFolder: saves, staging: !saves)
+        }
         let action = settings.defaultAction
         return ExportPolicy(
             copiesToClipboard: action.copiesToClipboard,
@@ -147,6 +157,12 @@ struct CaptureOutput {
         if isTransparentWindow {
             logger.info("Falling back to PNG so the window's transparency survives")
             format = .png
+        }
+        // An HDR capture written as JPEG is quantised to eight bits and tone-mapped on
+        // the way out, which throws away the reason it was captured in HDR (docs/06 M25).
+        if capture.image.bitsPerComponent > 8, !format.supportsHighBitDepth {
+            logger.info("Falling back to HEIC so the capture's dynamic range survives")
+            format = .heic
         }
         return EncodingOptions(
             format: format,

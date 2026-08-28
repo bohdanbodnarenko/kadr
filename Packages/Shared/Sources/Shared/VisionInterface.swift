@@ -22,17 +22,25 @@ public struct TextRecognitionOptions: Codable, Sendable, Hashable {
     /// Off by default: OCR for the capture-text hotkey must stay cheap, and auto-redaction
     /// is a lazy editor action, not something that runs on every capture.
     public var includeRedactionCandidates: Bool
+    /// Also look for tables, so a screenshot of one can be pasted as a grid
+    /// (macOS 15+, docs/06 M25).
+    ///
+    /// On by default for Capture Text: it is the same document pass, and finding nothing
+    /// costs a check rather than a second recognition.
+    public var detectsTables: Bool
 
     public init(
         preservesLineBreaks: Bool = true,
         languages: [String]? = nil,
         detectsCodes: Bool = true,
-        includeRedactionCandidates: Bool = false
+        includeRedactionCandidates: Bool = false,
+        detectsTables: Bool = true
     ) {
         self.preservesLineBreaks = preservesLineBreaks
         self.languages = languages
         self.detectsCodes = detectsCodes
         self.includeRedactionCandidates = includeRedactionCandidates
+        self.detectsTables = detectsTables
     }
 }
 
@@ -77,15 +85,25 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     public let codes: [DetectedCode]
     /// Secret-shaped spans, boxed in annotation space. Empty unless the caller asked.
     public let candidates: [RedactionCandidate]
+    /// Tables found in the capture (macOS 15+, docs/06 M25). Empty on macOS 14, and empty
+    /// when the capture is not of a table.
+    public let tables: [RecognizedTable]
 
     public init(
         lines: [RecognizedLine] = [],
         codes: [DetectedCode] = [],
-        candidates: [RedactionCandidate] = []
+        candidates: [RedactionCandidate] = [],
+        tables: [RecognizedTable] = []
     ) {
         self.lines = lines
         self.codes = codes
         self.candidates = candidates
+        self.tables = tables
+    }
+
+    /// The best table found, if any is worth offering.
+    public var primaryTable: RecognizedTable? {
+        tables.filter(\.isMeaningful).max { $0.rowCount * $0.columnCount < $1.rowCount * $1.columnCount }
     }
 
     public var isEmpty: Bool {
@@ -104,7 +122,7 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case lines, codes, candidates
+        case lines, codes, candidates, tables
     }
 
     public init(from decoder: Decoder) throws {
@@ -112,6 +130,7 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
         lines = try container.decode([RecognizedLine].self, forKey: .lines)
         codes = try container.decodeIfPresent([DetectedCode].self, forKey: .codes) ?? []
         candidates = try container.decodeIfPresent([RedactionCandidate].self, forKey: .candidates) ?? []
+        tables = try container.decodeIfPresent([RecognizedTable].self, forKey: .tables) ?? []
     }
 }
 
@@ -232,6 +251,94 @@ public struct ScrollStitchResponse: Codable, Sendable, Hashable {
     }
 }
 
+/// One capture to read for the history index (docs/03 §5 P3, docs/06 M20).
+public struct HistoryIndexItem: Codable, Sendable, Hashable {
+    public var id: UUID
+    /// The file to recognise text in.
+    public var path: String
+
+    public init(id: UUID, path: String) {
+        self.id = id
+        self.path = path
+    }
+}
+
+/// A batch of captures to read (docs/03 §5 P3, docs/06 M20).
+///
+/// Paths in, text out. The helper does the part that needs Vision and nothing else: the
+/// library — the SQLite file, the retention policy, the writes — stays with the agent,
+/// which owns it and is its only writer (docs/04 §9). Sending the *work* rather than the
+/// *database* also keeps the helper small: it has no reason to link a database library
+/// it would use for one statement.
+public struct HistoryIndexRequest: Codable, Sendable, Hashable {
+    public var items: [HistoryIndexItem]
+
+    public init(items: [HistoryIndexItem]) {
+        self.items = items
+    }
+}
+
+/// What one capture said.
+public struct HistoryIndexResult: Codable, Sendable, Hashable {
+    public var id: UUID
+    /// The recognised text. Empty is a real answer — a screenshot of a photo has none —
+    /// and the caller still records it so the capture is not read again on every pass.
+    public var text: String
+
+    public init(id: UUID, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
+/// What one indexing pass got through.
+public struct HistoryIndexResponse: Codable, Sendable, Hashable {
+    public var results: [HistoryIndexResult]
+
+    public init(results: [HistoryIndexResult] = []) {
+        self.results = results
+    }
+
+    public var isEmpty: Bool {
+        results.isEmpty
+    }
+}
+
+/// Ask Vision which pixels are the subject (docs/04 §6, docs/06 M23).
+///
+/// Paths rather than pixels, like the GIF and stitch requests: the image is a full-size
+/// capture and the mask is another one, and moving both across XPC would cost more than
+/// the segmentation.
+public struct SubjectMaskRequest: Codable, Sendable, Hashable {
+    public var sourcePath: String
+    /// Where to write the grayscale mask, at the source's pixel size.
+    public var destinationPath: String
+
+    public init(sourcePath: String, destinationPath: String) {
+        self.sourcePath = sourcePath
+        self.destinationPath = destinationPath
+    }
+}
+
+/// What came back from a subject-mask request.
+public struct SubjectMaskResponse: Codable, Sendable, Hashable {
+    /// The mask on disk, or nil when the picture has no subject in it.
+    public var maskPath: String?
+    /// How many separate subjects Vision found. Zero is a normal answer, not an error —
+    /// a screenshot of a spreadsheet has no subject, and the editor should say so rather
+    /// than show a failure.
+    public var subjectCount: Int
+
+    public init(maskPath: String?, subjectCount: Int) {
+        self.maskPath = maskPath
+        self.subjectCount = subjectCount
+    }
+
+    public var isEmpty: Bool {
+        subjectCount == 0 || maskPath == nil
+    }
+}
+
 /// The XPC interface the helper vends.
 ///
 /// `@objc` because `NSXPCConnection` requires it, and JSON on both sides because encoding
@@ -271,6 +378,29 @@ public protocol VisionServiceProtocol {
         requestData: Data,
         reply: @escaping @Sendable (Data?, (any Error)?) -> Void
     )
+
+    /// Reads a batch of captures for the history index (docs/03 §5 P3).
+    ///
+    /// In the helper because it is OCR, and OCR means Vision models: tens of megabytes
+    /// that the agent must never load, and that should die with a process rather than
+    /// linger in a menu bar app (docs/04 §1, §7 rule 4). Only the recognition happens
+    /// here — the agent stays the single writer of the library (docs/04 §9) — and it only
+    /// asks for a pass when the machine is on mains power and the user opted in, so the
+    /// library getting indexed costs the idle budget exactly nothing.
+    func indexHistory(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Segments the subject out of a capture and writes a mask (docs/04 §6, docs/06 M23).
+    ///
+    /// In the helper because it is Vision: the segmentation model is tens of megabytes,
+    /// the editor must not load it, and process exit is the only thing that reliably gives
+    /// it back (docs/04 §1, §7 rule 4).
+    func subjectMask(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
 }
 
 /// The service name the helper listens on and the agent connects to.
@@ -287,6 +417,9 @@ public enum VisionServiceError: Int, Error, Sendable, Codable {
     case invalidRequest = 3
     case stitchFailed = 4
     case notEnoughFrames = 5
+    case historyUnavailable = 6
+    case noSubjectFound = 7
+    case maskFailed = 8
 
     public var localizedDescription: String {
         switch self {
@@ -295,6 +428,9 @@ public enum VisionServiceError: Int, Error, Sendable, Codable {
         case .invalidRequest: "The text recognition request was malformed."
         case .stitchFailed: "Kadr could not stitch the scrolling capture."
         case .notEnoughFrames: "A scrolling capture needs at least two frames."
+        case .historyUnavailable: "Kadr could not open the capture library."
+        case .noSubjectFound: "Kadr could not find a subject in this capture."
+        case .maskFailed: "Kadr could not separate the subject from the background."
         }
     }
 }

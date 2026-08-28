@@ -14,32 +14,57 @@ import Shared
 public enum AnnotationLayerFactory {
     /// Makes the layer for one annotation, or `nil` for commands that draw nothing at
     /// editing time.
-    public static func makeLayer(for command: AnnotationCommand, contentsScale: CGFloat) -> CALayer? {
-        let layer: CALayer? = switch command {
+    /// - Parameter imageScale: the base image's pixels per point, which only the
+    ///   measurement readout needs (docs/06 M21).
+    public static func makeLayer(
+        for command: AnnotationCommand,
+        contentsScale: CGFloat,
+        imageScale: CGFloat = 1
+    ) -> CALayer? {
+        let layer = strokeShapeLayer(for: command)
+            ?? contentLayer(for: command, contentsScale: contentsScale, imageScale: imageScale)
+        layer?.contentsScale = contentsScale
+        layer?.name = command.id.rawValue.uuidString
+        return layer
+    }
+
+    /// The annotations that are one stroked path.
+    private static func strokeShapeLayer(for command: AnnotationCommand) -> CALayer? {
+        switch command {
         case let .arrow(spec): arrowLayer(spec)
         case let .shape(spec): shapeLayer(spec)
         case let .line(spec): lineLayer(spec)
         case let .freehand(spec): strokeLayer(spec.points, stroke: spec.stroke)
         case let .highlighter(spec): highlighterLayer(spec)
+        default: nil
+        }
+    }
+
+    /// The annotations that carry text or an effect, and the chrome that draws nothing.
+    private static func contentLayer(
+        for command: AnnotationCommand,
+        contentsScale: CGFloat,
+        imageScale: CGFloat
+    ) -> CALayer? {
+        switch command {
         case let .text(spec): textLayer(spec, contentsScale: contentsScale)
         case let .counter(spec): counterLayer(spec, contentsScale: contentsScale)
         // Shown live as a preview rather than a burned-in effect, so the user can move it
         // freely; the export renderer is what makes it permanent.
         case let .redaction(spec): redactionPreviewLayer(spec)
-        // The crop is chrome around the canvas, not an object on it.
-        case .crop: nil
-        case .beautify: nil
+        case let .measure(spec): measureLayer(spec, contentsScale: contentsScale, imageScale: imageScale)
+        case let .image(spec): imageLayer(spec)
+        // The crop and the beautify backdrop are chrome around the canvas, not objects
+        // on it, so they have no layer of their own here.
+        default: nil
         }
-        layer?.contentsScale = contentsScale
-        layer?.name = command.id.rawValue.uuidString
-        return layer
     }
 
     /// Updates an existing layer in place.
     ///
     /// The hot path during a drag: no allocation, no tree surgery, just new geometry on a
     /// layer that is already on screen.
-    public static func update(_ layer: CALayer, for command: AnnotationCommand) {
+    public static func update(_ layer: CALayer, for command: AnnotationCommand, imageScale: CGFloat = 1) {
         switch command {
         case let .arrow(spec):
             (layer as? CAShapeLayer)?.path = arrowPath(spec)
@@ -51,6 +76,18 @@ public enum AnnotationLayerFactory {
             (layer as? CAShapeLayer)?.path = strokePath(spec.points)
         case let .highlighter(spec):
             (layer as? CAShapeLayer)?.path = strokePath(spec.points)
+        default:
+            updateContentLayer(layer, for: command, imageScale: imageScale)
+        }
+    }
+
+    /// The layers that carry text, an effect or an image rather than one stroked path.
+    private static func updateContentLayer(
+        _ layer: CALayer,
+        for command: AnnotationCommand,
+        imageScale: CGFloat
+    ) {
+        switch command {
         case let .text(spec):
             layer.frame = spec.rect
             (layer as? CATextLayer)?.string = attributedText(spec)
@@ -58,7 +95,12 @@ public enum AnnotationLayerFactory {
             layer.frame = counterFrame(spec)
         case let .redaction(spec):
             layer.frame = spec.rect
-        case .crop, .beautify:
+        case let .measure(spec):
+            updateMeasureLayer(layer, spec: spec, imageScale: imageScale)
+        case let .image(spec):
+            updateImageLayer(layer, spec: spec)
+        default:
+            // Crop, beautify and background removal are the canvas, not layers on it.
             break
         }
     }

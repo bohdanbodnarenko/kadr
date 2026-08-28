@@ -79,6 +79,18 @@ final class RecordingCoordinator {
 
     // MARK: - Starting
 
+    /// Options this recording overrides for one run, and who to tell when it stops.
+    ///
+    /// Cleared when the recording ends, so `kadr record-screen --fps 30` cannot leave the
+    /// user's Recording settings quietly changed (docs/03 §8.4).
+    @ObservationIgnored private var overrides = RecordingOverrides.none
+    @ObservationIgnored private var automationCompletion: ((CaptureOutcome) -> Void)?
+
+    /// Arms the next recording with automation's overrides (docs/03 §8.4).
+    func arm(_ overrides: RecordingOverrides) {
+        self.overrides = overrides
+    }
+
     /// Picks a region with the selection overlay, then records it.
     func beginRegionRecording() {
         guard !isRecording else { return }
@@ -212,12 +224,16 @@ final class RecordingCoordinator {
     }
 
     private var currentOptions: RecordingOptions {
-        RecordingOptions(
-            frameRate: RecordingFrameRate(rawValue: settings.recordingFrameRate.rawValue) ?? .sixty,
+        let requestedRate = overrides.frameRate ?? settings.recordingFrameRate.rawValue
+        return RecordingOptions(
+            // An automation may ask for a frame rate the encoder presets do not have; the
+            // nearest preset is a better answer than refusing the recording.
+            frameRate: RecordingFrameRate.nearest(to: requestedRate),
             codec: settings.recordingCodec == .hevc ? .hevc : .h264,
-            capturesSystemAudio: settings.recordsSystemAudio,
-            capturesMicrophone: settings.recordsMicrophone,
-            showsCursor: settings.recordingShowsCursor
+            capturesSystemAudio: overrides.recordsSystemAudio ?? settings.recordsSystemAudio,
+            capturesMicrophone: overrides.recordsMicrophone ?? settings.recordsMicrophone,
+            showsCursor: settings.recordingShowsCursor,
+            dynamicRange: settings.recordingDynamicRange
         )
     }
 
@@ -250,8 +266,13 @@ final class RecordingCoordinator {
         }
     }
 
-    func stop() {
-        guard isRecording else { return }
+    /// Stops and finalises. `completion` is how `kadr stop-recording` learns the path.
+    func stop(reportingTo completion: ((CaptureOutcome) -> Void)? = nil) {
+        guard isRecording else {
+            completion?(.failed("Nothing is recording."))
+            return
+        }
+        automationCompletion = completion
         state = .finishing
         stopTicking()
         focus.disable()
@@ -265,12 +286,16 @@ final class RecordingCoordinator {
                 let result = try await engine.stop(savingTo: destination)
                 state = .idle
                 elapsed = 0
+                overrides = .none
                 logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
+                report(.file(result.fileURL))
                 onFinished?(result)
             } catch {
                 state = .idle
                 elapsed = 0
+                overrides = .none
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
+                report(.failed(error.localizedDescription))
             }
         }
     }
@@ -285,7 +310,16 @@ final class RecordingCoordinator {
             await self?.engine.cancel()
             self?.state = .idle
             self?.elapsed = 0
+            self?.overrides = .none
+            self?.report(.cancelled)
         }
+    }
+
+    /// Reports to whoever asked for this recording, once.
+    private func report(_ outcome: CaptureOutcome) {
+        guard let automationCompletion else { return }
+        self.automationCompletion = nil
+        automationCompletion(outcome)
     }
 
     // MARK: - Plumbing

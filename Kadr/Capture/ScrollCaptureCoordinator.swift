@@ -53,6 +53,10 @@ final class ScrollCaptureCoordinator {
     /// Where the finished page lands: the same Quick Access path as any other capture.
     var onFinished: ((URL, PixelSize) -> Void)?
 
+    /// One-shot reporter for `kadr capture-scrolling` (docs/03 §8.4). Cleared when the
+    /// capture ends, whichever way it ends.
+    @ObservationIgnored private var automationCompletion: ((CaptureOutcome) -> Void)?
+
     init(
         captureEngine: CaptureEngine,
         permissions: PermissionCoordinator,
@@ -73,6 +77,18 @@ final class ScrollCaptureCoordinator {
 
     // MARK: - Starting
 
+    /// Arms the next scrolling capture with a place to report its result.
+    func arm(completion: ((CaptureOutcome) -> Void)?) {
+        report(.cancelled)
+        automationCompletion = completion
+    }
+
+    private func report(_ outcome: CaptureOutcome) {
+        guard let automationCompletion else { return }
+        self.automationCompletion = nil
+        automationCompletion(outcome)
+    }
+
     /// Picks the region to scroll through, then starts grabbing frames.
     func begin() {
         guard state == .idle else { return }
@@ -85,13 +101,17 @@ final class ScrollCaptureCoordinator {
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     purpose: .scrollingCapture
                 ) { [weak self] outcome in
-                    guard case let .region(result) = outcome else { return }
+                    guard case let .region(result) = outcome else {
+                        self?.report(.cancelled)
+                        return
+                    }
                     self?.start(region: result.rect, display: result.display)
                 }
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger
                     .error("Could not freeze for a scrolling capture: \(error.localizedDescription, privacy: .public)")
+                report(.failed(error.localizedDescription))
             }
         }
     }
@@ -126,6 +146,7 @@ final class ScrollCaptureCoordinator {
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Scrolling capture failed to start: \(error.localizedDescription, privacy: .public)")
+                report(.failed(error.localizedDescription))
             }
         }
     }
@@ -324,6 +345,9 @@ final class ScrollCaptureCoordinator {
         state = .idle
         if let url {
             onFinished?(url, size)
+            report(.file(url))
+        } else {
+            report(.cancelled)
         }
     }
 

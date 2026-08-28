@@ -33,9 +33,11 @@ fail() { printf '%s✘ %s%s\n' "$RED" "$1" "$OFF"; failures=$((failures + 1)); }
 pass() { printf '%s✔ %s%s\n' "$GREEN" "$1" "$OFF"; }
 note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
 
-# Swift sources we own. Sparkle's own sources (once vendored) are never in these paths.
+# Swift sources we own, across every process in the app family — the agent, the editor,
+# the XPC helper and the `kadr` CLI. Sparkle's own sources (once vendored) are never in
+# these paths.
 swift_sources() {
-    find Kadr KadrTests Packages/*/Sources Packages/*/Tests \
+    find Kadr KadrTests KadrEditor HelperTools KadrCLI Packages/*/Sources Packages/*/Tests \
         -name '*.swift' -not -path '*/.build/*' 2>/dev/null | sort
 }
 

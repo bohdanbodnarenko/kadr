@@ -207,6 +207,116 @@ public final class VisionClient {
         }
     }
 
+    /// Asks the helper to read a batch of captures for the history index (docs/03 §5).
+    ///
+    /// Cheap to call and safe to stop calling: one batch per call, and the caller decides
+    /// whether to ask again — which is where the "on mains power, opted in, never on a
+    /// timer" rule lives. The helper only recognises; the caller writes what comes back
+    /// into the library it owns (docs/04 §9).
+    public func indexHistory(_ request: HistoryIndexRequest) async throws -> HistoryIndexResponse {
+        let state = signposter.beginInterval("historyIndex")
+        defer { signposter.endInterval("historyIndex", state) }
+
+        let requestData = try JSONEncoder().encode(request)
+        let connection = connection ?? makeConnection()
+        self.connection = connection
+
+        let boxed = UncheckedSendableBox(connection)
+        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await Self.requestIndex(requestData, on: boxed.value) }
+            group.addTask {
+                // A batch is a handful of OCR passes; generous enough for a slow machine,
+                // bounded so a wedged helper cannot leave the pass hanging forever.
+                try await Task.sleep(for: .seconds(120))
+                throw ClientError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ClientError.timedOut }
+            return first
+        }
+        return try JSONDecoder().decode(HistoryIndexResponse.self, from: resultData)
+    }
+
+    private nonisolated static func requestIndex(
+        _ requestData: Data,
+        on connection: NSXPCConnection
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            let resume = ResumeOnce(continuation)
+            let service = connection.remoteObjectProxyWithErrorHandler { error in
+                resume(.failure(error))
+            } as? any VisionServiceProtocol
+
+            guard let service else {
+                resume(.failure(ClientError.helperUnavailable))
+                return
+            }
+            service.indexHistory(requestData: requestData) { data, error in
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(VisionServiceError.historyUnavailable))
+                }
+            }
+        }
+    }
+
+    /// Asks the helper to separate the subject from the background (docs/06 M23).
+    ///
+    /// Paths again: the capture and the mask are both full-size images, and the point of
+    /// doing this in the helper is that the editor never holds the segmentation model.
+    public func subjectMask(_ request: SubjectMaskRequest) async throws -> SubjectMaskResponse {
+        let state = signposter.beginInterval("subjectMask")
+        defer { signposter.endInterval("subjectMask", state) }
+
+        let requestData = try JSONEncoder().encode(request)
+        let connection = connection ?? makeConnection()
+        self.connection = connection
+
+        let boxed = UncheckedSendableBox(connection)
+        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await Self.requestSubjectMask(requestData, on: boxed.value) }
+            group.addTask {
+                // Segmenting a 5K capture on an older machine is seconds, not minutes;
+                // this bound exists to catch a dead helper, not a slow model.
+                try await Task.sleep(for: .seconds(60))
+                throw ClientError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw ClientError.timedOut }
+            return first
+        }
+        return try JSONDecoder().decode(SubjectMaskResponse.self, from: resultData)
+    }
+
+    private nonisolated static func requestSubjectMask(
+        _ requestData: Data,
+        on connection: NSXPCConnection
+    ) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            let resume = ResumeOnce(continuation)
+            let service = connection.remoteObjectProxyWithErrorHandler { error in
+                resume(.failure(error))
+            } as? any VisionServiceProtocol
+
+            guard let service else {
+                resume(.failure(ClientError.helperUnavailable))
+                return
+            }
+            service.subjectMask(requestData: requestData) { data, error in
+                if let error {
+                    resume(.failure(error))
+                } else if let data {
+                    resume(.success(data))
+                } else {
+                    resume(.failure(VisionServiceError.maskFailed))
+                }
+            }
+        }
+    }
+
     /// Drops the connection so the helper can start its idle countdown.
     public func disconnect() {
         connection?.invalidate()

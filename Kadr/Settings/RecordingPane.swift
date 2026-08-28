@@ -1,4 +1,5 @@
 import SettingsKit
+import Shared
 import SwiftUI
 
 /// Recording settings (docs/03 §1.8, §8.3).
@@ -18,9 +19,18 @@ struct RecordingPane: View {
                         Text(codec.title).tag(codec)
                     }
                 }
+                if DynamicRange.isAvailable {
+                    Picker("Dynamic range", selection: $settings.recordingDynamicRange) {
+                        ForEach(DynamicRange.available, id: \.self) { range in
+                            Text(range.title).tag(range)
+                        }
+                    }
+                    .disabled(settings.recordingCodec != .hevc)
+                }
             } footer: {
                 Text("HEVC is about half the size at the same quality and every Mac that "
-                    + "runs macOS 14 encodes it in hardware.")
+                    + "runs macOS 14 encodes it in hardware. HDR needs it: H.264 as Kadr "
+                    + "configures it cannot carry ten bits.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

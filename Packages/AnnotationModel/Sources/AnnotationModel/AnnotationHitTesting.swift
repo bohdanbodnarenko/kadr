@@ -26,15 +26,8 @@ public enum AnnotationHitTesting {
             hitsPolyline(spec.points, at: point, tolerance: tolerance(for: spec.stroke))
         case let .highlighter(spec):
             hitsPolyline(spec.points, at: point, tolerance: tolerance(for: spec.stroke))
-        case let .text(spec):
-            spec.rect.contains(point)
-        case let .redaction(spec):
-            spec.rect.contains(point)
-        case let .counter(spec):
-            hypot(point.x - spec.center.x, point.y - spec.center.y) <= spec.radius
-        case .crop, .beautify:
-            // Canvas chrome is edited through its own UI, not by clicking the drawing.
-            false
+        default:
+            hitsArea(command, at: point)
         }
     }
 
@@ -57,18 +50,31 @@ public enum AnnotationHitTesting {
 
     /// The bounding box of an annotation, including its stroke.
     public static func boundingBox(of command: AnnotationCommand) -> CGRect {
+        strokedBounds(of: command) ?? rectBounds(of: command)
+    }
+
+    /// The annotations whose extent comes from a path plus its stroke width.
+    private static func strokedBounds(of command: AnnotationCommand) -> CGRect? {
         switch command {
         case let .arrow(spec):
             polylineBounds(arrowPolyline(spec)).insetBy(dx: -spec.stroke.width, dy: -spec.stroke.width)
         case let .line(spec):
             polylineBounds([spec.start, spec.end])
                 .insetBy(dx: -spec.stroke.width, dy: -spec.stroke.width)
-        case let .shape(spec):
-            spec.rect.standardized.insetBy(dx: -spec.stroke.width / 2, dy: -spec.stroke.width / 2)
         case let .freehand(spec):
             polylineBounds(spec.points).insetBy(dx: -spec.stroke.width, dy: -spec.stroke.width)
         case let .highlighter(spec):
             polylineBounds(spec.points).insetBy(dx: -spec.stroke.width / 2, dy: -spec.stroke.width / 2)
+        default:
+            nil
+        }
+    }
+
+    /// The annotations that already are a rectangle, or that describe one.
+    private static func rectBounds(of command: AnnotationCommand) -> CGRect {
+        switch command {
+        case let .shape(spec):
+            spec.rect.standardized.insetBy(dx: -spec.stroke.width / 2, dy: -spec.stroke.width / 2)
         case let .text(spec):
             spec.rect.standardized
         case let .redaction(spec):
@@ -82,12 +88,57 @@ public enum AnnotationHitTesting {
             )
         case let .crop(spec):
             spec.rect.standardized
-        case .beautify:
+        case let .measure(spec):
+            spec.rect.standardized.insetBy(dx: -spec.stroke.width, dy: -spec.stroke.width)
+        case let .image(spec):
+            spec.rect.standardized
+        default:
             .zero
         }
     }
 
     // MARK: - Geometry
+
+    /// The annotations grabbed by their area rather than by a stroked path.
+    private static func hitsArea(_ command: AnnotationCommand, at point: CGPoint) -> Bool {
+        switch command {
+        case let .text(spec):
+            spec.rect.contains(point)
+        case let .redaction(spec):
+            spec.rect.contains(point)
+        case let .image(spec):
+            spec.rect.contains(point)
+        case let .counter(spec):
+            hypot(point.x - spec.center.x, point.y - spec.center.y) <= spec.radius
+        case let .measure(spec):
+            hitsMeasure(spec, at: point)
+        default:
+            // Canvas chrome is edited through its own UI, not by clicking the drawing.
+            false
+        }
+    }
+
+    /// A box measurement is grabbed by its outline, not its middle: the point of
+    /// measuring a region is being able to see what is inside it.
+    private static func hitsMeasure(_ spec: MeasureSpec, at point: CGPoint) -> Bool {
+        let tolerance = tolerance(for: spec.stroke)
+        if spec.measuresBox {
+            return hitsPolyline(boxOutline(spec.rect), at: point, tolerance: tolerance)
+        }
+        return hitsSegment(from: spec.start, to: spec.end, at: point, tolerance: tolerance)
+    }
+
+    /// The four corners of a rect, closed, for hit-testing a box measurement's outline.
+    static func boxOutline(_ rect: CGRect) -> [CGPoint] {
+        let box = rect.standardized
+        return [
+            CGPoint(x: box.minX, y: box.minY),
+            CGPoint(x: box.maxX, y: box.minY),
+            CGPoint(x: box.maxX, y: box.maxY),
+            CGPoint(x: box.minX, y: box.maxY),
+            CGPoint(x: box.minX, y: box.minY)
+        ]
+    }
 
     private static func tolerance(for stroke: StrokeStyle) -> CGFloat {
         max(stroke.width / 2, minimumTouchTolerance)

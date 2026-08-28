@@ -33,7 +33,7 @@ public struct DisplayScale: Hashable, Sendable {
 // MARK: - Screen space (AppKit, bottom-left origin, points)
 
 /// A point in AppKit's global screen space: origin bottom-left, unit points.
-public struct ScreenPoint: Hashable, Sendable {
+public struct ScreenPoint: Hashable, Sendable, Codable {
     public var x: CGFloat
     public var y: CGFloat
 
@@ -46,7 +46,7 @@ public struct ScreenPoint: Hashable, Sendable {
 /// A rect in AppKit's global screen space: origin bottom-left, unit points.
 ///
 /// `origin` is the **bottom-left** corner, matching `NSRect`.
-public struct ScreenRect: Hashable, Sendable {
+public struct ScreenRect: Hashable, Sendable, Codable {
     public var origin: ScreenPoint
     public var width: CGFloat
     public var height: CGFloat

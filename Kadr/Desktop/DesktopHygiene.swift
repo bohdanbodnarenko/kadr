@@ -148,7 +148,13 @@ final class DesktopHygieneController {
     }
 
     func toggleUserHide() {
-        settings.desktopIconsHidden.toggle()
+        setUserHide(!settings.desktopIconsHidden)
+    }
+
+    /// Sets the hide rather than flipping it, so `kadr toggle-desktop-icons --state on`
+    /// is idempotent (docs/03 §8.4).
+    func setUserHide(_ hidden: Bool) {
+        settings.desktopIconsHidden = hidden
         if settings.desktopIconsHidden {
             reasons.insert(.user)
             applyHideIfNeeded()

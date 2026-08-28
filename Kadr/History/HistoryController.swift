@@ -30,12 +30,23 @@ final class HistoryController {
     private var filter = HistoryFilter.all
     private var pending: [HistoryIngest] = []
 
+    /// What the History window's search field holds, and the indexer behind it
+    /// (docs/03 §5 P3).
+    private(set) var searchText = ""
+    let indexing: HistoryIndexCoordinator
+
     static let menuStripCount = 8
     static let pageSize = 48
 
     init(settings: AppSettings, store: HistoryStore? = nil) {
         self.settings = settings
         self.store = store
+        indexing = HistoryIndexCoordinator(settings: settings)
+    }
+
+    /// Whether a search is narrowing the grid right now.
+    var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var policy: HistoryPolicy {
@@ -105,14 +116,36 @@ final class HistoryController {
 
         do {
             try await store.applyRetention(policy)
-            let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
-            records = page
-            hasMore = page.count == Self.pageSize
+            if isSearching {
+                records = try await store.search(searchText, filter: filter)
+                // A search returns its whole ranked result set, so there is no next page.
+                hasMore = false
+            } else {
+                let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
+                records = page
+                hasMore = page.count == Self.pageSize
+            }
             usage = try await store.storageUsage()
             recent = try await store.recent(limit: Self.menuStripCount)
         } catch {
             logger.error("Could not load history: \(error.localizedDescription, privacy: .public)")
         }
+
+        // Opening the window is a thing the user did, so it is a fair moment to read a
+        // few more captures — never a timer (docs/03 §5).
+        startIndexingIfAllowed()
+    }
+
+    /// Runs a search, or clears one. Reloading is what actually queries.
+    func search(_ text: String, filter: HistoryFilter) async {
+        searchText = text
+        await reload(filter: filter)
+    }
+
+    /// Asks the helper to read a batch, if the user opted in and the machine can afford it.
+    func startIndexingIfAllowed() {
+        guard let store else { return }
+        indexing.requestPass(store: store)
     }
 
     func loadMore() async {
@@ -154,6 +187,16 @@ final class HistoryController {
             _ = try? await store?.applyRetention(policy)
             usage = await (try? store?.storageUsage()) ?? usage
             recent = await (try? store?.recent(limit: Self.menuStripCount)) ?? recent
+
+            // Opting out is not just "stop indexing": what was already read has to go, or
+            // the search field would keep finding text from captures the user has since
+            // decided should not be searchable (docs/03 §5).
+            if settings.historyIndexesText {
+                startIndexingIfAllowed()
+            } else {
+                indexing.cancel()
+                try? await store?.clearIndex()
+            }
         }
     }
 
@@ -190,5 +233,9 @@ final class HistoryController {
         _ = try? await store.applyRetention(policy)
         recent = await (try? store.recent(limit: Self.menuStripCount)) ?? recent
         usage = await (try? store.storageUsage()) ?? usage
+
+        // A capture just landed, so the agent is awake anyway: a good moment to read it
+        // (docs/03 §5 — the index never wakes the agent by itself).
+        startIndexingIfAllowed()
     }
 }

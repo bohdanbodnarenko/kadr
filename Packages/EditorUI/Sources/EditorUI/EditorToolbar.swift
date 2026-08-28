@@ -6,6 +6,7 @@ struct EditorToolbar: View {
     @Bindable var model: EditorDocumentModel
     let onExport: (EditorRootView.ExportAction) -> Void
     var onAutoRedact: (() -> Void)?
+    var onRemoveBackground: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -15,6 +16,10 @@ struct EditorToolbar: View {
             Spacer()
             if onAutoRedact != nil {
                 autoRedact
+                Divider().frame(height: 20)
+            }
+            if onRemoveBackground != nil {
+                removeBackground
                 Divider().frame(height: 20)
             }
             exportControls
@@ -31,6 +36,21 @@ struct EditorToolbar: View {
         }
         .help("Find emails, cards, and keys, then review before blurring")
         .disabled(model.isFindingRedactions)
+        .controlSize(.small)
+    }
+
+    /// One button that both applies and undoes the lift, because it is one decision.
+    private var removeBackground: some View {
+        Button {
+            onRemoveBackground?()
+        } label: {
+            Label(
+                model.hasSubjectLift ? "Restore Background" : "Remove Background",
+                systemImage: model.hasSubjectLift ? "person.crop.square.fill" : "person.and.background.dotted"
+            )
+        }
+        .help("Cut the subject out of the capture, on this Mac, with no network")
+        .disabled(model.isLiftingSubject)
         .controlSize(.small)
     }
 
@@ -88,6 +108,13 @@ struct EditorToolbar: View {
                 Button("Copy Without Annotations") {
                     onExport(.copyWithoutAnnotations)
                 }
+                Divider()
+                // A project keeps the annotations editable rather than flattening them,
+                // which is the whole point of the `.kadr` format (docs/04 §6).
+                Button("Save Project…") {
+                    onExport(.saveProject)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
             } label: {
                 Image(systemName: "ellipsis.circle")
             }

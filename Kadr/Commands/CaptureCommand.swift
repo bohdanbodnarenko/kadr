@@ -10,6 +10,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case captureWindow
     case captureFullscreen
     case captureText
+    case pickColor
     case captureScrolling
     case capturePreviousArea
     case recordRegion
@@ -24,6 +25,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .captureWindow: "Capture Window"
         case .captureFullscreen: "Capture Screen"
         case .captureText: "Capture Text (OCR)"
+        case .pickColor: "Pick Colour…"
         case .captureScrolling: "Scrolling Capture…"
         case .capturePreviousArea: "Capture Previous Area"
         case .recordRegion: "Record Region…"
@@ -52,7 +54,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// Commands the menu offers directly. `capturePreviousArea` is a hotkey-only
     /// repeat of the last region, so it stays off the menu (docs/03 §8.1).
     static var menuCommands: [CaptureCommand] {
-        [.captureArea, .captureWindow, .captureFullscreen, .captureScrolling, .captureText]
+        [.captureArea, .captureWindow, .captureFullscreen, .captureScrolling, .captureText, .pickColor]
     }
 
     /// Freeze and desktop hygiene, grouped under the capture actions (docs/03 §7).

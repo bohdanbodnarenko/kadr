@@ -25,7 +25,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AutomationKitTests",
-            dependencies: ["AutomationKit"],
+            dependencies: [
+                "AutomationKit",
+                .product(name: "Shared", package: "Shared")
+            ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]

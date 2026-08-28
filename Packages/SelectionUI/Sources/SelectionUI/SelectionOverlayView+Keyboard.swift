@@ -33,6 +33,9 @@ extension SelectionOverlayView {
         if handlePrecisionKey(event) {
             return
         }
+        if handleColorKey(event) {
+            return
+        }
         if mode == .window, handleWindowModeKey(event) {
             return
         }
@@ -50,6 +53,25 @@ extension SelectionOverlayView {
         isPrecisionMode.toggle()
         onPrecisionModeChanged?(isPrecisionMode)
         redraw()
+        return true
+    }
+
+    /// `E` picks colours, `F` changes the notation, `X` stores one to compare against
+    /// (docs/03 §3 P3, docs/06 M22).
+    func handleColorKey(_ event: NSEvent) -> Bool {
+        guard !event.modifierFlags.contains(.command), mode == .area else { return false }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "e":
+            setEyedropperMode(!isEyedropperMode)
+            onEyedropperModeChanged?(isEyedropperMode)
+        case "f" where isEyedropperMode:
+            colorFormat = colorFormat.next
+            redraw()
+        case "x" where isEyedropperMode:
+            sampleComparisonColor()
+        default:
+            return false
+        }
         return true
     }
 
@@ -169,6 +191,13 @@ extension SelectionOverlayView {
     }
 
     func commitTypedSizeOrSelection() {
+        // In eyedropper mode Return means "take this colour", not "take this rectangle".
+        if isEyedropperMode {
+            if let pick = currentPick {
+                onPickColor?(pick)
+            }
+            return
+        }
         if let size = sizeEntry.size {
             interaction.setSize(size)
             sizeEntry.reset()

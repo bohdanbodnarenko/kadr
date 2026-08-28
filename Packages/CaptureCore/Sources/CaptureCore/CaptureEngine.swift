@@ -25,6 +25,17 @@ public actor CaptureEngine {
     private let frontmostApplication: any FrontmostApplicationProviding
     private let ownBundleIdentifier: String?
 
+    /// Whether captures keep the display's HDR range (docs/06 M25).
+    ///
+    /// State on the engine rather than a parameter on every capture call: it is a setting,
+    /// it applies to all of them, and threading it through four signatures and their
+    /// callers would only make each of those calls harder to read.
+    public private(set) var dynamicRange: DynamicRange = .standard
+
+    public func setDynamicRange(_ range: DynamicRange) {
+        dynamicRange = range.resolved
+    }
+
     public init(
         frontmostApplication: any FrontmostApplicationProviding = WorkspaceFrontmostApplication(),
         ownBundleIdentifier: String? = Bundle.main.bundleIdentifier
@@ -54,6 +65,9 @@ public actor CaptureEngine {
 
         let content = try await content(onScreenWindowsOnly: true)
         let excluded = options.excludesOwnWindows ? ownApplications(in: content) : []
+        // Read once, off the actor, so the concurrent freezes agree with each other and
+        // with the capture that is cropped out of them (docs/04 §4.2).
+        let range = dynamicRange
 
         return try await withThrowingTaskGroup(of: DisplayFreeze.self) { group in
             for display in content.displays {
@@ -62,7 +76,8 @@ public actor CaptureEngine {
                     try await self.freeze(
                         display: boxed.value.display,
                         excluding: boxed.value.excluded,
-                        options: options
+                        options: options,
+                        dynamicRange: range
                     )
                 }
             }
@@ -100,6 +115,7 @@ public actor CaptureEngine {
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = includesCursor
         apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
+        applyDynamicRange(dynamicRange, to: configuration)
 
         let image = try await screenshot(ScreenshotRequest(filter: filter, configuration: configuration))
         return await Capture(
@@ -185,6 +201,7 @@ public actor CaptureEngine {
         configuration.sourceRect = local.cgRect
         configuration.width = pixels.width
         configuration.height = pixels.height
+        applyDynamicRange(dynamicRange, to: configuration)
 
         let image = try await screenshot(ScreenshotRequest(filter: filter, configuration: configuration))
         return await Capture(
@@ -230,6 +247,7 @@ public actor CaptureEngine {
             configuration.includeChildWindows = options.includesChildWindows
         }
         apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
+        applyDynamicRange(dynamicRange, to: configuration)
 
         let scale = DisplayScale(CGFloat(filter.pointPixelScale))
         let frame = DisplayRect(cgRect: window.frame)
@@ -271,7 +289,8 @@ public actor CaptureEngine {
     private nonisolated func freeze(
         display: SCDisplay,
         excluding applications: [SCRunningApplication],
-        options: FreezeOptions
+        options: FreezeOptions,
+        dynamicRange: DynamicRange = .standard
     ) async throws -> DisplayFreeze {
         let filter = if applications.isEmpty {
             SCContentFilter(display: display, excludingWindows: [])
@@ -285,6 +304,10 @@ public actor CaptureEngine {
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = options.includesCursor
         apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
+        // The freeze is what an area capture is cropped out of, so it has to be captured
+        // in the same range as the file the user will get — otherwise "what you selected
+        // is what you get" would quietly stop being true for HDR (docs/04 §4.2).
+        applyDynamicRange(dynamicRange, to: configuration)
 
         let geometry = DisplayGeometry(
             displayID: display.displayID,
@@ -316,6 +339,20 @@ public actor CaptureEngine {
     private nonisolated func apply(size: CGSize, scale: Float, to configuration: SCStreamConfiguration) {
         configuration.width = Int((size.width * CGFloat(scale)).rounded())
         configuration.height = Int((size.height * CGFloat(scale)).rounded())
+    }
+
+    /// Asks ScreenCaptureKit for the display's full range, when the user wants it and the
+    /// system can do it (docs/04 §4.1, docs/06 M25).
+    ///
+    /// `hdrLocalDisplay` rather than `hdrCanonicalDisplay`: the local variant matches what
+    /// this display is actually showing, which is the promise a screenshot makes. The
+    /// canonical one is for content that has to look the same on someone else's screen,
+    /// which is a video-production concern rather than a screenshot one.
+    private nonisolated func applyDynamicRange(_ range: DynamicRange, to configuration: SCStreamConfiguration) {
+        guard range.resolved.isHigh else { return }
+        if #available(macOS 15.0, *) {
+            configuration.captureDynamicRange = .hdrLocalDisplay
+        }
     }
 
     private func ownApplications(in content: SCShareableContent) -> [SCRunningApplication] {

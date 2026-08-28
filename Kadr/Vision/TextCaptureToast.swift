@@ -10,11 +10,13 @@ import SwiftUI
 @MainActor
 final class TextCaptureToast {
     private var panel: NonActivatingPanel?
-    private static let size = CGSize(width: 340, height: 150)
+    private static let size = CGSize(width: 340, height: 190)
     private static let margin: CGFloat = 20
     private var dismissTask: Task<Void, Never>?
 
-    func show(text: String, codes: [DetectedCode], on screen: NSScreen?) {
+    /// - Parameter table: a table found in the capture, which unlocks "Copy as Table"
+    ///   (macOS 26+, docs/06 M25).
+    func show(text: String, codes: [DetectedCode], table: RecognizedTable? = nil, on screen: NSScreen?) {
         dismiss()
 
         let screen = screen ?? NSScreen.main ?? NSScreen.screens.first
@@ -30,6 +32,7 @@ final class TextCaptureToast {
         panel.contentView = NSHostingView(rootView: TextCaptureToastView(
             text: text,
             codes: codes,
+            table: table,
             onDismiss: { [weak self] in self?.dismiss() }
         ))
         panel.orderFrontRegardless()
@@ -56,6 +59,7 @@ final class TextCaptureToast {
 private struct TextCaptureToastView: View {
     let text: String
     let codes: [DetectedCode]
+    let table: RecognizedTable?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -85,6 +89,25 @@ private struct TextCaptureToastView: View {
                 .frame(maxHeight: 60)
             }
 
+            // A screenshot of a table is one of the most annoying things to retype, and
+            // the recogniser can see the grid — so offer the grid (docs/06 M25).
+            if let table, table.isMeaningful {
+                HStack {
+                    Button("Copy as Table") {
+                        copy(table.tabSeparated)
+                    }
+                    .help("Tab-separated, ready to paste into a spreadsheet")
+                    Button("Copy as Markdown") {
+                        copy(table.markdown)
+                    }
+                    Text("\(table.rowCount)×\(table.columnCount)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
             // A QR payload that is a link is the one case worth an action (docs/03 §1.7).
             if let url = codes.compactMap(\.url).first {
                 HStack {
@@ -105,6 +128,12 @@ private struct TextCaptureToastView: View {
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func copy(_ string: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+        onDismiss()
     }
 
     private var title: String {

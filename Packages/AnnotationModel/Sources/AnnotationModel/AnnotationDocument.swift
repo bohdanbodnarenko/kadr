@@ -84,6 +84,35 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         }.first
     }
 
+    /// The background removal in force, if any. The last one wins.
+    public var subjectLift: SubjectLiftSpec? {
+        commands.reversed().compactMap { command in
+            if case let .subjectLift(spec) = command {
+                return spec
+            }
+            return nil
+        }.first
+    }
+
+    /// Replaces the background removal, or clears it. One undo step either way — unlike
+    /// beautify's slider edits, this is a decision rather than a drag.
+    public mutating func setSubjectLift(_ spec: SubjectLiftSpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .subjectLift = command {
+                return true
+            }
+            return false
+        }
+        if let spec {
+            // Behind everything else: it changes the base image, so it belongs at the
+            // bottom of the stack alongside the other canvas chrome.
+            updated.insert(.subjectLift(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        pushHistory(updated)
+    }
+
     /// The capture area that is composed onto the canvas: the crop, or the whole image.
     public var contentRect: CGRect {
         crop?.rect ?? baseImage.bounds

@@ -33,6 +33,40 @@ struct HistoryPerfTests {
             "cold-open took \(milliseconds) ms at 1k items (budget 400 ms, docs/03 §5)"
         )
     }
+
+    /// docs/03 §5 P3: search is a field you type into, so it has to answer at typing
+    /// speed. Same 400 ms budget as the cold open, at the same 1k items.
+    @Test("Search across 1k indexed items answers within the cold-open budget")
+    func searchAtOneThousand() async throws {
+        let root = try makeHistoryRoot()
+        try seedLibrary(at: root, count: 1000)
+
+        let store = try HistoryStore.open(root: root)
+        #expect(try await store.rebuild() == 1000)
+
+        // Index every record, with one needle hidden among the haystack.
+        let records = try await store.loadPage(filter: .all, offset: 0, limit: 1000)
+        for (index, record) in records.enumerated() {
+            try await store.index(
+                id: record.id,
+                text: index == 500 ? "quarterly revenue chart" : "unremarkable window contents \(index)",
+                applicationName: "Seed"
+            )
+        }
+
+        let cold = try HistoryStore.open(root: root)
+        let started = ContinuousClock.now
+        let hits = try await cold.search("quarterly")
+        let elapsed = started.duration(to: .now)
+        let milliseconds = elapsed.components.seconds * 1000
+            + elapsed.components.attoseconds / 1_000_000_000_000_000
+
+        #expect(hits.count == 1)
+        #expect(
+            elapsed < .milliseconds(400),
+            "search took \(milliseconds) ms at 1k items (budget 400 ms, docs/03 §5)"
+        )
+    }
 }
 
 /// Writes 1k unique captures + sidecars + thumbnails without going through ingest, so the

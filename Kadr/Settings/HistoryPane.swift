@@ -21,6 +21,16 @@ struct HistoryPane: View {
             }
 
             Section {
+                Toggle("Search the text in captures", isOn: $settings.historyIndexesText)
+                Text("Kadr reads your captures so History can be searched by what is in "
+                    + "them. It happens in a helper process, only while you are on mains "
+                    + "power, and nothing ever leaves this Mac. Turning it off deletes "
+                    + "everything Kadr has read.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Picker("Library size limit", selection: $settings.historySizeCap) {
                     ForEach(HistorySizeCap.allCases, id: \.self) { cap in
                         Text(cap.title).tag(cap)
@@ -35,5 +45,6 @@ struct HistoryPane: View {
         .formStyle(.grouped)
         .onChange(of: settings.historyRetention) { _, _ in history?.applySettingsChange() }
         .onChange(of: settings.historySizeCap) { _, _ in history?.applySettingsChange() }
+        .onChange(of: settings.historyIndexesText) { _, _ in history?.applySettingsChange() }
     }
 }

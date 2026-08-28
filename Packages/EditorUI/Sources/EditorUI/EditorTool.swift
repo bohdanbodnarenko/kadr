@@ -13,6 +13,7 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
     case redaction
     case counter
     case crop
+    case measure
 
     /// The annotation this tool draws, or `nil` for select.
     public var annotation: AnnotationTool? {
@@ -27,6 +28,7 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .redaction: .redaction
         case .counter: .counter
         case .crop: .crop
+        case .measure: .measure
         }
     }
 
@@ -47,6 +49,7 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .redaction: "drop.fill"
         case .counter: "1.circle.fill"
         case .crop: "crop"
+        case .measure: "ruler"
         }
     }
 
@@ -63,6 +66,7 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .redaction: "b"
         case .counter: "c"
         case .crop: "k"
+        case .measure: "m"
         }
     }
 

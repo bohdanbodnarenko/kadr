@@ -45,6 +45,19 @@ public enum ImageFormat: String, CaseIterable, Sendable {
         }
     }
 
+    /// Whether the format can carry more than 8 bits per channel.
+    ///
+    /// Matters for HDR (docs/06 M25): an HDR capture written as JPEG is quantised to 8
+    /// bits and tone-mapped on the way, which throws away the entire point of having
+    /// captured it in HDR. PNG carries 16-bit channels and an ICC profile; HEIC is the
+    /// format actually designed for this.
+    public var supportsHighBitDepth: Bool {
+        switch self {
+        case .png, .heic: true
+        case .jpeg, .webp: false
+        }
+    }
+
     /// Whether a quality setting means anything.
     public var isLossy: Bool {
         switch self {

@@ -33,6 +33,10 @@ public enum DefaultCaptureAction: String, CaseIterable, SettingValue {
 /// honours it are sibling packages that cannot import each other (docs/04 §2).
 extension ImageFormat: SettingValue {}
 
+/// Same story as `ImageFormat`: the setting and the capture engine that honours it are
+/// sibling packages, so the type lives in Shared (docs/04 §2, docs/06 M25).
+extension DynamicRange: SettingValue {}
+
 /// What a self-timer counts down before capturing (docs/03 §1.5).
 public enum SelfTimer: Int, CaseIterable, Sendable {
     case off = 0
@@ -122,75 +126,6 @@ public enum RecordingVideoCodec: String, CaseIterable, SettingValue {
         case .h264: "H.264 (most compatible)"
         }
     }
-}
-
-/// The typed key set. Names are namespaced so `defaults read app.kadr.Kadr` stays legible.
-public enum SettingKeys {
-    public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
-    /// Whether the user has been through onboarding (docs/03 §8.2).
-    public static let hasCompletedOnboarding = SettingKey("app.hasCompletedOnboarding", default: false)
-    public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)
-    public static let saveFolderPath = SettingKey("general.saveFolderPath", default: "")
-    public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
-    public static let imageFormat = SettingKey("general.imageFormat", default: ImageFormat.png)
-    public static let downscaleRetinaCaptures = SettingKey("general.downscaleRetinaCaptures", default: false)
-
-    // Capture pane (docs/03 §8.3).
-    public static let includesCursor = SettingKey("capture.includesCursor", default: false)
-    public static let windowShadow = SettingKey("capture.windowShadow", default: true)
-    public static let transparentWindowBackground = SettingKey("capture.transparentWindowBackground", default: true)
-    /// Custom timer values live alongside the presets so a typed value survives a
-    /// round-trip through the presets picker.
-    public static let selfTimer = SettingKey("capture.selfTimer", default: SelfTimer.off)
-    public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
-    /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
-    public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
-
-    // Recording pane (docs/03 §1.8, §8.3).
-    public static let recordingFrameRate = SettingKey("recording.frameRate", default: RecordingQuality.sixty)
-    public static let recordingCodec = SettingKey("recording.codec", default: RecordingVideoCodec.hevc)
-    public static let recordsSystemAudio = SettingKey("recording.systemAudio", default: true)
-    public static let recordsMicrophone = SettingKey("recording.microphone", default: false)
-    public static let recordingShowsCursor = SettingKey("recording.showsCursor", default: true)
-    /// Turn on Do Not Disturb while recording, so notifications stay out of the file.
-    public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
-    /// Draw a halo where the user clicks (docs/03 §1.8).
-    public static let recordingShowsClicks = SettingKey("recording.showsClicks", default: false)
-    /// Show pressed keys. Off by default and shortcuts-only by default: showing every
-    /// keystroke means showing whatever gets typed into a password field.
-    public static let recordingShowsKeystrokes = SettingKey("recording.showsKeystrokes", default: false)
-    public static let recordingKeystrokesShortcutsOnly = SettingKey(
-        "recording.keystrokesShortcutsOnly",
-        default: true
-    )
-    public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
-
-    // MARK: Scrolling capture (docs/03 §1.6)
-
-    /// Let Kadr do the scrolling. Off by default: it needs Accessibility, and the
-    /// assisted tier needs no permission at all.
-    public static let scrollAutoScroll = SettingKey("scroll.autoScroll", default: false)
-    /// Points per synthesized scroll step. Smaller means more overlap and a safer stitch.
-    public static let scrollStepPoints = SettingKey("scroll.stepPoints", default: 120)
-    /// Frames a second while the user scrolls.
-    public static let scrollFrameRate = SettingKey("scroll.frameRate", default: 8)
-    /// Show the seam review when the stitch is not sure (docs/03 §1.6 failure mode).
-    public static let scrollReviewsSeams = SettingKey("scroll.reviewsSeams", default: true)
-
-    // Overlay pane (docs/03 §2, §8.3).
-    public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
-    public static let overlayCardWidth = SettingKey("overlay.cardWidth", default: 220)
-    public static let overlayTimeout = SettingKey("overlay.timeout", default: OverlayTimeout.never)
-    /// Cards visible before older ones collapse behind the stack (docs/03 §2).
-    public static let overlayMaxVisibleCards = SettingKey("overlay.maxVisibleCards", default: 5)
-    /// Always show cards on the primary display instead of the capture's display.
-    public static let overlayOnPrimaryDisplay = SettingKey("overlay.onPrimaryDisplay", default: false)
-    /// Remove the card when its file is dragged out (docs/03 §2).
-    public static let overlayDismissOnDrag = SettingKey("overlay.dismissOnDrag", default: true)
-
-    // History pane (docs/03 §5, §8.3).
-    public static let historyRetention = SettingKey("history.retention", default: HistoryRetention.forever)
-    public static let historySizeCap = SettingKey("history.sizeCap", default: HistorySizeCap.gigabytes5)
 }
 
 /// Observable façade over `UserDefaults` (docs/04 §9: plain `@Observable`, no TCA).
@@ -370,6 +305,11 @@ public final class AppSettings {
         didSet { store[SettingKeys.historySizeCap] = historySizeCap }
     }
 
+    /// Whether captures are read for the History search index (docs/03 §5 P3).
+    public var historyIndexesText: Bool {
+        didSet { store[SettingKeys.historyIndexesText] = historyIndexesText }
+    }
+
     public var desktopIconsHidden: Bool {
         didSet { store[SettingKeys.desktopIconsHidden] = desktopIconsHidden }
     }
@@ -392,6 +332,22 @@ public final class AppSettings {
 
     public var capturePrecisionCrosshair: Bool {
         didSet { store[SettingKeys.capturePrecisionCrosshair] = capturePrecisionCrosshair }
+    }
+
+    /// Whether stills keep the display's HDR range (macOS 15+, docs/06 M25).
+    public var captureDynamicRange: DynamicRange {
+        didSet { store[SettingKeys.captureDynamicRange] = captureDynamicRange }
+    }
+
+    /// Whether recordings keep the display's HDR range (macOS 15+, docs/06 M25).
+    public var recordingDynamicRange: DynamicRange {
+        didSet { store[SettingKeys.recordingDynamicRange] = recordingDynamicRange }
+    }
+
+    /// Whether a selection sticks to the edges Kadr finds in the frozen screen
+    /// (docs/03 §8.3 "snapping", docs/06 M21).
+    public var captureSnapsToEdges: Bool {
+        didSet { store[SettingKeys.captureSnapsToEdges] = captureSnapsToEdges }
     }
 
     /// How long a capture waits, taking the custom value into account (docs/03 §1.5).
@@ -434,12 +390,16 @@ public final class AppSettings {
         overlayDismissOnDrag = store[SettingKeys.overlayDismissOnDrag]
         historyRetention = store[SettingKeys.historyRetention]
         historySizeCap = store[SettingKeys.historySizeCap]
+        historyIndexesText = store[SettingKeys.historyIndexesText]
         desktopIconsHidden = store[SettingKeys.desktopIconsHidden]
         hideDesktopDuringCapture = store[SettingKeys.hideDesktopDuringCapture]
         hideDesktopDuringRecording = store[SettingKeys.hideDesktopDuringRecording]
         captureWallpaper = store[SettingKeys.captureWallpaper]
         captureWallpaperImagePath = store[SettingKeys.captureWallpaperImagePath]
         capturePrecisionCrosshair = store[SettingKeys.capturePrecisionCrosshair]
+        captureSnapsToEdges = store[SettingKeys.captureSnapsToEdges]
+        captureDynamicRange = store[SettingKeys.captureDynamicRange].resolved
+        recordingDynamicRange = store[SettingKeys.recordingDynamicRange].resolved
     }
 
     /// Where captures are written. Falls back to the Desktop until the user picks a folder.
@@ -488,11 +448,15 @@ public final class AppSettings {
         overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
         historyRetention = SettingKeys.historyRetention.defaultValue
         historySizeCap = SettingKeys.historySizeCap.defaultValue
+        historyIndexesText = SettingKeys.historyIndexesText.defaultValue
         desktopIconsHidden = SettingKeys.desktopIconsHidden.defaultValue
         hideDesktopDuringCapture = SettingKeys.hideDesktopDuringCapture.defaultValue
         hideDesktopDuringRecording = SettingKeys.hideDesktopDuringRecording.defaultValue
         captureWallpaper = SettingKeys.captureWallpaper.defaultValue
         captureWallpaperImagePath = SettingKeys.captureWallpaperImagePath.defaultValue
         capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
+        captureSnapsToEdges = SettingKeys.captureSnapsToEdges.defaultValue
+        captureDynamicRange = SettingKeys.captureDynamicRange.defaultValue
+        recordingDynamicRange = SettingKeys.recordingDynamicRange.defaultValue
     }
 }

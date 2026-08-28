@@ -6,13 +6,26 @@ public enum HistoryItemKind: String, Sendable, Codable, CaseIterable, Hashable {
     case image
     case video
     case scrolling
+    /// A re-editable `.kadr` project (docs/03 §3 P3, docs/06 M24).
+    case project
 
     public var title: String {
         switch self {
         case .image: "Images"
         case .video: "Recordings"
         case .scrolling: "Scrolling"
+        case .project: "Projects"
         }
+    }
+
+    /// Whether opening this reopens the editor rather than showing an overlay card.
+    public var opensInEditor: Bool {
+        self == .project
+    }
+
+    /// Whether the file is a single still the text indexer can read (docs/06 M20).
+    public var isReadable: Bool {
+        self == .image || self == .scrolling
     }
 }
 

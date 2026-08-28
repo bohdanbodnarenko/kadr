@@ -141,6 +141,14 @@ final class QuickAccessManager {
             return
         }
         history?.markAccessed(record)
+
+        // A project is a document, not a capture card: reopening one means picking up
+        // the editing session where it was left (docs/03 §3 P3, docs/06 M24).
+        guard !record.kind.opensInEditor else {
+            editor.open(url)
+            return
+        }
+
         present(QuickAccessItem(
             fileURL: url,
             isStaged: false,
@@ -317,6 +325,25 @@ final class QuickAccessManager {
     func annotate(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        editor.open(url)
+    }
+
+    /// Pins a file automation named, or a capture automation just took (docs/03 §8.4).
+    ///
+    /// Takes a URL rather than a card because `kadr pin --path …` names a file the
+    /// overlay has never seen. Returns false when the file cannot be read as an image.
+    @discardableResult
+    func pinFile(at url: URL) -> Bool {
+        pins.pin(
+            url,
+            copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
+            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
+            annotate: { [weak self] fileURL in self?.editor.open(fileURL) }
+        )
+    }
+
+    /// Opens a file in the editor, for `kadr annotate --path …` (docs/03 §8.4).
+    func annotateFile(at url: URL) {
         editor.open(url)
     }
 

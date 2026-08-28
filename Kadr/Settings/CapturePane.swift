@@ -1,4 +1,5 @@
 import SettingsKit
+import Shared
 import SwiftUI
 
 /// Capture settings (docs/03 §8.3): cursor, window shadow and background, self-timer.
@@ -12,6 +13,20 @@ struct CapturePane: View {
         Form {
             Section {
                 Toggle("Include the pointer", isOn: $settings.includesCursor)
+                if DynamicRange.isAvailable {
+                    Picker("Dynamic range", selection: $settings.captureDynamicRange) {
+                        ForEach(DynamicRange.available, id: \.self) { range in
+                            Text(range.title).tag(range)
+                        }
+                    }
+                    Text("HDR keeps the display's full range — worth it for video and "
+                        + "photos, and misleading for interfaces, where apps that do not "
+                        + "understand HDR show it washed out. Saved as HEIC or PNG, "
+                        + "whatever the format setting says.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section("Window capture") {
@@ -87,6 +102,12 @@ struct CapturePane: View {
                     }
                 }
                 Toggle("Precision crosshair (press C on the overlay)", isOn: $settings.capturePrecisionCrosshair)
+                Toggle("Snap the selection to edges Kadr finds", isOn: $settings.captureSnapsToEdges)
+                Text("Kadr reads the frozen screen for window borders and dividers and "
+                    + "pulls the selection onto them. Hold ⌘ while dragging to ignore them.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Hides Finder icons and widgets, and can swap the wallpaper, so a "
                     + "screenshot does not include your Desktop. A crash restores the "
                     + "previous wallpaper; a Hide Desktop Icons toggle survives relaunch.")

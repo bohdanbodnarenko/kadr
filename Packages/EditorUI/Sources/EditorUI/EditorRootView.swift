@@ -12,6 +12,7 @@ public struct EditorRootView: View {
     @Bindable private var model: EditorDocumentModel
     private let baseImage: CGImage
     private weak var redactionAssist: (any RedactionAssisting)?
+    private weak var subjectLift: (any SubjectLifting)?
     private let onExport: (ExportAction) -> Void
 
     /// What the toolbar's export controls ask for.
@@ -19,17 +20,21 @@ public struct EditorRootView: View {
         case copy
         case copyWithoutAnnotations
         case save
+        /// Write a re-editable `.kadr` rather than a flattened image (docs/06 M24).
+        case saveProject
     }
 
     public init(
         model: EditorDocumentModel,
         baseImage: CGImage,
         redactionAssist: (any RedactionAssisting)? = nil,
+        subjectLift: (any SubjectLifting)? = nil,
         onExport: @escaping (ExportAction) -> Void
     ) {
         self.model = model
         self.baseImage = baseImage
         self.redactionAssist = redactionAssist
+        self.subjectLift = subjectLift
         self.onExport = onExport
     }
 
@@ -38,7 +43,8 @@ public struct EditorRootView: View {
             EditorToolbar(
                 model: model,
                 onExport: onExport,
-                onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } }
+                onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } },
+                onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } }
             )
             if model.hasRedactionReviewChrome {
                 Divider()
@@ -66,6 +72,29 @@ public struct EditorRootView: View {
             model.beginRedactionReview(analysis)
         } catch {
             model.failRedactionReview(error.localizedDescription)
+        }
+    }
+
+    /// Asks the helper for a subject mask and applies it.
+    ///
+    /// "No subject" is reported as a message rather than an error: a screenshot of a
+    /// spreadsheet legitimately has nothing to lift, and calling that a failure would be
+    /// blaming the user for the picture they took (docs/06 M23).
+    private func runSubjectLift() async {
+        guard let subjectLift else { return }
+        if model.hasSubjectLift {
+            model.removeSubjectLift()
+            return
+        }
+        model.startSubjectLift()
+        do {
+            guard let mask = try await subjectLift.liftSubject() else {
+                model.failSubjectLift("Kadr could not find a subject in this capture.")
+                return
+            }
+            model.applySubjectLift(maskPNG: mask)
+        } catch {
+            model.failSubjectLift(error.localizedDescription)
         }
     }
 

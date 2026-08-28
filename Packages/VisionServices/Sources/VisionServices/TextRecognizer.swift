@@ -35,9 +35,17 @@ public struct TextRecognizer: Sendable {
 
         async let linesAndCandidates = recognizeText(in: image, options: options)
         async let codes = options.detectsCodes ? detectCodes(in: image) : []
+        // Concurrent with the rest: it is a second pass over the same pixels, and making
+        // Capture Text wait for it in series would double the latency budget (docs/03 §1.7).
+        async let tables = options.detectsTables ? DocumentTableRecognizer().tables(in: image) : []
 
         let (lines, candidates) = try await linesAndCandidates
-        return try await VisionAnalysis(lines: lines, codes: codes, candidates: candidates)
+        return try await VisionAnalysis(
+            lines: lines,
+            codes: codes,
+            candidates: candidates,
+            tables: tables
+        )
     }
 
     // MARK: - Text

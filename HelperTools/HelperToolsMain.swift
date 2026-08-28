@@ -18,6 +18,8 @@ final class VisionService: NSObject, VisionServiceProtocol {
     private let recognizer = TextRecognizer()
     private let gifEncoder = ImageIOGIFEncoder()
     private let stitcher = ScrollStitcher()
+    private let historyIndexer = HistoryTextIndexer()
+    private let subjectMasker = SubjectMaskGenerator()
     private let logger = KadrLog.logger(.capture)
 
     func encodeGIF(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
@@ -118,6 +120,57 @@ final class VisionService: NSObject, VisionServiceProtocol {
             do {
                 let analysis = try await recognizer.analyze(pngData: imageData, options: options)
                 try reply(JSONEncoder().encode(analysis), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func subjectMask(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+
+        let request: SubjectMaskRequest
+        do {
+            request = try JSONDecoder().decode(SubjectMaskRequest.self, from: requestData)
+        } catch {
+            IdleTerminator.shared.endTransaction()
+            reply(nil, VisionServiceError.invalidRequest)
+            return
+        }
+
+        let masker = subjectMasker
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                let response = try masker.writeMask(
+                    of: URL(fileURLWithPath: request.sourcePath),
+                    to: URL(fileURLWithPath: request.destinationPath)
+                )
+                try reply(JSONEncoder().encode(response), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func indexHistory(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+
+        let request: HistoryIndexRequest
+        do {
+            request = try JSONDecoder().decode(HistoryIndexRequest.self, from: requestData)
+        } catch {
+            IdleTerminator.shared.endTransaction()
+            reply(nil, VisionServiceError.invalidRequest)
+            return
+        }
+
+        let indexer = historyIndexer
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                let response = await indexer.run(request)
+                try reply(JSONEncoder().encode(response), nil)
             } catch {
                 reply(nil, error)
             }

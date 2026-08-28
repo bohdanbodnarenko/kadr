@@ -1,4 +1,5 @@
 import AppKit
+import AutomationKit
 import CaptureCore
 import os
 import RecordingCore
@@ -64,6 +65,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hygiene: desktopHygiene
     )
 
+    /// The automation frontends (docs/03 §8.4). The router is built lazily; the listener
+    /// is one run-loop source with no thread and no timer behind it, which is what lets
+    /// automation exist without costing the idle budget (PRD §8).
+    private lazy var automation = AutomationRouter(
+        areaCapture: areaCapture,
+        scrollCapture: scrollCapture,
+        recording: recording,
+        hygiene: desktopHygiene,
+        openSettings: { [weak self] tab in self?.settingsWindowController.show(tab: tab) },
+        openHistory: { [weak self] in self?.openHistory() },
+        addToHistory: { [weak self] url in self?.addToHistory(url) ?? false }
+    )
+    private var automationListener: AutomationListener?
+
     private lazy var loginItem = LoginItemController()
     private lazy var settingsWindowController = SettingsWindowController(
         settings: settings,
@@ -119,6 +134,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyCenter?.start()
 
         updater.start()
+
+        // The CLI's end of the automation channel (docs/03 §8.4). A second Kadr would
+        // find the name taken, and should not pretend to own automation.
+        let listener = AutomationListener { [weak self] command, reply in
+            guard let self else {
+                reply(.failed("Kadr is shutting down."))
+                return
+            }
+            automation.perform(command, completion: reply)
+        }
+        if listener.start() {
+            automationListener = listener
+        } else {
+            logger.error("Another Kadr already owns the automation port")
+        }
 
         // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
         recording.onFinished = { [weak self] result in
@@ -179,6 +209,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func perform(_ command: CaptureCommand) {
         logger.info("Command requested: \(command.rawValue, privacy: .public)")
+        if performCapture(command) {
+            return
+        }
+        switch command {
+        case .captureScrolling:
+            scrollCapture.begin()
+        case .recordRegion:
+            recording.beginRegionRecording()
+        case .recordDisplay:
+            recording.beginDisplayRecording()
+        case .toggleDesktopIcons:
+            desktopHygiene.toggleUserHide()
+        default:
+            break
+        }
+    }
+
+    /// The commands that go through the selection overlay. Returns whether it was one.
+    private func performCapture(_ command: CaptureCommand) -> Bool {
         switch command {
         case .captureArea:
             areaCapture.beginAreaCapture()
@@ -190,17 +239,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             areaCapture.captureAllDisplays()
         case .captureText:
             areaCapture.beginTextCapture()
-        case .captureScrolling:
-            scrollCapture.begin()
-        case .recordRegion:
-            recording.beginRegionRecording()
-        case .recordDisplay:
-            recording.beginDisplayRecording()
+        case .pickColor:
+            areaCapture.beginColorPick()
         case .freezeScreen:
             areaCapture.toggleFreezeScreen()
-        case .toggleDesktopIcons:
-            desktopHygiene.toggleUserHide()
+        default:
+            return false
         }
+        return true
     }
 
     /// Keeps the menu bar in step with the recording.
@@ -243,6 +289,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController.show()
     }
 
+    /// The command layer, for the Shortcuts actions (docs/03 §8.4).
+    @MainActor
+    static func performAutomation(_ command: AppCommand, completion: @escaping (AutomationResponse) -> Void) {
+        shared.automation.perform(command, completion: completion)
+    }
+
+    /// Copies a file into the capture library (docs/03 §8.4 `add-to-history`).
+    ///
+    /// How a `.kadr` project saved in the editor gets into History: the editor writes the
+    /// file and opens `kadr://add-to-history`, because the library belongs to the agent.
+    private func addToHistory(_ url: URL) -> Bool {
+        guard let draft = ProjectIngest().draft(for: url) else { return false }
+        history.ingest(draft)
+        return true
+    }
+
     private func openHistory() {
         history.showWindow { [weak self] record in
             self?.areaCapture.reopenFromHistory(record)
@@ -269,6 +331,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        automationListener?.stop()
         desktopHygiene.prepareForTermination()
+    }
+
+    // MARK: - URL scheme (docs/03 §8.4)
+
+    /// Handles `kadr://…`. The answer is dropped: a URL has nowhere to send one, which is
+    /// exactly why the CLI exists.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            do {
+                let command = try AutomationParser.command(from: url)
+                automation.perform(command) { [weak self] response in
+                    guard response.status != .ok else { return }
+                    let message = response.message ?? response.status.rawValue
+                    self?.logger.error("URL command failed: \(message, privacy: .public)")
+                }
+            } catch {
+                let message = (error as? AutomationError)?.localizedDescription ?? error.localizedDescription
+                logger.error("Could not run \(url.absoluteString, privacy: .public): \(message, privacy: .public)")
+            }
+        }
     }
 }

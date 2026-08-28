@@ -182,6 +182,87 @@ public struct CounterSpec: Codable, Hashable, Sendable {
     }
 }
 
+/// A measurement drawn on the capture (docs/03 §3 P3, docs/06 M21).
+///
+/// The pixel ruler a designer or developer actually wants: drag across two edges and read
+/// the distance, or drag a box and read its size. Both numbers are reported in points
+/// *and* pixels on a Retina capture, because the two differ by a factor of two and only
+/// one of them is the one being argued about in the code review.
+public struct MeasureSpec: Codable, Hashable, Sendable {
+    public var id: AnnotationID
+    public var start: CGPoint
+    public var end: CGPoint
+    /// Measure the box the drag describes rather than the distance across it.
+    public var measuresBox: Bool
+    public var stroke: StrokeStyle
+    public var labelStyle: TextStyle
+
+    public init(
+        id: AnnotationID = AnnotationID(),
+        start: CGPoint,
+        end: CGPoint,
+        measuresBox: Bool = false,
+        stroke: StrokeStyle = StrokeStyle(color: .annotationRed, width: 2),
+        labelStyle: TextStyle = TextStyle(fontSize: 13, color: .white, backgroundColor: .annotationRed)
+    ) {
+        self.id = id
+        self.start = start
+        self.end = end
+        self.measuresBox = measuresBox
+        self.stroke = stroke
+        self.labelStyle = labelStyle
+    }
+
+    /// The box the drag describes, in base-image points.
+    public var rect: CGRect {
+        CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        )
+    }
+
+    /// Point-to-point distance, in base-image points.
+    public var length: CGFloat {
+        hypot(end.x - start.x, end.y - start.y)
+    }
+
+    /// Whether the drag is close enough to one axis to be read as a straight measurement.
+    ///
+    /// Most measurements are horizontal or vertical — the width of a gutter, the height
+    /// of a row — and a distance line that renders at 0.4° off true looks like a mistake.
+    public var isAxisAligned: Bool {
+        let dx = abs(end.x - start.x)
+        let dy = abs(end.y - start.y)
+        return min(dx, dy) <= max(dx, dy) * 0.02
+    }
+
+    /// The label, in points and — when the capture is Retina — pixels.
+    ///
+    /// - Parameter scale: the base image's pixels per point.
+    public func readout(scale: CGFloat) -> String {
+        measuresBox
+            ? Self.text(width: rect.width, height: rect.height, scale: scale)
+            : Self.text(length: length, scale: scale)
+    }
+
+    static func text(length: CGFloat, scale: CGFloat) -> String {
+        let points = Int(length.rounded())
+        guard scale != 1 else { return "\(points) px" }
+        return "\(points) pt · \(Int((length * scale).rounded())) px"
+    }
+
+    static func text(width: CGFloat, height: CGFloat, scale: CGFloat) -> String {
+        let pointWidth = Int(width.rounded())
+        let pointHeight = Int(height.rounded())
+        guard scale != 1 else { return "\(pointWidth) × \(pointHeight) px" }
+        let pixelWidth = Int((width * scale).rounded())
+        let pixelHeight = Int((height * scale).rounded())
+        return "\(pointWidth) × \(pointHeight) pt · \(pixelWidth) × \(pixelHeight) px"
+    }
+}
+
 /// A non-destructive crop (docs/03 §3).
 public struct CropSpec: Codable, Hashable, Sendable {
     public var id: AnnotationID
@@ -212,6 +293,9 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     case counter(CounterSpec)
     case crop(CropSpec)
     case beautify(BeautifySpec)
+    case measure(MeasureSpec)
+    case subjectLift(SubjectLiftSpec)
+    case image(ImageSpec)
 
     public var id: AnnotationID {
         switch self {
@@ -225,6 +309,9 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case let .counter(spec): spec.id
         case let .crop(spec): spec.id
         case let .beautify(spec): spec.id
+        case let .measure(spec): spec.id
+        case let .subjectLift(spec): spec.id
+        case let .image(spec): spec.id
         }
     }
 
@@ -241,6 +328,9 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .counter: .counter
         case .crop: .crop
         case .beautify: .beautify
+        case .measure: .measure
+        case .subjectLift: .subjectLift
+        case .image: .image
         }
     }
 
@@ -265,6 +355,9 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     case counter
     case crop
     case beautify
+    case measure
+    case subjectLift
+    case image
 
     public var title: String {
         switch self {
@@ -278,16 +371,23 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
         case .counter: "Counter"
         case .crop: "Crop"
         case .beautify: "Beautify"
+        case .measure: "Measure"
+        case .subjectLift: "Remove Background"
+        case .image: "Image"
         }
     }
 
     /// Canvas chrome is edited through its own UI, not by dragging a shape on the image.
     public var isCanvasChrome: Bool {
-        self == .crop || self == .beautify
+        self == .crop || self == .beautify || self == .subjectLift
     }
 
-    /// Tools the pointer can draw with. Beautify is inspector-only.
+    /// Tools the pointer can draw with.
+    ///
+    /// Beautify and background removal are actions in the chrome rather than things you
+    /// draw, and an image arrives by being dropped rather than by being drawn — but once
+    /// it is there it selects and moves like anything else (docs/06 M24).
     public var isPointerTool: Bool {
-        self != .beautify
+        self != .beautify && self != .subjectLift && self != .image
     }
 }

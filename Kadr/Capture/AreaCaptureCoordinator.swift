@@ -1,6 +1,8 @@
 import AppKit
+import AutomationKit
 import CaptureCore
 import HistoryKit
+import MediaExport
 import os
 import OverlayKit
 import SelectionUI
@@ -22,12 +24,16 @@ final class AreaCaptureCoordinator {
     private let vision = VisionClient()
     private let recovery = PermissionRecovery()
     private var pickerSession: ContentSharingPickerSession?
-    private let toast = TextCaptureToast()
+    /// Internal, not private: the colour-pick half lives in
+    /// `AreaCaptureCoordinator+ColorPick.swift`, and `private` is file-scoped.
+    let toast = TextCaptureToast()
     private let output: CaptureOutput
-    private let quickAccess: QuickAccessManager
-    private let pins = PinManager()
+    /// Internal, not private: the overlay-facing forwarders live in
+    /// `AreaCaptureCoordinator+Overlay.swift`, and `private` is file-scoped.
+    let quickAccess: QuickAccessManager
+    let pins = PinManager()
     private let hygiene: DesktopHygieneController?
-    private let logger = KadrLog.logger(.capture)
+    let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
     private var inFlight: Task<Void, Never>?
@@ -41,6 +47,15 @@ final class AreaCaptureCoordinator {
     /// is Kadr, which makes a useless `{app}` in the filename.
     private var frontmostAtHotkey: AppIdentity?
     private var purpose: SelectionPurpose = .capture
+    /// Whether the next overlay opens as a colour picker (docs/03 §3 P3, docs/06 M22).
+    var startsInEyedropperMode = false
+
+    /// Settings this one capture overrides, and who to tell when it lands (docs/03 §8.4).
+    ///
+    /// Both are cleared the moment the capture reports, so an automated capture cannot
+    /// leak its `action=` into the next one the user takes by hand.
+    /// The automation request this capture is serving, if any (docs/03 §8.4).
+    let automation = AutomationCaptureRequest()
 
     init(
         engine: CaptureEngine,
@@ -62,6 +77,23 @@ final class AreaCaptureCoordinator {
 
     var hasPreviousRegion: Bool {
         lastRegion != nil
+    }
+
+    /// How long this capture waits: the automation's `delay=` if it gave one, otherwise
+    /// the user's self-timer (docs/03 §1.5, §8.4).
+    private var timerSeconds: Int {
+        automation.overrides.delaySeconds ?? settings.timerSeconds
+    }
+
+    /// Whether to draw the pointer, honouring an automation override (docs/03 §8.4).
+    private var includesCursor: Bool {
+        automation.overrides.includesCursor ?? settings.includesCursor
+    }
+
+    /// Arms the next capture with automation's overrides and a place to report to
+    /// (docs/03 §8.4).
+    func arm(_ overrides: CaptureOverrides, completion: ((CaptureOutcome) -> Void)?) {
+        automation.arm(overrides, completion: completion)
     }
 
     /// Freezes every display and puts the selection overlay up.
@@ -92,14 +124,15 @@ final class AreaCaptureCoordinator {
     /// Captures every display with no overlay at all (docs/03 §1.3).
     func captureAllDisplays() {
         inFlight?.cancel()
-        let seconds = settings.timerSeconds
+        let seconds = timerSeconds
         timer.run(seconds: seconds) { [weak self] in
             guard let self else { return }
             inFlight = Task { [weak self] in
                 guard let self else { return }
                 do {
+                    await engine.setDynamicRange(settings.captureDynamicRange)
                     let captures = try await engine.captureAllDisplays(
-                        includesCursor: settings.includesCursor
+                        includesCursor: includesCursor
                     )
                     permissions.noteCaptureSuccess()
                     hygiene?.beginCapture()
@@ -114,7 +147,7 @@ final class AreaCaptureCoordinator {
         }
     }
 
-    private func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
+    func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
         frontmostAtHotkey = Self.currentFrontmostApp()
         self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
@@ -127,6 +160,9 @@ final class AreaCaptureCoordinator {
         inFlight = Task { [weak self] in
             guard let self else { return }
             do {
+                // Applied before the freeze, because an area capture is cropped out of it
+                // and has to be in the same range as the file (docs/06 M25).
+                await engine.setDynamicRange(settings.captureDynamicRange)
                 let freezes = try await engine.freezeAllDisplays()
                 guard !Task.isCancelled else { return }
                 permissions.noteCaptureSuccess()
@@ -147,12 +183,21 @@ final class AreaCaptureCoordinator {
                     []
                 }
 
+                // Set before presenting, so the detection pass the overlay kicks off is
+                // skipped entirely when the user has snapping off (docs/06 M21).
+                overlay.snapsToEdges = settings.captureSnapsToEdges
+                overlay.onColorPicked = { [weak self] pick in
+                    self?.deliver(pick)
+                }
+                let eyedropper = startsInEyedropperMode
+                startsInEyedropperMode = false
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     mode: mode,
                     purpose: purpose,
                     windows: windows,
                     precisionMode: settings.capturePrecisionCrosshair,
+                    eyedropper: eyedropper,
                     signpostState: interval
                 ) { [weak self] outcome in
                     self?.hygiene?.endCapture()
@@ -170,6 +215,29 @@ final class AreaCaptureCoordinator {
     }
 
     /// Repeats the last region with no UI at all (docs/03 §1.1).
+    /// Captures a rectangle automation named, with no overlay at all (docs/03 §8.4).
+    ///
+    /// The rect arrives in AppKit's screen space because that is what a user reads off a
+    /// window's frame; it is flipped into CoreGraphics' display space and matched to the
+    /// display it lands on here, so nothing downstream has to guess (CLAUDE.md rule 6).
+    func captureRegion(_ screenRect: ScreenRect) {
+        inFlight?.cancel()
+        frontmostAtHotkey = Self.currentFrontmostApp()
+        purpose = .capture
+
+        let global = screenRect.inDisplaySpace(.current)
+        guard let displayID = DisplayLookup.display(containing: global) else {
+            logger.error("The requested region is not on any display")
+            automation.report(.failed("That region is not on any display."))
+            return
+        }
+        lastRegion = (global, displayID)
+
+        timer.run(seconds: timerSeconds) { [weak self] in
+            self?.captureRegionLive(global, on: displayID)
+        }
+    }
+
     func capturePreviousArea() {
         guard let lastRegion else {
             logger.info("No previous area to capture yet")
@@ -178,7 +246,7 @@ final class AreaCaptureCoordinator {
 
         inFlight?.cancel()
         let region = lastRegion
-        timer.run(seconds: settings.timerSeconds) { [weak self] in
+        timer.run(seconds: timerSeconds) { [weak self] in
             self?.captureRegionLive(region.rect, on: region.displayID)
         }
     }
@@ -196,6 +264,7 @@ final class AreaCaptureCoordinator {
         switch outcome {
         case nil:
             logger.info("Capture cancelled")
+            automation.report(.cancelled)
         case let .region(result):
             finishRegion(result, freezes: freezes)
         case let .window(selection):
@@ -210,10 +279,10 @@ final class AreaCaptureCoordinator {
         let options = WindowCaptureOptions(
             includesShadow: shadow,
             transparentBackground: settings.transparentWindowBackground,
-            includesCursor: settings.includesCursor
+            includesCursor: includesCursor
         )
 
-        timer.run(seconds: settings.timerSeconds) { [weak self] in
+        timer.run(seconds: timerSeconds) { [weak self] in
             guard let self else { return }
             inFlight = Task { [weak self] in
                 guard let self else { return }
@@ -248,8 +317,8 @@ final class AreaCaptureCoordinator {
         // the countdown, so the frozen image is the wrong source and the region is
         // re-captured live (docs/03 §1.5). Without a timer, cropping the freeze is both
         // faster and the only way to guarantee WYSIWYG (docs/03 §1.1).
-        guard settings.timerSeconds == 0 else {
-            timer.run(seconds: settings.timerSeconds) { [weak self] in
+        guard timerSeconds == 0 else {
+            timer.run(seconds: timerSeconds) { [weak self] in
                 self?.captureRegionLive(result.rect, on: result.display.displayID)
             }
             return
@@ -300,13 +369,15 @@ final class AreaCaptureCoordinator {
                 logger.info("Recognised \(characters, privacy: .public) characters")
 
                 let screen = NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
-                toast.show(text: text, codes: analysis.codes, on: screen)
+                toast.show(text: text, codes: analysis.codes, table: analysis.primaryTable, on: screen)
+                automation.report(.text(text))
 
                 // Let go of the connection so the helper can start its idle countdown
                 // and give its Vision models back (docs/04 §1).
                 vision.disconnect()
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
+                automation.report(.failed(error.localizedDescription))
                 vision.disconnect()
             }
         }
@@ -319,7 +390,7 @@ final class AreaCaptureCoordinator {
                 let capture = try await engine.captureRegion(
                     rect,
                     on: displayID,
-                    includesCursor: settings.includesCursor
+                    includesCursor: includesCursor
                 )
                 permissions.noteCaptureSuccess()
                 hygiene?.beginCapture()
@@ -333,41 +404,22 @@ final class AreaCaptureCoordinator {
 
     /// Exports a capture and puts a card up for it (docs/03 §2).
     private func deliver(_ capture: Capture) {
-        guard let result = output.deliver(capture) else { return }
+        guard let result = output.deliver(capture, overrides: automation.overrides) else {
+            automation.report(.failed("Kadr could not write the capture."))
+            return
+        }
         quickAccess.show(result, capture: capture)
-    }
 
-    /// Brings back the most recently dismissed card, or the latest history item (docs/03 §5).
-    func restoreRecentlyClosed() {
-        quickAccess.restoreRecentlyClosed()
-    }
-
-    var canRestoreRecentlyClosed: Bool {
-        quickAccess.hasRecentlyClosed
-    }
-
-    /// Re-opens a library item as a Quick Access card (docs/03 §5).
-    func reopenFromHistory(_ record: HistoryRecord) {
-        quickAccess.presentFromHistory(record)
-    }
-
-    /// The "Close all pins" global command (docs/03 §4).
-    func closeAllPins() {
-        pins.closeAll()
-    }
-
-    var pinCount: Int {
-        pins.count
-    }
-
-    /// Puts a stitched scrolling capture into the overlay and the editor (docs/03 §1.6).
-    func showScrollingCapture(at fileURL: URL, pixelSize: PixelSize) {
-        quickAccess.showScrollingCapture(at: fileURL, pixelSize: pixelSize)
-    }
-
-    /// Puts a finished recording into the Quick Access Overlay (docs/03 §1.8).
-    func showRecording(at fileURL: URL) {
-        quickAccess.showRecording(at: fileURL)
+        // `action=annotate|pin` says what to do with the file once it exists (docs/03 §8.4).
+        if let fileURL = result.fileURL {
+            switch automation.overrides.action {
+            case .annotate: quickAccess.annotateFile(at: fileURL)
+            case .pin: quickAccess.pinFile(at: fileURL)
+            default: break
+            }
+        }
+        let outcome = result.fileURL.map(CaptureOutcome.file)
+        automation.report(outcome ?? .failed("Kadr could not write the capture."))
     }
 
     /// The frontmost app right now, as a value.
@@ -378,10 +430,14 @@ final class AreaCaptureCoordinator {
 
     private func handle(_ error: any Error) {
         if error is CancellationError {
+            // Deliberately silent: a cancelled task means a *newer* capture superseded
+            // this one, and by now the automation slot belongs to that one. Arming
+            // reports the cancellation to whoever was displaced (docs/06 M19).
             return
         }
         permissions.noteCaptureFailure(error)
         let mapped = CaptureError.mapping(error)
+        automation.report(.failed(mapped.errorDescription ?? "Capture failed."))
         logger.error("Capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
 
         // A lost grant is the one failure worth interrupting the user over: every capture

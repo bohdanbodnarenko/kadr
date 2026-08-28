@@ -41,6 +41,10 @@ struct HistoryView: View {
     @State private var selection: Set<UUID> = []
     @State private var kindFilter: HistoryItemKind?
     @State private var dateFilter: HistoryDateFilter = .all
+    /// The search field's text (docs/03 §5 P3). Debounced before it reaches SQLite so a
+    /// fast typist does not queue a query per keystroke.
+    @State private var searchText = ""
+    @State private var searchTask: Task<Void, Never>?
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
@@ -58,6 +62,8 @@ struct HistoryView: View {
         .task { await controller.reload(filter: currentFilter) }
         .onChange(of: kindFilter) { _, _ in Task { await applyFilters() } }
         .onChange(of: dateFilter) { _, _ in Task { await applyFilters() } }
+        .onChange(of: searchText) { _, text in scheduleSearch(text) }
+        .onDisappear { searchTask?.cancel() }
     }
 
     private var currentFilter: HistoryFilter {
@@ -85,6 +91,9 @@ struct HistoryView: View {
 
             Spacer()
 
+            SearchField(text: $searchText)
+                .frame(width: 200)
+
             Button("Reveal in Finder") { revealSelected() }
                 .disabled(selection.count != 1)
             Button("Delete", role: .destructive) { Task { await deleteSelected() } }
@@ -94,13 +103,26 @@ struct HistoryView: View {
         .padding(.vertical, 10)
     }
 
+    /// Waits for the typing to settle, then searches.
+    ///
+    /// 250 ms: long enough that a word is one query rather than five, short enough that
+    /// the grid feels like it is following along.
+    private func scheduleSearch(_ text: String) {
+        searchTask?.cancel()
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await controller.search(text, filter: currentFilter)
+        }
+    }
+
     private var grid: some View {
         ScrollView {
             if controller.records.isEmpty, !controller.isLoading {
                 ContentUnavailableView(
-                    "No captures yet",
-                    systemImage: "clock",
-                    description: Text("Captures you take show up here, and in the menu bar strip.")
+                    emptyTitle,
+                    systemImage: controller.isSearching ? "magnifyingglass" : "clock",
+                    description: Text(emptyDescription)
                 )
                 .frame(maxWidth: .infinity, minHeight: 280)
             } else {
@@ -152,10 +174,34 @@ struct HistoryView: View {
         }
     }
 
+    private var emptyTitle: String {
+        controller.isSearching ? "No matches" : "No captures yet"
+    }
+
+    /// Says *why* there is nothing, which for a search over a half-built index is the
+    /// difference between "no results" and "not read yet" (docs/03 §5 P3).
+    private var emptyDescription: String {
+        guard controller.isSearching else {
+            return "Captures you take show up here, and in the menu bar strip."
+        }
+        if !controller.indexing.isAllowed {
+            return "Search reads the text in your captures. Turn it on in Settings → History, "
+                + "and plug in — Kadr only reads them on mains power."
+        }
+        if controller.indexing.isRunning {
+            return "Kadr is still reading your captures. Try again in a moment."
+        }
+        return "No capture contains that text, and no window or app name matches it."
+    }
+
     private var footer: some View {
         HStack {
             storageMeter
             Spacer()
+            if controller.indexing.isRunning {
+                Label("Indexing…", systemImage: "text.magnifyingglass")
+                    .foregroundStyle(.secondary)
+            }
             if !selection.isEmpty {
                 Text("\(selection.count) selected")
                     .foregroundStyle(.secondary)
@@ -249,6 +295,13 @@ private struct HistoryCell: View {
                 if record.kind == .video {
                     Image(systemName: "play.circle.fill")
                         .font(.title)
+                        .foregroundStyle(.white, .black.opacity(0.45))
+                }
+                // A project looks like the capture it is built on, so it needs a badge to
+                // say that opening it reopens an editing session (docs/06 M24).
+                if record.kind == .project {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.title3)
                         .foregroundStyle(.white, .black.opacity(0.45))
                 }
             }

@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 /// One editor window over one capture (docs/03 §3).
 @MainActor
-final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisting {
+final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisting, SubjectLifting {
     enum OpenError: LocalizedError {
         case unreadableImage(URL)
 
@@ -72,7 +72,8 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         let root = EditorRootView(
             model: model,
             baseImage: baseImage,
-            redactionAssist: self
+            redactionAssist: self,
+            subjectLift: self
         ) { [weak self] action in
             self?.export(action)
         }
@@ -109,6 +110,10 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     // MARK: - Export
 
     private func export(_ action: EditorRootView.ExportAction) {
+        if action == .saveProject {
+            saveProject()
+            return
+        }
         do {
             let image = try renderer.render(
                 baseImage: baseImage,
@@ -120,10 +125,46 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 copyToClipboard(image)
             case .save:
                 try save(image)
+            case .saveProject:
+                // Handled above; the project path does not render a flattened image.
+                break
             }
         } catch {
             logger.error("Export failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Writes a re-editable `.kadr` beside the capture, and tells the agent about it.
+    ///
+    /// The agent owns the library, so the project is added to History through the URL
+    /// scheme rather than by this process reaching into the store (docs/03 §8.4,
+    /// docs/06 M24). If the agent is not running the file is still written — the save is
+    /// the promise, the library entry is the convenience.
+    private func saveProject() {
+        let destination = fileURL
+            .deletingPathExtension()
+            .appendingPathExtension(KadrDocumentFile.fileExtension)
+        do {
+            let png = try Self.pngData(of: baseImage)
+            try KadrDocumentFile.write(
+                KadrDocumentFile.Contents(document: model.document, baseImagePNG: png),
+                to: destination
+            )
+            logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
+            addToLibrary(destination)
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
+        } catch {
+            logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func addToLibrary(_ url: URL) {
+        var components = URLComponents()
+        components.scheme = "kadr"
+        components.host = "add-to-history"
+        components.queryItems = [URLQueryItem(name: "path", value: url.path)]
+        guard let target = components.url else { return }
+        NSWorkspace.shared.open(target)
     }
 
     private func copyToClipboard(_ image: CGImage) {
@@ -181,5 +222,63 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 includeRedactionCandidates: true
             )
         )
+    }
+
+    /// Asks the helper to segment the subject and hands back the mask (docs/06 M23).
+    ///
+    /// The base image is written to a scratch PNG rather than the capture file being
+    /// passed straight through: a `.kadr` project's base image lives inside a zip, and a
+    /// mask has to match the pixels the document is actually built on.
+    func liftSubject() async throws -> Data? {
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-lift-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+
+        let source = scratch.appendingPathComponent("base.png")
+        try Self.writePNG(baseImage, to: source)
+
+        let response = try await vision.subjectMask(SubjectMaskRequest(
+            sourcePath: source.path,
+            destinationPath: scratch.appendingPathComponent("mask.png").path
+        ))
+        // Let go so the helper can start its idle countdown and give the model back
+        // (docs/04 §1).
+        vision.disconnect()
+
+        guard let maskPath = response.maskPath else { return nil }
+        return try Data(contentsOf: URL(fileURLWithPath: maskPath))
+    }
+
+    private static func pngData(of image: CGImage) throws -> Data {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
+        }
+        return data as Data
+    }
+
+    private static func writePNG(_ image: CGImage, to url: URL) throws {
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw OpenError.unreadableImage(url)
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            throw OpenError.unreadableImage(url)
+        }
     }
 }

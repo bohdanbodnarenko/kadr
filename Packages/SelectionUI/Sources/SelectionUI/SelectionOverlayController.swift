@@ -83,6 +83,8 @@ public struct SelectionResult: Sendable {
 @MainActor
 final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
     private let overlayView: SelectionOverlayView
+    /// Which display this panel covers, so results that arrive later find the right one.
+    let displayID: CGDirectDisplayID
 
     init(
         frozen: FrozenDisplay,
@@ -91,6 +93,7 @@ final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
         purpose: SelectionPurpose
     ) {
         let frame = screen.frame.cgRect
+        displayID = frozen.geometry.displayID
         overlayView = SelectionOverlayView(
             frozenImage: frozen.image,
             bounds: CGRect(origin: .zero, size: frame.size),
@@ -151,6 +154,22 @@ public final class SelectionOverlayController {
     /// Fired when the user toggles precision guides with `C` (docs/03 §7).
     public var onPrecisionModeChanged: ((Bool) -> Void)?
 
+    /// A colour was picked with the eyedropper (docs/03 §3 P3, docs/06 M22).
+    ///
+    /// Separate from the selection outcome because it is a different kind of answer: the
+    /// user wanted a value, not a rectangle, and the overlay dismisses either way.
+    public var onColorPicked: ((ColorPick) -> Void)?
+    private var isEyedropperMode = false
+
+    /// Whether the selection sticks to the edges in the frozen screen (docs/03 §8.3,
+    /// docs/06 M21). The app sets this from Settings → Capture.
+    public var snapsToEdges = true
+    /// How close an edge has to be before the selection takes it, in points.
+    public var snapTolerance: CGFloat = 6
+    /// The detection pass, so a second hotkey abandons the first one's work.
+    private var snapTask: Task<Void, Never>?
+    private var snapping: [CGDirectDisplayID: SelectionSnapping] = [:]
+
     public init(screens: any ScreenProviding = SystemScreens()) {
         self.screens = screens
     }
@@ -173,6 +192,7 @@ public final class SelectionOverlayController {
         purpose: SelectionPurpose = .capture,
         windows: [PickableWindowDescriptor] = [],
         precisionMode: Bool = false,
+        eyedropper: Bool = false,
         signpostState: OSSignpostIntervalState? = nil,
         completion: @escaping (SelectionOutcome?) -> Void
     ) {
@@ -186,6 +206,10 @@ public final class SelectionOverlayController {
         self.mode = mode == .window ? .window : .area
         self.purpose = purpose
         isPrecisionMode = precisionMode
+        // Never inherited from a previous overlay: a capture hotkey means "capture", and
+        // arriving in colour-picking mode because of something you did ten minutes ago
+        // would be baffling. It is on only when this call asked for it (docs/06 M22).
+        isEyedropperMode = eyedropper
         self.freezes = Dictionary(uniqueKeysWithValues: freezes.map { ($0.geometry.displayID, $0) })
         pickableWindows = Self.mapWindows(windows, onto: freezes.map(\.geometry))
         previouslyActiveApp = NSWorkspace.shared.frontmostApplication
@@ -206,6 +230,49 @@ public final class SelectionOverlayController {
             signposter.endInterval("hotkeyToOverlay", signpostState)
         }
         logger.info("Selection overlay presented on \(set.windows.count, privacy: .public) display(s)")
+
+        // Deliberately after the interval closes: finding the edges is a full pass over
+        // every frozen bitmap, and the hotkey→overlay budget has no room for it (PRD §8).
+        // The overlay is already usable; snapping switches on when the answer arrives.
+        detectEdges(in: freezes)
+    }
+
+    /// Finds the straight edges in each frozen display, off the main thread.
+    ///
+    /// One display at a time and cancellable: on a three-display setup the display the
+    /// user is actually pointing at should not wait behind the other two, and a second
+    /// hotkey should abandon the work rather than finish it for an overlay that is gone.
+    private func detectEdges(in freezes: [FrozenDisplay]) {
+        snapTask?.cancel()
+        snapping = [:]
+        guard snapsToEdges else { return }
+
+        let tolerance = snapTolerance
+        snapTask = Task { [weak self] in
+            for frozen in freezes {
+                guard !Task.isCancelled else { return }
+                let image = frozen.image
+                let candidates = await Task.detached(priority: .userInitiated) {
+                    EdgeDetector.candidates(in: image)
+                }.value
+                guard !Task.isCancelled else { return }
+                self?.applySnapping(
+                    SelectionSnapping(
+                        candidates: candidates,
+                        scale: frozen.geometry.scale.factor,
+                        tolerance: tolerance
+                    ),
+                    to: frozen.geometry.displayID
+                )
+            }
+        }
+    }
+
+    private func applySnapping(_ value: SelectionSnapping, to displayID: CGDirectDisplayID) {
+        snapping[displayID] = value
+        windowSet?.windows.values
+            .first { $0.displayID == displayID }?
+            .view.setSnapping(value)
     }
 
     /// Tears the overlay down without a selection.
@@ -213,10 +280,31 @@ public final class SelectionOverlayController {
         dismiss(result: nil)
     }
 
+    /// Wires one panel's colour picking: the mode follows every display, and a pick
+    /// answers before the overlay is torn down (docs/06 M22).
+    private func configureEyedropper(on panel: SelectionPanel) {
+        panel.view.setEyedropperMode(isEyedropperMode)
+        panel.view.onEyedropperModeChanged = { [weak self] enabled in
+            guard let self else { return }
+            isEyedropperMode = enabled
+            for panel in windowSet?.windows.values ?? [:].values {
+                panel.view.setEyedropperMode(enabled)
+            }
+        }
+        panel.view.onPickColor = { [weak self] pick in
+            guard let self else { return }
+            // Report before dismissing: tearing the overlay down drops the frozen bitmap
+            // the pick was read out of.
+            onColorPicked?(pick)
+            dismiss(result: nil)
+        }
+    }
+
     private func makePanel(for descriptor: ScreenDescriptor) -> SelectionPanel? {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
         let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: purpose)
         panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
+        panel.view.setSnapping(snapping[descriptor.displayID])
         panel.view.setPrecisionMode(isPrecisionMode)
 
         panel.view.onPrecisionModeChanged = { [weak self] enabled in
@@ -242,6 +330,8 @@ public final class SelectionOverlayController {
                 togglesShadow: togglesShadow
             )))
         }
+
+        configureEyedropper(on: panel)
 
         panel.view.onCancel = { [weak self] in
             self?.dismiss(result: nil)

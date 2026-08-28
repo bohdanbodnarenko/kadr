@@ -70,11 +70,19 @@ final class LoupeLayerGroup {
         container.isHidden = true
     }
 
+    /// The colour under a point, for the eyedropper (docs/06 M22).
+    func color(at point: CGPoint) -> PixelColor? {
+        sampler.color(at: point)
+    }
+
     /// Moves the loupe to the pointer and refreshes what it shows.
     ///
     /// Called on every mouse-moved event, so it does no allocation beyond the crop and
     /// runs inside the caller's disabled-action transaction.
-    func update(pointer: CGPoint, within bounds: CGRect) {
+    ///
+    /// - Parameter readout: what the strip under the loupe should say. `nil` uses the
+    ///   default — the pointer's coordinates and the colour's hex.
+    func update(pointer: CGPoint, within bounds: CGRect, readout: String? = nil) {
         let sourceSide = Self.side / Self.zoom
         guard let region = sampler.magnifiedRegion(around: pointer, sideInPoints: sourceSide) else {
             hide()
@@ -84,11 +92,15 @@ final class LoupeLayerGroup {
         imageLayer.contents = region.image
         container.isHidden = false
 
-        let colour = sampler.color(at: pointer)
-        readoutLayer.string = [
-            DimensionFormatter.pointerText(at: pointer),
-            colour?.hexText
-        ].compactMap(\.self).joined(separator: "  ")
+        if let readout {
+            readoutLayer.string = readout
+        } else {
+            let colour = sampler.color(at: pointer)
+            readoutLayer.string = [
+                DimensionFormatter.pointerText(at: pointer),
+                colour?.hexText
+            ].compactMap(\.self).joined(separator: "  ")
+        }
 
         updateGrid(pixelsAcross: region.rect.width)
         position(near: pointer, within: bounds)

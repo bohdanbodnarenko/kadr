@@ -86,15 +86,10 @@ if [ -z "$PID" ]; then
     fi
     echo "• the app could not be launched here — runtime budgets skipped"
     note "this needs a logged-in GUI session; pass --require-run to make it fatal"
-    # The static budget still applies wherever this runs.
-    SIZE_KB=$(du -sk "$APP" | cut -f1)
-    SIZE_MB=$((SIZE_KB / 1024))
-    if [ "$SIZE_MB" -ge 15 ]; then
-        fail "bundle ${SIZE_MB} MB, over the 15 MB budget"
-        exit 1
-    fi
-    pass "bundle ${SIZE_MB} MB (budget < 15 MB)"
-    exit 0
+    # The static budget still applies wherever this runs, and Scripts/check-size.sh is
+    # what measures it — see the note by the bundle-size section below.
+    Scripts/check-size.sh "$APP"
+    exit $?
 fi
 
 # The app logs its own launch-to-status-item interval; read it back rather than timing
@@ -158,12 +153,17 @@ else
 fi
 
 # ---------------------------------------------------------------- bundle size
+#
+# Delegated to Scripts/check-size.sh rather than measured here. The PRD §8 budget is on
+# the *download* — "< 15 MB DMG" — and `du` on an unstripped .app answers a different
+# question by a factor of three, which is how the two scripts ended up disagreeing about
+# whether the same build passed. One budget, one measurement.
 SIZE_KB=$(du -sk "$APP" | cut -f1)
 SIZE_MB=$((SIZE_KB / 1024))
-if [ "$SIZE_MB" -ge 15 ]; then
-    fail "bundle ${SIZE_MB} MB, over the 15 MB budget"
+if Scripts/check-size.sh "$APP" > /dev/null 2>&1; then
+    pass "download size within the PRD §8 budget (Scripts/check-size.sh)"
 else
-    pass "bundle ${SIZE_MB} MB (budget < 15 MB)"
+    fail "download size over the 15 MB budget — run Scripts/check-size.sh for the detail"
 fi
 
 pkill -x Kadr 2>/dev/null

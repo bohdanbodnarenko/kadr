@@ -12,6 +12,11 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     private var shapeKind: ShapeKind
     private var textStyle: TextStyle
     private var redactionStyle: RedactionStyle
+    /// Optional on the wire, not in the API: a synthesized `Decodable` throws on a
+    /// missing key for a non-optional property, so a memory encoded before this existed
+    /// would fail to decode. Optional storage makes adding a remembered choice a
+    /// non-breaking change.
+    private var measuresBox: Bool?
 
     public init() {
         strokes = [:]
@@ -58,12 +63,21 @@ public struct StyleMemory: Codable, Hashable, Sendable {
         set { redactionStyle = newValue }
     }
 
+    /// Whether the measure tool draws a box or a distance (docs/06 M21). Remembered like
+    /// every other per-tool choice, so a session spent measuring boxes stays that way.
+    public var lastMeasuresBox: Bool {
+        get { measuresBox ?? false }
+        set { measuresBox = newValue }
+    }
+
     /// Sensible starting points per tool, so the first use of each is already usable.
     static func defaultStroke(for tool: AnnotationTool) -> StrokeStyle {
         switch tool {
         case .highlighter: StrokeStyle(color: .highlighterYellow, width: 20)
         case .freehand: StrokeStyle(width: 3)
-        case .counter, .text, .redaction, .crop, .beautify: StrokeStyle()
+        // A measurement is a thin line whose job is to be precise, not loud.
+        case .measure: StrokeStyle(color: .annotationRed, width: 2)
+        case .counter, .text, .redaction, .crop, .beautify, .subjectLift, .image: StrokeStyle()
         case .arrow, .shape, .line: StrokeStyle()
         }
     }

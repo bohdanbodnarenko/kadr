@@ -92,6 +92,12 @@ public struct PixelColor: Hashable, Sendable {
         DimensionFormatter.hexText(red: red, green: green, blue: blue)
     }
 
+    /// The same colour as the value the conversions and contrast maths work on
+    /// (docs/06 M22).
+    public var rgb: SampledColor {
+        SampledColor(red8: red, green8: green, blue8: blue)
+    }
+
     /// Whether to draw the loupe's readout in black or white over this colour.
     ///
     /// Rec. 601 luma, which is the cheap standard choice for a legibility decision.

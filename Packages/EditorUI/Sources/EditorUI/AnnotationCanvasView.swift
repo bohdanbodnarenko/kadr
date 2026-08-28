@@ -12,7 +12,9 @@ import Shared
 /// body re-evaluation, no layout pass, no diffing.
 @MainActor
 public final class AnnotationCanvasView: NSView {
-    private let model: EditorDocumentModel
+    /// Internal, not private: the drop handling lives in
+    /// `AnnotationCanvasView+Drop.swift`, and `private` is file-scoped.
+    let model: EditorDocumentModel
     private let backdropLayer = CALayer()
     private let gradientLayer = CAGradientLayer()
     private let shadowLayer = CALayer()
@@ -27,6 +29,12 @@ public final class AnnotationCanvasView: NSView {
     /// Layers by annotation, so an update finds its own layer without a search.
     private var layers: [AnnotationID: CALayer] = [:]
     private var draftShapeLayer: CALayer?
+    /// Kept so the measure tool can read the image's straight edges the first time it is
+    /// used — never at open, because most sessions never measure anything (docs/06 M21).
+    private let baseImage: CGImage
+    private let subjectLift = SubjectLiftCompositor()
+    /// The lift the base layer currently shows, so the composite is not redone per edit.
+    private var liftedFrom: SubjectLiftSpec?
     private var marqueeLayer = CAShapeLayer()
 
     /// Called whenever the document changes, so the window can update its title bar.
@@ -34,6 +42,7 @@ public final class AnnotationCanvasView: NSView {
 
     public init(model: EditorDocumentModel, baseImage: CGImage) {
         self.model = model
+        self.baseImage = baseImage
         super.init(frame: CGRect(origin: .zero, size: model.document.baseImage.size))
 
         wantsLayer = true
@@ -90,7 +99,11 @@ public final class AnnotationCanvasView: NSView {
 
         let scale = window?.backingScaleFactor ?? 2
         for command in model.document.commands {
-            guard let layer = AnnotationLayerFactory.makeLayer(for: command, contentsScale: scale) else {
+            guard let layer = AnnotationLayerFactory.makeLayer(
+                for: command,
+                contentsScale: scale,
+                imageScale: imageScale
+            ) else {
                 continue
             }
             annotationLayer.addSublayer(layer)
@@ -210,7 +223,15 @@ public final class AnnotationCanvasView: NSView {
 
     /// Maps a click on the view onto image-space points (beautify offsets the card).
     private func imagePoint(from event: NSEvent) -> CGPoint {
-        let viewPoint = convert(event.locationInWindow, from: nil)
+        imagePoint(fromWindowPoint: event.locationInWindow)
+    }
+
+    /// The same mapping from a bare window point.
+    ///
+    /// Internal, not private: a drop reports a location rather than an event, and the
+    /// drop handling lives in `AnnotationCanvasView+Drop.swift`.
+    func imagePoint(fromWindowPoint windowPoint: CGPoint) -> CGPoint {
+        let viewPoint = convert(windowPoint, from: nil)
         guard model.document.beautify != nil, let layout = model.document.beautifyLayout else {
             return viewPoint
         }
@@ -235,10 +256,10 @@ public final class AnnotationCanvasView: NSView {
 
         let scale = window?.backingScaleFactor ?? 2
         if let existing = draftShapeLayer, existing.name == draft.id.rawValue.uuidString {
-            AnnotationLayerFactory.update(existing, for: draft)
+            AnnotationLayerFactory.update(existing, for: draft, imageScale: imageScale)
         } else {
             draftShapeLayer?.removeFromSuperlayer()
-            draftShapeLayer = AnnotationLayerFactory.makeLayer(for: draft, contentsScale: scale)
+            draftShapeLayer = AnnotationLayerFactory.makeLayer(for: draft, contentsScale: scale, imageScale: imageScale)
             if let layer = draftShapeLayer {
                 draftLayer.addSublayer(layer)
             }
@@ -286,6 +307,7 @@ public final class AnnotationCanvasView: NSView {
 
     override public func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        prepareEdgesIfMeasuring()
         model.pointerDown(at: imagePoint(from: event), modifiers: modifiers(from: event))
         refreshAfterEdit()
     }
@@ -306,6 +328,20 @@ public final class AnnotationCanvasView: NSView {
         rebuildAnnotationLayers()
     }
 
+    /// Reads the base image's edges the first time the measure tool is used.
+    ///
+    /// Lazy on purpose: it is one pass over every pixel of the capture, and a session that
+    /// never measures anything should never pay for it.
+    /// The base image's pixels per point, which the measurement readout needs.
+    private var imageScale: CGFloat {
+        model.document.baseImage.scale
+    }
+
+    private func prepareEdgesIfMeasuring() {
+        guard model.tool == .measure, model.edgeCandidates.isEmpty else { return }
+        model.loadEdges(from: baseImage)
+    }
+
     /// While dragging a selection, update the moved layers in place rather than rebuilding
     /// the tree — the whole point of keeping a layer per annotation.
     private func rebuildAnnotationLayersDuringMove() {
@@ -315,7 +351,7 @@ public final class AnnotationCanvasView: NSView {
 
         for command in model.document.commands where model.selection.contains(command.id) {
             guard let layer = layers[command.id] else { continue }
-            AnnotationLayerFactory.update(layer, for: command)
+            AnnotationLayerFactory.update(layer, for: command, imageScale: imageScale)
         }
     }
 
@@ -361,12 +397,27 @@ public final class AnnotationCanvasView: NSView {
     }
 
     private func refreshAfterEdit() {
+        refreshBaseImage()
         rebuildAnnotationLayers()
+    }
+
+    /// Re-composites the base layer when background removal is applied or undone
+    /// (docs/06 M23).
+    ///
+    /// Cached against the spec that produced it: the composite is a full-image CoreImage
+    /// pass, and redoing it on every mouse-up while the user draws arrows over a cut-out
+    /// would be visible.
+    private func refreshBaseImage() {
+        let spec = model.document.subjectLift
+        guard spec != liftedFrom else { return }
+        liftedFrom = spec
+        baseLayer.contents = spec.map { subjectLift.apply($0, to: baseImage) } ?? baseImage
     }
 
     /// Called after undo, redo or an inspector change.
     public func documentChangedExternally() {
         layoutCanvasChrome()
+        refreshBaseImage()
         rebuildAnnotationLayers()
     }
 

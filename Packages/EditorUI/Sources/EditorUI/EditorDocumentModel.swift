@@ -44,6 +44,19 @@ public final class EditorDocumentModel {
     public internal(set) var redactionAssistError: String?
     public internal(set) var isRedactionReviewActive = false
 
+    /// The straight lines found in the base image, for the measure tool (docs/06 M21).
+    ///
+    /// Supplied by the canvas, which is the only thing here that holds the pixels. Empty
+    /// until then, and an empty set simply means nothing snaps — measuring still works.
+    public internal(set) var edgeCandidates: EdgeCandidates = .none
+    /// How close a measurement endpoint has to be to a detected line before it snaps, in
+    /// base-image points. Zero turns snapping off.
+    public var edgeSnapTolerance: CGFloat = 6
+
+    /// Background removal, which is a round trip to the helper (docs/06 M23).
+    public internal(set) var isLiftingSubject = false
+    public internal(set) var subjectLiftError: String?
+
     /// The annotation being drawn right now. It lives outside the document until the
     /// mouse comes up, so a half-drawn arrow never lands in the undo history.
     public private(set) var draft: AnnotationCommand?
@@ -93,7 +106,7 @@ public final class EditorDocumentModel {
             place(annotationTool, at: point)
             return
         }
-        draft = makeDraft(annotationTool, at: point)
+        draft = makeDraft(annotationTool, at: snappedIfMeasuring(point))
     }
 
     public func pointerDragged(to point: CGPoint, modifiers: EditorModifiers = []) {
@@ -114,7 +127,7 @@ public final class EditorDocumentModel {
         }
 
         guard var draft else { return }
-        update(&draft, from: origin, to: point, modifiers: modifiers)
+        update(&draft, from: origin, to: snappedIfMeasuring(point), modifiers: modifiers)
         self.draft = draft
     }
 
@@ -135,6 +148,14 @@ public final class EditorDocumentModel {
                     ? document.selection.union(ids)
                     : ids
             }
+            return
+        }
+
+        // A click with the measure tool and no drag means "measure the thing under the
+        // pointer" — the edge-snap payoff (docs/06 M21).
+        if let box = measurementForClick(on: draft) {
+            document.add(box)
+            document.selection = [box.id]
             return
         }
 
@@ -254,7 +275,14 @@ public final class EditorDocumentModel {
             ))
         case .crop:
             return .crop(CropSpec(rect: CGRect(origin: point, size: .zero)))
-        case .counter, .beautify:
+        case .measure:
+            return .measure(MeasureSpec(
+                start: point,
+                end: point,
+                measuresBox: styleMemory.lastMeasuresBox,
+                stroke: stroke
+            ))
+        case .counter, .beautify, .subjectLift, .image:
             return nil
         }
     }
@@ -301,7 +329,10 @@ public final class EditorDocumentModel {
         case var .highlighter(spec):
             spec.points.append(point)
             draft = .highlighter(spec)
-        case .counter, .beautify:
+        case var .measure(spec):
+            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
+            draft = .measure(spec)
+        case .counter, .beautify, .subjectLift, .image:
             break
         }
     }
@@ -325,7 +356,10 @@ public final class EditorDocumentModel {
             styleMemory.lastTextStyle = spec.style
         case let .redaction(spec):
             styleMemory.lastRedactionStyle = spec.style
-        case .counter, .crop, .beautify:
+        case let .measure(spec):
+            styleMemory.remember(spec.stroke, for: .measure)
+            styleMemory.lastMeasuresBox = spec.measuresBox
+        case .counter, .crop, .beautify, .subjectLift, .image:
             break
         }
     }
@@ -391,56 +425,15 @@ public final class EditorDocumentModel {
             return spec.points.count > 1
         case let .highlighter(spec):
             return spec.points.count > 1
+        case let .measure(spec):
+            // A click that did not drag is not a failed measurement — it is a request to
+            // measure the element under the pointer, handled in `pointerUp`.
+            return spec.length >= minimum
         // A text box starts empty by design; the user types into it next.
         case .text:
             return true
-        case .counter, .beautify:
+        case .counter, .beautify, .subjectLift, .image:
             return true
-        }
-    }
-
-    /// Moves an annotation, whatever its geometry.
-    static func translated(_ command: AnnotationCommand, by delta: CGSize) -> AnnotationCommand {
-        func move(_ point: CGPoint) -> CGPoint {
-            CGPoint(x: point.x + delta.width, y: point.y + delta.height)
-        }
-        func move(_ rect: CGRect) -> CGRect {
-            rect.offsetBy(dx: delta.width, dy: delta.height)
-        }
-
-        switch command {
-        case var .arrow(spec):
-            spec.start = move(spec.start)
-            spec.end = move(spec.end)
-            spec.controlPoint = spec.controlPoint.map(move)
-            return .arrow(spec)
-        case var .line(spec):
-            spec.start = move(spec.start)
-            spec.end = move(spec.end)
-            return .line(spec)
-        case var .shape(spec):
-            spec.rect = move(spec.rect)
-            return .shape(spec)
-        case var .freehand(spec):
-            spec.points = spec.points.map(move)
-            return .freehand(spec)
-        case var .highlighter(spec):
-            spec.points = spec.points.map(move)
-            return .highlighter(spec)
-        case var .text(spec):
-            spec.rect = move(spec.rect)
-            return .text(spec)
-        case var .redaction(spec):
-            spec.rect = move(spec.rect)
-            return .redaction(spec)
-        case var .counter(spec):
-            spec.center = move(spec.center)
-            return .counter(spec)
-        case var .crop(spec):
-            spec.rect = move(spec.rect)
-            return .crop(spec)
-        case .beautify:
-            return command
         }
     }
 }

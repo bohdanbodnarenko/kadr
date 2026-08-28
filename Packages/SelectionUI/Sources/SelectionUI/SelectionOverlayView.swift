@@ -33,7 +33,10 @@ final class SelectionOverlayView: NSView {
     var interaction: SelectionInteraction
     var windowPick = WindowPickInteraction()
     var sizeEntry = NumericSizeEntry()
-    private let loupe: LoupeLayerGroup
+    /// Internal, not private: the eyedropper half lives in
+    /// `SelectionOverlayView+Eyedropper.swift`, and `private` is file-scoped.
+    let loupe: LoupeLayerGroup
+    private let ruler: RulerLayerGroup
     private let windowHighlight: WindowHighlightLayerGroup
     private let displayScale: DisplayScale
     private let logger = KadrLog.logger(.overlay)
@@ -54,6 +57,23 @@ final class SelectionOverlayView: NSView {
     var onPrecisionModeChanged: ((Bool) -> Void)?
     var isPrecisionMode = false
 
+    // MARK: Eyedropper (docs/03 §3 P3, docs/06 M22)
+
+    /// `E` turns the loupe into a colour picker.
+    ///
+    /// The loupe already reads pixels out of the frozen image, which is what makes this
+    /// nearly free — and what makes it *correct*: the colour reported is the colour in the
+    /// file, not a re-sample of a screen that has since changed (docs/04 §4.2).
+    var isEyedropperMode = false
+    /// Which notation the readout uses. `F` cycles it.
+    var colorFormat: ColorFormat = .hex
+    /// The second sample, for the contrast readout. `X` takes it.
+    var comparisonColor: SampledColor?
+    /// Return in eyedropper mode reports the pick instead of committing a selection.
+    var onPickColor: ((ColorPick) -> Void)?
+    /// The eyedropper was toggled, so every other display's overlay can follow.
+    var onEyedropperModeChanged: ((Bool) -> Void)?
+
     // MARK: Geometry constants
 
     private static let badgeHeight: CGFloat = 22
@@ -70,6 +90,7 @@ final class SelectionOverlayView: NSView {
         interaction = SelectionInteraction(bounds: CGRect(origin: .zero, size: bounds.size))
         windowHighlight = WindowHighlightLayerGroup(scale: scale)
         loupe = LoupeLayerGroup(sampler: LoupeSampler(image: frozenImage, scale: scale), scale: scale)
+        ruler = RulerLayerGroup(scale: scale)
         displayScale = scale
         super.init(frame: bounds)
 
@@ -144,6 +165,7 @@ final class SelectionOverlayView: NSView {
         badgeTextLayer.isHidden = true
         root.addSublayer(badgeTextLayer)
 
+        root.addSublayer(ruler.container)
         root.addSublayer(windowHighlight.container)
         root.addSublayer(loupe.container)
         startMarchingAnts()
@@ -252,6 +274,9 @@ final class SelectionOverlayView: NSView {
         if event.modifierFlags.contains(.shift) {
             modifiers.insert(.lockAspect)
         }
+        if event.modifierFlags.contains(.command) {
+            modifiers.insert(.freeform)
+        }
         return modifiers
     }
 
@@ -272,6 +297,7 @@ final class SelectionOverlayView: NSView {
             windowHighlight.hide()
             updateDimming()
             updateCrosshair()
+            updateRuler()
             updateBadge()
             updateLoupe()
         case .window:
@@ -286,6 +312,7 @@ final class SelectionOverlayView: NSView {
         badgeBackgroundLayer.isHidden = true
         badgeTextLayer.isHidden = true
         loupe.hide()
+        ruler.hide()
 
         let path = CGMutablePath()
         path.addRect(bounds)
@@ -328,6 +355,15 @@ final class SelectionOverlayView: NSView {
         crosshairLayer.path = path
     }
 
+    /// The pixel ruler, which rides along with precision mode (docs/06 M21).
+    private func updateRuler() {
+        guard isPrecisionMode, let rect = interaction.rect, !rect.isEmpty else {
+            ruler.hide()
+            return
+        }
+        ruler.show(along: rect)
+    }
+
     private func updateBadge() {
         let measurement: String? = if !sizeEntry.isEmpty {
             sizeEntry.displayText
@@ -339,7 +375,10 @@ final class SelectionOverlayView: NSView {
             nil
         }
         // The badge names the mode as well as the size, so Capture Text is unmistakable.
-        let text = [purpose.badge, measurement].compactMap(\.self).joined(separator: "  ")
+        // The eyedropper says so too, and lists its own keys — nobody guesses `F` and `X`.
+        let modeBadge = isEyedropperMode ? "COLOUR  F: format  X: compare" : purpose.badge
+        let text = [modeBadge, isEyedropperMode ? nil : measurement].compactMap(\.self)
+            .joined(separator: "  ")
             .nilIfEmpty
 
         guard let text, let rect = interaction.rect ?? interaction.pointer.map({
@@ -375,7 +414,7 @@ final class SelectionOverlayView: NSView {
             loupe.hide()
             return
         }
-        loupe.update(pointer: pointer, within: bounds)
+        loupe.update(pointer: pointer, within: bounds, readout: eyedropperReadout)
     }
 
     /// The windows this display can offer for picking (docs/03 §1.2).
@@ -393,6 +432,11 @@ final class SelectionOverlayView: NSView {
             windowPick.pointerMoved(to: pointer)
         }
         redraw()
+    }
+
+    /// Hands the view the edges the selection should stick to (docs/06 M21).
+    func setSnapping(_ snapping: SelectionSnapping?) {
+        interaction.snapping = snapping
     }
 
     func setPrecisionMode(_ enabled: Bool) {

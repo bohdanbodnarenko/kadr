@@ -13,6 +13,8 @@ public struct SelectionModifiers: OptionSet, Sendable, Hashable {
     public static let fromCenter = SelectionModifiers(rawValue: 1 << 0)
     /// ⇧ — lock to a square.
     public static let lockAspect = SelectionModifiers(rawValue: 1 << 1)
+    /// ⌘ — ignore the detected edges for this drag (docs/06 M21).
+    public static let freeform = SelectionModifiers(rawValue: 1 << 2)
 }
 
 public enum NudgeDirection: Sendable, Hashable, CaseIterable {
@@ -57,6 +59,13 @@ public struct SelectionInteraction: Equatable, Sendable {
     /// The current pointer position, used for the crosshair and the loupe.
     public private(set) var pointer: CGPoint?
     public private(set) var rect: CGRect?
+
+    /// The edges in the frozen image this selection snaps to (docs/06 M21).
+    ///
+    /// Set after detection finishes rather than at present time: finding the edges is one
+    /// pass over a 5K bitmap, and the hotkey→overlay budget has no room for it (PRD §8).
+    /// Until it arrives, dragging simply does not snap.
+    public var snapping: SelectionSnapping?
 
     /// True while Space is held, which turns a drag into a move (docs/03 §1.1).
     public private(set) var isMovingSelection = false
@@ -111,7 +120,18 @@ public struct SelectionInteraction: Equatable, Sendable {
                 height: abs(corner.y - anchor.y)
             )
         }
-        rect = unclamped.intersection(bounds)
+        rect = snapped(unclamped.intersection(bounds), modifiers: modifiers)
+    }
+
+    /// Applies edge snapping, unless the user asked for it not to be.
+    ///
+    /// ⌘ is the escape hatch: a snap that fights the user is worse than no snap, and a
+    /// modifier they are already holding for other reasons would be the wrong choice.
+    private func snapped(_ rect: CGRect, modifiers: SelectionModifiers) -> CGRect {
+        guard let snapping, !modifiers.contains(.freeform), !modifiers.contains(.lockAspect) else {
+            return rect
+        }
+        return snapping.snapped(rect).intersection(bounds)
     }
 
     public mutating func end() {

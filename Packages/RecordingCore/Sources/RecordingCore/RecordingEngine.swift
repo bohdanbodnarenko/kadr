@@ -195,6 +195,14 @@ public actor RecordingEngine {
         configuration.queueDepth = 3
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
 
+        if options.recordsHDR, #available(macOS 15.0, *) {
+            // Ten bits per channel, and the display's own range rather than a canonical
+            // one — a screen recording should look like the screen (docs/04 §4.3).
+            configuration.captureDynamicRange = .hdrLocalDisplay
+            configuration.pixelFormat = kCVPixelFormatType_ARGB2101010LEPacked
+            configuration.colorSpaceName = CGColorSpace.itur_2100_HLG
+        }
+
         let (stream, output) = try makeStream(filter: filter, configuration: configuration)
         self.stream = stream
         self.output = output

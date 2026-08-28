@@ -1,4 +1,5 @@
 import AppKit
+import AutomationKit
 import os
 import OverlayKit
 import SettingsKit
@@ -41,20 +42,30 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window != nil
     }
 
-    func show() {
+    /// - Parameter tab: which pane to land on, for `kadr open-settings --tab …`
+    ///   (docs/03 §8.4). `nil` leaves the window wherever the user left it.
+    func show(tab: SettingsTab? = nil) {
         // The user can flip the login item in System Settings behind our back.
         loginItem.refresh()
 
         if let window {
+            // A window that is already open cannot have its tab changed without rebuilding
+            // the SwiftUI tree, and rebuilding it would throw away whatever the user was
+            // typing. Bringing it forward is the honest thing to do.
             window.makeKeyAndOrderFront(nil)
             return
         }
 
         let hosting = NSHostingView(
-            rootView: SettingsView(settings: settings, loginItem: loginItem, history: history)
+            rootView: SettingsView(
+                settings: settings,
+                loginItem: loginItem,
+                history: history,
+                selection: tab ?? .general
+            )
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 420),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false

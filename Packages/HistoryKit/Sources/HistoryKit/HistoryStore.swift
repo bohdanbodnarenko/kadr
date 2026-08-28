@@ -111,17 +111,45 @@ public actor HistoryStore {
         }
 
         return try await dbPool.read { db in
-            var request = HistoryRecord.order(Column("captured_at").desc)
-            if let kind = filter.kind {
-                request = request.filter(Column("kind") == kind.rawValue)
-            }
-            if let after = filter.capturedAfter {
-                request = request.filter(Column("captured_at") >= after)
-            }
-            if let before = filter.capturedBefore {
-                request = request.filter(Column("captured_at") <= before)
-            }
+            let request = Self.apply(filter, to: HistoryRecord.order(Column("captured_at").desc))
             return try request.limit(limit, offset: offset).fetchAll(db)
+        }
+    }
+
+    /// Narrows a query by the browser's type and date pickers (docs/03 §5).
+    ///
+    /// Shared by browsing and searching so a filter cannot mean one thing in the grid and
+    /// something else once the user types into the search field.
+    static func apply(
+        _ filter: HistoryFilter,
+        to request: QueryInterfaceRequest<HistoryRecord>
+    ) -> QueryInterfaceRequest<HistoryRecord> {
+        var request = request
+        if let kind = filter.kind {
+            request = request.filter(Column("kind") == kind.rawValue)
+        }
+        if let after = filter.capturedAfter {
+            request = request.filter(Column("captured_at") >= after)
+        }
+        if let before = filter.capturedBefore {
+            request = request.filter(Column("captured_at") <= before)
+        }
+        return request
+    }
+
+    /// Database access for the search and indexing API in `HistoryIndexing.swift`.
+    ///
+    /// Internal rather than private: the actor is still the only writer, and keeping the
+    /// pool itself unreachable is what makes that true.
+    func read<Value: Sendable>(_ block: @Sendable @escaping (Database) throws -> Value) async throws -> Value {
+        try await dbPool.read(block)
+    }
+
+    func write<Value: Sendable>(_ block: @Sendable @escaping (Database) throws -> Value) async throws -> Value {
+        do {
+            return try await dbPool.write(block)
+        } catch {
+            throw HistoryError.database(error.localizedDescription)
         }
     }
 
@@ -201,6 +229,7 @@ public actor HistoryStore {
 
         try await dbPool.write { db in
             try db.execute(sql: "DELETE FROM capture_records")
+            try db.execute(sql: "DELETE FROM capture_fts")
         }
 
         var inserted = 0
@@ -265,6 +294,8 @@ public actor HistoryStore {
 
         try await dbPool.write { db in
             try db.execute(sql: "DELETE FROM capture_records WHERE id = ?", arguments: [id.uuidString])
+            // The index is a separate table with no foreign key, so it has to be told.
+            try db.execute(sql: "DELETE FROM capture_fts WHERE id = ?", arguments: [id.uuidString])
         }
         try? FileManager.default.removeItem(at: layout.sidecarURL(id: id))
 

@@ -74,7 +74,8 @@ struct CaptureCommandTests {
             .captureWindow,
             .captureFullscreen,
             .captureScrolling,
-            .captureText
+            .captureText,
+            .pickColor
         ])
         #expect(CaptureCommand.menuCommands.allSatisfy { !$0.title.isEmpty })
         // Repeating the last region is a hotkey, not a menu item (docs/03 §8.1).

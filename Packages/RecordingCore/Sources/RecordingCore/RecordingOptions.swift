@@ -2,6 +2,7 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import Shared
+import VideoToolbox
 
 /// Video codecs Kadr records with (docs/03 §1.8).
 public enum RecordingCodec: String, CaseIterable, Sendable {
@@ -35,6 +36,14 @@ public enum RecordingFrameRate: Int, CaseIterable, Sendable {
     public var title: String {
         "\(rawValue) fps"
     }
+
+    /// The preset closest to a requested rate.
+    ///
+    /// Automation may ask for `--fps 45` (docs/03 §8.4); the encoder has three presets,
+    /// and recording at the nearest one is a better answer than refusing to record.
+    public static func nearest(to rate: Int) -> RecordingFrameRate {
+        allCases.min { abs($0.rawValue - rate) < abs($1.rawValue - rate) } ?? .sixty
+    }
 }
 
 /// What a recording captures.
@@ -47,6 +56,8 @@ public struct RecordingOptions: Sendable, Hashable {
     public var showsCursor: Bool
     /// Kadr's own sound never belongs in a recording of the user's screen.
     public var excludesOwnAudio: Bool
+    /// Keep the display's HDR range (macOS 15+, docs/04 §4.3, docs/06 M25).
+    public var dynamicRange: DynamicRange
 
     public init(
         frameRate: RecordingFrameRate = .sixty,
@@ -54,7 +65,8 @@ public struct RecordingOptions: Sendable, Hashable {
         capturesSystemAudio: Bool = true,
         capturesMicrophone: Bool = false,
         showsCursor: Bool = true,
-        excludesOwnAudio: Bool = true
+        excludesOwnAudio: Bool = true,
+        dynamicRange: DynamicRange = .standard
     ) {
         self.frameRate = frameRate
         self.codec = codec
@@ -62,6 +74,14 @@ public struct RecordingOptions: Sendable, Hashable {
         self.capturesMicrophone = capturesMicrophone
         self.showsCursor = showsCursor
         self.excludesOwnAudio = excludesOwnAudio
+        // Resolved here rather than at the call site, so a recording started on macOS 14
+        // with the setting on records standard rather than failing.
+        self.dynamicRange = dynamicRange.resolved
+    }
+
+    /// HDR needs a codec that can carry ten bits; H.264 as Kadr configures it cannot.
+    public var recordsHDR: Bool {
+        dynamicRange.isHigh && codec == .hevc
     }
 
     /// A bit rate that holds up for screen content at this size and frame rate.
@@ -77,18 +97,33 @@ public struct RecordingOptions: Sendable, Hashable {
 
     /// AVFoundation settings for the video track.
     func videoSettings(pixelWidth: Int, pixelHeight: Int) -> [String: Any] {
-        [
+        var compression: [String: Any] = [
+            AVVideoAverageBitRateKey: bitRate(forPixelWidth: pixelWidth, height: pixelHeight),
+            // Two seconds between keyframes: seeking stays responsive without paying
+            // for a keyframe on every static screen.
+            AVVideoMaxKeyFrameIntervalDurationKey: 2,
+            AVVideoExpectedSourceFrameRateKey: frameRate.rawValue
+        ]
+        var settings: [String: Any] = [
             AVVideoCodecKey: codec.avCodec,
             AVVideoWidthKey: pixelWidth,
-            AVVideoHeightKey: pixelHeight,
-            AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: bitRate(forPixelWidth: pixelWidth, height: pixelHeight),
-                // Two seconds between keyframes: seeking stays responsive without paying
-                // for a keyframe on every static screen.
-                AVVideoMaxKeyFrameIntervalDurationKey: 2,
-                AVVideoExpectedSourceFrameRateKey: frameRate.rawValue
-            ]
+            AVVideoHeightKey: pixelHeight
         ]
+
+        if recordsHDR {
+            // Main10 plus the HLG tag set: HLG rather than PQ because an HLG file still
+            // looks right on an SDR display, and a screen recording is shared far more
+            // often than it is graded (docs/04 §4.3).
+            compression[AVVideoProfileLevelKey] = kVTProfileLevel_HEVC_Main10_AutoLevel as String
+            settings[AVVideoColorPropertiesKey] = [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020
+            ]
+        }
+
+        settings[AVVideoCompressionPropertiesKey] = compression
+        return settings
     }
 
     /// AVFoundation settings for an audio track.

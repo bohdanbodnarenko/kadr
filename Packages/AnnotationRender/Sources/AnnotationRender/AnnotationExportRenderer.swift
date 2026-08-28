@@ -12,6 +12,7 @@ import Shared
 /// existing at all — which is why this is testable without a window.
 public struct AnnotationExportRenderer: Sendable {
     private let rasterizer = RedactionRasterizer()
+    private let subjectLift = SubjectLiftCompositor()
     private let logger = KadrLog.logger(.capture)
 
     public init() {}
@@ -41,20 +42,21 @@ public struct AnnotationExportRenderer: Sendable {
         // Redactions are burned into the image before anything is drawn over it, so the
         // exported file carries no removable overlay (docs/03 §3).
         let redactions = includeAnnotations ? document.commands.compactMap(\.redaction) : []
-        let source = rasterizer.apply(redactions, to: baseImage, scale: scale, randomSeed: randomSeed)
+        let redacted = rasterizer.apply(redactions, to: baseImage, scale: scale, randomSeed: randomSeed)
+
+        // Background removal is part of what the base image *is*, like a crop — so it
+        // applies even to "copy without annotations", which is about the drawing on top
+        // rather than about the canvas (docs/06 M23).
+        let source = document.subjectLift.map { subjectLift.apply($0, to: redacted) } ?? redacted
 
         let pixelWidth = Int((canvas.width * scale).rounded())
         let pixelHeight = Int((canvas.height * scale).rounded())
         guard pixelWidth > 0, pixelHeight > 0 else { throw RenderError.couldNotCreateContext }
 
-        guard let context = CGContext(
-            data: nil,
+        guard let context = Self.makeContext(
             width: pixelWidth,
             height: pixelHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: source.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            matching: source
         ) else {
             throw RenderError.couldNotCreateContext
         }
@@ -72,7 +74,7 @@ public struct AnnotationExportRenderer: Sendable {
                 includeAnnotations: includeAnnotations,
                 in: context
             ) { command, context in
-                draw(command, in: context)
+                draw(command, in: context, imageScale: scale)
             }
         } else {
             context.translateBy(x: -canvas.minX, y: -canvas.minY)
@@ -83,7 +85,7 @@ public struct AnnotationExportRenderer: Sendable {
             context.draw(source, in: document.baseImage.bounds)
             if includeAnnotations {
                 for command in document.commands {
-                    draw(command, in: context)
+                    draw(command, in: context, imageScale: scale)
                 }
             }
         }
@@ -92,23 +94,70 @@ public struct AnnotationExportRenderer: Sendable {
         return image
     }
 
+    /// A canvas that can hold everything the source image can (docs/06 M25).
+    ///
+    /// An HDR capture is 16 bits per channel, often half-float; rendering it into the
+    /// 8-bit context every other export uses would quantise and clip it, which is exactly
+    /// what capturing in HDR was meant to avoid. Falls back to 8 bits when the deeper
+    /// context cannot be made, because a slightly flattened export beats none.
+    private static func makeContext(width: Int, height: Int, matching source: CGImage) -> CGContext? {
+        let space = source.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+
+        if source.bitsPerComponent > 8 {
+            var info = CGImageAlphaInfo.premultipliedLast.rawValue
+                | CGBitmapInfo.byteOrder16Little.rawValue
+            if source.bitmapInfo.contains(.floatComponents) {
+                info |= CGBitmapInfo.floatComponents.rawValue
+            }
+            if let deep = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 16,
+                bytesPerRow: 0,
+                space: space,
+                bitmapInfo: info
+            ) {
+                return deep
+            }
+        }
+
+        return CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+    }
+
     // MARK: - Commands
 
-    private func draw(_ command: AnnotationCommand, in context: CGContext) {
+    private func draw(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
         switch command {
         case let .arrow(spec): drawArrow(spec, in: context)
         case let .shape(spec): drawShape(spec, in: context)
         case let .line(spec): drawLine(spec, in: context)
         case let .freehand(spec): drawStroke(spec.points, stroke: spec.stroke, in: context)
         case let .highlighter(spec): drawHighlighter(spec, in: context)
+        default: drawContent(command, in: context, imageScale: imageScale)
+        }
+    }
+
+    /// The commands that draw text or an effect — and the three that deliberately draw
+    /// nothing here.
+    private func drawContent(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
+        switch command {
         case let .text(spec): drawText(spec, in: context)
         case let .counter(spec): drawCounter(spec, in: context)
-        // Already burned into the image; drawing it again would be the removable overlay
-        // this design exists to avoid.
-        case .redaction: break
-        // The crop is the canvas, applied by the transform above.
-        case .crop: break
-        case .beautify: break
+        case let .measure(spec): drawMeasure(spec, in: context, imageScale: imageScale)
+        case let .image(spec): drawImage(spec, in: context)
+        // A redaction is already burned into the image; drawing it again would be the
+        // removable overlay this design exists to avoid. The crop and the beautify
+        // backdrop are the canvas itself, applied by the transform above.
+        default: break
         }
     }
 
@@ -269,6 +318,80 @@ public struct AnnotationExportRenderer: Sendable {
         context.translateBy(x: 0, y: spec.rect.midY * 2)
         context.scaleBy(x: 1, y: -1)
         CTFrameDraw(frame, context)
+        context.restoreGState()
+    }
+
+    /// The dimension geometry and its readout (docs/06 M21).
+    ///
+    /// Replayed rather than snapshotted, like every other command, so an exported
+    /// measurement is crisp at the capture's own pixel scale.
+    private func drawMeasure(_ spec: MeasureSpec, in context: CGContext, imageScale: CGFloat) {
+        apply(spec.stroke, to: context)
+        if spec.measuresBox {
+            context.setLineDash(phase: 0, lengths: [6, 4])
+        }
+        context.setLineCap(.butt)
+        context.addPath(MeasureRendering.path(spec))
+        context.strokePath()
+        context.setLineDash(phase: 0, lengths: [])
+
+        let label = MeasureRendering.attributedLabel(spec, imageScale: imageScale)
+        let size = MeasureRendering.labelSize(label)
+        let rect = MeasureRendering.labelRect(spec, size: size)
+
+        if let background = spec.labelStyle.backgroundColor {
+            context.setFillColor(background.cgColor)
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: 4, cornerHeight: 4, transform: nil))
+            context.fillPath()
+        }
+
+        // Text draws in CoreGraphics' own orientation, so the canvas flip is undone here.
+        let line = CTLineCreateWithAttributedString(label)
+        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+        context.saveGState()
+        context.translateBy(x: 0, y: rect.midY * 2)
+        context.scaleBy(x: 1, y: -1)
+        context.textPosition = CGPoint(
+            x: rect.midX - bounds.width / 2 - bounds.minX,
+            y: rect.midY - bounds.height / 2 - bounds.minY
+        )
+        CTLineDraw(line, context)
+        context.restoreGState()
+    }
+
+    /// An inserted image, with its shadow and rounded corners (docs/06 M24).
+    private func drawImage(_ spec: ImageSpec, in context: CGContext) {
+        guard let image = ImageRendering.decode(spec.pngData) else { return }
+        let rect = spec.rect.standardized
+        guard !rect.isEmpty else { return }
+
+        context.saveGState()
+        context.setAlpha(spec.opacity)
+        if spec.hasShadow {
+            let radius = ImageRendering.shadowRadius(spec)
+            context.setShadow(
+                offset: CGSize(width: 0, height: -radius / 2),
+                blur: radius,
+                color: CGColor(gray: 0, alpha: 0.35)
+            )
+        }
+        if spec.cornerRadius > 0 {
+            // Clipping needs its own state: the shadow is cast by the drawing, and a clip
+            // applied to the shadow as well would square its corners off again.
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            context.addPath(ImageRendering.clipPath(spec))
+            context.clip()
+        }
+
+        // Images are drawn in the flipped space every command works in, so the transform
+        // is undone around this one draw rather than the image being mirrored.
+        context.translateBy(x: 0, y: rect.midY * 2)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(image, in: rect)
+
+        if spec.cornerRadius > 0 {
+            context.endTransparencyLayer()
+        }
         context.restoreGState()
     }
 
