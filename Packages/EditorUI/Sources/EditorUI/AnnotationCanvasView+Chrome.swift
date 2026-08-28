@@ -12,15 +12,21 @@ import Shared
 /// the export renderer also draws from, so the two stay honest by sharing a source rather
 /// than by being read together.
 extension AnnotationCanvasView {
-    /// Shows the camera's projection, or takes it away again (docs/09 U1.2).
+    /// Shows the expensive chrome — the camera's projection and any progressive blur —
+    /// or takes it away again (docs/09 U1.2, U1.3).
     ///
     /// Rendered through the same code the export uses rather than approximated with a
     /// `CATransform3D`: the two would have to agree about the sign of every rotation under
     /// a flipped geometry, and a preview that leans the other way from the file is worse
-    /// than a preview that costs a CoreImage pass. U1.3's settle-preview is where the
-    /// cheap live approximation belongs.
-    func updateCameraPreview() {
-        guard model.document.cameraGeometry != nil else {
+    /// than one that costs a CoreImage pass.
+    ///
+    /// What makes that affordable is the settle pattern. While a slider is moving, the
+    /// last good render stays on screen, stretched — wrong in detail, right in shape, and
+    /// free. The real render happens once the value stops moving, which is the only moment
+    /// anyone looks closely (docs/09 U1.3).
+    func updateExpensiveChrome() {
+        guard needsOffscreenRender else {
+            chromeSettle.cancel()
             cameraLayer.isHidden = true
             cameraLayer.contents = nil
             contentHost.isHidden = false
@@ -28,26 +34,49 @@ extension AnnotationCanvasView {
             return
         }
 
-        let canvas = model.document.canvasRect
-        guard let projected = try? AnnotationExportRenderer().render(
+        // Something changed, so the render on screen is now stale. Showing it anyway is
+        // the cheap preview: it is the previous frame of a drag, which is a better guess
+        // than anything that could be computed inside 16 ms.
+        chromeSettle.touch()
+        if cameraLayer.contents == nil {
+            // Nothing to stretch yet — the first frame has to be real, or the canvas is
+            // blank until the user stops moving.
+            renderExpensiveChrome()
+        } else {
+            showOffscreenLayer()
+        }
+    }
+
+    /// Whether the chrome needs a full offscreen render rather than the plain layer tree.
+    private var needsOffscreenRender: Bool {
+        model.document.cameraGeometry != nil || model.document.progressiveBlur != nil
+    }
+
+    /// The real thing: the whole canvas, rendered through the export path.
+    func renderExpensiveChrome() {
+        guard needsOffscreenRender else { return }
+        guard let rendered = try? AnnotationExportRenderer().render(
             baseImage: baseImage,
             document: model.document
         ) else {
-            // A projection we cannot render leaves the flat canvas visible, which is wrong
-            // but legible — the alternative is a blank editor.
+            // A render we cannot do leaves the flat canvas visible, which is wrong but
+            // legible — the alternative is a blank editor.
             cameraLayer.isHidden = true
             contentHost.isHidden = false
+            backdropLayer.opacity = 1
             return
         }
+        cameraLayer.contents = rendered
+        showOffscreenLayer()
+    }
 
-        // The projection already contains the backdrop and the card, so everything the
-        // flat path draws is hidden rather than drawn underneath it.
+    /// Puts the offscreen render on screen and hides everything it already contains.
+    private func showOffscreenLayer() {
         contentHost.isHidden = true
         shadowLayer.isHidden = true
         backdropLayer.opacity = 0
         cameraLayer.isHidden = false
-        cameraLayer.frame = CGRect(origin: .zero, size: canvas.size)
-        cameraLayer.contents = projected
+        cameraLayer.frame = CGRect(origin: .zero, size: model.document.canvasRect.size)
         cameraLayer.contentsGravity = .resize
     }
 
@@ -72,7 +101,7 @@ extension AnnotationCanvasView {
             draftLayer.frame = drawing
             selectionLayer.frame = drawing
             reviewLayer.frame = drawing
-            updateCameraPreview()
+            updateExpensiveChrome()
             return
         }
 
@@ -109,7 +138,7 @@ extension AnnotationCanvasView {
         draftLayer.frame = drawing
         selectionLayer.frame = drawing
         reviewLayer.frame = drawing
-        updateCameraPreview()
+        updateExpensiveChrome()
     }
 
     /// Draws the card's shadow without laying anything opaque behind the capture.

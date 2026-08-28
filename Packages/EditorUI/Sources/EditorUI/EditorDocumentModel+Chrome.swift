@@ -41,4 +41,18 @@ public extension EditorDocumentModel {
     func clearCamera() {
         document.setCamera(nil)
     }
+
+    /// Replaces the progressive blur, keeping its identity across inspector edits so the
+    /// undo stack sees one command being adjusted rather than a new one each tick.
+    func applyProgressiveBlur(_ spec: ProgressiveBlurSpec) {
+        var spec = spec
+        if let existing = document.progressiveBlur {
+            spec.id = existing.id
+        }
+        document.setProgressiveBlur(spec)
+    }
+
+    func clearProgressiveBlur() {
+        document.setProgressiveBlur(nil)
+    }
 }

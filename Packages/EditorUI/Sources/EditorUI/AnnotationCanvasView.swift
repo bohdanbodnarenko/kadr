@@ -19,8 +19,16 @@ public final class AnnotationCanvasView: NSView {
     let backdropLayer = CALayer()
     let gradientLayer = CAGradientLayer()
     let shadowLayer = CALayer()
-    /// Shows the whole canvas projected through the perspective camera (docs/09 U1.2).
+    /// Shows the whole canvas rendered through the export path, for the chrome that
+    /// cannot be drawn as layers: the perspective camera and the progressive blur
+    /// (docs/09 U1.2, U1.3).
     let cameraLayer = CALayer()
+    /// Keeps that render off the drag path — stale-but-stretched while a slider moves,
+    /// exact once it stops (docs/09 U1.3).
+    private(set) lazy var chromeSettle = SettlePreview { [weak self] in
+        self?.renderExpensiveChrome()
+    }
+
     let contentHost = CALayer()
     let baseLayer = CALayer()
     let annotationLayer = CALayer()

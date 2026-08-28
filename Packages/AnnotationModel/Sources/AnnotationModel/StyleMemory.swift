@@ -77,7 +77,8 @@ public struct StyleMemory: Codable, Hashable, Sendable {
         case .freehand: StrokeStyle(width: 3)
         // A measurement is a thin line whose job is to be precise, not loud.
         case .measure: StrokeStyle(color: .annotationRed, width: 2)
-        case .counter, .text, .redaction, .crop, .beautify, .camera, .subjectLift, .image: StrokeStyle()
+        case .counter, .text, .redaction, .crop, .beautify, .camera, .progressiveBlur,
+             .subjectLift, .image: StrokeStyle()
         case .arrow, .shape, .line: StrokeStyle()
         }
     }

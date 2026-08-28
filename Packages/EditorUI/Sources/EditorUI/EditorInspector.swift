@@ -47,6 +47,7 @@ struct EditorInspector: View {
 
             EditorBeautifyInspector(model: model)
             EditorCameraInspector(model: model)
+            EditorBlurInspector(model: model)
         }
         .formStyle(.grouped)
     }

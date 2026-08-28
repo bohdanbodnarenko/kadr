@@ -92,6 +92,12 @@ public struct AnnotationExportRenderer: Sendable {
         }
 
         guard let image = context.makeImage() else { throw RenderError.couldNotCreateImage }
+
+        // A scene blur is the last thing that happens: it covers the backdrop as well as
+        // the capture, which is only possible once everything is composed (docs/09 U1.3).
+        if let blur = document.progressiveBlur, blur.extent == .scene {
+            return ProgressiveBlurCompositor.apply(blur, to: image, in: canvas, scale: scale) ?? image
+        }
         return image
     }
 

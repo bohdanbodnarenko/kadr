@@ -46,8 +46,14 @@ enum BeautifyCompositor {
             drawShadow(spec.shadow, around: shadowPath, in: layout, canvas: canvasBounds, context: context)
         }
 
-        if let camera, drawProjected(contents, layout: layout, camera: camera, in: context) {
-            return
+        // A projected card, or one with its own blur, has to be flattened offscreen first;
+        // otherwise the card is drawn straight into the canvas.
+        let blur = document.progressiveBlur.flatMap { $0.extent == .clipped ? $0 : nil }
+        if camera != nil || blur != nil {
+            let drawn = drawFlattenedCard(contents, layout: layout, camera: camera, blur: blur, in: context)
+            if drawn {
+                return
+            }
         }
 
         context.saveGState()
@@ -77,35 +83,54 @@ enum BeautifyCompositor {
         context.restoreGState()
     }
 
-    /// Renders the card flat, projects it, and draws the result.
+    /// Renders the card flat, blurs and projects it, and draws the result.
     ///
-    /// Returns false if the offscreen render or the projection failed, so the caller can
-    /// fall back to drawing the card upright — a screenshot without its lean beats an
-    /// empty canvas.
-    private static func drawProjected(
+    /// Returns false if the offscreen render failed, so the caller can fall back to drawing
+    /// the card upright and sharp — a plain screenshot beats an empty canvas.
+    ///
+    /// The order is blur *then* project, because a depth-of-field blur belongs to the
+    /// picture rather than to the lens looking at it: blurring after the projection would
+    /// smear the tilted edges instead of softening the content.
+    private static func drawFlattenedCard(
         _ contents: CardContents,
         layout: BeautifyLayout,
-        camera: AnnotationCameraGeometry,
+        camera: AnnotationCameraGeometry?,
+        blur: ProgressiveBlurSpec?,
         in context: CGContext
     ) -> Bool {
         let scale = contents.document.baseImage.scale
-        guard let card = renderCard(contents, layout: layout, scale: scale) else { return false }
-        guard let projected = CameraCompositor.project(
-            card: card,
-            onto: camera.quad,
-            canvasSize: layout.canvasSize,
-            scale: scale
-        ) else {
-            return false
+        guard var card = renderCard(contents, layout: layout, scale: scale) else { return false }
+
+        if let blur {
+            let localCard = CGRect(origin: .zero, size: layout.cardRect.size)
+            card = ProgressiveBlurCompositor.apply(blur, to: card, in: localCard, scale: scale) ?? card
+        }
+
+        let canvas = CGRect(origin: .zero, size: layout.canvasSize)
+        let destination: CGRect
+        let drawable: CGImage
+        if let camera {
+            guard let projected = CameraCompositor.project(
+                card: card,
+                onto: camera.quad,
+                canvasSize: layout.canvasSize,
+                scale: scale
+            ) else {
+                return false
+            }
+            drawable = projected
+            destination = canvas
+        } else {
+            drawable = card
+            destination = layout.cardRect
         }
 
         // Drawn in the flipped space every command works in, so the transform is undone
         // around this one draw rather than the bitmap being mirrored.
-        let canvas = CGRect(origin: .zero, size: layout.canvasSize)
         context.saveGState()
-        context.translateBy(x: 0, y: canvas.midY * 2)
+        context.translateBy(x: 0, y: destination.midY * 2)
         context.scaleBy(x: 1, y: -1)
-        context.draw(projected, in: canvas)
+        context.draw(drawable, in: destination)
         context.restoreGState()
         return true
     }

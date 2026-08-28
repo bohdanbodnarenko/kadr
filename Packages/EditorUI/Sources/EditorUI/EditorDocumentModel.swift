@@ -325,7 +325,7 @@ public final class EditorDocumentModel {
                 measuresBox: styleMemory.lastMeasuresBox,
                 stroke: stroke
             ))
-        case .counter, .beautify, .camera, .subjectLift, .image:
+        case .counter, .beautify, .camera, .progressiveBlur, .subjectLift, .image:
             return nil
         }
     }
@@ -375,7 +375,7 @@ public final class EditorDocumentModel {
         case var .measure(spec):
             spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
             draft = .measure(spec)
-        case .counter, .beautify, .camera, .subjectLift, .image:
+        case .counter, .beautify, .camera, .progressiveBlur, .subjectLift, .image:
             break
         }
     }
@@ -402,7 +402,7 @@ public final class EditorDocumentModel {
         case let .measure(spec):
             styleMemory.remember(spec.stroke, for: .measure)
             styleMemory.lastMeasuresBox = spec.measuresBox
-        case .counter, .crop, .beautify, .camera, .subjectLift, .image:
+        case .counter, .crop, .beautify, .camera, .progressiveBlur, .subjectLift, .image:
             break
         }
     }
@@ -475,7 +475,7 @@ public final class EditorDocumentModel {
         // A text box starts empty by design; the user types into it next.
         case .text:
             return true
-        case .counter, .beautify, .camera, .subjectLift, .image:
+        case .counter, .beautify, .camera, .progressiveBlur, .subjectLift, .image:
             return true
         }
     }

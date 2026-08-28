@@ -33,26 +33,40 @@ extension AnnotationExportRenderer {
             target.restoreGState()
         }
 
-        // Without a camera this is one flat draw; with one, the same drawing goes to an
-        // offscreen bitmap first so the annotations lean with the capture rather than
-        // floating upright over it.
-        guard let camera = document.cameraGeometry,
-              let flat = renderFlat(canvas: canvas, scale: scale, matching: source, draw: drawContents),
-              let projected = CameraCompositor.project(
-                  card: flat,
-                  onto: camera.quad,
-                  canvasSize: canvas.size,
-                  scale: scale
-              )
+        // Without a camera or a capture blur this is one flat draw. With either, the same
+        // drawing goes to an offscreen bitmap first — so the annotations lean with the
+        // capture rather than floating upright over it, and so the blur has an image to
+        // work on.
+        let camera = document.cameraGeometry
+        let blur = document.progressiveBlur.flatMap { $0.extent == .clipped ? $0 : nil }
+        guard camera != nil || blur != nil,
+              var flat = renderFlat(canvas: canvas, scale: scale, matching: source, draw: drawContents)
         else {
             drawContents(into: context, origin: .zero)
             return
         }
 
+        if let blur {
+            let local = CGRect(origin: .zero, size: canvas.size)
+            flat = ProgressiveBlurCompositor.apply(blur, to: flat, in: local, scale: scale) ?? flat
+        }
+        if let camera {
+            guard let projected = CameraCompositor.project(
+                card: flat,
+                onto: camera.quad,
+                canvasSize: canvas.size,
+                scale: scale
+            ) else {
+                drawContents(into: context, origin: .zero)
+                return
+            }
+            flat = projected
+        }
+
         context.saveGState()
         context.translateBy(x: 0, y: canvas.midY * 2)
         context.scaleBy(x: 1, y: -1)
-        context.draw(projected, in: canvas)
+        context.draw(flat, in: canvas)
         context.restoreGState()
     }
 

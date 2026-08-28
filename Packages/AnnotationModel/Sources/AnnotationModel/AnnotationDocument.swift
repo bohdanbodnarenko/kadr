@@ -35,8 +35,10 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
 
     /// Every version of the command list, oldest first, with `historyIndex` pointing at
     /// the current one.
-    private var history: [[AnnotationCommand]]
-    private var historyIndex: Int
+    /// Internal, not private: the canvas chrome lives in
+    /// `AnnotationDocument+Chrome.swift`, and `private` is file-scoped.
+    var history: [[AnnotationCommand]]
+    var historyIndex: Int
 
     /// The command list as it was when the current gesture opened, or nil when no gesture
     /// is in progress. Never encoded: a gesture cannot outlive the drag that opened it,
@@ -86,93 +88,6 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
             }
             return nil
         }.first
-    }
-
-    /// The beautify chrome in force, if any. The last one wins.
-    public var beautify: BeautifySpec? {
-        commands.reversed().compactMap { command in
-            if case let .beautify(spec) = command {
-                return spec
-            }
-            return nil
-        }.first
-    }
-
-    /// The background removal in force, if any. The last one wins.
-    public var subjectLift: SubjectLiftSpec? {
-        commands.reversed().compactMap { command in
-            if case let .subjectLift(spec) = command {
-                return spec
-            }
-            return nil
-        }.first
-    }
-
-    /// Replaces the background removal, or clears it. One undo step either way — unlike
-    /// beautify's slider edits, this is a decision rather than a drag.
-    public mutating func setSubjectLift(_ spec: SubjectLiftSpec?) {
-        var updated = commands
-        updated.removeAll { command in
-            if case .subjectLift = command {
-                return true
-            }
-            return false
-        }
-        if let spec {
-            // Behind everything else: it changes the base image, so it belongs at the
-            // bottom of the stack alongside the other canvas chrome.
-            updated.insert(.subjectLift(spec), at: 0)
-        }
-        guard updated != commands else { return }
-        pushHistory(updated)
-    }
-
-    /// The perspective camera in force, if any. The last one wins.
-    public var camera: AnnotationCameraSpec? {
-        commands.reversed().compactMap { command in
-            if case let .camera(spec) = command {
-                return spec
-            }
-            return nil
-        }.first
-    }
-
-    /// Where the camera puts the card's corners, or nil when there is no camera to apply.
-    ///
-    /// Measured against the *card* rather than the capture, so a tilted screenshot leans
-    /// within its beautified frame rather than within its own bounds — which is the
-    /// composition the effect exists for (docs/09 U1.2).
-    public var cameraGeometry: AnnotationCameraGeometry? {
-        guard let camera, !camera.isIdentity else { return nil }
-        let cardRect = beautifyLayout?.cardRect ?? contentRect
-        return AnnotationCameraGeometry(spec: camera, contentRect: cardRect)
-    }
-
-    /// Replaces the current camera, coalescing successive inspector edits into one undo
-    /// step so dragging a slider does not flood the undo stack.
-    public mutating func setCamera(_ spec: AnnotationCameraSpec?) {
-        var updated = commands
-        updated.removeAll { command in
-            if case .camera = command {
-                return true
-            }
-            return false
-        }
-        if let spec, !spec.isIdentity {
-            updated.insert(.camera(spec), at: 0)
-        }
-        guard updated != commands else { return }
-        if shouldCoalesce(updated, matching: {
-            if case .camera = $0 {
-                true
-            } else {
-                false
-            }
-        }) {
-            history[historyIndex] = updated
-            return
-        }
-        pushHistory(updated)
     }
 
     /// The capture area that is composed onto the canvas: the crop, or the whole image.
@@ -229,7 +144,7 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     /// Only *successive* inspector edits coalesce. Turning the effect on or off is its own
     /// step, otherwise "add a background" and "remove it" collapse into one and undo
     /// appears to do nothing.
-    private func shouldCoalesce(
+    func shouldCoalesce(
         _ updated: [AnnotationCommand],
         matching isChrome: (AnnotationCommand) -> Bool
     ) -> Bool {
@@ -355,7 +270,7 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         return true
     }
 
-    private mutating func pushHistory(_ commands: [AnnotationCommand]) {
+    mutating func pushHistory(_ commands: [AnnotationCommand]) {
         // Anything undone is discarded the moment a new edit lands, which is what every
         // editor does and what users expect.
         if historyIndex < history.count - 1 {
