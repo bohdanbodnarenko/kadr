@@ -38,111 +38,241 @@ public enum BeautifyAspect: String, Codable, CaseIterable, Sendable {
 /// The fill behind a beautified capture (docs/03 §3 P2).
 public enum BeautifyBackdrop: Codable, Hashable, Sendable {
     case solid(AnnotationColor)
-    /// `angleDegrees` is measured from the positive x-axis, clockwise in the model's
-    /// top-left space, so 90 is top to bottom.
-    case gradient(start: AnnotationColor, end: AnnotationColor, angleDegrees: CGFloat)
-    /// A file path. The renderer falls back to a dark fill if the file is missing.
+    /// A curated or custom ramp, with an optional designed midpoint (docs/09 U1.1).
+    case gradient(BeautifyGradient)
+    /// A local file path — bundled art or an image the user imported. Never a URL: there
+    /// are no wallpaper packs to download, by rule (CLAUDE.md rule 1). The renderer falls
+    /// back to a dark fill if the file is missing.
     case image(path: String)
+
+    /// The two-stop spelling earlier documents used, kept as a constructor so call sites
+    /// and presets read the same as before.
+    public static func gradient(
+        start: AnnotationColor,
+        end: AnnotationColor,
+        angleDegrees: CGFloat
+    ) -> BeautifyBackdrop {
+        .gradient(BeautifyGradient(start: start, end: end, angleDegrees: angleDegrees))
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case solid, gradient, image
+        /// The pre-U1.1 shape: a `gradient` object holding these three keys directly.
+        case start, end, angleDegrees
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let colour = try container.decodeIfPresent(AnnotationColor.self, forKey: .solid) {
+            self = .solid(colour)
+        } else if let path = try container.decodeIfPresent(String.self, forKey: .image) {
+            self = .image(path: path)
+        } else if let ramp = try container.decodeIfPresent(BeautifyGradient.self, forKey: .gradient) {
+            self = .gradient(ramp)
+        } else if let start = try container.decodeIfPresent(AnnotationColor.self, forKey: .start) {
+            // A document written before gradients were their own type.
+            self = try .gradient(BeautifyGradient(
+                start: start,
+                end: container.decode(AnnotationColor.self, forKey: .end),
+                angleDegrees: container.decodeIfPresent(CGFloat.self, forKey: .angleDegrees) ?? 90
+            ))
+        } else {
+            self = .solid(.white)
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .solid(colour): try container.encode(colour, forKey: .solid)
+        case let .gradient(ramp): try container.encode(ramp, forKey: .gradient)
+        case let .image(path): try container.encode(path, forKey: .image)
+        }
+    }
 }
 
 /// Drop shadow of the rounded capture card.
+///
+/// Blur and offset are normalized like every other beautify length, so a preset's shadow
+/// stays proportionally the same on a phone-sized crop and a 5K capture (docs/09 U1.1).
 public struct BeautifyShadow: Codable, Hashable, Sendable {
     public var opacity: CGFloat
-    public var blur: CGFloat
-    public var offsetY: CGFloat
+    public var blur: BeautifyMetric
+    public var offsetY: BeautifyMetric
 
-    public init(opacity: CGFloat = 0, blur: CGFloat = 24, offsetY: CGFloat = 12) {
+    public init(
+        opacity: CGFloat = 0,
+        blur: BeautifyMetric = .relative(0.05),
+        offsetY: BeautifyMetric = .relative(0.02)
+    ) {
         self.opacity = min(max(opacity, 0), 1)
-        self.blur = max(blur, 0)
+        self.blur = blur
         self.offsetY = offsetY
     }
 
-    public static let none = BeautifyShadow(opacity: 0, blur: 0, offsetY: 0)
-    public static let soft = BeautifyShadow(opacity: 0.28, blur: 28, offsetY: 12)
+    public static let none = BeautifyShadow(opacity: 0, blur: .zero, offsetY: .zero)
+    public static let soft = BeautifyShadow(opacity: 0.28, blur: .relative(0.05), offsetY: .relative(0.022))
 
     public var isEnabled: Bool {
-        opacity > 0 && blur > 0
+        opacity > 0 && !blur.isZero
     }
 
     /// Extra canvas inset so the shadow is not clipped at export.
-    public var outset: CGFloat {
+    public func outset(shortestEdge: CGFloat) -> CGFloat {
         guard isEnabled else { return 0 }
-        return blur + abs(offsetY)
+        return blur.resolved(shortestEdge: shortestEdge)
+            + abs(offsetY.resolved(shortestEdge: shortestEdge))
+    }
+
+    /// Documents written before U1.1 stored blur and offset as bare point values, which
+    /// `BeautifyMetric` decodes as `.points` — so they open unchanged, just without the
+    /// scaling. Nothing here needs a version bump.
+    private enum CodingKeys: String, CodingKey {
+        case opacity, blur, offsetY
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        opacity = try container.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 0
+        blur = try container.decodeIfPresent(BeautifyMetric.self, forKey: .blur) ?? .zero
+        offsetY = try container.decodeIfPresent(BeautifyMetric.self, forKey: .offsetY) ?? .zero
     }
 }
 
-/// Non-destructive canvas chrome: padding, backdrop, corners, shadow, aspect (docs/03 §3 P2).
+/// Non-destructive canvas chrome: padding, backdrop, corners, shadow, aspect, alignment
+/// (docs/03 §3 P2, docs/09 U1.1).
 ///
 /// Stored as an `AnnotationCommand` so it undo/redoes with everything else and round-trips
 /// in the `.kadr` file. It is not selectable on the canvas.
 public struct BeautifySpec: Codable, Hashable, Sendable {
     public var id: AnnotationID
-    public var padding: CGFloat
-    public var cornerRadius: CGFloat
+    /// Space around the capture, normalized to its shortest edge so a preset keeps its
+    /// visual weight whatever it is applied to.
+    public var padding: BeautifyMetric
+    public var cornerRadius: BeautifyMetric
     public var backdrop: BeautifyBackdrop
     public var shadow: BeautifyShadow
     public var aspect: BeautifyAspect
-    /// When true, leftover space after padding and aspect is split equally so the capture
-    /// sits in the middle. When false, extra space from an aspect preset sits at the bottom.
-    public var autoBalance: Bool
+    /// Where the capture sits in the canvas.
+    public var alignment: BeautifyAlignment
+    /// Whether a non-centre alignment presses the capture against the canvas edge —
+    /// zero padding there, and the corners that touch it squared off.
+    ///
+    /// On by default because it is the reason to offer alignment at all: a screenshot that
+    /// runs off the bottom of the frame is a composition, one merely pushed towards the
+    /// bottom is a mistake.
+    public var sticksToEdges: Bool
 
     public init(
         id: AnnotationID = AnnotationID(),
-        padding: CGFloat = 48,
-        cornerRadius: CGFloat = 16,
+        padding: BeautifyMetric = .relative(0.08),
+        cornerRadius: BeautifyMetric = .relative(0.03),
         backdrop: BeautifyBackdrop = .solid(.white),
         shadow: BeautifyShadow = .soft,
         aspect: BeautifyAspect = .original,
-        autoBalance: Bool = true
+        alignment: BeautifyAlignment = .center,
+        sticksToEdges: Bool = true
     ) {
         self.id = id
-        self.padding = max(padding, 0)
-        self.cornerRadius = max(cornerRadius, 0)
+        self.padding = padding
+        self.cornerRadius = cornerRadius
         self.backdrop = backdrop
         self.shadow = shadow
         self.aspect = aspect
-        self.autoBalance = autoBalance
+        self.alignment = alignment
+        self.sticksToEdges = sticksToEdges
     }
+
+    /// The edges this spec presses the capture against.
+    public var stuckEdges: BeautifyEdges {
+        sticksToEdges ? BeautifyEdges.stuck(by: alignment) : .none
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case id, padding, cornerRadius, backdrop, shadow, aspect, alignment, sticksToEdges
+        /// Pre-U1.1: a bool that put aspect-ratio slack at the bottom instead of splitting
+        /// it. That is what `.top` alignment means now, so it migrates rather than lingers.
+        case autoBalance
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(AnnotationID.self, forKey: .id) ?? AnnotationID()
+        padding = try container.decodeIfPresent(BeautifyMetric.self, forKey: .padding) ?? .relative(0.08)
+        cornerRadius = try container.decodeIfPresent(BeautifyMetric.self, forKey: .cornerRadius)
+            ?? .relative(0.03)
+        backdrop = try container.decodeIfPresent(BeautifyBackdrop.self, forKey: .backdrop) ?? .solid(.white)
+        shadow = try container.decodeIfPresent(BeautifyShadow.self, forKey: .shadow) ?? .soft
+        aspect = try container.decodeIfPresent(BeautifyAspect.self, forKey: .aspect) ?? .original
+
+        if let alignment = try container.decodeIfPresent(BeautifyAlignment.self, forKey: .alignment) {
+            self.alignment = alignment
+            // Old documents have no alignment and never stuck to anything; new ones say so.
+            sticksToEdges = try container.decodeIfPresent(Bool.self, forKey: .sticksToEdges) ?? true
+        } else {
+            let balanced = try container.decodeIfPresent(Bool.self, forKey: .autoBalance) ?? true
+            alignment = balanced ? .center : .top
+            // Sticking would move a document that predates it, so it stays off on decode.
+            sticksToEdges = false
+        }
+    }
+
+    /// Explicit because `CodingKeys` carries a migration-only key with no property behind
+    /// it, and because `autoBalance` must not be written back out — a document Kadr saves
+    /// says what it means now.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(padding, forKey: .padding)
+        try container.encode(cornerRadius, forKey: .cornerRadius)
+        try container.encode(backdrop, forKey: .backdrop)
+        try container.encode(shadow, forKey: .shadow)
+        try container.encode(aspect, forKey: .aspect)
+        try container.encode(alignment, forKey: .alignment)
+        try container.encode(sticksToEdges, forKey: .sticksToEdges)
+    }
+
+    // MARK: - Presets
 
     public static let cleanWhite = BeautifySpec()
 
     public static let twitter = BeautifySpec(
-        padding: 64,
-        cornerRadius: 20,
-        backdrop: .gradient(
-            start: AnnotationColor(red: 0.76, green: 0.86, blue: 0.98),
-            end: AnnotationColor(red: 0.93, green: 0.96, blue: 1),
-            angleDegrees: 90
-        ),
+        padding: .relative(0.10),
+        cornerRadius: .relative(0.035),
+        backdrop: .gradient(BeautifyPalette.gradients[5]),
         shadow: .soft,
-        aspect: .sixteenNine,
-        autoBalance: true
+        aspect: .sixteenNine
     )
 
     public static let instagram = BeautifySpec(
-        padding: 72,
-        cornerRadius: 24,
-        backdrop: .gradient(
-            start: AnnotationColor(red: 0.98, green: 0.82, blue: 0.70),
-            end: AnnotationColor(red: 0.95, green: 0.55, blue: 0.72),
-            angleDegrees: 135
-        ),
-        shadow: BeautifyShadow(opacity: 0.22, blur: 32, offsetY: 14),
-        aspect: .fourFive,
-        autoBalance: true
+        padding: .relative(0.12),
+        cornerRadius: .relative(0.04),
+        backdrop: .gradient(BeautifyPalette.gradients[7]),
+        shadow: BeautifyShadow(opacity: 0.22, blur: .relative(0.06), offsetY: .relative(0.025)),
+        aspect: .fourFive
     )
 
     public static let story = BeautifySpec(
-        padding: 48,
-        cornerRadius: 20,
-        backdrop: .gradient(
-            start: AnnotationColor(red: 0.10, green: 0.10, blue: 0.14),
-            end: AnnotationColor(red: 0.22, green: 0.18, blue: 0.32),
-            angleDegrees: 90
-        ),
-        shadow: BeautifyShadow(opacity: 0.4, blur: 24, offsetY: 10),
-        aspect: .nineSixteen,
-        autoBalance: true
+        padding: .relative(0.08),
+        cornerRadius: .relative(0.035),
+        backdrop: .gradient(BeautifyPalette.gradients[6]),
+        shadow: BeautifyShadow(opacity: 0.4, blur: .relative(0.045), offsetY: .relative(0.018)),
+        aspect: .nineSixteen
+    )
+
+    /// The bleeds-off-the-bottom composition the alignment work exists for (docs/09 U1.1).
+    public static let stuckBottom = BeautifySpec(
+        padding: .relative(0.12),
+        cornerRadius: .relative(0.035),
+        backdrop: .gradient(BeautifyPalette.gradients[0]),
+        shadow: .none,
+        aspect: .sixteenNine,
+        alignment: .bottom,
+        sticksToEdges: true
     )
 }
 
@@ -162,50 +292,7 @@ public struct BeautifyPreset: Hashable, Sendable, Identifiable {
         BeautifyPreset(id: "clean", title: "Clean White", spec: .cleanWhite),
         BeautifyPreset(id: "twitter", title: "Twitter / X", spec: .twitter),
         BeautifyPreset(id: "instagram", title: "Instagram", spec: .instagram),
-        BeautifyPreset(id: "story", title: "Story", spec: .story)
+        BeautifyPreset(id: "story", title: "Story", spec: .story),
+        BeautifyPreset(id: "stuck", title: "Edge Bleed", spec: .stuckBottom)
     ]
-}
-
-/// Where the capture sits inside a beautified canvas.
-public struct BeautifyLayout: Equatable, Sendable {
-    public var canvasSize: CGSize
-    /// The capture's frame in canvas coordinates.
-    public var contentRect: CGRect
-
-    public init(canvasSize: CGSize, contentRect: CGRect) {
-        self.canvasSize = canvasSize
-        self.contentRect = contentRect
-    }
-
-    /// Lays the capture onto a canvas honouring padding, shadow, aspect and auto-balance.
-    public static func compute(contentSize: CGSize, spec: BeautifySpec) -> BeautifyLayout {
-        let width = max(contentSize.width, 1)
-        let height = max(contentSize.height, 1)
-        let inset = max(spec.padding, spec.shadow.outset)
-
-        var canvasWidth = width + inset * 2
-        var canvasHeight = height + inset * 2
-
-        if let ratio = spec.aspect.ratio, ratio > 0 {
-            let current = canvasWidth / canvasHeight
-            if current < ratio {
-                canvasWidth = canvasHeight * ratio
-            } else if current > ratio {
-                canvasHeight = canvasWidth / ratio
-            }
-        }
-
-        let leftoverX = canvasWidth - width
-        let leftoverY = canvasHeight - height
-        let origin = if spec.autoBalance {
-            CGPoint(x: leftoverX / 2, y: leftoverY / 2)
-        } else {
-            CGPoint(x: leftoverX / 2, y: inset)
-        }
-
-        return BeautifyLayout(
-            canvasSize: CGSize(width: canvasWidth, height: canvasHeight),
-            contentRect: CGRect(origin: origin, size: CGSize(width: width, height: height))
-        )
-    }
 }

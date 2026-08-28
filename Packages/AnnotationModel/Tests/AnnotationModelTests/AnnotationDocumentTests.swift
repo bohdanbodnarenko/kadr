@@ -120,18 +120,18 @@ struct DocumentEditingTests {
     @Test("Beautify expands the canvas around the capture")
     func beautifyExpandsCanvas() {
         var document = makeDocument()
-        document.setBeautify(BeautifySpec(padding: 40, shadow: .none, aspect: .original))
+        document.setBeautify(BeautifySpec(padding: .points(40), shadow: .none, aspect: .original))
 
         #expect(document.canvasRect == CGRect(x: 0, y: 0, width: 880, height: 680))
         #expect(document.contentRect == baseImage.bounds)
-        #expect(document.beautify?.padding == 40)
+        #expect(document.beautify?.padding == .points(40))
     }
 
     @Test("Beautify wraps a crop rather than the whole image")
     func beautifyUsesCropSize() {
         var document = makeDocument()
         document.add(.crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 200, height: 100))))
-        document.setBeautify(BeautifySpec(padding: 20, shadow: .none, aspect: .original))
+        document.setBeautify(BeautifySpec(padding: .points(20), shadow: .none, aspect: .original))
 
         #expect(document.contentRect == CGRect(x: 0, y: 0, width: 200, height: 100))
         #expect(document.canvasRect.size == CGSize(width: 240, height: 140))
@@ -140,9 +140,9 @@ struct DocumentEditingTests {
     @Test("Replacing beautify coalesces onto one undo step")
     func beautifyCoalesces() {
         var document = makeDocument()
-        document.setBeautify(BeautifySpec(padding: 10, shadow: .none))
-        document.setBeautify(BeautifySpec(padding: 20, shadow: .none))
-        document.setBeautify(BeautifySpec(padding: 30, shadow: .none))
+        document.setBeautify(BeautifySpec(padding: .points(10), shadow: .none))
+        document.setBeautify(BeautifySpec(padding: .points(20), shadow: .none))
+        document.setBeautify(BeautifySpec(padding: .points(30), shadow: .none))
 
         #expect(document.canUndo)
         document.undo()

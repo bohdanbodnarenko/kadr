@@ -189,7 +189,7 @@ struct BeautifyExportTests {
     @Test("Padding grows the exported bitmap")
     func paddingGrowsExport() throws {
         let document = makeDocument(commands: [
-            .beautify(BeautifySpec(padding: 40, shadow: .none, aspect: .original))
+            .beautify(BeautifySpec(padding: .points(40), shadow: .none, aspect: .original))
         ])
         let image = try renderer.render(baseImage: makeStripedImage(), document: document)
         #expect(image.width == 280)
@@ -201,8 +201,8 @@ struct BeautifyExportTests {
         let red = AnnotationColor(red: 1, green: 0, blue: 0)
         let document = makeDocument(commands: [
             .beautify(BeautifySpec(
-                padding: 40,
-                cornerRadius: 0,
+                padding: .points(40),
+                cornerRadius: .zero,
                 backdrop: .solid(red),
                 shadow: .none,
                 aspect: .original
@@ -220,8 +220,8 @@ struct BeautifyExportTests {
         let blue = AnnotationColor(red: 0, green: 0, blue: 1)
         let document = makeDocument(size: CGSize(width: 100, height: 100), commands: [
             .beautify(BeautifySpec(
-                padding: 20,
-                cornerRadius: 50,
+                padding: .points(20),
+                cornerRadius: .points(50),
                 backdrop: .solid(blue),
                 shadow: .none,
                 aspect: .original
@@ -263,7 +263,7 @@ struct BeautifyExportTests {
                 rect: CGRect(x: 0, y: 0, width: 200, height: 200),
                 fill: FillStyle(color: .black)
             )),
-            .beautify(BeautifySpec(padding: 20, shadow: .none, aspect: .original))
+            .beautify(BeautifySpec(padding: .points(20), shadow: .none, aspect: .original))
         ])
         let bare = try renderer.render(
             baseImage: makeStripedImage(),

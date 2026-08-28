@@ -12,18 +12,19 @@ import Shared
 /// body re-evaluation, no layout pass, no diffing.
 @MainActor
 public final class AnnotationCanvasView: NSView {
-    /// Internal, not private: the drop handling lives in
-    /// `AnnotationCanvasView+Drop.swift`, and `private` is file-scoped.
+    /// Several members are internal rather than private: the drop handling lives in
+    /// `AnnotationCanvasView+Drop.swift` and the beautify chrome in
+    /// `AnnotationCanvasView+Chrome.swift`, and `private` is file-scoped.
     let model: EditorDocumentModel
-    private let backdropLayer = CALayer()
-    private let gradientLayer = CAGradientLayer()
-    private let shadowLayer = CALayer()
-    private let contentHost = CALayer()
-    private let baseLayer = CALayer()
-    private let annotationLayer = CALayer()
-    private let reviewLayer = CALayer()
-    private let draftLayer = CALayer()
-    private let selectionLayer = CALayer()
+    let backdropLayer = CALayer()
+    let gradientLayer = CAGradientLayer()
+    let shadowLayer = CALayer()
+    let contentHost = CALayer()
+    let baseLayer = CALayer()
+    let annotationLayer = CALayer()
+    let reviewLayer = CALayer()
+    let draftLayer = CALayer()
+    let selectionLayer = CALayer()
     private let logger = KadrLog.logger(.overlay)
 
     /// Layers by annotation, so an update finds its own layer without a search.
@@ -131,96 +132,6 @@ public final class AnnotationCanvasView: NSView {
     }
 
     /// Sizes the view and the card so beautify chrome matches export (docs/03 §3 P2).
-    private func layoutCanvasChrome() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-
-        let imageBounds = model.document.baseImage.bounds
-        let content = model.document.contentRect
-
-        guard let spec = model.document.beautify, let layout = model.document.beautifyLayout else {
-            setFrameSize(imageBounds.size)
-            backdropLayer.isHidden = true
-            shadowLayer.isHidden = true
-            contentHost.frame = bounds
-            contentHost.cornerRadius = 0
-            contentHost.masksToBounds = false
-            let drawing = CGRect(origin: .zero, size: imageBounds.size)
-            baseLayer.frame = drawing
-            annotationLayer.frame = drawing
-            draftLayer.frame = drawing
-            selectionLayer.frame = drawing
-            reviewLayer.frame = drawing
-            return
-        }
-
-        setFrameSize(layout.canvasSize)
-        backdropLayer.isHidden = false
-        backdropLayer.frame = bounds
-        applyBackdrop(spec.backdrop)
-
-        let radius = min(
-            spec.cornerRadius,
-            min(layout.contentRect.width, layout.contentRect.height) / 2
-        )
-
-        shadowLayer.isHidden = !spec.shadow.isEnabled
-        shadowLayer.frame = layout.contentRect
-        shadowLayer.cornerRadius = radius
-        shadowLayer.backgroundColor = NSColor.white.cgColor
-        shadowLayer.shadowOpacity = Float(spec.shadow.opacity)
-        shadowLayer.shadowRadius = spec.shadow.blur * 0.5
-        shadowLayer.shadowOffset = CGSize(width: 0, height: spec.shadow.offsetY)
-        shadowLayer.shadowColor = NSColor.black.cgColor
-
-        contentHost.frame = layout.contentRect
-        contentHost.cornerRadius = radius
-        contentHost.masksToBounds = true
-
-        let drawing = CGRect(
-            x: -content.minX,
-            y: -content.minY,
-            width: imageBounds.width,
-            height: imageBounds.height
-        )
-        baseLayer.frame = drawing
-        annotationLayer.frame = drawing
-        draftLayer.frame = drawing
-        selectionLayer.frame = drawing
-        reviewLayer.frame = drawing
-    }
-
-    private func applyBackdrop(_ backdrop: BeautifyBackdrop) {
-        gradientLayer.isHidden = true
-        backdropLayer.contents = nil
-        switch backdrop {
-        case let .solid(colour):
-            backdropLayer.backgroundColor = NSColor(
-                srgbRed: colour.red,
-                green: colour.green,
-                blue: colour.blue,
-                alpha: colour.alpha
-            ).cgColor
-        case let .gradient(start, end, _):
-            backdropLayer.backgroundColor = nil
-            gradientLayer.isHidden = false
-            gradientLayer.frame = backdropLayer.bounds
-            gradientLayer.colors = [
-                NSColor(srgbRed: start.red, green: start.green, blue: start.blue, alpha: start.alpha).cgColor,
-                NSColor(srgbRed: end.red, green: end.green, blue: end.blue, alpha: end.alpha).cgColor
-            ]
-            gradientLayer.startPoint = CGPoint(x: 0.5, y: 0)
-            gradientLayer.endPoint = CGPoint(x: 0.5, y: 1)
-        case let .image(path):
-            backdropLayer.backgroundColor = NSColor.darkGray.cgColor
-            if let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) {
-                backdropLayer.contents = CGImageSourceCreateImageAtIndex(source, 0, nil)
-                backdropLayer.contentsGravity = .resizeAspectFill
-            }
-        }
-    }
-
     /// Maps a click on the view onto image-space points (beautify offsets the card).
     private func imagePoint(from event: NSEvent) -> CGPoint {
         imagePoint(fromWindowPoint: event.locationInWindow)

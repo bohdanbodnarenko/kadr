@@ -27,7 +27,7 @@ private let everyCommand: [AnnotationCommand] = [
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20), style: .defaultPixelate)),
     .counter(CounterSpec(number: 3, center: CGPoint(x: 50, y: 50))),
     .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100), canExpandCanvas: true)),
-    .beautify(BeautifySpec(padding: 24, aspect: .sixteenNine)),
+    .beautify(BeautifySpec(padding: .points(24), aspect: .sixteenNine)),
     .measure(MeasureSpec(start: CGPoint(x: 0, y: 40), end: CGPoint(x: 120, y: 40))),
     .measure(MeasureSpec(start: .zero, end: CGPoint(x: 80, y: 60), measuresBox: true)),
     .subjectLift(SubjectLiftSpec(maskPNG: Data([0x89, 0x50, 0x4E, 0x47]))),
