@@ -153,7 +153,7 @@ layer_of() {
     case "$1" in
         Shared) echo 0 ;;
         CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit) echo 1 ;;
-        RecordingCore|SelectionUI|AnnotationRender|HistoryKit) echo 2 ;;
+        RecordingCore|SelectionUI|AnnotationRender|HistoryKit|StudioCore) echo 2 ;;
         EditorUI) echo 3 ;;
         *) echo "" ;;
     esac

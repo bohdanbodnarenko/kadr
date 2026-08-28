@@ -1,0 +1,189 @@
+import CryptoKit
+import Foundation
+import os
+import Shared
+
+/// What was being recorded (docs/09 U3.1).
+public struct CaptureManifest: Codable, Sendable, Hashable {
+    public static let currentVersion = 1
+
+    public var version: Int
+    /// The recorded area's pixel size.
+    public var pixelSize: CGSize
+    /// Pixels per point, so the reconstruction draws a cursor the right size.
+    public var scale: CGFloat
+    public var frameRate: Int
+    /// How long the recording is, in recording time.
+    public var duration: TimeInterval
+    /// Whether the pointer is baked into the footage.
+    ///
+    /// It should not be: reconstruction needs a clean plate, because a cursor already in
+    /// the pixels cannot be smoothed, moved, or scaled with a zoom. Recorded so an older
+    /// session with a baked cursor can be handled rather than double-drawn.
+    public var hasBakedCursor: Bool
+    /// Whether a camera stream was recorded alongside.
+    public var hasCamera: Bool
+
+    public init(
+        version: Int = CaptureManifest.currentVersion,
+        pixelSize: CGSize,
+        scale: CGFloat = 2,
+        frameRate: Int = 60,
+        duration: TimeInterval = 0,
+        hasBakedCursor: Bool = false,
+        hasCamera: Bool = false
+    ) {
+        self.version = version
+        self.pixelSize = pixelSize
+        self.scale = scale
+        self.frameRate = frameRate
+        self.duration = duration
+        self.hasBakedCursor = hasBakedCursor
+        self.hasCamera = hasCamera
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, pixelSize, scale, frameRate, duration, hasBakedCursor, hasCamera
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            version: container.decodeIfPresent(Int.self, forKey: .version) ?? 1,
+            pixelSize: container.decodeIfPresent(CGSize.self, forKey: .pixelSize) ?? .zero,
+            scale: container.decodeIfPresent(CGFloat.self, forKey: .scale) ?? 2,
+            frameRate: container.decodeIfPresent(Int.self, forKey: .frameRate) ?? 60,
+            duration: container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0,
+            hasBakedCursor: container.decodeIfPresent(Bool.self, forKey: .hasBakedCursor) ?? false,
+            hasCamera: container.decodeIfPresent(Bool.self, forKey: .hasCamera) ?? false
+        )
+    }
+}
+
+/// Proof that a rendered file matches the edit that produced it (docs/09 U3.1).
+///
+/// Exporting a studio recording is minutes of work. Doing it again because the user pressed
+/// the button twice is minutes wasted; *not* doing it again because the app assumed nothing
+/// had changed is a wrong file shipped. A hash of the edit settles it: the same edit is the
+/// same stamp, and any change at all is a different one.
+public struct RenderStamp: Codable, Sendable, Hashable {
+    /// A digest of the edit this render came from.
+    public var editDigest: String
+    /// Where the rendered file is.
+    public var outputPath: String
+    /// What it was rendered at, so a request for a different size is not mistaken for a
+    /// cache hit.
+    public var pixelSize: CGSize
+
+    public init(editDigest: String, outputPath: String, pixelSize: CGSize) {
+        self.editDigest = editDigest
+        self.outputPath = outputPath
+        self.pixelSize = pixelSize
+    }
+
+    /// Whether a cached render can be handed over instead of doing the work again.
+    ///
+    /// The file has to still be there: a stamp naming a file the user has since moved is a
+    /// stamp for nothing.
+    public func matches(editDigest: String, pixelSize: CGSize) -> Bool {
+        self.editDigest == editDigest
+            && self.pixelSize == pixelSize
+            && FileManager.default.fileExists(atPath: outputPath)
+    }
+
+    /// The digest of an edit.
+    ///
+    /// Encoded with sorted keys so the same edit always hashes the same way — without that
+    /// a dictionary's iteration order would make every second export a cache miss.
+    public static func digest(of value: some Encodable) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(value) else { return "" }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// Reading and writing the parts of a session (docs/09 U3.1).
+///
+/// Every write is atomic. A sidecar half-written by a crash is worse than one that is
+/// absent: absent is recoverable, half-written is a file that decodes into nonsense and
+/// then gets rendered.
+public struct SessionDocument: Sendable {
+    private let logger = KadrLog.logger(.recording)
+    public let session: RecordingSession
+
+    public init(session: RecordingSession) {
+        self.session = session
+    }
+
+    // MARK: - Writing
+
+    public func write(_ telemetry: InputTelemetry) throws {
+        try write(telemetry, to: session.inputURL)
+    }
+
+    public func write(_ manifest: CaptureManifest) throws {
+        try write(manifest, to: session.captureURL)
+    }
+
+    public func write(_ stamp: RenderStamp) throws {
+        try write(stamp, to: session.renderStampURL)
+    }
+
+    /// Commits an edit, and clears the draft it came from.
+    public func commit(_ edit: some Encodable) throws {
+        try write(edit, to: session.editURL)
+        try? FileManager.default.removeItem(at: session.draftEditURL)
+    }
+
+    /// Saves the edit in progress, leaving the committed one alone.
+    public func writeDraft(_ edit: some Encodable) throws {
+        try write(edit, to: session.draftEditURL)
+    }
+
+    private func write(_ value: some Encodable, to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(value).write(to: url, options: .atomic)
+    }
+
+    // MARK: - Reading
+
+    public func telemetry() -> InputTelemetry? {
+        read(InputTelemetry.self, from: session.inputURL)
+    }
+
+    public func manifest() -> CaptureManifest? {
+        read(CaptureManifest.self, from: session.captureURL)
+    }
+
+    public func renderStamp() -> RenderStamp? {
+        read(RenderStamp.self, from: session.renderStampURL)
+    }
+
+    /// The edit to open: the draft if there is one, otherwise the committed edit.
+    ///
+    /// The draft wins because it is newer by construction — it is what the user was doing
+    /// when the app stopped, and it is the thing they would be surprised to lose.
+    public func edit<Edit: Decodable>(_ type: Edit.Type) -> Edit? {
+        read(type, from: session.draftEditURL) ?? read(type, from: session.editURL)
+    }
+
+    public func committedEdit<Edit: Decodable>(_ type: Edit.Type) -> Edit? {
+        read(type, from: session.editURL)
+    }
+
+    private func read<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            // A corrupt sidecar is not worth surfacing: the footage is intact, and the
+            // alternative to ignoring it is refusing to open a recording that is fine.
+            let name = url.lastPathComponent
+            let reason = error.localizedDescription
+            logger.error("Ignoring an unreadable \(name, privacy: .public): \(reason, privacy: .public)")
+            return nil
+        }
+    }
+}

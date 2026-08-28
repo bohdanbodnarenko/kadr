@@ -15,6 +15,7 @@
 		KADR000000000000000000CD /* AutomationKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000069 /* AutomationKit */; };
 		KADR000000000000000000CE /* SettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006A /* SettingsKit */; };
 		KADR000000000000000000CF /* RecordingCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006B /* RecordingCore */; };
+		KADR000000000000000000FE /* StudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioCore */; };
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
 		KADR000000000000000000D1 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006D /* AnnotationRender */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
@@ -153,6 +154,7 @@
 				KADR000000000000000000CD /* AutomationKit in Frameworks */,
 				KADR000000000000000000CE /* SettingsKit in Frameworks */,
 				KADR000000000000000000CF /* RecordingCore in Frameworks */,
+				KADR000000000000000000FE /* StudioCore in Frameworks */,
 				KADR000000000000000000D0 /* SelectionUI in Frameworks */,
 				KADR000000000000000000D1 /* AnnotationRender in Frameworks */,
 				KADR000000000000000000D2 /* HistoryKit in Frameworks */,
@@ -260,6 +262,7 @@
 				KADR00000000000000000069 /* AutomationKit */,
 				KADR0000000000000000006A /* SettingsKit */,
 				KADR0000000000000000006B /* RecordingCore */,
+				KADR000000000000000000FF /* StudioCore */,
 				KADR0000000000000000006C /* SelectionUI */,
 				KADR0000000000000000006D /* AnnotationRender */,
 				KADR0000000000000000006E /* HistoryKit */,
@@ -407,6 +410,7 @@
 				KADR00000000000000000006 /* XCLocalSwiftPackageReference "Packages/AutomationKit" */,
 				KADR00000000000000000007 /* XCLocalSwiftPackageReference "Packages/SettingsKit" */,
 				KADR00000000000000000008 /* XCLocalSwiftPackageReference "Packages/RecordingCore" */,
+				KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */,
 				KADR00000000000000000009 /* XCLocalSwiftPackageReference "Packages/SelectionUI" */,
 				KADR0000000000000000000A /* XCLocalSwiftPackageReference "Packages/AnnotationRender" */,
 				KADR0000000000000000000B /* XCLocalSwiftPackageReference "Packages/HistoryKit" */,
@@ -1004,6 +1008,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RecordingCore;
 		};
+		KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/StudioCore;
+		};
 		KADR00000000000000000009 /* XCLocalSwiftPackageReference "Packages/SelectionUI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/SelectionUI;
@@ -1073,6 +1081,10 @@
 		KADR0000000000000000006B /* RecordingCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RecordingCore;
+		};
+		KADR000000000000000000FF /* StudioCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioCore;
 		};
 		KADR0000000000000000006C /* SelectionUI */ = {
 			isa = XCSwiftPackageProductDependency;
