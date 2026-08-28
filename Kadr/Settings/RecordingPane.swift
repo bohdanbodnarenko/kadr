@@ -1,3 +1,4 @@
+import RecordingCore
 import SettingsKit
 import Shared
 import SwiftUI
@@ -38,6 +39,12 @@ struct RecordingPane: View {
             Section("Audio") {
                 Toggle("Record system audio", isOn: $settings.recordsSystemAudio)
                 Toggle("Record microphone", isOn: $settings.recordsMicrophone)
+                    .disabled(!RecordingOptions.microphoneIsAvailable)
+                if !RecordingOptions.microphoneIsAvailable {
+                    Text("Recording the microphone needs macOS 15 or later.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 Text("System audio needs no driver — macOS captures it directly. The "
                     + "microphone is recorded as a separate track so it can be dropped later.")
                     .font(.callout)

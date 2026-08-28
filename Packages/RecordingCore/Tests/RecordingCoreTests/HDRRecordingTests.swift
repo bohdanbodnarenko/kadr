@@ -68,3 +68,32 @@ struct HDRRecordingTests {
         #expect(options.dynamicRange == DynamicRange.high.resolved)
     }
 }
+
+/// The microphone toggle (docs/03 §1.8, docs/07 H2, docs/09 U0.3).
+///
+/// The review found the toggle produced silent narration files: the writer created a
+/// microphone track and nothing ever fed it. The rule pinned here is that a recording
+/// only claims a microphone track when this system can actually fill one.
+@Suite("Microphone capture")
+struct MicrophoneCaptureTests {
+    @Test("Asking for the microphone only sticks where the system can provide it")
+    func togglesResolveAgainstAvailability() {
+        let options = RecordingOptions(capturesMicrophone: true)
+        #expect(options.capturesMicrophone == RecordingOptions.microphoneIsAvailable)
+        #expect(options.recordsMicrophone == RecordingOptions.microphoneIsAvailable)
+    }
+
+    @Test("Not asking for it never records it")
+    func offStaysOff() {
+        let options = RecordingOptions(capturesMicrophone: false)
+        #expect(!options.capturesMicrophone)
+        #expect(!options.recordsMicrophone)
+    }
+
+    @Test("System audio is independent of the microphone")
+    func systemAudioIsSeparate() {
+        let options = RecordingOptions(capturesSystemAudio: true, capturesMicrophone: false)
+        #expect(options.capturesSystemAudio)
+        #expect(!options.recordsMicrophone)
+    }
+}

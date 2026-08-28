@@ -33,29 +33,63 @@ public struct CaptureFileWriter: Sendable {
         options: EncodingOptions = EncodingOptions()
     ) throws -> URL {
         let data = try encoder.encode(image, options: options)
-        let url = try availableURL(
-            in: directory,
-            template: template,
-            context: context,
-            fileExtension: options.format.fileExtension
-        )
 
         do {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            try data.write(to: url, options: .atomic)
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
 
-        logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
-        return url
+        // Both halves of docs/03 §9 — atomic, and never overwriting — in one move.
+        //
+        // Choosing a free name and then writing it is check-then-act: two captures a
+        // millisecond apart pick the same name and the second replaces the first. Foundation
+        // cannot express both guarantees in one write (`.withoutOverwriting` traps when
+        // combined with `.atomic`), so the file is written to a scratch name in the same
+        // directory and *moved* into place: the rename is atomic, and it fails rather than
+        // replacing anything, which makes the move itself the arbiter of the race
+        // (docs/07 M6).
+        //
+        // Same directory deliberately: a move across volumes is a copy, and would be
+        // neither atomic nor cheap.
+        let temporary = directory.appendingPathComponent(".kadr-write-\(UUID().uuidString)")
+        do {
+            try data.write(to: temporary, options: .atomic)
+        } catch {
+            throw ExportError.writeFailed(error.localizedDescription)
+        }
+        // Only ever removes a scratch file the move did not consume.
+        defer { try? fileManager.removeItem(at: temporary) }
+
+        for _ in 1 ... Self.collisionRetries {
+            let url = try availableURL(
+                in: directory,
+                template: template,
+                context: context,
+                fileExtension: options.format.fileExtension
+            )
+            do {
+                try fileManager.moveItem(at: temporary, to: url)
+                logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+                return url
+            } catch let error as CocoaError where error.code == .fileWriteFileExists {
+                continue
+            } catch {
+                throw ExportError.writeFailed(error.localizedDescription)
+            }
+        }
+        throw ExportError.writeFailed("Could not claim a filename in \(directory.path)")
     }
+
+    /// How many times a lost filename race is retried before giving up. Generous: every
+    /// retry means another capture landed in the same millisecond.
+    private static let collisionRetries = 16
 
     /// The first free filename for this capture.
     ///
     /// The counter goes through the template when it uses `{counter}` and is appended in
     /// parentheses when it does not, which matches what the Finder does.
-    func availableURL(
+    public func availableURL(
         in directory: URL,
         template: FilenameTemplate,
         context: FilenameContext,

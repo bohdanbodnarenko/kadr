@@ -28,6 +28,12 @@ final class HistoryController {
     private var window: HistoryWindowController?
     private var pageOffset = 0
     private var filter = HistoryFilter.all
+
+    /// The filter the window is currently showing, for refreshes driven from elsewhere.
+    var currentFilter: HistoryFilter {
+        filter
+    }
+
     private var pending: [HistoryIngest] = []
 
     /// What the History window's search field holds, and the indexer behind it
@@ -172,6 +178,30 @@ final class HistoryController {
             usage = try await store.storageUsage()
         } catch {
             logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Removes whatever the library holds for a file the user deleted elsewhere.
+    ///
+    /// Hashes the file first, because the library stores captures content-addressed and
+    /// the record's own path is not the path the caller has (docs/07 H5).
+    /// Removes the library's copy of the capture at `fileURL`.
+    ///
+    /// The address is taken synchronously, before returning: callers delete the file
+    /// immediately afterwards, and a hash taken later would be a hash of nothing — which
+    /// is how a "deleted" capture stayed in the library (docs/07 H5).
+    func deleteFromLibrary(matching fileURL: URL) {
+        guard let store, let hash = try? HistoryStore.contentHash(of: fileURL) else { return }
+        Task { [weak self] in
+            guard let report = try? await store.delete(contentHash: hash),
+                  report.deletedCount > 0
+            else {
+                return
+            }
+            // Re-query rather than filtering the cached page by hand: the deletion may
+            // have taken several records, and the window is showing whatever filter the
+            // user set.
+            await self?.reload(filter: self?.currentFilter ?? .all)
         }
     }
 

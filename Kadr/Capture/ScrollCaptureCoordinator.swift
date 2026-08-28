@@ -33,7 +33,9 @@ final class ScrollCaptureCoordinator {
     @ObservationIgnored private let vision = VisionClient()
     @ObservationIgnored private let session = ScrollCaptureSession()
     @ObservationIgnored private let scroller = AutoScroller()
-    @ObservationIgnored private let logger = KadrLog.logger(.capture)
+    /// Internal, not private: the seam-review half lives in
+    /// `ScrollCaptureCoordinator+Seams.swift`, and `private` is file-scoped.
+    @ObservationIgnored let logger = KadrLog.logger(.capture)
 
     private(set) var state: State = .idle
     private(set) var frameCount = 0
@@ -56,6 +58,14 @@ final class ScrollCaptureCoordinator {
     /// One-shot reporter for `kadr capture-scrolling` (docs/03 §8.4). Cleared when the
     /// capture ends, whichever way it ends.
     @ObservationIgnored private var automationCompletion: ((CaptureOutcome) -> Void)?
+
+    /// Bumped whenever a capture begins or ends.
+    ///
+    /// A stitch runs in the helper and takes seconds; cancelling meanwhile used to leave
+    /// it running, and its result then arrived as a finished page for a capture the user
+    /// had abandoned. The stitch carries the token it started with and drops everything
+    /// if it no longer matches (docs/07 M5).
+    @ObservationIgnored private var sessionToken = 0
 
     init(
         captureEngine: CaptureEngine,
@@ -117,6 +127,7 @@ final class ScrollCaptureCoordinator {
     }
 
     private func start(region rect: DisplayRect, display: DisplayGeometry) {
+        sessionToken += 1
         region = (rect, display)
         lastProfile = nil
         sticky = .none
@@ -280,6 +291,8 @@ final class ScrollCaptureCoordinator {
         autoScrollTask?.cancel()
         autoScrollTask = nil
         isAutoScrolling = false
+        // Invalidates any stitch already in flight before it can report (docs/07 M5).
+        sessionToken += 1
         Task { [weak self] in
             await self?.session.discard()
             self?.finish(nil)
@@ -287,6 +300,8 @@ final class ScrollCaptureCoordinator {
     }
 
     private func stitch(frames: [URL], excluding excluded: [Int]) async {
+        // Everything below suspends, and a cancel can land in any of those gaps.
+        let token = sessionToken
         let size = await session.pixelSize
         guard let destination = output.stagingURL(pixelSize: size) else {
             await session.discard()
@@ -302,6 +317,14 @@ final class ScrollCaptureCoordinator {
             vision.disconnect()
 
             let url = URL(fileURLWithPath: response.path)
+            guard token == sessionToken else {
+                // Cancelled while the helper was working: throw the page away rather than
+                // handing the user something they asked not to have (docs/07 M5).
+                logger.info("Discarding a stitch for a cancelled capture")
+                try? FileManager.default.removeItem(at: url)
+                await session.discard()
+                return
+            }
             logger.info("Stitched \(response.pixelSize.height, privacy: .public) px of page")
 
             if settings.scrollReviewsSeams, !response.uncertainSeams.isEmpty {
@@ -328,6 +351,10 @@ final class ScrollCaptureCoordinator {
             finish(url, size: response.pixelSize)
         } catch {
             vision.disconnect()
+            guard token == sessionToken else {
+                await session.discard()
+                return
+            }
             logger.error("Stitching failed: \(error.localizedDescription, privacy: .public)")
             presentStitchFailure(frames: frames)
             await session.discard()
@@ -336,6 +363,7 @@ final class ScrollCaptureCoordinator {
     }
 
     private func finish(_ url: URL?, size: PixelSize = PixelSize(width: 0, height: 0)) {
+        sessionToken += 1
         hud?.dismiss()
         hud = nil
         strip.reset()
@@ -350,86 +378,6 @@ final class ScrollCaptureCoordinator {
             report(.cancelled)
         }
     }
-
-    // MARK: - Seams the stitcher was not sure about (docs/03 §1.6)
-
-    private enum SeamChoice {
-        case keep
-        case retry
-        case exportFrames
-    }
-
-    private func reviewSeams(_ response: ScrollStitchResponse, frames: [URL]) -> SeamChoice {
-        let count = response.uncertainSeams.count
-        let alert = NSAlert()
-        alert.messageText = count == 1
-            ? "One join in this capture is uncertain"
-            : "\(count) joins in this capture are uncertain"
-        alert.informativeText = "Kadr could not be sure how two frames line up, which "
-            + "usually means the page moved in a way the overlap could not explain — a "
-            + "sticky banner, an animation, or scrolling faster than the frames could "
-            + "follow. Keep it if it looks right, retry without the frame that caused it, "
-            + "or take the frames away and assemble them yourself."
-        alert.addButton(withTitle: "Keep Anyway")
-        alert.addButton(withTitle: "Retry")
-        alert.addButton(withTitle: "Export Frames")
-        NSApp.activate()
-
-        return switch alert.runModal() {
-        case .alertSecondButtonReturn: .retry
-        case .alertThirdButtonReturn: .exportFrames
-        default: .keep
-        }
-    }
-
-    private func presentStitchFailure(frames: [URL]) {
-        let alert = NSAlert()
-        alert.messageText = "Kadr could not stitch this capture"
-        alert.informativeText = "The frames are still here. You can save them and put the "
-            + "page together yourself."
-        alert.addButton(withTitle: "Export Frames")
-        alert.addButton(withTitle: "Discard")
-        NSApp.activate()
-        if alert.runModal() == .alertFirstButtonReturn {
-            exportFrames(frames)
-        }
-    }
-
-    /// Hands the raw frames over, which is the honest fallback when stitching cannot be
-    /// trusted (docs/03 §1.6 failure mode).
-    private func exportFrames(_ frames: [URL]) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        panel.message = "Choose where to put the \(frames.count) captured frames."
-        NSApp.activate()
-        guard panel.runModal() == .OK, let directory = panel.url else { return }
-
-        let folder = directory.appendingPathComponent(
-            "Kadr Scrolling Capture \(Self.folderFormatter.string(from: Date()))",
-            isDirectory: true
-        )
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            for frame in frames {
-                try FileManager.default.copyItem(
-                    at: frame,
-                    to: folder.appendingPathComponent(frame.lastPathComponent)
-                )
-            }
-            NSWorkspace.shared.activateFileViewerSelecting([folder])
-        } catch {
-            logger.error("Could not export frames: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private static let folderFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return formatter
-    }()
 
     // MARK: - The HUD
 

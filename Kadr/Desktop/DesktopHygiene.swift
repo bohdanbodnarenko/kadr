@@ -172,6 +172,23 @@ final class DesktopHygieneController {
         applyCaptureWallpaper()
     }
 
+    /// Applies the capture appearance and waits for the screen to actually show it.
+    ///
+    /// Hiding the icons restarts the Finder and swapping the wallpaper is asynchronous;
+    /// capturing immediately photographs the desktop as it was. The settle is skipped
+    /// entirely when nothing changed, so an ordinary capture pays nothing for it
+    /// (docs/07 H3).
+    func beginCaptureAndSettle() async {
+        let changesAppearance = settings.hideDesktopDuringCapture
+            || settings.captureWallpaper != .none
+        beginCapture()
+        guard changesAppearance else { return }
+        try? await Task.sleep(for: .milliseconds(Self.settleMilliseconds))
+    }
+
+    /// Long enough for a Finder restart to repaint, short enough not to feel like lag.
+    private static let settleMilliseconds = 250
+
     func endCapture() {
         restoreCaptureWallpaper()
         reasons.remove(.capture)

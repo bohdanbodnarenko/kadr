@@ -72,9 +72,14 @@ struct ImageRenderingTests {
     }
 
     private func pixel(_ image: CGImage, x: Int, y: Int) -> Sample {
-        var bytes = [UInt8](repeating: 0, count: 4)
+        // Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is
+        // given and writes through it during `draw` — past the end of the inout access
+        // an array would give it, which is undefined behaviour and does crash.
+        let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+        bytes.initialize(repeating: 0, count: 4)
+        defer { bytes.deallocate() }
         guard let context = CGContext(
-            data: &bytes,
+            data: bytes,
             width: 1,
             height: 1,
             bitsPerComponent: 8,

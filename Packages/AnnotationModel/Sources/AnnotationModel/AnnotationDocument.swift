@@ -38,6 +38,11 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     private var history: [[AnnotationCommand]]
     private var historyIndex: Int
 
+    /// The command list as it was when the current gesture opened, or nil when no gesture
+    /// is in progress. Never encoded: a gesture cannot outlive the drag that opened it,
+    /// so a document saved mid-drag reopens with the gesture already resolved.
+    private var gestureBaseline: [AnnotationCommand]?
+
     public var selection: Set<AnnotationID>
 
     public init(baseImage: BaseImageReference, commands: [AnnotationCommand] = []) {
@@ -45,6 +50,15 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         history = [commands]
         historyIndex = 0
         selection = []
+    }
+
+    /// The gesture baseline is deliberately absent: it is transient UI state that belongs
+    /// to a drag in progress, and a decoded document is never mid-drag.
+    private enum CodingKeys: String, CodingKey {
+        case baseImage
+        case history
+        case historyIndex
+        case selection
     }
 
     /// The annotations as they stand, in back-to-front order.
@@ -188,6 +202,58 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     public mutating func add(_ command: AnnotationCommand) {
         perform { $0.append(command) }
         renumberCounters()
+    }
+
+    // MARK: - Gestures (docs/09 U0.2)
+
+    /// Opens a gesture: a run of live edits that must land as **one** undo step.
+    ///
+    /// A drag produces a mouse-moved event every frame. Routing those through `perform`
+    /// pushes an entry each time, which fills a 128-deep stack in under two seconds of
+    /// dragging and makes ⌘Z useless. Inside a gesture the edits amend the current entry
+    /// instead, and `endGesture` turns the whole run into a single step.
+    ///
+    /// Re-entrant calls are ignored, so a stray `pointerDown` cannot orphan a baseline.
+    public mutating func beginGesture() {
+        guard gestureBaseline == nil else { return }
+        gestureBaseline = commands
+    }
+
+    /// Whether a gesture is open. The view layer uses this to keep its live-drag path
+    /// and its rebuild-everything path from fighting.
+    public var isGestureOpen: Bool {
+        gestureBaseline != nil
+    }
+
+    /// A live edit inside a gesture. Outside one it behaves exactly like `perform`, so a
+    /// caller that forgets to open a gesture still gets correct — if noisier — history.
+    public mutating func updateGesture(_ change: (inout [AnnotationCommand]) -> Void) {
+        guard gestureBaseline != nil else {
+            perform(change)
+            return
+        }
+        var updated = commands
+        change(&updated)
+        guard updated != commands else { return }
+        history[historyIndex] = updated
+    }
+
+    /// Closes the gesture, leaving exactly one undo step for everything it did.
+    ///
+    /// The pre-gesture state is put back into the current slot and the final state is
+    /// pushed on top, so undo lands where the user started the drag rather than somewhere
+    /// in the middle of it. A gesture that changed nothing — a click that did not move —
+    /// leaves history untouched.
+    @discardableResult
+    public mutating func endGesture() -> Bool {
+        guard let baseline = gestureBaseline else { return false }
+        gestureBaseline = nil
+
+        let final = commands
+        history[historyIndex] = baseline
+        guard final != baseline else { return false }
+        pushHistory(final)
+        return true
     }
 
     public mutating func remove(_ ids: Set<AnnotationID>) {

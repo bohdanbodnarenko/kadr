@@ -60,9 +60,15 @@ public struct LoupeSampler: Sendable {
         guard x >= 0, y >= 0, x < image.width, y < image.height else { return nil }
         guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
 
-        var bytes = [UInt8](repeating: 0, count: 4)
+        // Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is
+        // given and writes through it during `draw`, which is past the end of the inout
+        // access an array would give it. That is undefined behaviour, and it does crash.
+        let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+        bytes.initialize(repeating: 0, count: 4)
+        defer { bytes.deallocate() }
+
         guard let context = CGContext(
-            data: &bytes,
+            data: bytes,
             width: 1,
             height: 1,
             bitsPerComponent: 8,

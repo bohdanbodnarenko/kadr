@@ -64,7 +64,12 @@ public final class EditorDocumentModel {
     public private(set) var marquee: CGRect?
 
     private var dragOrigin: CGPoint?
-    private var dragStartRects: [AnnotationID: CGRect] = [:]
+    /// The selected annotations exactly as they were when the drag began.
+    ///
+    /// The move is recomputed from these on every event rather than accumulated onto the
+    /// live ones: applying an origin-relative delta to already-moved commands compounds,
+    /// and the selection accelerates away from the pointer (docs/07 C2).
+    private var dragStartCommands: [AnnotationID: AnnotationCommand] = [:]
     private var isMovingSelection = false
 
     public init(document: AnnotationDocument) {
@@ -114,7 +119,7 @@ public final class EditorDocumentModel {
 
         if tool == .select {
             if isMovingSelection {
-                moveSelection(by: CGSize(width: point.x - origin.x, height: point.y - origin.y))
+                dragSelection(to: point, from: origin)
             } else {
                 marquee = CGRect(
                     x: min(origin.x, point.x),
@@ -133,8 +138,11 @@ public final class EditorDocumentModel {
 
     public func pointerUp(at point: CGPoint, modifiers: EditorModifiers = []) {
         defer {
+            // Closes the drag's single undo step. Safe unconditionally: with no gesture
+            // open it does nothing, so every exit from this method leaves history tidy.
+            document.endGesture()
             dragOrigin = nil
-            dragStartRects = [:]
+            dragStartCommands = [:]
             isMovingSelection = false
             marquee = nil
             draft = nil
@@ -183,11 +191,33 @@ public final class EditorDocumentModel {
         }
 
         isMovingSelection = !document.selection.isEmpty
-        dragStartRects = Dictionary(
+        guard isMovingSelection else { return }
+
+        dragStartCommands = Dictionary(
             uniqueKeysWithValues: document.commands
                 .filter { document.selection.contains($0.id) }
-                .map { ($0.id, AnnotationHitTesting.boundingBox(of: $0)) }
+                .map { ($0.id, $0) }
         )
+        // One undo step for the whole drag, however many frames it takes (docs/09 U0.2).
+        document.beginGesture()
+    }
+
+    /// Positions the selection for the pointer's current location.
+    ///
+    /// Absolute, not incremental: every event re-derives each annotation from where it
+    /// was when the drag started, so a 100-point drag moves exactly 100 points no matter
+    /// how many mouse-moved events arrived on the way.
+    private func dragSelection(to point: CGPoint, from origin: CGPoint) {
+        let delta = CGSize(width: point.x - origin.x, height: point.y - origin.y)
+        let starts = dragStartCommands
+        guard !starts.isEmpty else { return }
+
+        document.updateGesture { commands in
+            for index in commands.indices {
+                guard let start = starts[commands[index].id] else { continue }
+                commands[index] = Self.translated(start, by: delta)
+            }
+        }
     }
 
     /// Moves the selection by a delta from where the drag started.

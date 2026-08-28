@@ -17,17 +17,21 @@ import Shared
 @MainActor
 final class AreaCaptureCoordinator {
     private let engine: CaptureEngine
-    private let permissions: PermissionCoordinator
+    /// Internal, not private: the failure path lives in
+    /// `AreaCaptureCoordinator+Delivery.swift`, and `private` is file-scoped.
+    let permissions: PermissionCoordinator
     private let overlay: SelectionOverlayController
     private let settings: AppSettings
     private let timer = CaptureCountdown()
     private let vision = VisionClient()
-    private let recovery = PermissionRecovery()
+    let recovery = PermissionRecovery()
     private var pickerSession: ContentSharingPickerSession?
     /// Internal, not private: the colour-pick half lives in
     /// `AreaCaptureCoordinator+ColorPick.swift`, and `private` is file-scoped.
     let toast = TextCaptureToast()
-    private let output: CaptureOutput
+    /// Internal, not private: delivery lives in
+    /// `AreaCaptureCoordinator+Delivery.swift`, and `private` is file-scoped.
+    let output: CaptureOutput
     /// Internal, not private: the overlay-facing forwarders live in
     /// `AreaCaptureCoordinator+Overlay.swift`, and `private` is file-scoped.
     let quickAccess: QuickAccessManager
@@ -50,11 +54,10 @@ final class AreaCaptureCoordinator {
     /// Whether the next overlay opens as a colour picker (docs/03 §3 P3, docs/06 M22).
     var startsInEyedropperMode = false
 
-    /// Settings this one capture overrides, and who to tell when it lands (docs/03 §8.4).
-    ///
-    /// Both are cleared the moment the capture reports, so an automated capture cannot
-    /// leak its `action=` into the next one the user takes by hand.
     /// The automation request this capture is serving, if any (docs/03 §8.4).
+    ///
+    /// Cleared the moment the capture reports, so an automated capture cannot leak its
+    /// `action=` into the next one the user takes by hand.
     let automation = AutomationCaptureRequest()
 
     init(
@@ -131,16 +134,18 @@ final class AreaCaptureCoordinator {
                 guard let self else { return }
                 do {
                     await engine.setDynamicRange(settings.captureDynamicRange)
+                    // Before the pixels, not after: hiding the icons or swapping the
+                    // wallpaper afterwards leaves them in the shot and restarts the Finder
+                    // for nothing (docs/07 H3).
+                    await hygiene?.beginCaptureAndSettle()
                     let captures = try await engine.captureAllDisplays(
                         includesCursor: includesCursor
                     )
                     permissions.noteCaptureSuccess()
-                    hygiene?.beginCapture()
-                    for capture in captures {
-                        deliver(capture)
-                    }
+                    await deliverAll(captures)
                     hygiene?.endCapture()
                 } catch {
+                    hygiene?.endCapture()
                     handle(error)
                 }
             }
@@ -289,7 +294,7 @@ final class AreaCaptureCoordinator {
                 do {
                     let capture = try await engine.captureWindow(selection.window.id, options: options)
                     permissions.noteCaptureSuccess()
-                    deliver(capture)
+                    await deliver(capture)
                 } catch {
                     handle(error)
                 }
@@ -324,9 +329,6 @@ final class AreaCaptureCoordinator {
             return
         }
 
-        let state = signposter.beginInterval("selectionToClipboard")
-        defer { signposter.endInterval("selectionToClipboard", state) }
-
         // Cropped from the frozen bitmap, never re-captured — that is what guarantees
         // the file matches what the user selected on (docs/03 §1.1).
         guard let image = frozen.croppedImage(localRect: result.localRect) else {
@@ -336,7 +338,7 @@ final class AreaCaptureCoordinator {
 
         // Metadata for the crop, not the whole display: the filename template and the
         // history index both read the size from here.
-        deliver(Capture(
+        let capture = Capture(
             image: image,
             metadata: CaptureMetadata(
                 source: .region(display: result.display.displayID),
@@ -347,7 +349,17 @@ final class AreaCaptureCoordinator {
                 colorSpaceName: image.colorSpace?.name as String?,
                 frontmostApp: frontmostAtHotkey
             )
-        ))
+        )
+
+        // The signpost lives inside the task so it still measures what it claims to —
+        // selection to clipboard, encode included — now that the encode has moved off the
+        // main actor (PRD §8, docs/07 H4).
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            let state = signposter.beginInterval("selectionToClipboard")
+            await deliver(capture)
+            signposter.endInterval("selectionToClipboard", state)
+        }
     }
 
     /// Sends a crop to the Vision helper and puts the result on the clipboard.
@@ -387,70 +399,27 @@ final class AreaCaptureCoordinator {
         inFlight = Task { [weak self] in
             guard let self else { return }
             do {
+                // Before the pixels, not after (docs/07 H3).
+                await hygiene?.beginCaptureAndSettle()
                 let capture = try await engine.captureRegion(
                     rect,
                     on: displayID,
                     includesCursor: includesCursor
                 )
                 permissions.noteCaptureSuccess()
-                hygiene?.beginCapture()
-                deliver(capture)
+                await deliver(capture)
                 hygiene?.endCapture()
             } catch {
+                hygiene?.endCapture()
                 handle(error)
             }
         }
-    }
-
-    /// Exports a capture and puts a card up for it (docs/03 §2).
-    private func deliver(_ capture: Capture) {
-        guard let result = output.deliver(capture, overrides: automation.overrides) else {
-            automation.report(.failed("Kadr could not write the capture."))
-            return
-        }
-        quickAccess.show(result, capture: capture)
-
-        // `action=annotate|pin` says what to do with the file once it exists (docs/03 §8.4).
-        if let fileURL = result.fileURL {
-            switch automation.overrides.action {
-            case .annotate: quickAccess.annotateFile(at: fileURL)
-            case .pin: quickAccess.pinFile(at: fileURL)
-            default: break
-            }
-        }
-        let outcome = result.fileURL.map(CaptureOutcome.file)
-        automation.report(outcome ?? .failed("Kadr could not write the capture."))
     }
 
     /// The frontmost app right now, as a value.
     private static func currentFrontmostApp() -> AppIdentity? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         return AppIdentity(name: app.localizedName, bundleIdentifier: app.bundleIdentifier)
-    }
-
-    private func handle(_ error: any Error) {
-        if error is CancellationError {
-            // Deliberately silent: a cancelled task means a *newer* capture superseded
-            // this one, and by now the automation slot belongs to that one. Arming
-            // reports the cancellation to whoever was displaced (docs/06 M19).
-            return
-        }
-        permissions.noteCaptureFailure(error)
-        let mapped = CaptureError.mapping(error)
-        automation.report(.failed(mapped.errorDescription ?? "Capture failed."))
-        logger.error("Capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
-
-        // A lost grant is the one failure worth interrupting the user over: every capture
-        // will keep failing until they act (docs/03 §9).
-        guard mapped.indicatesPermissionLoss else { return }
-        switch recovery.present(state: permissions.state) {
-        case .openSettings:
-            recovery.openSystemSettings()
-        case .usePicker:
-            captureWithSystemPicker()
-        case .dismiss:
-            break
-        }
     }
 
     /// Captures through `SCContentSharingPicker`, which needs no permission at all
@@ -463,7 +432,7 @@ final class AreaCaptureCoordinator {
             defer { pickerSession = nil }
             do {
                 let capture = try await session.captureUserSelection()
-                deliver(capture)
+                await deliver(capture)
             } catch is CancellationError {
                 logger.info("Picker capture cancelled")
             } catch {

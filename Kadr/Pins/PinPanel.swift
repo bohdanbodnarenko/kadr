@@ -29,6 +29,10 @@ final class PinPanel: NonActivatingPanel {
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
     var onAnnotate: (() -> Void)?
+
+    /// Drags the pinned file out to another app. Pins always point at a finalised file,
+    /// so the promise has nothing to resolve beyond handing the path over.
+    private let dragController = FilePromiseDragController()
     var onClose: (() -> Void)?
 
     init?(fileURL: URL, scale: CGFloat) {
@@ -120,6 +124,16 @@ final class PinPanel: NonActivatingPanel {
     }
 
     /// Double-click returns the pin to 100% (docs/03 §4).
+    /// Starts a file-promise drag of the pinned capture (docs/03 §6).
+    func beginFileDrag(from view: NSView, event: NSEvent) {
+        dragController.beginDrag(
+            from: view,
+            event: event,
+            payload: .file(at: fileURL),
+            image: NSImage(contentsOf: fileURL)
+        )
+    }
+
     func resetZoom() {
         setZoom(1)
     }
@@ -199,6 +213,10 @@ private final class PinContentView: NSView {
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             panel?.resetZoom()
+        } else if event.modifierFlags.contains(.option) {
+            // ⌥-drag hands the file to another app; a plain drag still moves the pin,
+            // which is the gesture people already know (docs/03 §6, docs/09 U0.1).
+            panel?.beginFileDrag(from: self, event: event)
         } else {
             super.mouseDown(with: event)
         }

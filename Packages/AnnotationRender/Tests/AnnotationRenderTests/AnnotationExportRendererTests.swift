@@ -33,9 +33,14 @@ private func makeStripedImage(width: Int = 200, height: Int = 200) -> CGImage {
 private func pixels(of image: CGImage, in rect: CGRect) -> [UInt8] {
     let width = Int(rect.width)
     let height = Int(rect.height)
-    var bytes = [UInt8](repeating: 0, count: width * height * 4)
+    // Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is
+    // given and writes through it during `draw` — past the end of the inout access
+    // an array would give it, which is undefined behaviour and does crash.
+    let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: width * height * 4)
+    bytes.initialize(repeating: 0, count: width * height * 4)
+    defer { bytes.deallocate() }
     guard let context = CGContext(
-        data: &bytes,
+        data: bytes,
         width: width,
         height: height,
         bitsPerComponent: 8,
@@ -49,7 +54,7 @@ private func pixels(of image: CGImage, in rect: CGRect) -> [UInt8] {
         image,
         in: CGRect(x: -rect.minX, y: -rect.minY, width: CGFloat(image.width), height: CGFloat(image.height))
     )
-    return bytes
+    return Array(UnsafeBufferPointer(start: bytes, count: width * height * 4))
 }
 
 /// Mean absolute difference between neighbouring pixels — high for sharp stripes, low

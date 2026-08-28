@@ -121,6 +121,10 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
 
     func overlay(atRecordingTime seconds: TimeInterval) -> RecordingOverlay {
         lock.withLock {
+            // The engine's clock is the clock: remember it so events arriving between
+            // frames are stamped in the same time base (docs/07 M2).
+            recordingTime = seconds
+
             // Drop halos that have finished rather than accumulating them.
             clicks.removeAll { seconds - $0.time > Self.pulseDuration }
 
@@ -147,20 +151,39 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         }
     }
 
-    /// The recording clock, so events land at the right moment in the file.
-    var recordingStartedAt: Date? {
-        get { lock.withLock { startedAt } }
-        set { lock.withLock { startedAt = newValue } }
+    /// Where the recording is now, in the file's own time.
+    ///
+    /// This is the *engine's* clock, learned from the frames it asks us to draw into, and
+    /// it is the only clock in here. Stamping events with wall time instead is what made
+    /// halos and keystroke pills drift after a pause: the engine composites against
+    /// recording time, which stops while paused, so a wall-clock stamp taken after a
+    /// ten-second pause lands ten seconds in the future and never draws (docs/07 M2).
+    private var recordingTime: TimeInterval = 0
+
+    /// Resets the clock for a new recording.
+    func resetClock() {
+        lock.withLock { recordingTime = 0 }
     }
 
-    private var startedAt: Date?
-
-    private func elapsed() -> TimeInterval {
-        guard let startedAt else { return 0 }
-        return Date().timeIntervalSince(startedAt)
+    /// The current recording time. Callers already hold the lock.
+    private func elapsedLocked() -> TimeInterval {
+        recordingTime
     }
 
     // MARK: - Clicks
+
+    #if DEBUG
+        /// Records a click as if the monitor had seen one.
+        ///
+        /// A test seam: the real path is a global `NSEvent` monitor, which needs a running
+        /// event loop and a user. The thing worth testing is which *clock* the click is
+        /// stamped with (docs/07 M2), and that is all this bypasses.
+        func recordClickForTesting(at position: CGPoint, isRight: Bool = false) {
+            lock.withLock {
+                clicks.append(RecordedClick(position: position, time: elapsedLocked(), isRight: isRight))
+            }
+        }
+    #endif
 
     @MainActor
     private func startClickMonitor() {
@@ -173,7 +196,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             let isRight = event.type == .rightMouseDown
             let location = NSEvent.mouseLocation
             lock.withLock {
-                clicks.append(RecordedClick(position: location, time: elapsed(), isRight: isRight))
+                clicks.append(RecordedClick(position: location, time: elapsedLocked(), isRight: isRight))
                 // A stuck monitor must not grow this without bound.
                 if clicks.count > 32 {
                     clicks.removeFirst(clicks.count - 32)
@@ -257,7 +280,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         guard !text.isEmpty else { return }
         lock.withLock {
             keystrokes = text
-            keystrokeTime = elapsed()
+            keystrokeTime = elapsedLocked()
         }
     }
 }

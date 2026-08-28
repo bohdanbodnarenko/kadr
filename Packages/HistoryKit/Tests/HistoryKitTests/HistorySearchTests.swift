@@ -193,3 +193,81 @@ struct HistoryIndexTests {
         #expect(try await store.search("second").map(\.id) == [record.id])
     }
 }
+
+/// Deleting by content, not by row (docs/03 §5, docs/07 H5).
+///
+/// The privacy case the review found: a capture "deleted" from the overlay card was
+/// trashed on disk but left behind in the library's content-addressed store, where it sat
+/// until retention expired.
+@Suite("Deleting by content")
+struct HistoryContentDeleteTests {
+    private func makeStore() throws -> (HistoryStore, URL) {
+        let root = try makeHistoryRoot()
+        return try (HistoryStore.open(root: root), root)
+    }
+
+    @Test("Deleting by file removes the library's copy of it")
+    func deleteByFile() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let draft = try ingestDraft(seed: 1)
+        let record = try await store.ingest(draft)
+        #expect(try await store.storageUsage().itemCount == 1)
+
+        // The source file the card still points at, not the library's own copy.
+        let report = try await store.delete(fileMatching: draft.sourceURL)
+
+        #expect(report.deletedCount == 1)
+        #expect(try await store.storageUsage().itemCount == 0)
+        #expect(try await store.record(id: record.id) == nil)
+        #expect(
+            !FileManager.default.fileExists(atPath: store.fileURL(for: record).path),
+            "the library copy is what made a deleted capture recoverable"
+        )
+    }
+
+    @Test("Every record sharing those bytes goes, not just one")
+    func deleteRemovesEveryCopy() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // The same capture ingested twice is one file and two records.
+        let draft = try ingestDraft(seed: 2)
+        _ = try await store.ingest(draft)
+        _ = try await store.ingest(draft)
+        #expect(try await store.storageUsage().itemCount == 2)
+
+        let report = try await store.delete(fileMatching: draft.sourceURL)
+        #expect(report.deletedCount == 2)
+        #expect(try await store.storageUsage().itemCount == 0)
+    }
+
+    @Test("Deleting a file the library never held is a no-op, not an error")
+    func deleteUnknownFile() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        _ = try await store.ingest(ingestDraft(seed: 3))
+        let stranger = try writeTestImage(seed: 999)
+        defer { try? FileManager.default.removeItem(at: stranger) }
+
+        let report = try await store.delete(fileMatching: stranger)
+        #expect(report.deletedCount == 0)
+        #expect(try await store.storageUsage().itemCount == 1)
+    }
+
+    @Test("A deleted capture also leaves the search index")
+    func deleteClearsTheIndex() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let draft = try ingestDraft(seed: 4)
+        let record = try await store.ingest(draft)
+        try await store.index(id: record.id, text: "bank statement", applicationName: nil)
+        #expect(try await store.search("bank").count == 1)
+
+        _ = try await store.delete(fileMatching: draft.sourceURL)
+        #expect(try await store.search("bank").isEmpty)
+    }
+}

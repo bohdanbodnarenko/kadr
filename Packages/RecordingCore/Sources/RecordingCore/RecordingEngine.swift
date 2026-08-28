@@ -13,9 +13,16 @@ import Shared
 /// and the actor consumes that stream and writes. Nothing expensive happens on SCK's
 /// queue, and back-pressure is handled where it belongs — at the writer.
 public actor RecordingEngine {
+    /// How many sample buffers may queue between ScreenCaptureKit and the writer.
+    ///
+    /// Shallow on purpose: each one holds an IOSurface charged partly to WindowServer, so
+    /// an unbounded queue turns a moment of compositing lag into hundreds of megabytes of
+    /// retained frames (docs/07 H6).
+    static let sampleBufferDepth = 3
+
     private let logger = KadrLog.logger(.recording)
     private let signposter = KadrLog.signposter(.recording)
-    private let stitcher = SegmentStitcher()
+    private let stitcher: any SegmentStitching
     private let compositor = FrameCompositor()
     private let ownBundleIdentifier: String?
 
@@ -39,9 +46,29 @@ public actor RecordingEngine {
 
     public private(set) var state: RecordingState = .idle
 
-    public init(ownBundleIdentifier: String? = Bundle.main.bundleIdentifier) {
+    public init(
+        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        stitcher: any SegmentStitching = SegmentStitcher()
+    ) {
         self.ownBundleIdentifier = ownBundleIdentifier
+        self.stitcher = stitcher
     }
+
+    #if DEBUG
+        /// Puts the engine into the state a running recording leaves it in.
+        ///
+        /// A test seam, and a deliberate one: everything upstream of `stop` needs
+        /// ScreenCaptureKit and a real display, which CI has neither of — but the state
+        /// machine `stop` drives is exactly where the review found a recording could brick
+        /// (docs/07 C3). Debug-only, so it cannot exist in a shipped build.
+        func primeForTesting(state: RecordingState, segments: [URL], sessionDirectory: URL?) {
+            self.state = state
+            self.segments = segments
+            self.sessionDirectory = sessionDirectory
+            accumulatedDuration = 1
+            pixelSize = PixelSize(width: 100, height: 100)
+        }
+    #endif
 
     /// Sets what gets drawn into frames. Nil turns overlays off entirely.
     public func setOverlayProvider(_ provider: (any RecordingOverlayProviding)?) {
@@ -97,6 +124,11 @@ public actor RecordingEngine {
         guard state == .recording || state == .paused else { throw RecordingError.notRecording }
         state = .finishing
 
+        // Whatever happens below, the engine comes back to `.idle`. Leaving it in
+        // `.finishing` is what made a single failed stitch brick recording until relaunch:
+        // the menu bar reads "not recording" while every later start throws (docs/07 C3).
+        defer { state = .idle }
+
         await closeSegment()
         await stopStream()
 
@@ -105,16 +137,28 @@ public actor RecordingEngine {
             throw RecordingError.noFramesCaptured
         }
 
-        let url = try await stitcher.stitch(segments, to: destination)
-        let result = RecordingResult(
-            fileURL: url,
-            duration: accumulatedDuration,
-            pixelSize: pixelSize,
-            options: options
-        )
-        cleanUp()
-        state = .idle
-        return result
+        do {
+            let url = try await stitcher.stitch(segments, to: destination)
+            let result = RecordingResult(
+                fileURL: url,
+                duration: accumulatedDuration,
+                pixelSize: pixelSize,
+                options: options
+            )
+            cleanUp()
+            return result
+        } catch {
+            // Keep the footage. Segments are finalised and individually playable by
+            // design (docs/04 §4.3), so a failed join costs the user a join — not their
+            // recording. The directory is surfaced rather than deleted.
+            let directory = sessionDirectory
+            logger.error("Stitch failed: \(error.localizedDescription, privacy: .public)")
+            releaseSession(deletingFiles: false)
+            throw RecordingError.stitchFailed(
+                reason: error.localizedDescription,
+                segmentDirectory: directory?.path
+            )
+        }
     }
 
     /// Abandons the recording and deletes what it wrote.
@@ -156,11 +200,19 @@ public actor RecordingEngine {
     }
 
     private func cleanUp() {
+        releaseSession(deletingFiles: true)
+    }
+
+    /// Lets go of the session.
+    ///
+    /// - Parameter deletingFiles: false leaves the segments on disk, which is what a
+    ///   failed stitch needs — the engine is finished with them, the user is not.
+    private func releaseSession(deletingFiles: Bool) {
         consumeTask?.cancel()
         consumeTask = nil
         output = nil
         segments = []
-        if let sessionDirectory {
+        if deletingFiles, let sessionDirectory {
             try? FileManager.default.removeItem(at: sessionDirectory)
         }
         sessionDirectory = nil
@@ -188,6 +240,11 @@ public actor RecordingEngine {
         configuration.showsCursor = options.showsCursor
         configuration.capturesAudio = options.capturesSystemAudio
         configuration.excludesCurrentProcessAudio = options.excludesOwnAudio
+        if options.capturesMicrophone, #available(macOS 15.0, *) {
+            // ScreenCaptureKit records the mic alongside the screen, so there is no
+            // second capture session to keep in sync (docs/03 §1.8, docs/04 §4.3).
+            configuration.captureMicrophone = true
+        }
         // IOSurface-backed buffers straight from SCK's pool; the default depth of 3 is
         // deliberate — each retained frame is a full surface charged partly to
         // WindowServer, and raising it without measurement is how recordings start
@@ -230,6 +287,11 @@ public actor RecordingEngine {
             try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: output.queue)
             if options.capturesSystemAudio {
                 try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: output.queue)
+            }
+            // Without this output the writer's microphone track exists and is never fed,
+            // which is how the toggle produced silent narration files (docs/07 H2).
+            if options.capturesMicrophone, #available(macOS 15.0, *) {
+                try stream.addStreamOutput(output, type: .microphone, sampleHandlerQueue: output.queue)
             }
         } catch {
             throw RecordingError.writingFailed(error.localizedDescription)
@@ -374,7 +436,15 @@ private final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @u
     override init() {
         // `makeStream` hands back the stream and its continuation together, which avoids
         // the implicitly-unwrapped dance the closure form of `AsyncStream` requires.
-        let (stream, continuation) = AsyncStream<SampleBufferBox>.makeStream()
+        //
+        // Bounded, and deliberately shallow: each buffer holds an IOSurface charged partly
+        // to WindowServer, so an unbounded queue turns a moment of compositing lag into
+        // hundreds of megabytes of retained frames. Dropping the oldest is right for a
+        // recording — the writer stamps its own timestamps, so a dropped frame is a
+        // dropped frame, not a desynchronised one (docs/07 H6).
+        let (stream, continuation) = AsyncStream<SampleBufferBox>.makeStream(
+            bufferingPolicy: .bufferingNewest(RecordingEngine.sampleBufferDepth)
+        )
         buffers = stream
         self.continuation = continuation
         super.init()
@@ -390,7 +460,11 @@ private final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @u
         case .audio:
             continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .systemAudio))
         default:
-            break
+            // `.microphone` is macOS 15+, so it cannot be matched in a `case` that has to
+            // compile against the 14 SDK floor (docs/04 §4.3).
+            if #available(macOS 15.0, *), type == .microphone {
+                continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .microphone))
+            }
         }
     }
 

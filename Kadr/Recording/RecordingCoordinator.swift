@@ -127,7 +127,7 @@ final class RecordingCoordinator {
                 try await engine.start(target: target, options: options)
                 state = .recording
                 startedAt = Date()
-                overlaySource.recordingStartedAt = startedAt
+                overlaySource.resetClock()
                 pausedDuration = 0
                 pausedAt = nil
                 startTicking()
@@ -171,7 +171,7 @@ final class RecordingCoordinator {
     /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
     private func stopOverlays() {
         overlaySource.stop()
-        overlaySource.recordingStartedAt = nil
+        overlaySource.resetClock()
         Task { await engine.setOverlayProvider(nil) }
     }
 
@@ -324,10 +324,24 @@ final class RecordingCoordinator {
 
     // MARK: - Plumbing
 
+    /// Where the finished recording lands.
+    ///
+    /// Counted like every other capture: two recordings stopped inside the same second
+    /// used to resolve to the same name, and the second overwrote the first (docs/07 M6).
     private func destinationURL() -> URL {
         let template = FilenameTemplate("Kadr recording {date} {time}")
-        let name = template.expand(FilenameContext(applicationName: "Screen", date: Date()))
-        return settings.saveFolder.appendingPathComponent(name).appendingPathExtension("mp4")
+        let context = FilenameContext(applicationName: "Screen", date: Date())
+        let folder = settings.saveFolder
+
+        if let url = try? CaptureFileWriter().availableURL(
+            in: folder,
+            template: template,
+            context: context,
+            fileExtension: "mp4"
+        ) {
+            return url
+        }
+        return folder.appendingPathComponent(template.expand(context)).appendingPathExtension("mp4")
     }
 
     private func startTicking() {

@@ -8,7 +8,16 @@ import Shared
 /// Passthrough, not re-encode. The segments already contain exactly the frames the user
 /// recorded, in the codec they chose; decoding and re-encoding them would cost minutes on
 /// a long recording and lose quality for nothing. Stitching is a container operation.
-public struct SegmentStitcher: Sendable {
+/// Joins finished segments into the delivered file.
+///
+/// A protocol so the engine's failure path is testable: the review's C3 — a failed stitch
+/// leaving recording bricked — can only be pinned down by making the stitch fail on
+/// purpose (docs/09 U0.3).
+public protocol SegmentStitching: Sendable {
+    func stitch(_ segments: [URL], to destination: URL) async throws -> URL
+}
+
+public struct SegmentStitcher: SegmentStitching {
     private let logger = KadrLog.logger(.recording)
 
     public init() {}

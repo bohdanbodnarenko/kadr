@@ -13,7 +13,11 @@ struct QuickAccessCardActions {
     var share: (NSView) -> Void = { _ in }
     var delete: () -> Void = {}
     var dismiss: () -> Void = {}
-    var dragStarted: () -> Void = {}
+    /// Resolves the file to hand to a receiver, finalising a staged capture on the way.
+    /// Called when the drop asks for the bytes, never when the drag starts (docs/07 C1).
+    var resolveForDrag: @MainActor @Sendable () -> URL? = { nil }
+    /// The drag ended; `true` when a receiver took the file.
+    var dragCompleted: @MainActor @Sendable (Bool) -> Void = { _ in }
     /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
     var exportGIF: () -> Void = {}
     /// Whether Annotate, Pin and OCR do anything yet.
@@ -66,21 +70,28 @@ struct QuickAccessCardView: View {
             .frame(height: Self.thumbnailHeight)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(RoundedRectangle(cornerRadius: 8))
-            .onTapGesture(count: 2) {
-                if actions.annotateAvailable {
-                    actions.annotate()
-                }
-            }
-            .onTapGesture {
-                isExpanded.toggle()
-            }
-            // The file already exists on disk — staged or saved — so the drag hands over
-            // a real URL. A file promise would only defer a copy that has to happen
-            // anyway, and this way the receiving app gets the templated name directly.
-            .onDrag {
-                actions.dragStarted()
-                return NSItemProvider(contentsOf: item.fileURL) ?? NSItemProvider()
-            }
+            // One AppKit view owns click, double-click and drag. A file promise rather
+            // than a URL, so a staged capture is finalised when the receiver asks for it
+            // and an abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
+            .overlay(
+                FilePromiseDragView(
+                    payload: {
+                        FilePromisePayload(
+                            suggestedName: item.filename,
+                            contentType: item.contentType,
+                            resolve: actions.resolveForDrag,
+                            completed: actions.dragCompleted
+                        )
+                    },
+                    dragImage: { NSImage(contentsOf: item.fileURL) },
+                    onTap: { isExpanded.toggle() },
+                    onDoubleTap: {
+                        if actions.annotateAvailable {
+                            actions.annotate()
+                        }
+                    }
+                )
+            )
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Double-tap to expand actions, or drag to another app")
     }

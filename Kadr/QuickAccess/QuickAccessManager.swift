@@ -6,6 +6,7 @@ import os
 import OverlayKit
 import SettingsKit
 import Shared
+import UniformTypeIdentifiers
 
 /// Owns the Quick Access Overlay: the cards, where they sit, and when they go away.
 ///
@@ -245,7 +246,8 @@ final class QuickAccessManager {
         actions.save = { [weak self] in self?.save(item) }
         actions.delete = { [weak self] in self?.delete(item) }
         actions.dismiss = { [weak self] in self?.dismiss(item) }
-        actions.dragStarted = { [weak self] in self?.dragStarted(item) }
+        actions.resolveForDrag = { [weak self] in self?.resolveForDrag(item) }
+        actions.dragCompleted = { [weak self] accepted in self?.dragCompleted(item, accepted: accepted) }
         actions.pin = { [weak self] in self?.pin(item) }
         actions.pinAvailable = true
         actions.annotate = { [weak self] in self?.annotate(item) }
@@ -299,11 +301,9 @@ final class QuickAccessManager {
     }
 
     func copy(_ item: QuickAccessItem) {
-        guard let data = try? Data(contentsOf: item.fileURL) else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setData(data, forType: .png)
         finalizeIfStaged(item)
+        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        copyFile(at: url, isVideo: item.isVideo)
     }
 
     /// Pinning counts as acting on a staged capture, so it is finalised first — a pin
@@ -347,11 +347,23 @@ final class QuickAccessManager {
         editor.open(url)
     }
 
-    private func copyFile(at url: URL) {
-        guard let data = try? Data(contentsOf: url) else { return }
+    /// Puts a capture on the clipboard as what it actually is (docs/07 M1).
+    ///
+    /// Announcing every file as PNG meant a JPEG or HEIC pasted as garbage, and a
+    /// recording put hundreds of megabytes of MP4 on the pasteboard under an image type
+    /// no app could read. A video goes on as a file reference, which is what Finder, Mail
+    /// and Messages expect.
+    private func copyFile(at url: URL, isVideo: Bool = false) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setData(data, forType: .png)
+
+        guard !isVideo else {
+            pasteboard.writeObjects([url as NSURL])
+            return
+        }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let type = UTType(filenameExtension: url.pathExtension) ?? .png
+        pasteboard.setData(data, forType: NSPasteboard.PasteboardType(type.identifier))
     }
 
     private func revealInFinder(_ url: URL) {
@@ -365,11 +377,27 @@ final class QuickAccessManager {
 
     /// Dragging a card out counts as acting on it, so a staged file becomes a real one
     /// and the card goes if the user asked for that (docs/03 §2).
-    private func dragStarted(_ item: QuickAccessItem) {
+    /// The receiver asked for the file: finalise it and hand back where it now lives.
+    ///
+    /// Reading the URL back out of `panels` rather than trusting the captured item is the
+    /// whole fix for docs/07 C1 — `finalizeIfStaged` *moves* the file, and the card view's
+    /// copy of the item still holds the path it had before the move.
+    func resolveForDrag(_ item: QuickAccessItem) -> URL? {
         finalizeIfStaged(item)
-        if settings.overlayDismissOnDrag {
-            dismiss(item)
+        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .public)")
+            return nil
         }
+        return url
+    }
+
+    /// The drag finished. Only a drop that a receiver accepted may dismiss the card —
+    /// dismissing at drag start loses the capture when the user changes their mind
+    /// (docs/09 U0.1).
+    func dragCompleted(_ item: QuickAccessItem, accepted: Bool) {
+        guard accepted, settings.overlayDismissOnDrag else { return }
+        dismiss(item)
     }
 
     /// The first thing a user does with a staged capture finalises it (docs/03 §2).
@@ -396,6 +424,11 @@ final class QuickAccessManager {
         let entry = panels.remove(at: index)
         dismissTasks.removeValue(forKey: item.id)?.cancel()
         entry.panel.dismiss()
+        // The library keeps its own content-addressed copy, so trashing the file alone
+        // left a "deleted" capture sitting in App Support until retention expired — which
+        // for a sensitive screenshot is the whole problem (docs/07 H5). Hashed before the
+        // trash, because afterwards there is nothing to hash.
+        history?.deleteFromLibrary(matching: entry.item.fileURL)
         // Deleted means gone, so it is not offered for restore.
         try? FileManager.default.trashItem(at: entry.item.fileURL, resultingItemURL: nil)
         logger.info("Deleted \(entry.item.filename, privacy: .public)")

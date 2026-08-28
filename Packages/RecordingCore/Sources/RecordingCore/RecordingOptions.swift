@@ -71,7 +71,8 @@ public struct RecordingOptions: Sendable, Hashable {
         self.frameRate = frameRate
         self.codec = codec
         self.capturesSystemAudio = capturesSystemAudio
-        self.capturesMicrophone = capturesMicrophone
+        // Resolved here, so a writer never creates a track nothing can feed.
+        self.capturesMicrophone = capturesMicrophone && Self.microphoneIsAvailable
         self.showsCursor = showsCursor
         self.excludesOwnAudio = excludesOwnAudio
         // Resolved here rather than at the call site, so a recording started on macOS 14
@@ -82,6 +83,23 @@ public struct RecordingOptions: Sendable, Hashable {
     /// HDR needs a codec that can carry ten bits; H.264 as Kadr configures it cannot.
     public var recordsHDR: Bool {
         dynamicRange.isHigh && codec == .hevc
+    }
+
+    /// Whether this system can record the microphone at all.
+    ///
+    /// ScreenCaptureKit gained microphone capture in macOS 15. Kadr ships to 14, and a
+    /// toggle that silently records nothing is worse than one that is honestly
+    /// unavailable — so the UI hides it below that (docs/07 H2).
+    public static var microphoneIsAvailable: Bool {
+        if #available(macOS 15.0, *) {
+            return true
+        }
+        return false
+    }
+
+    /// Whether this recording will actually carry a microphone track.
+    public var recordsMicrophone: Bool {
+        capturesMicrophone && Self.microphoneIsAvailable
     }
 
     /// A bit rate that holds up for screen content at this size and frame rate.
@@ -174,4 +192,31 @@ public enum RecordingError: Error, Equatable, Sendable {
     case couldNotCreateWriter(String)
     case writingFailed(String)
     case noFramesCaptured
+    /// The segments were captured but could not be joined — a full disk, an unwritable
+    /// destination. Carries where the (individually playable) segments are, because
+    /// losing footage to a failed join is not an acceptable outcome (docs/09 U0.3).
+    case stitchFailed(reason: String, segmentDirectory: String?)
+}
+
+extension RecordingError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .alreadyRecording:
+            "A recording is already running."
+        case .notRecording:
+            "Nothing is recording."
+        case .targetUnavailable:
+            "That screen or window is no longer available to record."
+        case let .couldNotCreateWriter(reason), let .writingFailed(reason):
+            reason
+        case .noFramesCaptured:
+            "The recording captured no frames."
+        case let .stitchFailed(reason, directory):
+            if let directory {
+                "Kadr could not join the recording (\(reason)). The parts are still in \(directory)."
+            } else {
+                "Kadr could not join the recording: \(reason)"
+            }
+        }
+    }
 }

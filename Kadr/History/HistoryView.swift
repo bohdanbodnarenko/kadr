@@ -1,6 +1,7 @@
 import AppKit
 import HistoryKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Date presets for the history browser (docs/03 §5).
 enum HistoryDateFilter: String, CaseIterable, Identifiable {
@@ -133,15 +134,31 @@ struct HistoryView: View {
                             image: controller.thumbnail(for: record, maxPixelSize: 280),
                             isSelected: selection.contains(record.id)
                         )
-                        .onTapGesture(count: 2) { reopen(record) }
-                        .onTapGesture { toggleSelection(record.id) }
-                        .onDrag {
-                            controller.markAccessed(record)
-                            guard let url = controller.fileURL(for: record) else {
-                                return NSItemProvider()
-                            }
-                            return NSItemProvider(contentsOf: url) ?? NSItemProvider()
-                        }
+                        // A promise, not a URL: library files are content-addressed, so
+                        // dragging one out as a URL hands the receiver a file named after
+                        // its hash. The promise carries the name the capture was given
+                        // (docs/03 §6, docs/09 U0.1).
+                        .overlay(
+                            FilePromiseDragView(
+                                payload: {
+                                    FilePromisePayload(
+                                        suggestedName: record.originalFilename,
+                                        contentType: UTType(filenameExtension:
+                                            (record.originalFilename as NSString).pathExtension) ?? .png,
+                                        resolve: {
+                                            controller.markAccessed(record)
+                                            return controller.fileURL(for: record)
+                                        }
+                                    )
+                                },
+                                dragImage: {
+                                    controller.thumbnail(for: record, maxPixelSize: 160)
+                                        .map { NSImage(cgImage: $0, size: .zero) }
+                                },
+                                onTap: { toggleSelection(record.id) },
+                                onDoubleTap: { reopen(record) }
+                            )
+                        )
                         .contextMenu { cellMenu(record) }
                         .onAppear {
                             if record.id == controller.records.last?.id {

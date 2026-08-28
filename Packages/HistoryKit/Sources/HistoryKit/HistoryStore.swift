@@ -182,6 +182,42 @@ public actor HistoryStore {
         return report
     }
 
+    /// Deletes every record sharing a capture's bytes (docs/03 §5, docs/07 H5).
+    ///
+    /// By content hash, because that is what the library is keyed on: a capture the user
+    /// deleted from the overlay must not survive as a content-addressed copy in App
+    /// Support until retention expires. "Deleted" has to mean deleted.
+    @discardableResult
+    public func delete(contentHash: String) async throws -> EvictionReport {
+        let ids: [UUID] = try await dbPool.read { db in
+            let raw = try String.fetchAll(
+                db,
+                sql: "SELECT id FROM capture_records WHERE content_hash = ?",
+                arguments: [contentHash]
+            )
+            return raw.compactMap(UUID.init(uuidString:))
+        }
+        guard !ids.isEmpty else { return .empty }
+        return try await delete(ids: ids)
+    }
+
+    /// The library's address for the file at `url`.
+    ///
+    /// Exposed because content addressing is the library's own scheme and a caller that
+    /// is about to *destroy* the file needs the address while the bytes still exist —
+    /// trashing first and hashing afterwards deletes nothing (docs/07 H5).
+    public nonisolated static func contentHash(of url: URL) throws -> String {
+        try HistoryContentAddress.hash(of: url)
+    }
+
+    /// Deletes whatever the library holds for the file at `url`.
+    ///
+    /// Only safe while the file is still readable; see `contentHash(of:)`.
+    @discardableResult
+    public func delete(fileMatching url: URL) async throws -> EvictionReport {
+        try await delete(contentHash: HistoryStore.contentHash(of: url))
+    }
+
     public func storageUsage() async throws -> HistoryStorageUsage {
         try await dbPool.read { db in
             let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM capture_records") ?? 0

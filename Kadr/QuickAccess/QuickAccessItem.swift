@@ -3,6 +3,7 @@ import CoreGraphics
 import Foundation
 import HistoryKit
 import Shared
+import UniformTypeIdentifiers
 
 /// One capture, as the overlay knows it (docs/03 §2).
 ///
@@ -31,6 +32,15 @@ struct QuickAccessItem: Identifiable, Sendable {
 
     var filename: String {
         displayName ?? fileURL.lastPathComponent
+    }
+
+    /// What the file actually is, for pasteboard types and promise drags.
+    ///
+    /// Derived from the file rather than assumed: a capture may be PNG, JPEG, HEIC, WebP
+    /// or an MP4, and telling the receiver it is a PNG when it is not is how a paste ends
+    /// up as garbage (docs/07 M1).
+    var contentType: UTType {
+        UTType(filenameExtension: fileURL.pathExtension) ?? (isVideo ? .mpeg4Movie : .png)
     }
 
     /// "1280 × 960" for the hover readout.

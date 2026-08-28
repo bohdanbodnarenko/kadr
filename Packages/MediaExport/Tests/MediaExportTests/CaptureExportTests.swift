@@ -191,3 +191,92 @@ struct CaptureFileWriterTests {
         #expect(url.pathExtension == format.fileExtension)
     }
 }
+
+/// Never overwriting, even when two captures race for the same name (docs/03 §9, M6).
+@Suite("Filename collisions")
+struct FilenameCollisionTests {
+    private func scratch() -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-collide-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func makeImage() -> CGImage {
+        guard let context = CGContext(
+            data: nil,
+            width: 4,
+            height: 4,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let image = context.makeImage() else {
+            fatalError("Could not create a test image")
+        }
+        return image
+    }
+
+    /// The check-then-act window, closed: a file that appears between choosing the name
+    /// and writing it must not be replaced.
+    @Test("A name taken behind our back is never overwritten")
+    func doesNotOverwriteAnExistingFile() throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let writer = CaptureFileWriter()
+        let template = FilenameTemplate("fixed-name")
+        let context = FilenameContext()
+
+        // Someone else already owns the name this capture would choose.
+        let claimed = try writer.availableURL(
+            in: directory,
+            template: template,
+            context: context,
+            fileExtension: "png"
+        )
+        let sentinel = Data("not a screenshot".utf8)
+        try sentinel.write(to: claimed)
+
+        let written = try writer.write(
+            makeImage(),
+            to: directory,
+            template: template,
+            context: context
+        )
+
+        #expect(written != claimed, "the capture must take a different name")
+        #expect(try Data(contentsOf: claimed) == sentinel, "the existing file must be untouched")
+        #expect(FileManager.default.fileExists(atPath: written.path))
+    }
+
+    @Test("Repeated writes each get their own file")
+    func repeatedWritesDoNotCollide() throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let writer = CaptureFileWriter()
+        let template = FilenameTemplate("shot")
+        var urls: Set<URL> = []
+        for _ in 0 ..< 5 {
+            try urls.insert(writer.write(makeImage(), to: directory, template: template))
+        }
+
+        #expect(urls.count == 5, "five captures, five files")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).count == 5)
+    }
+
+    @Test("The counter is appended the way the Finder does it")
+    func counterFormat() throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let writer = CaptureFileWriter()
+        let template = FilenameTemplate("shot")
+        let first = try writer.write(makeImage(), to: directory, template: template)
+        let second = try writer.write(makeImage(), to: directory, template: template)
+
+        #expect(first.lastPathComponent == "shot.png")
+        #expect(second.lastPathComponent == "shot (2).png")
+    }
+}

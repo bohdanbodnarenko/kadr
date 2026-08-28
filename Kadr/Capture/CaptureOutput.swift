@@ -52,6 +52,84 @@ struct CaptureOutput {
         }
     }
 
+    /// Exports a capture without blocking the main actor (docs/07 H4).
+    ///
+    /// Encoding a 5K capture is tens of megabytes of PNG work — hundreds of milliseconds
+    /// of it — and doing that on the main actor freezes every window and blows the
+    /// selection→clipboard budget that this method's own signpost measures. The encode and
+    /// the file write happen off-main; only the pasteboard write comes back, because that
+    /// is the one part AppKit wants on the main thread.
+    @discardableResult
+    func deliverOffMain(_ capture: Capture, overrides: CaptureOverrides = .none) async -> ExportResult? {
+        let state = signposter.beginInterval("exportCapture")
+        defer { signposter.endInterval("exportCapture", state) }
+
+        let policy = policy(overrides)
+        let request = ExportRequest(
+            image: capture.image,
+            policy: policy,
+            saveFolder: settings.saveFolder,
+            template: FilenameTemplate(settings.filenameTemplate),
+            context: context(for: capture),
+            options: encodingOptions(for: capture)
+        )
+        let exporter = exporter
+
+        let outcome = await Task.detached(priority: .userInitiated) { () -> ExportOutcome? in
+            let clipboard = ClipboardCapture()
+            do {
+                let result = try exporter.export(
+                    request.image,
+                    policy: request.policy,
+                    saveFolder: request.saveFolder,
+                    template: request.template,
+                    context: request.context,
+                    options: request.options,
+                    copyData: { data, format in
+                        clipboard.store(data, format: format)
+                        return true
+                    }
+                )
+                return ExportOutcome(result: result, clipboard: clipboard.taken)
+            } catch {
+                return nil
+            }
+        }.value
+
+        guard let outcome else {
+            logger.error("Export failed")
+            return nil
+        }
+        if let clipboard = outcome.clipboard {
+            _ = copyToClipboard(clipboard.data, format: clipboard.format)
+        }
+        return outcome.result
+    }
+
+    /// Exports several captures from one action, e.g. every display at once.
+    ///
+    /// Only the first goes to the clipboard: there is one pasteboard, and writing each
+    /// display to it in turn means the user gets the last monitor rather than the one
+    /// they were looking at (docs/07 M4). The rest are still written to disk, because
+    /// losing three of four monitors would be worse than a file nobody asked for.
+    func deliverOffMain(
+        _ captures: [Capture],
+        overrides: CaptureOverrides = .none
+    ) async -> [(capture: Capture, result: ExportResult)] {
+        var delivered: [(capture: Capture, result: ExportResult)] = []
+        for (index, capture) in captures.enumerated() {
+            var overrides = overrides
+            if index > 0, overrides.action == nil || overrides.action == .copy {
+                // Everything after the first saves rather than fighting for the clipboard.
+                overrides.action = .save
+            }
+            if let result = await deliverOffMain(capture, overrides: overrides) {
+                delivered.append((capture, result))
+            }
+        }
+        return delivered
+    }
+
     /// Exports several captures at once, which is what a multi-display screen capture
     /// produces (docs/03 §1.3).
     ///
@@ -113,6 +191,34 @@ struct CaptureOutput {
         } catch {
             logger.error("Could not name a staged file: \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// What one export needs, gathered on the main actor so the work can leave it.
+    private struct ExportRequest: @unchecked Sendable {
+        let image: CGImage
+        let policy: ExportPolicy
+        let saveFolder: URL
+        let template: FilenameTemplate
+        let context: FilenameContext
+        let options: EncodingOptions
+    }
+
+    private struct ExportOutcome: @unchecked Sendable {
+        let result: ExportResult
+        let clipboard: (data: Data, format: ImageFormat)?
+    }
+
+    /// Carries the encoded bytes back from the export so the pasteboard write can happen
+    /// on the main actor, where AppKit wants it.
+    ///
+    /// `@unchecked Sendable` under a single-consumer invariant: it is written once inside
+    /// the detached export and read once after that task has finished.
+    private final nonisolated class ClipboardCapture: @unchecked Sendable {
+        private(set) var taken: (data: Data, format: ImageFormat)?
+
+        func store(_ data: Data, format: ImageFormat) {
+            taken = (data, format)
         }
     }
 
