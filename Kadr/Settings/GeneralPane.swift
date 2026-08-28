@@ -24,13 +24,11 @@ struct GeneralPane: View {
                 }
             }
 
-            Section {
-                Picker("After capturing", selection: $settings.defaultAction) {
-                    ForEach(DefaultCaptureAction.allCases, id: \.self) { action in
-                        Text(action.title).tag(action)
-                    }
-                }
+            Section("After capturing") {
+                AfterCaptureMatrixEditor(settings: settings)
+            }
 
+            Section {
                 LabeledContent("Save to") {
                     HStack {
                         Text(settings.saveFolder.path)

@@ -21,7 +21,9 @@ final class AreaCaptureCoordinator {
     /// `AreaCaptureCoordinator+Delivery.swift`, and `private` is file-scoped.
     let permissions: PermissionCoordinator
     private let overlay: SelectionOverlayController
-    private let settings: AppSettings
+    /// Internal, not private: delivery reads the after-capture matrix, and `private` is
+    /// file-scoped.
+    let settings: AppSettings
     private let timer = CaptureCountdown()
     private let vision = TextRecognizer()
     let recovery = PermissionRecovery()

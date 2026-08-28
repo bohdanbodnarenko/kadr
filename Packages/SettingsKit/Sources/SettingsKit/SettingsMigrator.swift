@@ -9,7 +9,7 @@ import Shared
 /// silently discard preferences written by a later version.
 public enum SettingsMigrator {
     /// The schema this build writes.
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     /// A single forward step: takes a store at `fromVersion` to `fromVersion + 1`.
     struct Step {
@@ -29,6 +29,19 @@ public enum SettingsMigrator {
             let key = SettingKeys.defaultAction.name
             guard store.object(forKey: key) as? String == "openInEditor" else { return }
             store.set(DefaultCaptureAction.copyToClipboard.rawValue, forKey: key)
+        }),
+        Step(fromVersion: 2, apply: { store in
+            // The single default action becomes a matrix (docs/09 U2.2). Migrated rather
+            // than reset: the old setting is the only statement the user has ever made
+            // about this, and discarding it to show them a nicer pane would be rude.
+            guard AfterCaptureMatrix.read(from: store, forKey: SettingKeys.afterCapture.name) == nil
+            else {
+                return
+            }
+            let stored = store.object(forKey: SettingKeys.defaultAction.name) as? String
+            let action = stored.flatMap(DefaultCaptureAction.init(rawValue:))
+                ?? SettingKeys.defaultAction.defaultValue
+            store[SettingKeys.afterCapture] = AfterCaptureMatrix.migrating(action)
         })
     ]
 

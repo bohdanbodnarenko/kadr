@@ -38,16 +38,34 @@ extension AreaCaptureCoordinator {
         }
         quickAccess.show(result, capture: capture)
 
-        // `action=annotate|pin` says what to do with the file once it exists (docs/03 §8.4).
         if let fileURL = result.fileURL {
+            // `action=annotate|pin` says what to do with the file once it exists
+            // (docs/03 §8.4). An automated request overrides the setting for this capture
+            // only, so the matrix is consulted just when nobody asked for anything.
             switch automation.overrides.action {
             case .annotate: quickAccess.annotateFile(at: fileURL)
             case .pin: quickAccess.pinFile(at: fileURL)
+            case .none: applyAfterCaptureActions(to: fileURL)
             default: break
             }
         }
         let outcome = result.fileURL.map(CaptureOutcome.file)
         automation.report(outcome ?? .failed("Kadr could not write the capture."))
+    }
+
+    /// Runs the after-capture actions the settings ask for (docs/09 U2.2).
+    ///
+    /// Only the ones that say what to do *with* the file: whether it was copied or saved
+    /// was already decided by the export policy, because those choices have to be made
+    /// before the bytes are written rather than after.
+    func applyAfterCaptureActions(to fileURL: URL) {
+        let actions = settings.afterCaptureActions(for: .screenshot)
+        if actions.contains(.annotate) {
+            quickAccess.annotateFile(at: fileURL)
+        }
+        if actions.contains(.pin) {
+            quickAccess.pinFile(at: fileURL)
+        }
     }
 
     func handle(_ error: any Error) {

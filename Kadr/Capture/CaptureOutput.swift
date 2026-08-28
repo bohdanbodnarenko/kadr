@@ -217,11 +217,14 @@ struct CaptureOutput {
             let saves = requested == .save
             return ExportPolicy(copiesToClipboard: copies, savesToFolder: saves, staging: !saves)
         }
-        let action = settings.defaultAction
+        // The matrix decides, per kind of capture (docs/09 U2.2). Staging is the absence
+        // of saving: a capture nobody asked to save waits in the staging area and is
+        // finalised on the first thing the user does with it (docs/03 §2).
+        let actions = settings.afterCaptureActions(for: .screenshot)
         return ExportPolicy(
-            copiesToClipboard: action.copiesToClipboard,
-            savesToFolder: action.savesToFolder,
-            staging: !action.savesToFolder
+            copiesToClipboard: actions.contains(.copy),
+            savesToFolder: actions.contains(.save),
+            staging: !actions.contains(.save)
         )
     }
 

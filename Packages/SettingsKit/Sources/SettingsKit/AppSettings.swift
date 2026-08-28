@@ -141,8 +141,25 @@ public final class AppSettings {
         didSet { store[SettingKeys.hasCompletedOnboarding] = hasCompletedOnboarding }
     }
 
+    /// Retired in favour of `afterCapture`, and kept so the code paths that still take an
+    /// old-style action keep working while they are converted (docs/09 U2.2).
     public var defaultAction: DefaultCaptureAction {
-        didSet { store[SettingKeys.defaultAction] = defaultAction }
+        didSet {
+            store[SettingKeys.defaultAction] = defaultAction
+            // Writing the old setting rewrites the matrix, so a test or a script that
+            // still sets it gets the behaviour it expects rather than a silent no-op.
+            afterCapture = AfterCaptureMatrix.migrating(defaultAction)
+        }
+    }
+
+    /// What happens after each kind of capture (docs/09 U2.2).
+    public var afterCapture: AfterCaptureMatrix {
+        didSet { store[SettingKeys.afterCapture] = afterCapture }
+    }
+
+    /// The actions for a kind of capture.
+    public func afterCaptureActions(for kind: CaptureKind) -> AfterCaptureActions {
+        afterCapture[kind]
     }
 
     /// Empty means "not chosen yet"; reads resolve to the Desktop, like macOS screenshots.
@@ -360,6 +377,7 @@ public final class AppSettings {
         self.store = store
         hasCompletedOnboarding = store[SettingKeys.hasCompletedOnboarding]
         defaultAction = store[SettingKeys.defaultAction]
+        afterCapture = store[SettingKeys.afterCapture]
         saveFolderPath = store[SettingKeys.saveFolderPath]
         filenameTemplate = store[SettingKeys.filenameTemplate]
         imageFormat = store[SettingKeys.imageFormat]
@@ -416,6 +434,7 @@ public final class AppSettings {
     /// Restores every key to its default. Used by Settings → Advanced → Reset (docs/03 §8.3).
     public func resetToDefaults() {
         defaultAction = SettingKeys.defaultAction.defaultValue
+        afterCapture = SettingKeys.afterCapture.defaultValue
         saveFolderPath = SettingKeys.saveFolderPath.defaultValue
         filenameTemplate = SettingKeys.filenameTemplate.defaultValue
         imageFormat = SettingKeys.imageFormat.defaultValue

@@ -6,7 +6,11 @@ public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
     /// Whether the user has been through onboarding (docs/03 §8.2).
     public static let hasCompletedOnboarding = SettingKey("app.hasCompletedOnboarding", default: false)
+    /// Retired by schema 3 in favour of `afterCapture`, and kept only so the migration
+    /// has something to read (docs/09 U2.2).
     public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)
+    /// What happens after each kind of capture (docs/09 U2.2).
+    public static let afterCapture = SettingKey("general.afterCapture", default: AfterCaptureMatrix.standard)
     public static let saveFolderPath = SettingKey("general.saveFolderPath", default: "")
     public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
     public static let imageFormat = SettingKey("general.imageFormat", default: ImageFormat.png)
