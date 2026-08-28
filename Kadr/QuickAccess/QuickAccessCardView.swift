@@ -22,6 +22,8 @@ struct QuickAccessCardActions {
     /// Opens a recording in the trim window (docs/03 §1.8). Only offered on a recording.
     var trim: () -> Void = {}
     var trimAvailable = false
+    /// The user has touched this card, so it stops closing on its own (docs/09 U2.1).
+    var engage: () -> Void = {}
     /// Whether Annotate, Pin and OCR do anything yet.
     var annotateAvailable = false
     var pinAvailable = false
@@ -68,7 +70,14 @@ struct QuickAccessCardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(Color.primary.opacity(0.12))
         )
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            // Hovering counts: reaching for a card is working with it, and having it
+            // vanish mid-thought is what makes people turn auto-close off entirely.
+            if hovering {
+                actions.engage()
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
     }

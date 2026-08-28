@@ -32,6 +32,12 @@ final class QuickAccessManager {
     let logger = KadrLog.logger(.overlay)
 
     var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
+    /// Cards the user has touched, which no longer close on their own (docs/09 U2.1).
+    private var engagedItems: Set<UUID> = []
+    /// Whether the cards are collapsed to an edge tab.
+    private(set) var isPeeking = false
+    /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
+    private var editorExitObserver: (any NSObjectProtocol)?
     private var dismissTasks: [UUID: Task<Void, Never>] = [:]
     /// Dismissed cards, newest first, for "Restore Recently Closed" (docs/03 §2).
     private var recentlyClosed: [QuickAccessItem] = []
@@ -200,7 +206,18 @@ final class QuickAccessManager {
         let area = screen.visibleFrame
         let maxVisible = settings.overlayMaxVisibleCards
 
+        let cardWidth = CGFloat(settings.overlayCardWidth)
         for (index, entry) in panels.enumerated() {
+            // Peeking narrows the card to a tab; everything below still positions it, so
+            // there is no separate layout to keep in step (docs/09 U2.1).
+            entry.panel.setPresentation(
+                isPeeking ? .peeking : .expanded,
+                edge: settings.overlayCorner.isLeading
+                    ? area.minX + Self.screenMargin + QuickAccessPanel.peekWidth
+                    : area.maxX - Self.screenMargin,
+                width: cardWidth,
+                height: entry.panel.frame.height
+            )
             let size = entry.panel.frame.size
             // Collapsed cards peek out from behind the front one rather than stacking
             // off the screen forever.
@@ -236,12 +253,103 @@ final class QuickAccessManager {
 
     func scheduleAutoDismiss(for item: QuickAccessItem) {
         let seconds = settings.overlayTimeout.seconds
-        guard seconds > 0 else { return }
+        guard seconds > 0, !engagedItems.contains(item.id) else { return }
         dismissTasks[item.id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
             self?.dismiss(item)
         }
+    }
+
+    /// The user has touched this card, so it stops being disposable (docs/09 U2.1).
+    ///
+    /// Permanently, not for another timeout's worth: someone who has reached for a card is
+    /// working with it, and having it vanish mid-thought because they paused to read is the
+    /// behaviour that makes people turn auto-close off entirely. The card still closes —
+    /// by being dismissed, dragged out, or acted on.
+    func noteEngagement(with item: QuickAccessItem) {
+        guard !engagedItems.contains(item.id) else { return }
+        engagedItems.insert(item.id)
+        dismissTasks.removeValue(forKey: item.id)?.cancel()
+        logger.info("Card engaged; auto-close cancelled")
+    }
+
+    /// Whether a card has been touched and will no longer close on its own.
+    func isEngaged(_ item: QuickAccessItem) -> Bool {
+        engagedItems.contains(item.id)
+    }
+
+    // MARK: - Peek (docs/09 U2.1)
+
+    /// Collapses every card to an edge tab, or restores them.
+    ///
+    /// Called when an editor window opens over the cards. Peeking rather than hiding
+    /// because hide-and-restore is a race — the card has to come back in the right place
+    /// at the right moment, and either mistake loses it or flashes it over the editor.
+    func setPeeking(_ peeking: Bool) {
+        guard isPeeking != peeking else { return }
+        isPeeking = peeking
+        if peeking {
+            watchForEditorExit()
+        } else {
+            stopWatchingForEditorExit()
+        }
+        restack()
+    }
+
+    /// Restores the cards when the editor process goes away.
+    ///
+    /// The editor is a separate app that exits with its last window, so its termination is
+    /// the signal that the user is done with it — and it is a notification rather than a
+    /// poll, so a peeking agent costs nothing while it waits (CLAUDE.md rule 2).
+    private func watchForEditorExit() {
+        guard editorExitObserver == nil else { return }
+        editorExitObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let key = NSWorkspace.applicationUserInfoKey
+            guard let application = notification.userInfo?[key] as? NSRunningApplication,
+                  application.bundleIdentifier == Self.editorBundleIdentifier
+            else {
+                return
+            }
+            MainActor.assumeIsolated {
+                self?.setPeeking(false)
+            }
+        }
+    }
+
+    private func stopWatchingForEditorExit() {
+        guard let editorExitObserver else { return }
+        NSWorkspace.shared.notificationCenter.removeObserver(editorExitObserver)
+        self.editorExitObserver = nil
+    }
+
+    nonisolated static let editorBundleIdentifier = "app.kadr.Kadr.Editor"
+
+    /// Captures a card's unsaved state for the quit prompt (docs/09 U2.1).
+    ///
+    /// A staged capture is one the user has not acted on: it lives in the staging area and
+    /// the 24-hour sweep will delete it. Quitting with those on screen throws work away
+    /// silently, which is the one thing a capture tool must not do.
+    var unsavedItems: [QuickAccessItem] {
+        panels.map(\.item).filter(\.isStaged)
+    }
+
+    var hasUnsavedItems: Bool {
+        !unsavedItems.isEmpty
+    }
+
+    /// Finalises every staged capture, for the "Save All" answer to the quit prompt.
+    @discardableResult
+    func finalizeAllStaged() -> Int {
+        let staged = unsavedItems
+        for item in staged {
+            finalizeIfStaged(item)
+        }
+        return staged.count
     }
 
     func copyFile(at url: URL, isVideo: Bool = false) {

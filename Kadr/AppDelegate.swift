@@ -45,13 +45,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settings = AppSettings()
     private lazy var history = HistoryController(settings: settings)
     private lazy var desktopHygiene = DesktopHygieneController(settings: settings)
-    private lazy var areaCapture = AreaCaptureCoordinator(
-        engine: captureEngine,
-        permissions: permissions,
-        settings: settings,
-        history: history,
-        hygiene: desktopHygiene
-    )
+    /// Written out rather than `lazy` so the quit path can ask whether the capture layer
+    /// was ever built without building it: a `lazy var` read at termination would
+    /// construct the whole thing to discover it has nothing to say (docs/04 §7.1).
+    private var areaCaptureStorage: AreaCaptureCoordinator?
+    private var areaCapture: AreaCaptureCoordinator {
+        if let areaCaptureStorage {
+            return areaCaptureStorage
+        }
+        let created = AreaCaptureCoordinator(
+            engine: captureEngine,
+            permissions: permissions,
+            settings: settings,
+            history: history,
+            hygiene: desktopHygiene
+        )
+        areaCaptureStorage = created
+        return created
+    }
+
     private lazy var scrollCapture = ScrollCaptureCoordinator(
         captureEngine: captureEngine,
         permissions: permissions,
@@ -328,6 +340,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing Settings must not quit the agent.
         false
+    }
+
+    /// Warns before quitting with captures nobody has saved (docs/09 U2.1).
+    ///
+    /// A staged capture lives in the staging area and the 24-hour sweep deletes it. Quitting
+    /// with cards on screen therefore throws work away, silently, which is the one thing a
+    /// capture tool must not do — the user's mental model is that a card on screen is a
+    /// screenshot they still have.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Only if the capture layer exists: an agent that never captured anything has
+        // nothing to lose, and asking would build the layer to find that out.
+        guard let quickAccess = areaCaptureStorage?.quickAccess else { return .terminateNow }
+        let unsaved = quickAccess.unsavedItems
+        guard !unsaved.isEmpty else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = unsaved.count == 1
+            ? "One capture has not been saved."
+            : "\(unsaved.count) captures have not been saved."
+        alert.informativeText = "Captures still on screen are kept temporarily and cleared "
+            + "within a day. Saving them puts them in your capture folder."
+        alert.addButton(withTitle: unsaved.count == 1 ? "Save and Quit" : "Save All and Quit")
+        alert.addButton(withTitle: "Discard and Quit")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+        NSApp.activate()
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            let saved = quickAccess.finalizeAllStaged()
+            logger.info("Saved \(saved, privacy: .public) capture(s) before quitting")
+            return .terminateNow
+        case .alertSecondButtonReturn:
+            return .terminateNow
+        default:
+            return .terminateCancel
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

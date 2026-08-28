@@ -31,6 +31,7 @@ extension QuickAccessManager {
         actions.recognizeText = { [weak self] in self?.recognizeText(item) }
         actions.textAvailable = !item.isVideo
         actions.trim = { [weak self] in self?.trim(item) }
+        actions.engage = { [weak self] in self?.noteEngagement(with: item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
         return actions
     }
@@ -104,7 +105,7 @@ extension QuickAccessManager {
             url,
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
             save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
-            annotate: { [weak self] fileURL in self?.editor.open(fileURL) },
+            annotate: { [weak self] fileURL in self?.openInEditor(fileURL) },
             copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) }
         )
     }
@@ -115,6 +116,17 @@ extension QuickAccessManager {
     func annotate(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        openInEditor(url)
+    }
+
+    /// Opens the editor and gets the cards out of its way (docs/09 U2.1).
+    ///
+    /// The cards collapse to an edge tab rather than hiding: an editor window is where the
+    /// user is now, and a stack of cards over it is in the way — but hiding them means
+    /// putting them back at the right moment, and either mistake loses a card or flashes it
+    /// over the window.
+    func openInEditor(_ url: URL) {
+        setPeeking(true)
         editor.open(url)
     }
 
@@ -128,14 +140,14 @@ extension QuickAccessManager {
             finalized(url),
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
             save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
-            annotate: { [weak self] fileURL in self?.editor.open(fileURL) },
+            annotate: { [weak self] fileURL in self?.openInEditor(fileURL) },
             copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) }
         )
     }
 
     /// Opens a file in the editor, for `kadr annotate --path …` (docs/03 §8.4).
     func annotateFile(at url: URL) {
-        editor.open(finalized(url))
+        openInEditor(finalized(url))
     }
 
     /// The permanent home of a file automation named, finalising it if it is staged.
@@ -163,7 +175,7 @@ extension QuickAccessManager {
         guard item.isVideo else { return }
         finalizeIfStaged(item)
         let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
-        editor.open(url)
+        openInEditor(url)
     }
 
     /// Recognises the text in a card's capture and copies it (docs/03 §1.7, §2).
