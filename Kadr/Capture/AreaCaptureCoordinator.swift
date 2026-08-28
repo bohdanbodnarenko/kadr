@@ -23,7 +23,7 @@ final class AreaCaptureCoordinator {
     private let overlay: SelectionOverlayController
     private let settings: AppSettings
     private let timer = CaptureCountdown()
-    private let vision = VisionClient()
+    private let vision = TextRecognizer()
     let recovery = PermissionRecovery()
     private var pickerSession: ContentSharingPickerSession?
     /// Internal, not private: the colour-pick half lives in
@@ -367,30 +367,25 @@ final class AreaCaptureCoordinator {
         inFlight = Task { [weak self] in
             guard let self else { return }
             do {
-                let options = TextRecognitionOptions(
-                    preservesLineBreaks: settings.ocrPreservesLineBreaks
+                let recognition = try await vision.recognize(
+                    image,
+                    preservingLineBreaks: settings.ocrPreservesLineBreaks
                 )
-                let analysis = try await vision.analyze(image, options: options)
-                let text = analysis.text(preservingLineBreaks: settings.ocrPreservesLineBreaks)
-
-                if !text.isEmpty {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                }
-                let characters = text.count
+                vision.copyToClipboard(recognition)
+                let characters = recognition.text.count
                 logger.info("Recognised \(characters, privacy: .public) characters")
 
                 let screen = NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
-                toast.show(text: text, codes: analysis.codes, table: analysis.primaryTable, on: screen)
-                automation.report(.text(text))
-
-                // Let go of the connection so the helper can start its idle countdown
-                // and give its Vision models back (docs/04 §1).
-                vision.disconnect()
+                toast.show(
+                    text: recognition.text,
+                    codes: recognition.codes,
+                    table: recognition.table,
+                    on: screen
+                )
+                automation.report(.text(recognition.text))
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
                 automation.report(.failed(error.localizedDescription))
-                vision.disconnect()
             }
         }
     }

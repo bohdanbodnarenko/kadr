@@ -17,11 +17,23 @@ public struct GIFOptions: Sendable, Hashable {
     public var maximumWidth: Int
     /// Loop forever, which is what a screen-recording GIF is for.
     public var loops: Bool
+    /// Roughly how much memory the encode may hold at once.
+    ///
+    /// ImageIO keeps every frame added to a GIF destination until `finalize`, so this is
+    /// the only lever there is: exceed it and the encode is planned down rather than run
+    /// (docs/07 M10, and see `GIFPlan`).
+    public var peakMemoryBudget: Int
 
-    public init(frameRate: Int = 15, maximumWidth: Int = 800, loops: Bool = true) {
+    public init(
+        frameRate: Int = 15,
+        maximumWidth: Int = 800,
+        loops: Bool = true,
+        peakMemoryBudget: Int = 400 * 1024 * 1024
+    ) {
         self.frameRate = min(max(frameRate, 1), 50)
         self.maximumWidth = max(maximumWidth, 80)
         self.loops = loops
+        self.peakMemoryBudget = max(peakMemoryBudget, 16 * 1024 * 1024)
     }
 
     /// Frame delay in hundredths of a second, which is the unit GIF actually stores.
@@ -50,6 +62,8 @@ public enum GIFError: Error, Equatable, Sendable {
 public protocol GIFEncoding: Sendable {
     func encode(movieAt url: URL, to destination: URL, options: GIFOptions) async throws -> URL
     func estimatedSize(ofMovieAt url: URL, options: GIFOptions) async throws -> Int
+    /// What an encode would actually do, so the user can be asked about the real thing.
+    func plan(forMovieAt url: URL, options: GIFOptions) async throws -> GIFPlan
 }
 
 public struct ImageIOGIFEncoder: GIFEncoding {
@@ -66,8 +80,25 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         else {
             throw GIFError.noVideoTrack
         }
-        let times = frameTimes(duration: duration, frameRate: options.frameRate)
+        // Planned before a single frame is decoded: ImageIO holds them all until the
+        // destination is finalised, so the size of the job has to be decided up front
+        // (docs/07 M10).
+        let plan = try await GIFPlan.fitting(
+            sourceSeconds: duration,
+            frameSize: displaySize(of: track),
+            options: options
+        )
+        let times = frameTimes(duration: plan.encodedSeconds, frameRate: plan.frameRate)
         guard !times.isEmpty else { throw GIFError.encodingFailed }
+        if plan.isReduced {
+            logger.info(
+                """
+                GIF planned down to \(plan.frameRate, privacy: .public) fps, \
+                \(plan.maximumWidth, privacy: .public) px, \
+                \(plan.encodedSeconds, privacy: .public) s
+                """
+            )
+        }
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -75,35 +106,19 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         // ends up stuttering on long static stretches.
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = try await maximumSize(for: track, limit: options.maximumWidth)
+        generator.maximumSize = try await maximumSize(for: track, limit: plan.maximumWidth)
 
-        try? FileManager.default.removeItem(at: destination)
-        guard let output = CGImageDestinationCreateWithURL(
-            destination as CFURL,
-            UTType.gif.identifier as CFString,
-            times.count,
-            nil
-        ) else {
-            throw GIFError.couldNotCreateDestination
-        }
-
-        CGImageDestinationSetProperties(output, [
-            kCGImagePropertyGIFDictionary: [
-                kCGImagePropertyGIFLoopCount: options.loops ? 0 : 1
-            ]
-        ] as CFDictionary)
-
-        let frameProperties = [
-            kCGImagePropertyGIFDictionary: [
-                kCGImagePropertyGIFDelayTime: options.frameDelay,
-                kCGImagePropertyGIFUnclampedDelayTime: options.frameDelay
-            ]
-        ] as CFDictionary
+        let output = try makeDestination(
+            at: destination,
+            frameCount: times.count,
+            loops: options.loops
+        )
+        let frameProperties = Self.frameProperties(frameRate: plan.frameRate)
 
         var written = 0
         for time in times {
-            // One frame in memory at a time: the whole point of streaming into the
-            // destination rather than collecting frames first.
+            // ImageIO keeps every frame until `finalize`, so how many there are is the
+            // memory question — `plan` is what answers it.
             guard let image = try? await generator.image(at: time).image else { continue }
             CGImageDestinationAddImage(output, image, frameProperties)
             written += 1
@@ -119,6 +134,36 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         return destination
     }
 
+    /// Creates the GIF destination, replacing whatever was there.
+    private func makeDestination(at url: URL, frameCount: Int, loops: Bool) throws -> CGImageDestination {
+        try? FileManager.default.removeItem(at: url)
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL,
+            UTType.gif.identifier as CFString,
+            frameCount,
+            nil
+        ) else {
+            throw GIFError.couldNotCreateDestination
+        }
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyGIFDictionary: [
+                kCGImagePropertyGIFLoopCount: loops ? 0 : 1
+            ]
+        ] as CFDictionary)
+        return destination
+    }
+
+    /// The per-frame delay, in the hundredths of a second GIF actually stores.
+    private static func frameProperties(frameRate: Int) -> CFDictionary {
+        let delay = (100.0 / Double(frameRate)).rounded() / 100.0
+        return [
+            kCGImagePropertyGIFDictionary: [
+                kCGImagePropertyGIFDelayTime: delay,
+                kCGImagePropertyGIFUnclampedDelayTime: delay
+            ]
+        ] as CFDictionary
+    }
+
     /// A size estimate to show before committing to an export (docs/03 §1.8).
     ///
     /// Encodes a handful of evenly spread frames and multiplies. Rough by construction —
@@ -131,16 +176,24 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         else {
             throw GIFError.noVideoTrack
         }
-        let totalFrames = max(1, frameTimes(duration: duration, frameRate: options.frameRate).count)
+        let plan = try await GIFPlan.fitting(
+            sourceSeconds: duration,
+            frameSize: displaySize(of: track),
+            options: options
+        )
+        let totalFrames = max(1, plan.frameCount)
 
         let sampleCount = min(6, totalFrames)
         let sampleTimes = (0 ..< sampleCount).map { index in
-            CMTime(seconds: duration * Double(index) / Double(max(1, sampleCount)), preferredTimescale: 600)
+            CMTime(
+                seconds: plan.encodedSeconds * Double(index) / Double(max(1, sampleCount)),
+                preferredTimescale: 600
+            )
         }
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = try await maximumSize(for: track, limit: options.maximumWidth)
+        generator.maximumSize = try await maximumSize(for: track, limit: plan.maximumWidth)
 
         let probe = FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-gif-estimate-\(UUID().uuidString).gif")
@@ -168,6 +221,21 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         return sampleBytes / max(1, sampled) * totalFrames
     }
 
+    /// The plan an encode of this movie would follow.
+    public func plan(forMovieAt url: URL, options: GIFOptions) async throws -> GIFPlan {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let duration = try? await CMTimeGetSeconds(asset.load(.duration))
+        else {
+            throw GIFError.noVideoTrack
+        }
+        return try await GIFPlan.fitting(
+            sourceSeconds: duration,
+            frameSize: displaySize(of: track),
+            options: options
+        )
+    }
+
     // MARK: - Geometry
 
     private static func fileSize(of url: URL) -> Int {
@@ -182,12 +250,18 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         }
     }
 
-    private func maximumSize(for track: AVAssetTrack, limit: Int) async throws -> CGSize {
+    /// The track's size as it is meant to be seen, with its transform applied.
+    private func displaySize(of track: AVAssetTrack) async throws -> CGSize {
         let natural = try await track.load(.naturalSize)
         let transform = try await track.load(.preferredTransform)
         let size = natural.applying(transform)
-        let width = abs(size.width)
-        let height = abs(size.height)
+        return CGSize(width: abs(size.width), height: abs(size.height))
+    }
+
+    private func maximumSize(for track: AVAssetTrack, limit: Int) async throws -> CGSize {
+        let size = try await displaySize(of: track)
+        let width = size.width
+        let height = size.height
         guard width > CGFloat(limit) else { return CGSize(width: width, height: height) }
 
         let scale = CGFloat(limit) / width

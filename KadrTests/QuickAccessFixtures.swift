@@ -60,7 +60,8 @@ struct TestHarness {
 func makeManager(
     saveFolder: URL,
     stagingFolder: URL,
-    history: HistoryController? = nil
+    history: HistoryController? = nil,
+    pins: PinManager = PinManager()
 ) -> TestHarness {
     let suite = UUID().uuidString
     guard let store = UserDefaults(suiteName: suite) else {
@@ -78,7 +79,7 @@ func makeManager(
         manager: QuickAccessManager(
             settings: settings,
             output: output,
-            pins: PinManager(),
+            pins: pins,
             history: history
         ),
         settings: settings,

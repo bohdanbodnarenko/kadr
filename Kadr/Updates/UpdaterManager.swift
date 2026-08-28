@@ -25,6 +25,9 @@ final class UpdaterManager: NSObject {
     /// Whether an update check can start right now — false while one is running.
     private(set) var canCheckForUpdates = false
 
+    /// How long to hold the activation policy if Sparkle never reports back.
+    private static let checkBackstopSeconds = 120
+
     override private init() {
         // Started explicitly in `start()` rather than here, so launch controls when the
         // first network call can happen — and so debug builds can decline entirely.
@@ -40,7 +43,42 @@ final class UpdaterManager: NSObject {
             options: [.initial, .new]
         ) { [weak self] updater, _ in
             MainActor.assumeIsolated {
-                self?.canCheckForUpdates = updater.canCheckForUpdates
+                self?.setCanCheckForUpdates(updater.canCheckForUpdates)
+            }
+        }
+    }
+
+    /// Whoever is waiting for the current check to finish.
+    private var checkFinishedWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func setCanCheckForUpdates(_ value: Bool) {
+        canCheckForUpdates = value
+        guard value else { return }
+        releaseCheckWaiters()
+    }
+
+    private func releaseCheckWaiters() {
+        guard !checkFinishedWaiters.isEmpty else { return }
+        let waiting = checkFinishedWaiters
+        checkFinishedWaiters.removeAll()
+        for waiter in waiting {
+            waiter.resume()
+        }
+    }
+
+    /// Waits for the running check to finish, without asking every half second.
+    ///
+    /// Sparkle reports through KVO, so there is an event to wait on; polling for it was
+    /// the agent doing work on a schedule for no reason (docs/07 LOW, CLAUDE.md rule 2).
+    /// The backstop exists because the activation policy must not be stuck regular for the
+    /// rest of the session if Sparkle never reports — and because an unresumed
+    /// continuation is a leak, not a timeout.
+    private func waitForCheckToFinish() async {
+        await withCheckedContinuation { continuation in
+            checkFinishedWaiters.append(continuation)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(Self.checkBackstopSeconds))
+                self?.releaseCheckWaiters()
             }
         }
     }
@@ -92,9 +130,11 @@ final class UpdaterManager: NSObject {
             // Sparkle's window has no close callback to hook, so the policy is released
             // once the check can start again — which is when its UI has gone.
             Task { @MainActor [weak self] in
-                while self?.canCheckForUpdates == false {
-                    try? await Task.sleep(for: .milliseconds(500))
+                guard let self else {
+                    ActivationJuggler.shared.endRegularWindow()
+                    return
                 }
+                await waitForCheckToFinish()
                 ActivationJuggler.shared.endRegularWindow()
             }
         #endif

@@ -25,10 +25,28 @@ final class PinPanel: NonActivatingPanel {
     private var isClickThrough = false
     private var clickThroughBadge: NSView?
 
+    /// The longest edge, in pixels, of the texture currently loaded. A resize that does not
+    /// change it needs no decode at all.
+    private var loadedTarget = 0
+    /// The pending reload for a gesture that has not settled yet.
+    private var reloadTask: Task<Void, Never>?
+    /// Set while a live resize defers its reload to `viewDidEndLiveResize`.
+    private var needsBackingReload = false
+    /// How long a zoom has to be still before the sharp texture is fetched.
+    private static let reloadSettleMilliseconds = 120
+    #if DEBUG
+        /// How many times the capture has actually been decoded from disk. The point of
+        /// the debounce is that this stays small however much the pin is resized.
+        private(set) var decodeCount = 0
+    #endif
+
     /// Fired for the menu commands the pin does not implement itself.
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
     var onAnnotate: (() -> Void)?
+    /// Recognises the pin's text and copies it (docs/03 §1.7). The pin holds a file URL,
+    /// so the work is the manager's — the panel only offers the command (docs/07 M8).
+    var onCopyText: (() -> Void)?
 
     /// Drags the pinned file out to another app. Pins always point at a finalised file,
     /// so the promise has nothing to resolve beyond handing the path over.
@@ -79,6 +97,8 @@ final class PinPanel: NonActivatingPanel {
     }
 
     func dismiss() {
+        reloadTask?.cancel()
+        reloadTask = nil
         contentView = nil
         imageView.image = nil
         orderOut(nil)
@@ -89,26 +109,66 @@ final class PinPanel: NonActivatingPanel {
 
     /// Loads a texture sized for the panel, not the capture (docs/03 §4).
     ///
-    /// Reloaded whenever the panel resizes so a pin scaled up stays sharp, and dropped
-    /// back down when it shrinks so the memory goes with it.
+    /// Reloaded whenever the panel settles at a new size so a pin scaled up stays sharp,
+    /// and dropped back down when it shrinks so the memory goes with it.
     func reloadBackingImage() {
+        reloadTask?.cancel()
+        reloadTask = nil
+        needsBackingReload = false
+
         let scale = screen?.backingScaleFactor ?? 2
         let longestEdge = max(frame.width, frame.height) * scale * max(1, zoom)
         // Never ask for more pixels than the capture actually has.
         let target = min(Int(longestEdge.rounded()), max(pixelSize.width, pixelSize.height))
+        guard target != loadedTarget else {
+            // Same texture, new frame: stretching the one we have is free.
+            imageView.image?.size = frame.size
+            return
+        }
 
         guard let image = loader.thumbnail(for: fileURL, maxPixelSize: target) else {
             logger.error("Could not load a backing image for \(self.fileURL.lastPathComponent, privacy: .public)")
             return
         }
+        loadedTarget = target
+        #if DEBUG
+            decodeCount += 1
+        #endif
         imageView.image = NSImage(cgImage: image, size: frame.size)
+    }
+
+    /// Asks for a reload once the user stops resizing or zooming.
+    ///
+    /// A live resize delivers a frame change per screen refresh and a scroll-zoom one per
+    /// tick; decoding the capture from disk on each of them made dragging a pin's corner
+    /// stutter and re-read a 5K PNG sixty times a second (docs/07 M9). The texture already
+    /// on screen stretches perfectly well until the gesture ends.
+    private func scheduleBackingReload() {
+        imageView.image?.size = frame.size
+        guard !inLiveResize else {
+            // AppKit tells us when the drag ends; nothing to poll for.
+            needsBackingReload = true
+            return
+        }
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.reloadSettleMilliseconds))
+            guard !Task.isCancelled else { return }
+            self?.reloadBackingImage()
+        }
+    }
+
+    /// Reloads if a gesture deferred one. Called when a live resize ends.
+    func reloadBackingImageIfNeeded() {
+        guard needsBackingReload else { return }
+        reloadBackingImage()
     }
 
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
         let changed = frameRect.size != frame.size
         super.setFrame(frameRect, display: flag)
         if changed {
-            reloadBackingImage()
+            scheduleBackingReload()
         }
     }
 
@@ -206,6 +266,12 @@ private final class PinContentView: NSView {
         true
     }
 
+    /// The end of a corner drag: now the sharp texture is worth fetching (docs/07 M9).
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        panel?.reloadBackingImageIfNeeded()
+    }
+
     override func scrollWheel(with event: NSEvent) {
         panel?.handleScroll(event)
     }
@@ -251,8 +317,8 @@ private final class PinContentView: NSView {
         annotate.target = self
         menu.addItem(annotate)
 
-        let ocr = NSMenuItem(title: "Copy Text", action: nil, keyEquivalent: "")
-        ocr.isEnabled = false
+        let ocr = NSMenuItem(title: "Copy Text", action: #selector(copyPinText), keyEquivalent: "")
+        ocr.target = self
         menu.addItem(ocr)
 
         menu.addItem(.separator())
@@ -277,6 +343,10 @@ private final class PinContentView: NSView {
 
     @objc private func annotatePin() {
         panel?.onAnnotate?()
+    }
+
+    @objc private func copyPinText() {
+        panel?.onCopyText?()
     }
 
     @objc private func copyPin() {

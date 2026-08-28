@@ -92,6 +92,13 @@ public struct HistoryIngest: Sendable {
     public var originalFilename: String
     /// For recordings, a still ImageIO can read. Images generate their own thumbnail.
     public var thumbnailSourceURL: URL?
+    /// Whether `thumbnailSourceURL` is a scratch file the ingest should delete once it has
+    /// taken its copy.
+    ///
+    /// A recording's poster is rendered to a temporary JPEG for exactly this, and nothing
+    /// deleted it afterwards — a session of recordings left a poster each in the temporary
+    /// directory (docs/07 LOW).
+    public var thumbnailSourceIsTemporary = false
 
     public init(
         sourceURL: URL,
@@ -100,7 +107,8 @@ public struct HistoryIngest: Sendable {
         applicationName: String? = nil,
         capturedAt: Date = Date(),
         originalFilename: String,
-        thumbnailSourceURL: URL? = nil
+        thumbnailSourceURL: URL? = nil,
+        thumbnailSourceIsTemporary: Bool = false
     ) {
         self.sourceURL = sourceURL
         self.kind = kind
@@ -109,6 +117,7 @@ public struct HistoryIngest: Sendable {
         self.capturedAt = capturedAt
         self.originalFilename = originalFilename
         self.thumbnailSourceURL = thumbnailSourceURL
+        self.thumbnailSourceIsTemporary = thumbnailSourceIsTemporary
     }
 }
 

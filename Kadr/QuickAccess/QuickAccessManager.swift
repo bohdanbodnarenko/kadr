@@ -14,18 +14,24 @@ import UniformTypeIdentifiers
 /// cards never take focus, they stack with the newest in front, they sit inside the
 /// screen's visible frame so they never cover the Dock, and dismissing a card is not
 /// the same as deleting its file.
+/// Several members are internal rather than private: the card actions live in
+/// `QuickAccessManager+Actions.swift`, and `private` is file-scoped.
 @MainActor
 final class QuickAccessManager {
-    private let settings: AppSettings
-    private let output: CaptureOutput
-    private let pins: PinManager
-    private let editor = EditorLauncher()
+    let settings: AppSettings
+    let output: CaptureOutput
+    let pins: PinManager
+    let editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
-    private let vision = VisionClient()
-    private let history: HistoryController?
-    private let logger = KadrLog.logger(.overlay)
+    /// The helper connection for GIF encoding (docs/03 §1.8).
+    let vision = VisionClient()
+    let textRecognizer = TextRecognizer()
+    /// Shows what OCR found, the same panel the selection overlay's text mode uses.
+    let textToast = TextCaptureToast()
+    let history: HistoryController?
+    let logger = KadrLog.logger(.overlay)
 
-    private var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
+    var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
     private var dismissTasks: [UUID: Task<Void, Never>] = [:]
     /// Dismissed cards, newest first, for "Restore Recently Closed" (docs/03 §2).
     private var recentlyClosed: [QuickAccessItem] = []
@@ -176,7 +182,7 @@ final class QuickAccessManager {
 
     // MARK: - Presenting
 
-    private func present(_ item: QuickAccessItem) {
+    func present(_ item: QuickAccessItem) {
         let panel = QuickAccessPanel(item: item, settings: settings, actions: actions(for: item))
         panels.insert((item, panel), at: 0)
         panel.present(at: .zero)
@@ -189,7 +195,7 @@ final class QuickAccessManager {
     ///
     /// Positions come off `visibleFrame`, not `frame`, which is what keeps cards clear of
     /// the Dock and the menu bar (docs/03 §2 accept list).
-    private func restack() {
+    func restack() {
         guard let screen = targetScreen() else { return }
         let area = screen.visibleFrame
         let maxVisible = settings.overlayMaxVisibleCards
@@ -216,7 +222,7 @@ final class QuickAccessManager {
         }
     }
 
-    private func targetScreen() -> NSScreen? {
+    func targetScreen() -> NSScreen? {
         if settings.overlayOnPrimaryDisplay {
             return NSScreen.screens.first
         }
@@ -228,7 +234,7 @@ final class QuickAccessManager {
         return matching ?? NSScreen.main ?? NSScreen.screens.first
     }
 
-    private func scheduleAutoDismiss(for item: QuickAccessItem) {
+    func scheduleAutoDismiss(for item: QuickAccessItem) {
         let seconds = settings.overlayTimeout.seconds
         guard seconds > 0 else { return }
         dismissTasks[item.id] = Task { [weak self] in
@@ -238,122 +244,7 @@ final class QuickAccessManager {
         }
     }
 
-    // MARK: - Card actions
-
-    private func actions(for item: QuickAccessItem) -> QuickAccessCardActions {
-        var actions = QuickAccessCardActions()
-        actions.copy = { [weak self] in self?.copy(item) }
-        actions.save = { [weak self] in self?.save(item) }
-        actions.delete = { [weak self] in self?.delete(item) }
-        actions.dismiss = { [weak self] in self?.dismiss(item) }
-        actions.resolveForDrag = { [weak self] in self?.resolveForDrag(item) }
-        actions.dragCompleted = { [weak self] accepted in self?.dragCompleted(item, accepted: accepted) }
-        actions.pin = { [weak self] in self?.pin(item) }
-        actions.pinAvailable = true
-        actions.annotate = { [weak self] in self?.annotate(item) }
-        actions.annotateAvailable = editor.isAvailable
-        actions.exportGIF = { [weak self] in self?.exportGIF(item) }
-        return actions
-    }
-
-    /// Turns a recording into a GIF, asking first if it is going to be large (docs/03 §1.8).
-    ///
-    /// The encode happens in the helper process, so the agent never holds a single frame
-    /// of it (docs/04 §1).
-    private func exportGIF(_ item: QuickAccessItem) {
-        let destination = item.fileURL.deletingPathExtension().appendingPathExtension("gif")
-        Task { [weak self] in
-            guard let self else { return }
-            defer { vision.disconnect() }
-
-            do {
-                let estimate = try await vision.encodeGIF(GIFRequest(
-                    sourcePath: item.fileURL.path,
-                    destinationPath: destination.path,
-                    estimateOnly: true
-                ))
-                guard confirmExport(estimatedBytes: estimate.byteCount) else { return }
-
-                let result = try await vision.encodeGIF(GIFRequest(
-                    sourcePath: item.fileURL.path,
-                    destinationPath: destination.path
-                ))
-                guard let path = result.path else { return }
-                logger.info("Exported \(URL(fileURLWithPath: path).lastPathComponent, privacy: .public)")
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
-            } catch {
-                logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
-    /// Shows the estimate before committing, because a large GIF takes real time to make.
-    private func confirmExport(estimatedBytes: Int) -> Bool {
-        let size = ByteCountFormatter.string(fromByteCount: Int64(estimatedBytes), countStyle: .file)
-        let alert = NSAlert()
-        alert.messageText = "Export this recording as a GIF?"
-        alert.informativeText = "The GIF will be roughly \(size). GIFs are much larger than "
-            + "video, so long recordings get big quickly."
-        alert.addButton(withTitle: "Export")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        return alert.runModal() == .alertFirstButtonReturn
-    }
-
-    func copy(_ item: QuickAccessItem) {
-        finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
-        copyFile(at: url, isVideo: item.isVideo)
-    }
-
-    /// Pinning counts as acting on a staged capture, so it is finalised first — a pin
-    /// pointing at a file that the staging sweep later deletes would go blank.
-    func pin(_ item: QuickAccessItem) {
-        finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
-        pins.pin(
-            url,
-            copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
-            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
-            annotate: { [weak self] fileURL in self?.editor.open(fileURL) }
-        )
-    }
-
-    /// Opens the capture in the editor. Annotating counts as acting on a staged file, so
-    /// it is finalised first — the editor must not be pointed at a file the staging sweep
-    /// will delete underneath it.
-    func annotate(_ item: QuickAccessItem) {
-        finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
-        editor.open(url)
-    }
-
-    /// Pins a file automation named, or a capture automation just took (docs/03 §8.4).
-    ///
-    /// Takes a URL rather than a card because `kadr pin --path …` names a file the
-    /// overlay has never seen. Returns false when the file cannot be read as an image.
-    @discardableResult
-    func pinFile(at url: URL) -> Bool {
-        pins.pin(
-            url,
-            copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
-            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
-            annotate: { [weak self] fileURL in self?.editor.open(fileURL) }
-        )
-    }
-
-    /// Opens a file in the editor, for `kadr annotate --path …` (docs/03 §8.4).
-    func annotateFile(at url: URL) {
-        editor.open(url)
-    }
-
-    /// Puts a capture on the clipboard as what it actually is (docs/07 M1).
-    ///
-    /// Announcing every file as PNG meant a JPEG or HEIC pasted as garbage, and a
-    /// recording put hundreds of megabytes of MP4 on the pasteboard under an image type
-    /// no app could read. A video goes on as a file reference, which is what Finder, Mail
-    /// and Messages expect.
-    private func copyFile(at url: URL, isVideo: Bool = false) {
+    func copyFile(at url: URL, isVideo: Bool = false) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -366,11 +257,11 @@ final class QuickAccessManager {
         pasteboard.setData(data, forType: NSPasteboard.PasteboardType(type.identifier))
     }
 
-    private func revealInFinder(_ url: URL) {
+    func revealInFinder(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    private func save(_ item: QuickAccessItem) {
+    func save(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         dismiss(item)
     }
@@ -401,7 +292,7 @@ final class QuickAccessManager {
     }
 
     /// The first thing a user does with a staged capture finalises it (docs/03 §2).
-    private func finalizeIfStaged(_ item: QuickAccessItem) {
+    func finalizeIfStaged(_ item: QuickAccessItem) {
         guard item.isStaged, let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
         guard let moved = output.finalizeStaged(item.fileURL) else { return }
         panels[index].item.fileURL = moved
@@ -435,14 +326,14 @@ final class QuickAccessManager {
         restack()
     }
 
-    private func recordClosed(_ item: QuickAccessItem) {
+    func recordClosed(_ item: QuickAccessItem) {
         recentlyClosed.insert(item, at: 0)
         if recentlyClosed.count > Self.maximumRecentlyClosed {
             recentlyClosed.removeLast()
         }
     }
 
-    private func ingest(_ item: QuickAccessItem, thumbnailSourceURL: URL? = nil) {
+    func ingest(_ item: QuickAccessItem, thumbnailSourceURL: URL? = nil) {
         history?.ingest(HistoryIngest(
             sourceURL: item.fileURL,
             kind: item.historyKind,
@@ -450,12 +341,15 @@ final class QuickAccessManager {
             applicationName: item.applicationName,
             capturedAt: item.capturedAt,
             originalFilename: item.filename,
-            thumbnailSourceURL: thumbnailSourceURL
+            thumbnailSourceURL: thumbnailSourceURL,
+            // A poster is rendered for the ingest and belongs to it; the library deletes
+            // it once its own copy is written (docs/07 LOW).
+            thumbnailSourceIsTemporary: thumbnailSourceURL != nil
         ))
     }
 
     /// Recordings need a still ImageIO can thumbnail; the poster is that still.
-    private func ingestRecording(_ item: QuickAccessItem) {
+    func ingestRecording(_ item: QuickAccessItem) {
         Task { [weak self] in
             guard let self else { return }
             let poster = await writePoster(for: item.fileURL)
@@ -463,7 +357,7 @@ final class QuickAccessManager {
         }
     }
 
-    private func writePoster(for video: URL) async -> URL? {
+    func writePoster(for video: URL) async -> URL? {
         guard let image = await VideoPosterFrame.posterFrame(
             of: video,
             maxPixelSize: HistoryThumbnailWriter.maxPixelSize

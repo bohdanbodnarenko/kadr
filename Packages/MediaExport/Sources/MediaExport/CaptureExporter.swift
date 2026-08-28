@@ -118,6 +118,11 @@ public struct CaptureExporter: Sendable {
         try staging.finalize(url, into: folder)
     }
 
+    /// Whether this file is still sitting in staging (docs/07 M11).
+    public func isStaged(_ url: URL) -> Bool {
+        staging.contains(url)
+    }
+
     /// Clears stale staged files. Called once at launch (docs/03 §2).
     @discardableResult
     public func sweepStaging() -> Int {

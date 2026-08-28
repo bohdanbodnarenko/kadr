@@ -33,6 +33,14 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     private var window: NSWindow?
     private var hostingView: NSView?
 
+    /// Keeps a recoverable copy while the user works (docs/07 M7).
+    private let autosave = EditorAutosave()
+    private var autosaveTask: Task<Void, Never>?
+    /// True once the user has been asked about closing, so the second close goes through.
+    private var isClosingConfirmed = false
+    /// How long the document has to be still before a copy is written.
+    private static let autosaveSettleMilliseconds = 1500
+
     var onClose: (() -> Void)?
 
     init(fileURL: URL) throws {
@@ -97,9 +105,110 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         self.window = window
         hostingView = hosting
         window.makeKeyAndOrderFront(nil)
+
+        offerRecoveryIfAny()
+        trackChangesForAutosave()
+    }
+
+    // MARK: - Unsaved work (docs/07 M7)
+
+    /// Closing used to discard the annotations silently, with no prompt and no copy.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !isClosingConfirmed, model.hasUnsavedChanges else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Save your changes to “\(fileURL.lastPathComponent)”?"
+        alert.informativeText = "Kadr will write a project file beside the capture so the "
+            + "annotations stay editable. Otherwise they are lost."
+        alert.addButton(withTitle: "Save Project")
+        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            saveProject()
+            // A failed save leaves the work unsaved, and closing anyway would throw it
+            // away — exactly what the prompt exists to prevent.
+            guard !model.hasUnsavedChanges else { return false }
+            isClosingConfirmed = true
+            return true
+        case .alertSecondButtonReturn:
+            autosave.discard(for: fileURL)
+            isClosingConfirmed = true
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Offers work a previous session left behind — a crash, a force quit, a power cut.
+    private func offerRecoveryIfAny() {
+        guard let recovered = autosave.read(for: fileURL) else { return }
+        guard recovered.document.commands != model.document.commands else {
+            autosave.discard(for: fileURL)
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Kadr has unsaved changes to “\(fileURL.lastPathComponent)”."
+        alert.informativeText = "The editor closed before these annotations were saved."
+        alert.addButton(withTitle: "Restore")
+        alert.addButton(withTitle: "Discard")
+        alert.alertStyle = .informational
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            model.replaceDocument(recovered.document)
+            logger.info("Restored autosaved annotations")
+        } else {
+            autosave.discard(for: fileURL)
+        }
+    }
+
+    /// Re-arms itself after every change, which is how Observation reports more than once.
+    private func trackChangesForAutosave() {
+        withObservationTracking {
+            _ = model.document.commands
+        } onChange: {
+            Task { @MainActor [weak self] in
+                self?.scheduleAutosave()
+                self?.trackChangesForAutosave()
+            }
+        }
+    }
+
+    /// Writes a copy once the document has been still for a moment.
+    ///
+    /// Debounced rather than written per edit: a drag is dozens of committed changes, and
+    /// re-encoding the base image PNG for each of them would make the editor stutter.
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        guard model.hasUnsavedChanges else {
+            autosave.discard(for: fileURL)
+            return
+        }
+        autosaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.autosaveSettleMilliseconds))
+            guard !Task.isCancelled else { return }
+            self?.writeAutosave()
+        }
+    }
+
+    private func writeAutosave() {
+        do {
+            let png = try Self.pngData(of: baseImage)
+            try autosave.write(
+                KadrDocumentFile.Contents(document: model.document, baseImagePNG: png),
+                for: fileURL
+            )
+        } catch {
+            logger.error("Could not autosave: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
+        autosaveTask?.cancel()
+        autosaveTask = nil
         window?.delegate = nil
         window?.contentView = nil
         window = nil
@@ -151,6 +260,10 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 to: destination
             )
             logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
+            // The work is durable now, so the prompt on close has nothing to ask about and
+            // the recovery copy has nothing to protect.
+            model.markSaved()
+            autosave.discard(for: fileURL)
             addToLibrary(destination)
             NSWorkspace.shared.activateFileViewerSelecting([destination])
         } catch {
@@ -195,6 +308,8 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
             options: EncodingOptions(scale: DisplayScale(model.document.baseImage.scale))
         )
         logger.info("Saved \(url.lastPathComponent, privacy: .public)")
+        model.markSaved()
+        autosave.discard(for: fileURL)
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 

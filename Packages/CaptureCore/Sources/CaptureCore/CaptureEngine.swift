@@ -107,10 +107,7 @@ public actor CaptureEngine {
             throw CaptureError.displayNotFound(displayID)
         }
 
-        let excluded = excludesOwnWindows ? ownApplications(in: content) : []
-        let filter = excluded.isEmpty
-            ? SCContentFilter(display: display, excludingWindows: [])
-            : SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
+        let filter = Self.filter(for: display, excluding: excludesOwnWindows ? ownApplications(in: content) : [])
         let scale = DisplayScale(CGFloat(filter.pointPixelScale))
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = includesCursor
@@ -172,7 +169,8 @@ public actor CaptureEngine {
     public func captureRegion(
         _ region: DisplayRect,
         on displayID: CGDirectDisplayID,
-        includesCursor: Bool = false
+        includesCursor: Bool = false,
+        excludesOwnWindows: Bool = true
     ) async throws -> Capture {
         let state = signposter.beginInterval("captureRegion")
         defer { signposter.endInterval("captureRegion", state) }
@@ -184,7 +182,10 @@ public actor CaptureEngine {
             throw CaptureError.displayNotFound(displayID)
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // Kadr's own windows are excluded here too, not just in the full-display paths: a
+        // card or a pin sitting over the region the user selected ends up in the file
+        // otherwise (docs/07 LOW).
+        let filter = Self.filter(for: display, excluding: excludesOwnWindows ? ownApplications(in: content) : [])
         let geometry = DisplayGeometry(
             displayID: displayID,
             frame: DisplayRect(cgRect: display.frame),
@@ -292,11 +293,7 @@ public actor CaptureEngine {
         options: FreezeOptions,
         dynamicRange: DynamicRange = .standard
     ) async throws -> DisplayFreeze {
-        let filter = if applications.isEmpty {
-            SCContentFilter(display: display, excludingWindows: [])
-        } else {
-            SCContentFilter(display: display, excludingApplications: applications, exceptingWindows: [])
-        }
+        let filter = Self.filter(for: display, excluding: applications)
         if #available(macOS 14.2, *) {
             filter.includeMenuBar = !options.excludesMenuBar
         }
@@ -385,6 +382,19 @@ public actor CaptureEngine {
             frontmostApp: frontmostApp,
             windowTitle: windowTitle
         )
+    }
+
+    /// A display filter, with `applications` left out of it.
+    ///
+    /// One place, because "which windows are in the shot" is a decision every capture path
+    /// has to make the same way — and three of them used to answer it differently.
+    nonisolated static func filter(
+        for display: SCDisplay,
+        excluding applications: [SCRunningApplication]
+    ) -> SCContentFilter {
+        applications.isEmpty
+            ? SCContentFilter(display: display, excludingWindows: [])
+            : SCContentFilter(display: display, excludingApplications: applications, exceptingWindows: [])
     }
 
     private func snapshot(of content: SCShareableContent) -> ShareableContentSnapshot {

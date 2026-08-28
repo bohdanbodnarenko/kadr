@@ -34,7 +34,12 @@ public actor ScrollCaptureSession {
     /// settle detection the auto tier needs.
     private var onFrame: (@Sendable (ScrollFrameNote) -> Void)?
 
-    public init() {}
+    /// Kadr's own bundle, so its windows can be kept out of the frames.
+    private let ownBundleIdentifier: String?
+
+    public init(ownBundleIdentifier: String? = Bundle.main.bundleIdentifier) {
+        self.ownBundleIdentifier = ownBundleIdentifier
+    }
 
     /// What the caller learns about a frame without being handed the frame.
     public struct ScrollFrameNote: Sendable {
@@ -65,7 +70,13 @@ public actor ScrollCaptureSession {
             throw CaptureError.displayNotFound(displayID)
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // A scroll capture runs for seconds while the user scrolls, which is plenty of
+        // time for a card to appear over the region and be stitched into the result
+        // (docs/07 LOW).
+        let own = ownBundleIdentifier.map { identifier in
+            content.applications.filter { $0.bundleIdentifier == identifier }
+        } ?? []
+        let filter = CaptureEngine.filter(for: display, excluding: own)
         let geometry = DisplayGeometry(
             displayID: displayID,
             frame: DisplayRect(cgRect: display.frame),

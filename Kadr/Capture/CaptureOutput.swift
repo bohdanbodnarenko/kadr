@@ -130,38 +130,6 @@ struct CaptureOutput {
         return delivered
     }
 
-    /// Exports several captures at once, which is what a multi-display screen capture
-    /// produces (docs/03 §1.3).
-    ///
-    /// Only one image can go on the clipboard, so the rest are saved regardless of the
-    /// clipboard-only policy — losing three of four monitors would be worse than a file
-    /// the user did not strictly ask for.
-    func deliver(_ captures: [Capture], overrides: CaptureOverrides = .none) {
-        guard let first = captures.first else { return }
-        deliver(first, overrides: overrides)
-
-        guard captures.count > 1 else { return }
-        let policy = policy(overrides)
-        for capture in captures.dropFirst() {
-            do {
-                _ = try exporter.export(
-                    capture.image,
-                    policy: ExportPolicy(
-                        copiesToClipboard: false,
-                        savesToFolder: !policy.staging,
-                        staging: policy.staging
-                    ),
-                    saveFolder: settings.saveFolder,
-                    template: FilenameTemplate(settings.filenameTemplate),
-                    context: context(for: capture),
-                    options: encodingOptions(for: capture)
-                )
-            } catch {
-                logger.error("Export failed for one display: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
     /// Moves a staged capture into the save folder on the user's first action.
     @discardableResult
     func finalizeStaged(_ url: URL) -> URL? {
@@ -171,6 +139,11 @@ struct CaptureOutput {
             logger.error("Could not finalise a staged capture: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// Whether this path is a staged capture, which the 24-hour sweep will delete.
+    func isStaged(_ url: URL) -> Bool {
+        exporter.isStaged(url)
     }
 
     /// Where a file written by something other than the encoder should land.

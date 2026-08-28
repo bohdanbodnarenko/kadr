@@ -42,16 +42,31 @@ final class VisionService: NSObject, VisionServiceProtocol {
             let options = GIFOptions(frameRate: request.frameRate, maximumWidth: request.maximumWidth)
 
             do {
+                // Both paths report the plan: a long recording is encoded at a lower rate,
+                // a smaller size or a shorter length to fit memory, and the caller has to
+                // be able to say so before the user commits (docs/07 M10).
+                let plan = try await encoder.plan(forMovieAt: source, options: options)
                 let response: GIFResponse = if request.estimateOnly {
                     try await GIFResponse(
                         path: nil,
-                        byteCount: encoder.estimatedSize(ofMovieAt: source, options: options)
+                        byteCount: encoder.estimatedSize(ofMovieAt: source, options: options),
+                        frameRate: plan.frameRate,
+                        maximumWidth: plan.maximumWidth,
+                        encodedSeconds: plan.encodedSeconds,
+                        sourceSeconds: plan.sourceSeconds
                     )
                 } else {
                     try await {
                         let url = try await encoder.encode(movieAt: source, to: destination, options: options)
                         let bytes = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                        return GIFResponse(path: url.path, byteCount: bytes)
+                        return GIFResponse(
+                            path: url.path,
+                            byteCount: bytes,
+                            frameRate: plan.frameRate,
+                            maximumWidth: plan.maximumWidth,
+                            encodedSeconds: plan.encodedSeconds,
+                            sourceSeconds: plan.sourceSeconds
+                        )
                     }()
                 }
                 try reply(JSONEncoder().encode(response), nil)

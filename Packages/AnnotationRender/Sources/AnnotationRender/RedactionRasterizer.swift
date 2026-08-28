@@ -54,7 +54,13 @@ public struct RedactionRasterizer: Sendable {
             case let .blur(radius):
                 blurred(output, in: pixels, radius: radius * scale)
             case let .pixelate(cellSize):
-                pixelated(output, in: pixels, cellSize: cellSize * scale, generator: &generator)
+                pixelated(
+                    output,
+                    in: pixels,
+                    cellSize: cellSize * scale,
+                    context: context,
+                    generator: &generator
+                )
             }
             output = obscured.cropped(to: pixels).composited(over: output)
         }
@@ -76,25 +82,72 @@ public struct RedactionRasterizer: Sendable {
             .applyingGaussianBlur(sigma: Double(max(radius, 1)))
     }
 
-    /// A mosaic whose cells sample from jittered positions.
+    /// A mosaic whose every cell samples from its own displaced point.
+    ///
+    /// `CIPixellate` cannot express this: it averages a fixed grid, and its only knob is
+    /// where that grid's centre sits. So the region is rendered, mosaicked on the CPU, and
+    /// handed back — see `PixelateMosaic` for why per-cell matters (docs/07 M3).
     private func pixelated(
         _ image: CIImage,
         in rect: CGRect,
         cellSize: CGFloat,
+        context: CIContext,
         generator: inout SeededGenerator
     ) -> CIImage {
         let size = max(cellSize, 2)
-        // Offsetting the mosaic's centre by up to a cell moves which pixel each cell
-        // averages, so the grid does not line up predictably with the content.
-        let jitterX = CGFloat.random(in: -size ... size, using: &generator)
-        let jitterY = CGFloat.random(in: -size ... size, using: &generator)
+        guard let region = context.createCGImage(image, from: rect),
+              let mosaicked = mosaic(region, cellSize: Int(size.rounded()), generator: &generator)
+        else {
+            logger.error("Could not build a jittered mosaic; falling back to an even one")
+            return evenMosaic(image, in: rect, cellSize: size)
+        }
+        // Back into the source image's own coordinates: `CIImage(cgImage:)` starts at the
+        // origin, and this region does not.
+        return CIImage(cgImage: mosaicked)
+            .transformed(by: CGAffineTransform(translationX: rect.minX, y: rect.minY))
+    }
 
-        return image
+    /// Renders `image` into a buffer, mosaics it, and returns the result.
+    private func mosaic(_ image: CGImage, cellSize: Int, generator: inout SeededGenerator) -> CGImage? {
+        let width = image.width
+        let height = image.height
+        let bytesPerRow = width * 4
+        guard width > 0, height > 0 else { return nil }
+
+        // Explicitly allocated: a `CGContext` writes through the pointer it is given for as
+        // long as it lives, which is longer than an inout access to a Swift array.
+        let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: bytesPerRow * height)
+        bytes.initialize(repeating: 0, count: bytesPerRow * height)
+        defer { bytes.deallocate() }
+
+        guard let context = CGContext(
+            data: bytes,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        PixelateMosaic.apply(
+            to: MutableBitmap(pixels: bytes, width: width, height: height, bytesPerRow: bytesPerRow),
+            cellSize: cellSize,
+            generator: &generator
+        )
+        return context.makeImage()
+    }
+
+    /// The fallback when the region cannot be rendered: an even mosaic is still a redaction,
+    /// and losing the jitter is better than losing the redaction.
+    private func evenMosaic(_ image: CIImage, in rect: CGRect, cellSize: CGFloat) -> CIImage {
+        image
             .cropped(to: rect)
             .clampedToExtent()
             .applyingFilter("CIPixellate", parameters: [
-                kCIInputCenterKey: CIVector(x: rect.midX + jitterX, y: rect.midY + jitterY),
-                kCIInputScaleKey: size
+                kCIInputCenterKey: CIVector(x: rect.midX, y: rect.midY),
+                kCIInputScaleKey: cellSize
             ])
     }
 }

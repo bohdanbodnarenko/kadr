@@ -26,9 +26,16 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     private let logger = KadrLog.logger(.app)
     private let signposter = KadrLog.signposter(.app)
     private var windows: [EditorWindowController] = []
+    /// Trim windows, which are the same idea over a recording (docs/03 §1.8).
+    private var trimWindows: [TrimWindowController] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+
+        // Recovery copies for captures that no longer exist are just clutter in
+        // Application Support, and a deleted capture should not leave its annotations
+        // behind (docs/07 H5, M7).
+        EditorAutosave().sweepOrphans()
 
         // Opened with no document — the agent always passes one, so this is a developer
         // launching the editor directly.
@@ -55,6 +62,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         let state = signposter.beginInterval("openCapture")
         defer { signposter.endInterval("openCapture", state) }
 
+        // A recording opens into the trim window; there is nothing to annotate on a movie,
+        // and Trim is what its card offers (docs/03 §1.8, docs/07 M8).
+        if TrimWindowController.handles(url) {
+            openForTrimming(url)
+            return
+        }
+
         do {
             let controller = try EditorWindowController(fileURL: url)
             controller.onClose = { [weak self, weak controller] in
@@ -65,6 +79,21 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
             logger.info("Opened \(url.lastPathComponent, privacy: .public)")
         } catch {
             logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
+            presentOpenFailure(for: url, error: error)
+        }
+    }
+
+    private func openForTrimming(_ url: URL) {
+        do {
+            let controller = try TrimWindowController(fileURL: url)
+            controller.onClose = { [weak self, weak controller] in
+                self?.trimWindows.removeAll { $0 === controller }
+            }
+            trimWindows.append(controller)
+            controller.show()
+            logger.info("Opened \(url.lastPathComponent, privacy: .public) for trimming")
+        } catch {
+            logger.error("Could not trim \(url.lastPathComponent, privacy: .public)")
             presentOpenFailure(for: url, error: error)
         }
     }

@@ -10,7 +10,6 @@ struct QuickAccessCardActions {
     var annotate: () -> Void = {}
     var pin: () -> Void = {}
     var recognizeText: () -> Void = {}
-    var share: (NSView) -> Void = { _ in }
     var delete: () -> Void = {}
     var dismiss: () -> Void = {}
     /// Resolves the file to hand to a receiver, finalising a staged capture on the way.
@@ -20,6 +19,9 @@ struct QuickAccessCardActions {
     var dragCompleted: @MainActor @Sendable (Bool) -> Void = { _ in }
     /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
     var exportGIF: () -> Void = {}
+    /// Opens a recording in the trim window (docs/03 §1.8). Only offered on a recording.
+    var trim: () -> Void = {}
+    var trimAvailable = false
     /// Whether Annotate, Pin and OCR do anything yet.
     var annotateAvailable = false
     var pinAvailable = false
@@ -34,6 +36,12 @@ struct QuickAccessCardView: View {
 
     @State private var isHovering = false
     @State private var isExpanded = false
+    /// The scale of the screen this card is on.
+    ///
+    /// Read rather than assumed: hard-coding 2× decoded twice the pixels needed on a
+    /// non-Retina display, and — once Apple ships anything above 2× — too few on a better
+    /// one (docs/07 LOW).
+    @Environment(\.displayScale) private var displayScale
 
     private static let thumbnailHeight: CGFloat = 120
     private static let actionRowHeight: CGFloat = 36
@@ -66,34 +74,38 @@ struct QuickAccessCardView: View {
     }
 
     private var thumbnail: some View {
-        ThumbnailImage(url: item.fileURL, maxPixelSize: Int(width * 2), isVideo: item.isVideo)
-            .frame(height: Self.thumbnailHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-            // One AppKit view owns click, double-click and drag. A file promise rather
-            // than a URL, so a staged capture is finalised when the receiver asks for it
-            // and an abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
-            .overlay(
-                FilePromiseDragView(
-                    payload: {
-                        FilePromisePayload(
-                            suggestedName: item.filename,
-                            contentType: item.contentType,
-                            resolve: actions.resolveForDrag,
-                            completed: actions.dragCompleted
-                        )
-                    },
-                    dragImage: { NSImage(contentsOf: item.fileURL) },
-                    onTap: { isExpanded.toggle() },
-                    onDoubleTap: {
-                        if actions.annotateAvailable {
-                            actions.annotate()
-                        }
+        ThumbnailImage(
+            url: item.fileURL,
+            maxPixelSize: Int((width * displayScale).rounded()),
+            isVideo: item.isVideo
+        )
+        .frame(height: Self.thumbnailHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        // One AppKit view owns click, double-click and drag. A file promise rather
+        // than a URL, so a staged capture is finalised when the receiver asks for it
+        // and an abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
+        .overlay(
+            FilePromiseDragView(
+                payload: {
+                    FilePromisePayload(
+                        suggestedName: item.filename,
+                        contentType: item.contentType,
+                        resolve: actions.resolveForDrag,
+                        completed: actions.dragCompleted
+                    )
+                },
+                dragImage: { NSImage(contentsOf: item.fileURL) },
+                onTap: { isExpanded.toggle() },
+                onDoubleTap: {
+                    if actions.annotateAvailable {
+                        actions.annotate()
                     }
-                )
+                }
             )
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Double-tap to expand actions, or drag to another app")
+        )
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Double-tap to expand actions, or drag to another app")
     }
 
     private var details: some View {
@@ -129,8 +141,14 @@ struct QuickAccessCardView: View {
                 action: actions.annotate
             )
             if item.isVideo {
-                // A recording gets GIF where a screenshot gets Pin and OCR; neither of
-                // those means anything for a movie (docs/03 §1.8, §2).
+                // A recording gets Trim and GIF where a screenshot gets Pin and OCR;
+                // neither of those means anything for a movie (docs/03 §1.8, §2).
+                action(
+                    "Trim",
+                    systemImage: "scissors",
+                    enabled: actions.trimAvailable,
+                    action: actions.trim
+                )
                 action("Export GIF", systemImage: "square.stack.3d.down.right", action: actions.exportGIF)
             } else {
                 action("Pin", systemImage: "pin", enabled: actions.pinAvailable, action: actions.pin)

@@ -26,14 +26,12 @@ public final class ContentSharingPickerSession: NSObject {
         super.init()
     }
 
-    deinit {
-        // The picker is a process-wide singleton; leaving a dead observer on it leaks.
-        MainActor.assumeIsolated {
-            if isObserving {
-                picker.remove(self)
-            }
-        }
-    }
+    // No `deinit` cleanup: observation is ended in `pickFilter`, deterministically.
+    //
+    // The tempting version — `MainActor.assumeIsolated` in `deinit` — is a trap. A `deinit`
+    // runs wherever the last reference is released, which for an object handed through a
+    // `Task` is often not the main thread, and `assumeIsolated` does not check and hope: it
+    // crashes the process (docs/07 LOW).
 
     /// Whether the picker is available on this system.
     public static var isAvailable: Bool {
@@ -93,7 +91,12 @@ public final class ContentSharingPickerSession: NSObject {
         picker.defaultConfiguration = configuration
         picker.isActive = true
 
-        defer { picker.isActive = false }
+        defer {
+            picker.isActive = false
+            // The picker is a process-wide singleton, so a dead observer left on it leaks
+            // — and this is the one place that knows the session is over.
+            stopObserving()
+        }
 
         let boxed = try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -106,6 +109,12 @@ public final class ContentSharingPickerSession: NSObject {
         guard !isObserving else { return }
         picker.add(self)
         isObserving = true
+    }
+
+    private func stopObserving() {
+        guard isObserving else { return }
+        picker.remove(self)
+        isObserving = false
     }
 
     private func finish(with result: Result<UncheckedSendableBox<SCContentFilter>, any Error>) {

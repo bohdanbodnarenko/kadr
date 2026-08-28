@@ -64,6 +64,13 @@ public actor HistoryStore {
 
         let thumbURL = layout.thumbnailURL(hash: hash)
         let thumbSource = draft.thumbnailSourceURL ?? draft.sourceURL
+        // A poster rendered for this ingest is scratch: once the library has its own copy
+        // there is nothing left to keep, and nothing else will come back for it.
+        defer {
+            if draft.thumbnailSourceIsTemporary, let poster = draft.thumbnailSourceURL {
+                try? FileManager.default.removeItem(at: poster)
+            }
+        }
         try HistoryThumbnailWriter.write(from: thumbSource, to: thumbURL)
 
         let byteSize = fileSize(captureURL)

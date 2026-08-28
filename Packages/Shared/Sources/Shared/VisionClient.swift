@@ -47,55 +47,8 @@ public final class VisionClient {
 
         guard let pngData = Self.pngData(from: image) else { throw ClientError.encodingFailed }
         let optionsData = try JSONEncoder().encode(options)
-        let connection = connection ?? makeConnection()
-        self.connection = connection
-
-        // `NSXPCConnection` is not `Sendable`; it is used only from the request task,
-        // which is the single consumer, so it crosses in a documented box (docs/04 §8).
-        let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.request(pngData, optionsData, on: boxed.value) }
-            group.addTask {
-                try await Task.sleep(for: Self.timeout)
-                throw ClientError.timedOut
-            }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else { throw ClientError.timedOut }
-            return first
-        }
-        return try JSONDecoder().decode(VisionAnalysis.self, from: resultData)
-    }
-
-    private nonisolated static func request(
-        _ pngData: Data,
-        _ optionsData: Data,
-        on connection: NSXPCConnection
-    ) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            // Every path — a dead helper, a failed request, a reply — has to resume this
-            // exactly once. An XPC connection that dies before replying is not an edge
-            // case; it is what an idle helper exiting looks like from here, and leaving
-            // the continuation unresumed would hang the capture flow forever.
-            let resume = ResumeOnce(continuation)
-
-            let service = connection.remoteObjectProxyWithErrorHandler { error in
-                resume.callAsFunction(.failure(error))
-            } as? any VisionServiceProtocol
-
-            guard let service else {
-                resume(.failure(ClientError.helperUnavailable))
-                return
-            }
-
-            service.analyze(imageData: pngData, optionsData: optionsData) { data, error in
-                if let error {
-                    resume(.failure(error))
-                } else if let data {
-                    resume(.success(data))
-                } else {
-                    resume(.failure(VisionServiceError.recognitionFailed))
-                }
-            }
+        return try await send(timeout: Self.timeout, fallback: .recognitionFailed) { service, reply in
+            service.analyze(imageData: pngData, optionsData: optionsData, reply: reply)
         }
     }
 
@@ -108,49 +61,11 @@ public final class VisionClient {
         defer { signposter.endInterval("gif", state) }
 
         let requestData = try JSONEncoder().encode(request)
-        let connection = connection ?? makeConnection()
-        self.connection = connection
-
-        let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.requestGIF(requestData, on: boxed.value) }
-            group.addTask {
-                // Encoding a long recording legitimately takes a while, so this bound is
-                // far more generous than the recognition one — it exists to catch a dead
-                // helper, not a slow encode.
-                try await Task.sleep(for: .seconds(600))
-                throw ClientError.timedOut
-            }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else { throw ClientError.timedOut }
-            return first
-        }
-        return try JSONDecoder().decode(GIFResponse.self, from: resultData)
-    }
-
-    private nonisolated static func requestGIF(
-        _ requestData: Data,
-        on connection: NSXPCConnection
-    ) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            let resume = ResumeOnce(continuation)
-            let service = connection.remoteObjectProxyWithErrorHandler { error in
-                resume(.failure(error))
-            } as? any VisionServiceProtocol
-
-            guard let service else {
-                resume(.failure(ClientError.helperUnavailable))
-                return
-            }
-            service.encodeGIF(requestData: requestData) { data, error in
-                if let error {
-                    resume(.failure(error))
-                } else if let data {
-                    resume(.success(data))
-                } else {
-                    resume(.failure(VisionServiceError.recognitionFailed))
-                }
-            }
+        // Encoding a long recording legitimately takes a while, so this bound is far more
+        // generous than the recognition one — it exists to catch a dead helper, not a slow
+        // encode.
+        return try await send(timeout: .seconds(600), fallback: .recognitionFailed) { service, reply in
+            service.encodeGIF(requestData: requestData, reply: reply)
         }
     }
 
@@ -164,46 +79,8 @@ public final class VisionClient {
         defer { signposter.endInterval("scroll stitch", state) }
 
         let requestData = try JSONEncoder().encode(request)
-        let connection = connection ?? makeConnection()
-        self.connection = connection
-
-        let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.requestStitch(requestData, on: boxed.value) }
-            group.addTask {
-                try await Task.sleep(for: .seconds(300))
-                throw ClientError.timedOut
-            }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else { throw ClientError.timedOut }
-            return first
-        }
-        return try JSONDecoder().decode(ScrollStitchResponse.self, from: resultData)
-    }
-
-    private nonisolated static func requestStitch(
-        _ requestData: Data,
-        on connection: NSXPCConnection
-    ) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            let resume = ResumeOnce(continuation)
-            let service = connection.remoteObjectProxyWithErrorHandler { error in
-                resume(.failure(error))
-            } as? any VisionServiceProtocol
-
-            guard let service else {
-                resume(.failure(ClientError.helperUnavailable))
-                return
-            }
-            service.stitchScroll(requestData: requestData) { data, error in
-                if let error {
-                    resume(.failure(error))
-                } else if let data {
-                    resume(.success(data))
-                } else {
-                    resume(.failure(VisionServiceError.stitchFailed))
-                }
-            }
+        return try await send(timeout: .seconds(300), fallback: .stitchFailed) { service, reply in
+            service.stitchScroll(requestData: requestData, reply: reply)
         }
     }
 
@@ -218,48 +95,10 @@ public final class VisionClient {
         defer { signposter.endInterval("historyIndex", state) }
 
         let requestData = try JSONEncoder().encode(request)
-        let connection = connection ?? makeConnection()
-        self.connection = connection
-
-        let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.requestIndex(requestData, on: boxed.value) }
-            group.addTask {
-                // A batch is a handful of OCR passes; generous enough for a slow machine,
-                // bounded so a wedged helper cannot leave the pass hanging forever.
-                try await Task.sleep(for: .seconds(120))
-                throw ClientError.timedOut
-            }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else { throw ClientError.timedOut }
-            return first
-        }
-        return try JSONDecoder().decode(HistoryIndexResponse.self, from: resultData)
-    }
-
-    private nonisolated static func requestIndex(
-        _ requestData: Data,
-        on connection: NSXPCConnection
-    ) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            let resume = ResumeOnce(continuation)
-            let service = connection.remoteObjectProxyWithErrorHandler { error in
-                resume(.failure(error))
-            } as? any VisionServiceProtocol
-
-            guard let service else {
-                resume(.failure(ClientError.helperUnavailable))
-                return
-            }
-            service.indexHistory(requestData: requestData) { data, error in
-                if let error {
-                    resume(.failure(error))
-                } else if let data {
-                    resume(.success(data))
-                } else {
-                    resume(.failure(VisionServiceError.historyUnavailable))
-                }
-            }
+        // A batch is a handful of OCR passes; generous enough for a slow machine, bounded
+        // so a wedged helper cannot leave the pass hanging forever.
+        return try await send(timeout: .seconds(120), fallback: .historyUnavailable) { service, reply in
+            service.indexHistory(requestData: requestData, reply: reply)
         }
     }
 
@@ -272,31 +111,65 @@ public final class VisionClient {
         defer { signposter.endInterval("subjectMask", state) }
 
         let requestData = try JSONEncoder().encode(request)
+        // Segmenting a 5K capture on an older machine is seconds, not minutes; this bound
+        // exists to catch a dead helper, not a slow model.
+        return try await send(timeout: .seconds(60), fallback: .maskFailed) { service, reply in
+            service.subjectMask(requestData: requestData, reply: reply)
+        }
+    }
+
+    // MARK: - The one round trip
+
+    /// What every call to the helper does: connect, send, decode, and never hang.
+    ///
+    /// Each of the five requests used to carry its own copy of this — a task group racing a
+    /// sleep, a `ResumeOnce`, a proxy error handler and the same three-way reply check, all
+    /// spelled out five times (docs/07 LOW). They differ in exactly three things: how long
+    /// to wait, which method to call, and what an empty reply means.
+    ///
+    /// - Parameters:
+    ///   - timeout: XPC does not promise a reply, so every call needs a bound.
+    ///   - fallback: the error to report when the helper replies with neither data nor an
+    ///     error, which should not happen and must still be an error rather than a hang.
+    ///   - invoke: calls the method this request wants.
+    private func send<Response: Decodable>(
+        timeout: Duration,
+        fallback: VisionServiceError,
+        invoke: @escaping @Sendable (any VisionServiceProtocol, @escaping @Sendable (Data?, (any Error)?) -> Void)
+            -> Void
+    ) async throws -> Response {
         let connection = connection ?? makeConnection()
         self.connection = connection
 
+        // `NSXPCConnection` is not `Sendable`; it is used only from the request task,
+        // which is the single consumer, so it crosses in a documented box (docs/04 §8).
         let boxed = UncheckedSendableBox(connection)
         let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.requestSubjectMask(requestData, on: boxed.value) }
+            group.addTask { try await Self.request(on: boxed.value, fallback: fallback, invoke: invoke) }
             group.addTask {
-                // Segmenting a 5K capture on an older machine is seconds, not minutes;
-                // this bound exists to catch a dead helper, not a slow model.
-                try await Task.sleep(for: .seconds(60))
+                try await Task.sleep(for: timeout)
                 throw ClientError.timedOut
             }
             defer { group.cancelAll() }
             guard let first = try await group.next() else { throw ClientError.timedOut }
             return first
         }
-        return try JSONDecoder().decode(SubjectMaskResponse.self, from: resultData)
+        return try JSONDecoder().decode(Response.self, from: resultData)
     }
 
-    private nonisolated static func requestSubjectMask(
-        _ requestData: Data,
-        on connection: NSXPCConnection
+    private nonisolated static func request(
+        on connection: NSXPCConnection,
+        fallback: VisionServiceError,
+        invoke: @escaping @Sendable (any VisionServiceProtocol, @escaping @Sendable (Data?, (any Error)?) -> Void)
+            -> Void
     ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
+            // Every path — a dead helper, a failed request, a reply — has to resume this
+            // exactly once. An XPC connection that dies before replying is not an edge
+            // case; it is what an idle helper exiting looks like from here, and leaving
+            // the continuation unresumed would hang the capture flow forever.
             let resume = ResumeOnce(continuation)
+
             let service = connection.remoteObjectProxyWithErrorHandler { error in
                 resume(.failure(error))
             } as? any VisionServiceProtocol
@@ -305,13 +178,13 @@ public final class VisionClient {
                 resume(.failure(ClientError.helperUnavailable))
                 return
             }
-            service.subjectMask(requestData: requestData) { data, error in
+            invoke(service) { data, error in
                 if let error {
                     resume(.failure(error))
                 } else if let data {
                     resume(.success(data))
                 } else {
-                    resume(.failure(VisionServiceError.maskFailed))
+                    resume(.failure(fallback))
                 }
             }
         }

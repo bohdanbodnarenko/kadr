@@ -35,7 +35,8 @@ final class PinManager {
         _ fileURL: URL,
         copy: @escaping (URL) -> Void,
         save: @escaping (URL) -> Void,
-        annotate: @escaping (URL) -> Void = { _ in }
+        annotate: @escaping (URL) -> Void = { _ in },
+        copyText: @escaping (URL) -> Void = { _ in }
     ) -> Bool {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let scale = screen?.backingScaleFactor ?? 2
@@ -47,6 +48,7 @@ final class PinManager {
         panel.onCopy = { copy(fileURL) }
         panel.onSave = { save(fileURL) }
         panel.onAnnotate = { annotate(fileURL) }
+        panel.onCopyText = { copyText(fileURL) }
         panel.onClose = { [weak self, weak panel] in
             guard let panel else { return }
             self?.close(panel)

@@ -40,23 +40,40 @@ public struct StagingArea: Sendable {
     public func finalize(_ url: URL, into folder: URL) throws -> URL {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
-        var destination = folder.appendingPathComponent(url.lastPathComponent)
-        let base = destination.deletingPathExtension().lastPathComponent
-        let ext = destination.pathExtension
-        var counter = 2
-        while FileManager.default.fileExists(atPath: destination.path) {
-            destination = folder
-                .appendingPathComponent("\(base) (\(counter))")
-                .appendingPathExtension(ext)
-            counter += 1
-        }
+        let base = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
 
-        do {
-            try FileManager.default.moveItem(at: url, to: destination)
-        } catch {
-            throw ExportError.writeFailed(error.localizedDescription)
+        // The move itself is the collision check: `moveItem` refuses to replace, so a
+        // second capture finalising between the test and the move loses the race rather
+        // than the file. Testing first and moving after is how a capture gets overwritten
+        // (the docs/07 M6 pattern).
+        for counter in 1 ... Self.collisionRetries {
+            let name = counter == 1 ? base : "\(base) (\(counter))"
+            let destination = folder.appendingPathComponent(name).appendingPathExtension(ext)
+            do {
+                try FileManager.default.moveItem(at: url, to: destination)
+                return destination
+            } catch let error as CocoaError where error.code == .fileWriteFileExists {
+                continue
+            } catch {
+                throw ExportError.writeFailed(error.localizedDescription)
+            }
         }
-        return destination
+        throw ExportError.writeFailed("Could not find a free name in \(folder.lastPathComponent)")
+    }
+
+    /// How many names to try before giving up. Reached only if something is creating files
+    /// as fast as we can name them.
+    private static let collisionRetries = 32
+
+    /// Whether `url` is a file this staging area is holding.
+    ///
+    /// Automation names files by path, so the only way to know whether `kadr pin --path …`
+    /// points at a staged capture — one the 24-hour sweep would delete out from under the
+    /// pin — is to ask (docs/07 M11).
+    public func contains(_ url: URL) -> Bool {
+        url.standardizedFileURL.deletingLastPathComponent().path
+            == directory.standardizedFileURL.path
     }
 
     /// Deletes staged files older than the retention window.

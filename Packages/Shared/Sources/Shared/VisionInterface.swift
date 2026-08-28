@@ -164,8 +164,36 @@ public struct GIFResponse: Codable, Sendable, Hashable {
     /// Where the GIF was written, or nil for an estimate.
     public var path: String?
     public var byteCount: Int
+    /// The frame rate the encode will use, which may be below the one asked for.
+    ///
+    /// A GIF destination holds every frame until it is finalised, so a long recording has
+    /// to be planned down to fit memory. The plan travels back with the estimate so the
+    /// user is asked about the GIF they will actually get, rather than the one they asked
+    /// for (docs/07 M10).
+    public var frameRate: Int
+    public var maximumWidth: Int
+    /// How many seconds of the recording the GIF covers.
+    public var encodedSeconds: Double
+    /// How long the recording is.
+    public var sourceSeconds: Double
 
-    public init(path: String?, byteCount: Int) {
+    /// Whether the GIF stops before the recording does.
+    public var isClipped: Bool {
+        encodedSeconds + 0.01 < sourceSeconds
+    }
+
+    public init(
+        path: String?,
+        byteCount: Int,
+        frameRate: Int = 0,
+        maximumWidth: Int = 0,
+        encodedSeconds: Double = 0,
+        sourceSeconds: Double = 0
+    ) {
+        self.frameRate = frameRate
+        self.maximumWidth = maximumWidth
+        self.encodedSeconds = encodedSeconds
+        self.sourceSeconds = sourceSeconds
         self.path = path
         self.byteCount = byteCount
     }

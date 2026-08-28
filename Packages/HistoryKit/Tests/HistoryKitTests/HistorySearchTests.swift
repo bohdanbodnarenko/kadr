@@ -1,6 +1,9 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import Shared
 import Testing
+import UniformTypeIdentifiers
 @testable import HistoryKit
 
 /// The FTS5 query the user's typing turns into (docs/03 §5 P3).
@@ -269,5 +272,93 @@ struct HistoryContentDeleteTests {
 
         _ = try await store.delete(fileMatching: draft.sourceURL)
         #expect(try await store.search("bank").isEmpty)
+    }
+}
+
+/// Scratch files handed to an ingest (docs/07 LOW, docs/09 U0.5).
+///
+/// A recording cannot be thumbnailed by ImageIO, so a poster frame is rendered to a
+/// temporary JPEG and handed over. Nothing deleted it afterwards, so a session of
+/// recordings left one poster each behind in the temporary directory.
+@Suite("Ingest scratch files")
+struct IngestScratchFileTests {
+    private func makeStore() throws -> (HistoryStore, URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-poster-\(UUID().uuidString)", isDirectory: true)
+        return try (HistoryStore.open(root: root), root)
+    }
+
+    /// A capture on disk, plus a separate still to use as its thumbnail source.
+    private func makeDraft(temporaryThumbnail: Bool) throws -> (HistoryIngest, URL) {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-src-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        let capture = folder.appendingPathComponent("recording.mp4")
+        try pngData().write(to: capture)
+        let poster = folder.appendingPathComponent("poster.jpg")
+        try pngData().write(to: poster)
+
+        return (HistoryIngest(
+            sourceURL: capture,
+            kind: .video,
+            pixelSize: PixelSize(width: 40, height: 30),
+            originalFilename: "recording.mp4",
+            thumbnailSourceURL: poster,
+            thumbnailSourceIsTemporary: temporaryThumbnail
+        ), poster)
+    }
+
+    private func pngData() throws -> Data {
+        guard let context = CGContext(
+            data: nil,
+            width: 40,
+            height: 30,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let image = context.makeImage() else {
+            throw CocoaError(.featureUnsupported)
+        }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw CocoaError(.featureUnsupported)
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
+        return data as Data
+    }
+
+    @Test("A poster rendered for the ingest is deleted once the library has its copy")
+    func temporaryPosterIsRemoved() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (draft, poster) = try makeDraft(temporaryThumbnail: true)
+        defer { try? FileManager.default.removeItem(at: poster.deletingLastPathComponent()) }
+
+        let record = try await store.ingest(draft)
+
+        #expect(!FileManager.default.fileExists(atPath: poster.path), "the scratch poster should be gone")
+        #expect(
+            FileManager.default.fileExists(atPath: store.thumbnailFileURL(for: record).path),
+            "and the library's own copy should not be"
+        )
+    }
+
+    @Test("A thumbnail source the caller owns is left alone")
+    func permanentThumbnailSurvives() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (draft, poster) = try makeDraft(temporaryThumbnail: false)
+        defer { try? FileManager.default.removeItem(at: poster.deletingLastPathComponent()) }
+
+        _ = try await store.ingest(draft)
+        #expect(FileManager.default.fileExists(atPath: poster.path))
     }
 }

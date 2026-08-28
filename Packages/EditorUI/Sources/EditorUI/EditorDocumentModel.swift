@@ -72,8 +72,38 @@ public final class EditorDocumentModel {
     private var dragStartCommands: [AnnotationID: AnnotationCommand] = [:]
     private var isMovingSelection = false
 
+    /// The document's commands as they were when the work was last saved.
+    ///
+    /// Comparing against a snapshot rather than counting edits means undoing back to where
+    /// the user started is *clean* again — which is what they will expect when the window
+    /// stops asking to save.
+    @ObservationIgnored private var savedCommands: [AnnotationCommand]
+
     public init(document: AnnotationDocument) {
         self.document = document
+        savedCommands = document.commands
+    }
+
+    /// Whether there is work in this window that only exists in this window (docs/07 M7).
+    public var hasUnsavedChanges: Bool {
+        document.commands != savedCommands
+    }
+
+    /// Replaces the whole document, for restoring work a previous session left behind.
+    ///
+    /// The restored state counts as unsaved, because it is: the autosave is a recovery
+    /// copy, not a save the user made.
+    public func replaceDocument(_ replacement: AnnotationDocument) {
+        document = replacement
+    }
+
+    /// Records that the current state has been written somewhere durable.
+    ///
+    /// Called for a project save and for an image export alike: exporting a flattened PNG
+    /// loses re-editability, but the user has just deliberately produced the artefact they
+    /// came for, and asking them to save again on the way out would be nagging.
+    public func markSaved() {
+        savedCommands = document.commands
     }
 
     public var selection: Set<AnnotationID> {
