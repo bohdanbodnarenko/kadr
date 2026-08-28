@@ -78,16 +78,17 @@ public struct AnnotationExportRenderer: Sendable {
             }
         } else {
             context.translateBy(x: -canvas.minX, y: -canvas.minY)
-            if document.crop?.canExpandCanvas == true {
-                context.setFillColor(CGColor(gray: 1, alpha: 1))
-                context.fill(canvas)
-            }
-            context.draw(source, in: document.baseImage.bounds)
-            if includeAnnotations {
-                for command in document.commands {
-                    draw(command, in: context, imageScale: scale)
-                }
-            }
+            drawPlainCanvas(
+                CardContents(
+                    source: source,
+                    document: document,
+                    includeAnnotations: includeAnnotations,
+                    drawCommand: { command, target in draw(command, in: target, imageScale: scale) }
+                ),
+                canvas: canvas,
+                scale: scale,
+                in: context
+            )
         }
 
         guard let image = context.makeImage() else { throw RenderError.couldNotCreateImage }
@@ -100,7 +101,9 @@ public struct AnnotationExportRenderer: Sendable {
     /// 8-bit context every other export uses would quantise and clip it, which is exactly
     /// what capturing in HDR was meant to avoid. Falls back to 8 bits when the deeper
     /// context cannot be made, because a slightly flattened export beats none.
-    private static func makeContext(width: Int, height: Int, matching source: CGImage) -> CGContext? {
+    /// Internal, not private: the canvas assembly lives in
+    /// `AnnotationExportRenderer+Canvas.swift`, and `private` is file-scoped.
+    static func makeContext(width: Int, height: Int, matching source: CGImage) -> CGContext? {
         let space = source.colorSpace ?? CGColorSpaceCreateDeviceRGB()
 
         if source.bitsPerComponent > 8 {
@@ -135,7 +138,8 @@ public struct AnnotationExportRenderer: Sendable {
 
     // MARK: - Commands
 
-    private func draw(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
+    /// Internal, not private: the canvas assembly draws commands too.
+    func draw(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
         switch command {
         case let .arrow(spec): drawArrow(spec, in: context)
         case let .shape(spec): drawShape(spec, in: context)

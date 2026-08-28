@@ -127,6 +127,54 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         pushHistory(updated)
     }
 
+    /// The perspective camera in force, if any. The last one wins.
+    public var camera: AnnotationCameraSpec? {
+        commands.reversed().compactMap { command in
+            if case let .camera(spec) = command {
+                return spec
+            }
+            return nil
+        }.first
+    }
+
+    /// Where the camera puts the card's corners, or nil when there is no camera to apply.
+    ///
+    /// Measured against the *card* rather than the capture, so a tilted screenshot leans
+    /// within its beautified frame rather than within its own bounds — which is the
+    /// composition the effect exists for (docs/09 U1.2).
+    public var cameraGeometry: AnnotationCameraGeometry? {
+        guard let camera, !camera.isIdentity else { return nil }
+        let cardRect = beautifyLayout?.cardRect ?? contentRect
+        return AnnotationCameraGeometry(spec: camera, contentRect: cardRect)
+    }
+
+    /// Replaces the current camera, coalescing successive inspector edits into one undo
+    /// step so dragging a slider does not flood the undo stack.
+    public mutating func setCamera(_ spec: AnnotationCameraSpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .camera = command {
+                return true
+            }
+            return false
+        }
+        if let spec, !spec.isIdentity {
+            updated.insert(.camera(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        if shouldCoalesce(updated, matching: {
+            if case .camera = $0 {
+                true
+            } else {
+                false
+            }
+        }) {
+            history[historyIndex] = updated
+            return
+        }
+        pushHistory(updated)
+    }
+
     /// The capture area that is composed onto the canvas: the crop, or the whole image.
     public var contentRect: CGRect {
         crop?.rect ?? baseImage.bounds
@@ -159,31 +207,41 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
             updated.insert(.beautify(spec), at: 0)
         }
         guard updated != commands else { return }
-        if shouldCoalesceBeautify(updated) {
+        if shouldCoalesce(updated, matching: {
+            if case .beautify = $0 {
+                true
+            } else {
+                false
+            }
+        }) {
             history[historyIndex] = updated
             return
         }
         pushHistory(updated)
     }
 
-    private func shouldCoalesceBeautify(_ updated: [AnnotationCommand]) -> Bool {
+    /// Whether replacing a chrome command should overwrite the last history entry rather
+    /// than adding one.
+    ///
+    /// Shared by beautify and the camera because both are edited by dragging sliders, and
+    /// both would otherwise put one undo step on the stack per mouse-moved event.
+    ///
+    /// Only *successive* inspector edits coalesce. Turning the effect on or off is its own
+    /// step, otherwise "add a background" and "remove it" collapse into one and undo
+    /// appears to do nothing.
+    private func shouldCoalesce(
+        _ updated: [AnnotationCommand],
+        matching isChrome: (AnnotationCommand) -> Bool
+    ) -> Bool {
         guard historyIndex > 0, historyIndex == history.count - 1 else { return false }
-        func isBeautify(_ command: AnnotationCommand) -> Bool {
-            if case .beautify = command {
-                return true
-            }
+        guard commands.contains(where: isChrome), updated.contains(where: isChrome) else {
             return false
         }
-        // Only successive inspector edits coalesce. Turning beautify on or off is its
-        // own undo step, otherwise "Add a background" and "remove it" collapse into one.
-        guard commands.contains(where: isBeautify), updated.contains(where: isBeautify) else {
-            return false
+        func withoutChrome(_ list: [AnnotationCommand]) -> [AnnotationCommand] {
+            list.filter { !isChrome($0) }
         }
-        func withoutBeautify(_ list: [AnnotationCommand]) -> [AnnotationCommand] {
-            list.filter { !isBeautify($0) }
-        }
-        return withoutBeautify(commands) == withoutBeautify(history[historyIndex - 1])
-            && withoutBeautify(updated) == withoutBeautify(history[historyIndex - 1])
+        return withoutChrome(commands) == withoutChrome(history[historyIndex - 1])
+            && withoutChrome(updated) == withoutChrome(history[historyIndex - 1])
     }
 
     // MARK: - Editing

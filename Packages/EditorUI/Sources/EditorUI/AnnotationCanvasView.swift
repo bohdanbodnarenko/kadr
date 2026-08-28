@@ -19,6 +19,8 @@ public final class AnnotationCanvasView: NSView {
     let backdropLayer = CALayer()
     let gradientLayer = CAGradientLayer()
     let shadowLayer = CALayer()
+    /// Shows the whole canvas projected through the perspective camera (docs/09 U1.2).
+    let cameraLayer = CALayer()
     let contentHost = CALayer()
     let baseLayer = CALayer()
     let annotationLayer = CALayer()
@@ -32,7 +34,7 @@ public final class AnnotationCanvasView: NSView {
     private var draftShapeLayer: CALayer?
     /// Kept so the measure tool can read the image's straight edges the first time it is
     /// used — never at open, because most sessions never measure anything (docs/06 M21).
-    private let baseImage: CGImage
+    let baseImage: CGImage
     private let subjectLift = SubjectLiftCompositor()
     /// The lift the base layer currently shows, so the composite is not redone per edit.
     private var liftedFrom: SubjectLiftSpec?
@@ -61,6 +63,8 @@ public final class AnnotationCanvasView: NSView {
             contentHost.addSublayer(layer)
         }
         root.addSublayer(contentHost)
+        cameraLayer.isHidden = true
+        root.addSublayer(cameraLayer)
 
         marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
         marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
@@ -142,14 +146,24 @@ public final class AnnotationCanvasView: NSView {
     /// Internal, not private: a drop reports a location rather than an event, and the
     /// drop handling lives in `AnnotationCanvasView+Drop.swift`.
     func imagePoint(fromWindowPoint windowPoint: CGPoint) -> CGPoint {
-        let viewPoint = convert(windowPoint, from: nil)
+        var viewPoint = convert(windowPoint, from: nil)
+
+        // A tilted capture is still editable, because the click is traced back through the
+        // camera's inverse before anything else looks at it. Without this, clicking a
+        // shape on a leaning screenshot selects whatever sits at the same *screen* point
+        // on the upright one (docs/09 U1.2).
+        if let camera = model.document.cameraGeometry {
+            guard let unprojected = camera.contentPoint(from: viewPoint) else { return viewPoint }
+            viewPoint = unprojected
+        }
+
         guard model.document.beautify != nil, let layout = model.document.beautifyLayout else {
             return viewPoint
         }
         let content = model.document.contentRect
         return CGPoint(
-            x: viewPoint.x - layout.contentRect.minX + content.minX,
-            y: viewPoint.y - layout.contentRect.minY + content.minY
+            x: viewPoint.x - layout.imageRect.minX + content.minX,
+            y: viewPoint.y - layout.imageRect.minY + content.minY
         )
     }
 

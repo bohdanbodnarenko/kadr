@@ -286,23 +286,6 @@ public final class EditorDocumentModel {
         document.bringToFront(document.selection)
     }
 
-    public func sendSelectionToBack() {
-        document.sendToBack(document.selection)
-    }
-
-    /// Applies canvas chrome. Successive inspector edits coalesce into one undo step.
-    public func applyBeautify(_ spec: BeautifySpec) {
-        var spec = spec
-        if let existing = document.beautify {
-            spec.id = existing.id
-        }
-        document.setBeautify(spec)
-    }
-
-    public func clearBeautify() {
-        document.setBeautify(nil)
-    }
-
     // MARK: - Drafting
 
     private func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
@@ -342,7 +325,7 @@ public final class EditorDocumentModel {
                 measuresBox: styleMemory.lastMeasuresBox,
                 stroke: stroke
             ))
-        case .counter, .beautify, .subjectLift, .image:
+        case .counter, .beautify, .camera, .subjectLift, .image:
             return nil
         }
     }
@@ -392,7 +375,7 @@ public final class EditorDocumentModel {
         case var .measure(spec):
             spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
             draft = .measure(spec)
-        case .counter, .beautify, .subjectLift, .image:
+        case .counter, .beautify, .camera, .subjectLift, .image:
             break
         }
     }
@@ -419,7 +402,7 @@ public final class EditorDocumentModel {
         case let .measure(spec):
             styleMemory.remember(spec.stroke, for: .measure)
             styleMemory.lastMeasuresBox = spec.measuresBox
-        case .counter, .crop, .beautify, .subjectLift, .image:
+        case .counter, .crop, .beautify, .camera, .subjectLift, .image:
             break
         }
     }
@@ -492,7 +475,7 @@ public final class EditorDocumentModel {
         // A text box starts empty by design; the user types into it next.
         case .text:
             return true
-        case .counter, .beautify, .subjectLift, .image:
+        case .counter, .beautify, .camera, .subjectLift, .image:
             return true
         }
     }

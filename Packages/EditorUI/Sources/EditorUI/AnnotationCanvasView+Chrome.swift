@@ -12,6 +12,45 @@ import Shared
 /// the export renderer also draws from, so the two stay honest by sharing a source rather
 /// than by being read together.
 extension AnnotationCanvasView {
+    /// Shows the camera's projection, or takes it away again (docs/09 U1.2).
+    ///
+    /// Rendered through the same code the export uses rather than approximated with a
+    /// `CATransform3D`: the two would have to agree about the sign of every rotation under
+    /// a flipped geometry, and a preview that leans the other way from the file is worse
+    /// than a preview that costs a CoreImage pass. U1.3's settle-preview is where the
+    /// cheap live approximation belongs.
+    func updateCameraPreview() {
+        guard model.document.cameraGeometry != nil else {
+            cameraLayer.isHidden = true
+            cameraLayer.contents = nil
+            contentHost.isHidden = false
+            backdropLayer.opacity = 1
+            return
+        }
+
+        let canvas = model.document.canvasRect
+        guard let projected = try? AnnotationExportRenderer().render(
+            baseImage: baseImage,
+            document: model.document
+        ) else {
+            // A projection we cannot render leaves the flat canvas visible, which is wrong
+            // but legible — the alternative is a blank editor.
+            cameraLayer.isHidden = true
+            contentHost.isHidden = false
+            return
+        }
+
+        // The projection already contains the backdrop and the card, so everything the
+        // flat path draws is hidden rather than drawn underneath it.
+        contentHost.isHidden = true
+        shadowLayer.isHidden = true
+        backdropLayer.opacity = 0
+        cameraLayer.isHidden = false
+        cameraLayer.frame = CGRect(origin: .zero, size: canvas.size)
+        cameraLayer.contents = projected
+        cameraLayer.contentsGravity = .resize
+    }
+
     func layoutCanvasChrome() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -33,6 +72,7 @@ extension AnnotationCanvasView {
             draftLayer.frame = drawing
             selectionLayer.frame = drawing
             reviewLayer.frame = drawing
+            updateCameraPreview()
             return
         }
 
@@ -69,6 +109,7 @@ extension AnnotationCanvasView {
         draftLayer.frame = drawing
         selectionLayer.frame = drawing
         reviewLayer.frame = drawing
+        updateCameraPreview()
     }
 
     /// Draws the card's shadow without laying anything opaque behind the capture.

@@ -293,6 +293,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     case counter(CounterSpec)
     case crop(CropSpec)
     case beautify(BeautifySpec)
+    case camera(AnnotationCameraSpec)
     case measure(MeasureSpec)
     case subjectLift(SubjectLiftSpec)
     case image(ImageSpec)
@@ -309,6 +310,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case let .counter(spec): spec.id
         case let .crop(spec): spec.id
         case let .beautify(spec): spec.id
+        case let .camera(spec): spec.id
         case let .measure(spec): spec.id
         case let .subjectLift(spec): spec.id
         case let .image(spec): spec.id
@@ -328,6 +330,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .counter: .counter
         case .crop: .crop
         case .beautify: .beautify
+        case .camera: .camera
         case .measure: .measure
         case .subjectLift: .subjectLift
         case .image: .image
@@ -355,6 +358,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     case counter
     case crop
     case beautify
+    case camera
     case measure
     case subjectLift
     case image
@@ -371,6 +375,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
         case .counter: "Counter"
         case .crop: "Crop"
         case .beautify: "Beautify"
+        case .camera: "Perspective"
         case .measure: "Measure"
         case .subjectLift: "Remove Background"
         case .image: "Image"
@@ -379,7 +384,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
 
     /// Canvas chrome is edited through its own UI, not by dragging a shape on the image.
     public var isCanvasChrome: Bool {
-        self == .crop || self == .beautify || self == .subjectLift
+        self == .crop || self == .beautify || self == .subjectLift || self == .camera
     }
 
     /// Tools the pointer can draw with.
@@ -388,6 +393,6 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     /// draw, and an image arrives by being dropped rather than by being drawn — but once
     /// it is there it selects and moves like anything else (docs/06 M24).
     public var isPointerTool: Bool {
-        self != .beautify && self != .subjectLift && self != .image
+        self != .beautify && self != .subjectLift && self != .image && self != .camera
     }
 }

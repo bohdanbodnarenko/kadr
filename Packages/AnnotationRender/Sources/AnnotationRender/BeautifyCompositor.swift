@@ -8,42 +8,149 @@ import ImageIO
 /// Kept off `AnnotationExportRenderer` so that type stays under the body-length budget;
 /// export still goes through one `render` entry point. Layout is not computed here — it
 /// comes from `BeautifyLayout`, so the live canvas and the export cannot disagree.
+/// Everything a card render needs about *what* to draw, as against *where*.
+///
+/// Bundled because it travels together through four functions unchanged, and four
+/// parameter lists repeating the same four things is four chances to reorder them.
+struct CardContents {
+    var source: CGImage
+    var document: AnnotationDocument
+    var includeAnnotations: Bool
+    var drawCommand: (AnnotationCommand, CGContext) -> Void
+}
+
 enum BeautifyCompositor {
     static func compose(
         source: CGImage,
         document: AnnotationDocument,
         includeAnnotations: Bool,
         in context: CGContext,
-        drawCommand: (AnnotationCommand, CGContext) -> Void
+        drawCommand: @escaping (AnnotationCommand, CGContext) -> Void
     ) {
+        let contents = CardContents(
+            source: source,
+            document: document,
+            includeAnnotations: includeAnnotations,
+            drawCommand: drawCommand
+        )
         guard let spec = document.beautify, let layout = document.beautifyLayout else { return }
         let canvasBounds = CGRect(origin: .zero, size: layout.canvasSize)
         fillBackdrop(spec.backdrop, in: canvasBounds, context: context)
 
-        let card = RoundedCornerPath.path(in: layout.cardRect, corners: layout.corners)
+        // With a camera, the card is projected — so the shape casting the shadow is the
+        // projected quad, not the upright rectangle (docs/09 U1.2).
+        let camera = document.cameraGeometry
+        let cardPath = RoundedCornerPath.path(in: layout.cardRect, corners: layout.corners)
+        let shadowPath = camera.map { CameraCompositor.path(of: $0.quad) } ?? cardPath
         if spec.shadow.isEnabled {
-            drawShadow(spec.shadow, around: card, in: layout, canvas: canvasBounds, context: context)
+            drawShadow(spec.shadow, around: shadowPath, in: layout, canvas: canvasBounds, context: context)
         }
 
+        if let camera, drawProjected(contents, layout: layout, camera: camera, in: context) {
+            return
+        }
+
+        context.saveGState()
+        context.addPath(cardPath)
+        context.clip()
+        drawCard(contents, imageOrigin: layout.imageRect.origin, in: context)
+        context.restoreGState()
+    }
+
+    /// Draws the capture and everything on it, positioned so `document.contentRect` lands
+    /// at `imageOrigin`. The caller has already clipped to whatever shape it wants.
+    static func drawCard(_ contents: CardContents, imageOrigin: CGPoint, in context: CGContext) {
+        let document = contents.document
         let content = document.contentRect
         context.saveGState()
-        context.addPath(card)
-        context.clip()
-        context.translateBy(
-            x: layout.imageRect.minX - content.minX,
-            y: layout.imageRect.minY - content.minY
-        )
+        context.translateBy(x: imageOrigin.x - content.minX, y: imageOrigin.y - content.minY)
         if document.crop?.canExpandCanvas == true {
             context.setFillColor(CGColor(gray: 1, alpha: 1))
             context.fill(content)
         }
-        context.draw(source, in: document.baseImage.bounds)
-        if includeAnnotations {
+        context.draw(contents.source, in: document.baseImage.bounds)
+        if contents.includeAnnotations {
             for command in document.commands {
-                drawCommand(command, context)
+                contents.drawCommand(command, context)
             }
         }
         context.restoreGState()
+    }
+
+    /// Renders the card flat, projects it, and draws the result.
+    ///
+    /// Returns false if the offscreen render or the projection failed, so the caller can
+    /// fall back to drawing the card upright — a screenshot without its lean beats an
+    /// empty canvas.
+    private static func drawProjected(
+        _ contents: CardContents,
+        layout: BeautifyLayout,
+        camera: AnnotationCameraGeometry,
+        in context: CGContext
+    ) -> Bool {
+        let scale = contents.document.baseImage.scale
+        guard let card = renderCard(contents, layout: layout, scale: scale) else { return false }
+        guard let projected = CameraCompositor.project(
+            card: card,
+            onto: camera.quad,
+            canvasSize: layout.canvasSize,
+            scale: scale
+        ) else {
+            return false
+        }
+
+        // Drawn in the flipped space every command works in, so the transform is undone
+        // around this one draw rather than the bitmap being mirrored.
+        let canvas = CGRect(origin: .zero, size: layout.canvasSize)
+        context.saveGState()
+        context.translateBy(x: 0, y: canvas.midY * 2)
+        context.scaleBy(x: 1, y: -1)
+        context.draw(projected, in: canvas)
+        context.restoreGState()
+        return true
+    }
+
+    /// The card, flat, with its rounded corners already applied — the bitmap the camera
+    /// projects.
+    private static func renderCard(
+        _ contents: CardContents,
+        layout: BeautifyLayout,
+        scale: CGFloat
+    ) -> CGImage? {
+        let pixelWidth = Int((layout.cardRect.width * scale).rounded())
+        let pixelHeight = Int((layout.cardRect.height * scale).rounded())
+        guard pixelWidth > 0, pixelHeight > 0 else { return nil }
+
+        guard let cardContext = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: contents.source.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        cardContext.scaleBy(x: scale, y: scale)
+        cardContext.translateBy(x: 0, y: layout.cardRect.height)
+        cardContext.scaleBy(x: 1, y: -1)
+
+        // The card's own space: its origin is the bitmap's origin, so the corner mask is
+        // built at zero and the capture is placed relative to that.
+        let localCard = CGRect(origin: .zero, size: layout.cardRect.size)
+        cardContext.addPath(RoundedCornerPath.path(in: localCard, corners: layout.corners))
+        cardContext.clip()
+        drawCard(
+            contents,
+            imageOrigin: CGPoint(
+                x: layout.imageRect.minX - layout.cardRect.minX,
+                y: layout.imageRect.minY - layout.cardRect.minY
+            ),
+            in: cardContext
+        )
+        return cardContext.makeImage()
     }
 
     /// Draws the card's shadow without putting anything opaque behind the card.
@@ -58,7 +165,7 @@ enum BeautifyCompositor {
     /// the canvas plus the card clips to everything *outside* the card, so the fill itself
     /// lands entirely in clipped-away territory and only the blur spilling past the edge
     /// survives. Nothing opaque is ever drawn where the capture goes.
-    private static func drawShadow(
+    static func drawShadow(
         _ shadow: BeautifyShadow,
         around card: CGPath,
         in layout: BeautifyLayout,
