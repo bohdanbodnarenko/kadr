@@ -29,6 +29,22 @@ public final class AnnotationCanvasView: NSView {
         self?.renderExpensiveChrome()
     }
 
+    /// Edits a text annotation where it sits, laid out by the exporter's own metrics
+    /// (docs/09 U1.8).
+    private(set) lazy var textEditor: TextOverlayEditor = {
+        let editor = TextOverlayEditor()
+        editor.onChange = { [weak self] id, string in
+            self?.model.updateText(id, string: string)
+        }
+        editor.onFinish = { [weak self] id in
+            guard let self else { return }
+            model.commitTextEdit(id)
+            layers[id]?.isHidden = false
+            rebuildAnnotationLayers()
+        }
+        return editor
+    }()
+
     let contentHost = CALayer()
     let baseLayer = CALayer()
     let annotationLayer = CALayer()
@@ -241,10 +257,38 @@ public final class AnnotationCanvasView: NSView {
     // MARK: - Mouse
 
     override public func mouseDown(with event: NSEvent) {
+        // Any click outside the field commits what is in it, which is what clicking away
+        // from a text field means everywhere else on the system.
+        if textEditor.isEditing {
+            textEditor.finish()
+        }
+
+        // A double-click on a text annotation edits it where it sits (docs/09 U1.8).
+        if event.clickCount == 2, beginEditingText(at: imagePoint(from: event)) {
+            return
+        }
+
         window?.makeFirstResponder(self)
         prepareEdgesIfMeasuring()
         model.pointerDown(at: imagePoint(from: event), modifiers: modifiers(from: event))
         refreshAfterEdit()
+    }
+
+    /// Opens the in-place editor over the text annotation under `point`, if there is one.
+    private func beginEditingText(at point: CGPoint) -> Bool {
+        let candidates = model.document.commands.filter { $0.tool == .text }
+        guard let hit = AnnotationHitTesting.topmost(in: candidates, at: point),
+              case let .text(spec) = hit
+        else {
+            return false
+        }
+
+        model.document.selection = [spec.id]
+        textEditor.begin(editing: spec, in: self)
+        // The annotation is drawn by the field while it is being edited; drawing it
+        // underneath as well would double every glyph.
+        layers[spec.id]?.isHidden = true
+        return true
     }
 
     override public func mouseDragged(with event: NSEvent) {

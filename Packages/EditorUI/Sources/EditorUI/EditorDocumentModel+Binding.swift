@@ -33,4 +33,77 @@ extension EditorDocumentModel {
             anchor: ArrowBinding.anchor(for: point, in: AnnotationHitTesting.boundingBox(of: target))
         )
     }
+
+    /// Follows the in-place text editor, keystroke by keystroke (docs/09 U1.8).
+    ///
+    /// Through a gesture, so a typed sentence is one undo step rather than one per letter —
+    /// the same primitive a pointer drag uses (docs/07 C2).
+    func updateText(_ id: AnnotationID, string: String) {
+        document.beginGesture()
+        document.updateGesture { commands in
+            guard let index = commands.firstIndex(where: { $0.id == id }),
+                  case var .text(spec) = commands[index]
+            else {
+                return
+            }
+            spec.string = string
+            commands[index] = .text(spec)
+        }
+    }
+
+    /// Closes the gesture the editing opened, and drops an annotation left empty.
+    func commitTextEdit(_ id: AnnotationID) {
+        document.endGesture()
+        guard case let .text(spec)? = document.command(id),
+              spec.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return
+        }
+        document.remove([id])
+    }
+
+    // MARK: - Crop (docs/09 U1.8)
+
+    /// The ratio the crop tool is holding.
+    var cropAspect: CropAspectPreset {
+        get { styleMemory.lastCropAspect }
+        set { styleMemory.lastCropAspect = newValue }
+    }
+
+    /// Switches the ratio and reshapes the existing crop to match.
+    ///
+    /// Reshaping now rather than at the next drag, because a ratio the picture does not
+    /// have yet is a setting that appears to have done nothing.
+    func applyCropAspect(_ preset: CropAspectPreset) {
+        cropAspect = preset
+        guard var spec = document.crop,
+              let ratio = preset.ratio(original: document.baseImage.size)
+        else {
+            return
+        }
+        spec.rect = CropRectEditor.resized(
+            spec.rect,
+            handle: .bottomTrailing,
+            translation: .zero,
+            aspect: ratio,
+            bounds: spec.canExpandCanvas ? nil : document.baseImage.bounds
+        )
+        document.setCrop(spec)
+    }
+
+    /// Whether the crop may extend past the capture, adding blank space rather than cutting.
+    func setCropCanExpandCanvas(_ allowed: Bool) {
+        var spec = document.crop ?? CropSpec(rect: document.baseImage.bounds)
+        guard spec.canExpandCanvas != allowed else { return }
+        spec.canExpandCanvas = allowed
+        if !allowed {
+            // Coming back inside: a crop that was allowed to grow may be outside the image.
+            spec.rect = spec.rect.intersection(document.baseImage.bounds)
+        }
+        document.setCrop(spec)
+    }
+
+    func clearCrop() {
+        document.setCrop(nil)
+    }
 }

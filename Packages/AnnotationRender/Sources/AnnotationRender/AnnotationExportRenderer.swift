@@ -314,25 +314,21 @@ public struct AnnotationExportRenderer: Sendable {
     private func drawText(_ spec: TextSpec, in context: CGContext) {
         guard !spec.string.isEmpty else { return }
 
-        if let background = spec.style.backgroundColor {
+        // Through `TextLayout`, so the on-canvas field and the exported file lay the same
+        // string out the same way (docs/09 U1.8).
+        if let background = spec.style.backgroundColor, let pill = TextLayout.pillRect(spec) {
+            let radius = TextLayout.pillRadius(for: spec.style)
             context.setFillColor(background.cgColor)
-            let pill = spec.rect.insetBy(dx: -6, dy: -4)
-            context.addPath(CGPath(roundedRect: pill, cornerWidth: 6, cornerHeight: 6, transform: nil))
+            context.addPath(CGPath(
+                roundedRect: pill,
+                cornerWidth: radius,
+                cornerHeight: radius,
+                transform: nil
+            ))
             context.fillPath()
         }
 
-        let font = CTFontCreateWithName(
-            spec.style.fontName as CFString,
-            spec.style.fontSize,
-            nil
-        )
-        // CoreText attribute names rather than AppKit's, so the export path stays free
-        // of a UI framework and could run in the XPC helper.
-        let attributed = NSAttributedString(string: spec.string, attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): spec.style.color.cgColor
-        ])
-        let framesetter = CTFramesetterCreateWithAttributedString(attributed)
+        let framesetter = CTFramesetterCreateWithAttributedString(TextLayout.attributedString(spec))
         let path = CGPath(rect: spec.rect, transform: nil)
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
 

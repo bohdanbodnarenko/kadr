@@ -31,6 +31,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NSApp.mainMenu = makeMainMenu()
 
         // Recovery copies for captures that no longer exist are just clutter in
         // Application Support, and a deleted capture should not leave its annotations
@@ -46,10 +47,41 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// The agent hands a capture over by file URL (docs/04 §6).
+    ///
+    /// Finder does too, once the app declares the image types it reads — and a file that
+    /// arrived from Finder is copied into Kadr's own folder first, so editing it can never
+    /// touch the original (docs/09 U1.8).
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
-            open(url)
+            open(imported(url) ?? url)
         }
+    }
+
+    /// Kadr's own copy of a file that came from outside.
+    ///
+    /// Only files from outside: a capture the agent just took is already Kadr's, and
+    /// copying it again would leave two of everything.
+    private func imported(_ url: URL) -> URL? {
+        guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
+        return CaptureImporter().copyIntoLibrary(url)
+    }
+
+    /// Whether a file already lives somewhere Kadr controls.
+    private func isKadrOwned(_ url: URL) -> Bool {
+        guard let support = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return false
+        }
+        let kadr = support.appendingPathComponent("Kadr", isDirectory: true).standardizedFileURL.path
+        return url.standardizedFileURL.path.hasPrefix(kadr)
+    }
+
+    /// The File ▸ Open command, for a capture Kadr never took.
+    @objc func importImage(_ sender: Any?) {
+        guard let url = CaptureImporter().promptForImport() else { return }
+        open(url)
     }
 
     /// The whole point of the separate process: when the last window goes, so does the
@@ -96,6 +128,50 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
             logger.error("Could not trim \(url.lastPathComponent, privacy: .public)")
             presentOpenFailure(for: url, error: error)
         }
+    }
+
+    /// A minimal menu bar: the commands a `.regular` app is expected to have.
+    ///
+    /// Built in code rather than in a nib because there are five items and a nib would be
+    /// five items plus a file nobody reads. Open is the one that earns it — without it,
+    /// import-from-Finder works only by dragging onto the icon (docs/09 U1.8).
+    private func makeMainMenu() -> NSMenu {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Hide Kadr Editor", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(.separator())
+        appMenu.addItem(
+            withTitle: "Quit Kadr Editor",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let fileItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(withTitle: "Open…", action: #selector(importImage(_:)), keyEquivalent: "o")
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileItem.submenu = fileMenu
+        main.addItem(fileItem)
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        main.addItem(editItem)
+
+        return main
     }
 
     private func presentOpenFailure(for url: URL, error: any Error) {

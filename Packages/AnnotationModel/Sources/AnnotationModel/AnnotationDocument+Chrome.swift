@@ -96,6 +96,33 @@ public extension AnnotationDocument {
         pushHistory(updated)
     }
 
+    /// Replaces the crop, coalescing successive edits into one undo step so dragging a
+    /// crop handle does not flood the stack (docs/09 U1.8).
+    mutating func setCrop(_ spec: CropSpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .crop = command {
+                return true
+            }
+            return false
+        }
+        if let spec {
+            updated.insert(.crop(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        if shouldCoalesce(updated, matching: {
+            if case .crop = $0 {
+                true
+            } else {
+                false
+            }
+        }) {
+            history[historyIndex] = updated
+            return
+        }
+        pushHistory(updated)
+    }
+
     /// The watermark in force, if any. The last one wins.
     var watermark: WatermarkSpec? {
         commands.reversed().compactMap { command in

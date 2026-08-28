@@ -65,9 +65,20 @@ public struct StyleMemory: Codable, Hashable, Sendable {
 
     /// Whether the measure tool draws a box or a distance (docs/06 M21). Remembered like
     /// every other per-tool choice, so a session spent measuring boxes stays that way.
+    /// Nil until the user picks one, so the default can change without rewriting anyone's
+    /// stored memory (docs/08 §2.6).
+    private var cropAspect: CropAspectPreset?
+
     public var lastMeasuresBox: Bool {
         get { measuresBox ?? false }
         set { measuresBox = newValue }
+    }
+
+    /// The ratio the crop tool is holding. Remembered like every other per-tool choice:
+    /// somebody cropping a run of screenshots to 16:9 wants the next one to be 16:9 too.
+    public var lastCropAspect: CropAspectPreset {
+        get { cropAspect ?? .free }
+        set { cropAspect = newValue }
     }
 
     /// Sensible starting points per tool, so the first use of each is already usable.
