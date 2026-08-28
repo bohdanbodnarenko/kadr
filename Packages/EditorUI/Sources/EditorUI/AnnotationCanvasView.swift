@@ -19,6 +19,7 @@ public final class AnnotationCanvasView: NSView {
     private let contentHost = CALayer()
     private let baseLayer = CALayer()
     private let annotationLayer = CALayer()
+    private let reviewLayer = CALayer()
     private let draftLayer = CALayer()
     private let selectionLayer = CALayer()
     private let logger = KadrLog.logger(.overlay)
@@ -46,7 +47,7 @@ public final class AnnotationCanvasView: NSView {
         baseLayer.contents = baseImage
         baseLayer.magnificationFilter = .trilinear
         contentHost.addSublayer(baseLayer)
-        for layer in [annotationLayer, draftLayer, selectionLayer] {
+        for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer] {
             contentHost.addSublayer(layer)
         }
         root.addSublayer(contentHost)
@@ -96,7 +97,24 @@ public final class AnnotationCanvasView: NSView {
             layers[command.id] = layer
         }
         updateSelectionHandles()
+        rebuildReviewLayers()
         onDocumentChanged?()
+    }
+
+    /// Dashed candidate chrome. Not a command — accepting is what writes a redaction.
+    private func rebuildReviewLayers() {
+        reviewLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        let size = model.document.baseImage.size
+        for candidate in model.redactionCandidates {
+            let shape = CAShapeLayer()
+            let rect = candidate.rect(in: size)
+            shape.path = CGPath(roundedRect: rect, cornerWidth: 3, cornerHeight: 3, transform: nil)
+            shape.fillColor = NSColor.systemOrange.withAlphaComponent(0.12).cgColor
+            shape.strokeColor = NSColor.systemOrange.cgColor
+            shape.lineWidth = 1.5
+            shape.lineDashPattern = [5, 3]
+            reviewLayer.addSublayer(shape)
+        }
     }
 
     /// Sizes the view and the card so beautify chrome matches export (docs/03 §3 P2).
@@ -120,6 +138,7 @@ public final class AnnotationCanvasView: NSView {
             annotationLayer.frame = drawing
             draftLayer.frame = drawing
             selectionLayer.frame = drawing
+            reviewLayer.frame = drawing
             return
         }
 
@@ -156,6 +175,7 @@ public final class AnnotationCanvasView: NSView {
         annotationLayer.frame = drawing
         draftLayer.frame = drawing
         selectionLayer.frame = drawing
+        reviewLayer.frame = drawing
     }
 
     private func applyBackdrop(_ backdrop: BeautifyBackdrop) {

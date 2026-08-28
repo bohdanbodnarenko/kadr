@@ -17,11 +17,22 @@ public struct TextRecognitionOptions: Codable, Sendable, Hashable {
     public var languages: [String]?
     /// Also look for QR codes and barcodes.
     public var detectsCodes: Bool
+    /// Run the secret scanner on recognised lines and return boxed candidates (docs/06 M18).
+    ///
+    /// Off by default: OCR for the capture-text hotkey must stay cheap, and auto-redaction
+    /// is a lazy editor action, not something that runs on every capture.
+    public var includeRedactionCandidates: Bool
 
-    public init(preservesLineBreaks: Bool = true, languages: [String]? = nil, detectsCodes: Bool = true) {
+    public init(
+        preservesLineBreaks: Bool = true,
+        languages: [String]? = nil,
+        detectsCodes: Bool = true,
+        includeRedactionCandidates: Bool = false
+    ) {
         self.preservesLineBreaks = preservesLineBreaks
         self.languages = languages
         self.detectsCodes = detectsCodes
+        self.includeRedactionCandidates = includeRedactionCandidates
     }
 }
 
@@ -64,10 +75,17 @@ public struct DetectedCode: Codable, Sendable, Hashable {
 public struct VisionAnalysis: Codable, Sendable, Hashable {
     public let lines: [RecognizedLine]
     public let codes: [DetectedCode]
+    /// Secret-shaped spans, boxed in annotation space. Empty unless the caller asked.
+    public let candidates: [RedactionCandidate]
 
-    public init(lines: [RecognizedLine] = [], codes: [DetectedCode] = []) {
+    public init(
+        lines: [RecognizedLine] = [],
+        codes: [DetectedCode] = [],
+        candidates: [RedactionCandidate] = []
+    ) {
         self.lines = lines
         self.codes = codes
+        self.candidates = candidates
     }
 
     public var isEmpty: Bool {
@@ -83,6 +101,17 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     public var averageConfidence: Double {
         guard !lines.isEmpty else { return 0 }
         return lines.map(\.confidence).reduce(0, +) / Double(lines.count)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case lines, codes, candidates
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lines = try container.decode([RecognizedLine].self, forKey: .lines)
+        codes = try container.decodeIfPresent([DetectedCode].self, forKey: .codes) ?? []
+        candidates = try container.decodeIfPresent([RedactionCandidate].self, forKey: .candidates) ?? []
     }
 }
 

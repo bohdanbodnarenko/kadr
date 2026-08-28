@@ -1,27 +1,24 @@
 import CoreGraphics
 import Foundation
 import ImageIO
-import os
-import Shared
 import UniformTypeIdentifiers
 
 /// Talks to the Vision helper (docs/04 §1).
 ///
-/// The connection is made on demand and let go afterwards. That is deliberate: holding it
-/// open would keep the helper alive, and the helper's whole value is that it exits and
-/// gives its Vision models back. The agent pays a spawn on first use and nothing at idle.
+/// Lives in Shared so both the agent and the editor can call it. The helper is still the
+/// only process that *loads* Vision — this type is just the XPC client. The connection is
+/// made on demand and let go afterwards so an idle helper can exit.
 @MainActor
-final class VisionClient {
-    private let logger = KadrLog.logger(.capture)
+public final class VisionClient {
     private let signposter = KadrLog.signposter(.capture)
     private var connection: NSXPCConnection?
 
-    enum ClientError: LocalizedError {
+    public enum ClientError: LocalizedError {
         case helperUnavailable
         case encodingFailed
         case timedOut
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .helperUnavailable: "Kadr's text recognition helper is not available."
             case .encodingFailed: "Kadr could not prepare the image for text recognition."
@@ -30,19 +27,21 @@ final class VisionClient {
         }
     }
 
+    public init() {}
+
     /// How long to wait before giving up on the helper.
     ///
     /// XPC does not promise a reply. A helper that dies at the wrong moment, or a launch
     /// that never happens, leaves the caller waiting forever — and this call sits between
     /// a user pressing a hotkey and anything appearing on screen, so "forever" is the one
     /// outcome that must be impossible.
-    static let timeout = Duration.seconds(15)
+    public static let timeout = Duration.seconds(15)
 
     /// Recognises text and codes in an image.
     ///
     /// Signposted end to end, because doc 03 §1.7 budgets a typical region at under a
     /// second and that has to include the helper spawning and loading its models.
-    func analyze(_ image: CGImage, options: TextRecognitionOptions) async throws -> VisionAnalysis {
+    public func analyze(_ image: CGImage, options: TextRecognitionOptions) async throws -> VisionAnalysis {
         let state = signposter.beginInterval("ocr")
         defer { signposter.endInterval("ocr", state) }
 
@@ -104,7 +103,7 @@ final class VisionClient {
     ///
     /// Paths cross the wire rather than data: a recording can be hundreds of megabytes,
     /// and the point of doing this in the helper is that the agent never holds the frames.
-    func encodeGIF(_ request: GIFRequest) async throws -> GIFResponse {
+    public func encodeGIF(_ request: GIFRequest) async throws -> GIFResponse {
         let state = signposter.beginInterval("gif")
         defer { signposter.endInterval("gif", state) }
 
@@ -160,7 +159,7 @@ final class VisionClient {
     /// Paths again, for the same reason as the GIF encoder and then some: a long scroll is
     /// a hundred full-screen frames, and the finished strip can be a hundred megabytes.
     /// None of that should pass through — or be held by — the menu bar agent.
-    func stitchScroll(_ request: ScrollStitchRequest) async throws -> ScrollStitchResponse {
+    public func stitchScroll(_ request: ScrollStitchRequest) async throws -> ScrollStitchResponse {
         let state = signposter.beginInterval("scroll stitch")
         defer { signposter.endInterval("scroll stitch", state) }
 
@@ -209,7 +208,7 @@ final class VisionClient {
     }
 
     /// Drops the connection so the helper can start its idle countdown.
-    func disconnect() {
+    public func disconnect() {
         connection?.invalidate()
         connection = nil
     }

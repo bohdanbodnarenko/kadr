@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 /// One editor window over one capture (docs/03 §3).
 @MainActor
-final class EditorWindowController: NSObject, NSWindowDelegate {
+final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisting {
     enum OpenError: LocalizedError {
         case unreadableImage(URL)
 
@@ -28,6 +28,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
     private let model: EditorDocumentModel
     private let renderer = AnnotationExportRenderer()
     private let logger = KadrLog.logger(.app)
+    private let vision = VisionClient()
 
     private var window: NSWindow?
     private var hostingView: NSView?
@@ -68,7 +69,11 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        let root = EditorRootView(model: model, baseImage: baseImage) { [weak self] action in
+        let root = EditorRootView(
+            model: model,
+            baseImage: baseImage,
+            redactionAssist: self
+        ) { [weak self] action in
             self?.export(action)
         }
         let hosting = NSHostingView(rootView: root)
@@ -166,5 +171,15 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
               let dpi = properties[kCGImagePropertyDPIWidth] as? Double, dpi > 0
         else { return 1 }
         return max(1, CGFloat((dpi / 72).rounded()))
+    }
+
+    func analyzeForRedaction(_ image: CGImage) async throws -> VisionAnalysis {
+        try await vision.analyze(
+            image,
+            options: TextRecognitionOptions(
+                detectsCodes: false,
+                includeRedactionCandidates: true
+            )
+        )
     }
 }

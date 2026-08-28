@@ -33,10 +33,11 @@ public struct TextRecognizer: Sendable {
         let state = signposter.beginInterval("visionAnalyze")
         defer { signposter.endInterval("visionAnalyze", state) }
 
-        async let lines = recognizeText(in: image, options: options)
+        async let linesAndCandidates = recognizeText(in: image, options: options)
         async let codes = options.detectsCodes ? detectCodes(in: image) : []
 
-        return try await VisionAnalysis(lines: lines, codes: codes)
+        let (lines, candidates) = try await linesAndCandidates
+        return try await VisionAnalysis(lines: lines, codes: codes, candidates: candidates)
     }
 
     // MARK: - Text
@@ -44,7 +45,7 @@ public struct TextRecognizer: Sendable {
     private func recognizeText(
         in image: CGImage,
         options: TextRecognitionOptions
-    ) async throws -> [RecognizedLine] {
+    ) async throws -> ([RecognizedLine], [RedactionCandidate]) {
         let request = VNRecognizeTextRequest()
         // Accurate rather than fast: this is a user asking for the text in a screenshot,
         // not a real-time video pass (docs/03 §1.7).
@@ -65,14 +66,93 @@ public struct TextRecognizer: Sendable {
         }
 
         let observations = request.results ?? []
-        return observations.compactMap { observation in
-            guard let candidate = observation.topCandidates(1).first else { return nil }
-            return RecognizedLine(
-                text: candidate.string,
-                confidence: Double(candidate.confidence),
+        var lines: [RecognizedLine] = []
+        var candidates: [RedactionCandidate] = []
+        lines.reserveCapacity(observations.count)
+
+        let redactionState = options.includeRedactionCandidates
+            ? signposter.beginInterval("redactionDetect")
+            : nil
+        defer {
+            if let redactionState {
+                signposter.endInterval("redactionDetect", redactionState)
+            }
+        }
+
+        for observation in observations {
+            guard let recognized = observation.topCandidates(1).first else { continue }
+            lines.append(RecognizedLine(
+                text: recognized.string,
+                confidence: Double(recognized.confidence),
                 boundingBox: observation.boundingBox
+            ))
+            if options.includeRedactionCandidates {
+                candidates.append(contentsOf: Self.candidates(from: recognized, observation: observation))
+            }
+        }
+
+        if options.includeRedactionCandidates {
+            candidates.append(contentsOf: Self.unboxedMatches(in: lines, already: candidates))
+        }
+
+        return (lines, candidates)
+    }
+
+    /// Secrets that only appear once the lines are joined — a JWT OCR'd as two lines, for
+    /// example. Uses the line box as a stand-in when Vision has no substring quad.
+    private static func unboxedMatches(
+        in lines: [RecognizedLine],
+        already: [RedactionCandidate]
+    ) -> [RedactionCandidate] {
+        let blob = lines.map(\.text).joined(separator: "\n")
+        return SecretScanner.matches(in: blob).compactMap { match in
+            let folded = match.text.filter { !$0.isWhitespace && $0 != "-" }
+            let exists = already.contains { candidate in
+                candidate.kind == match.kind
+                    && candidate.text.filter { !$0.isWhitespace && $0 != "-" } == folded
+            }
+            guard !exists else { return nil }
+            let prefix = String(match.text.prefix(12))
+            let line = lines.first { $0.text.localizedCaseInsensitiveContains(prefix) }
+            let visionBox = line?.boundingBox ?? lines.first?.boundingBox ?? .zero
+            return RedactionCandidate(
+                kind: match.kind,
+                text: match.text,
+                boundingBox: VisionNormalizedBox.topLeft(fromVision: visionBox)
             )
         }
+    }
+
+    /// Boxes each secret inside a recognised line using Vision's substring quads.
+    ///
+    /// This is the only place Vision types meet the scanner: the editor receives
+    /// `RedactionCandidate` values and never imports this package.
+    private static func candidates(
+        from recognized: VNRecognizedText,
+        observation: VNRecognizedTextObservation
+    ) -> [RedactionCandidate] {
+        SecretScanner.matches(in: recognized.string).map { match in
+            RedactionCandidate(
+                kind: match.kind,
+                text: match.text,
+                boundingBox: VisionNormalizedBox.topLeft(
+                    fromVision: substringBox(of: recognized, range: match.nsRange, fallback: observation.boundingBox)
+                )
+            )
+        }
+    }
+
+    private static func substringBox(
+        of recognized: VNRecognizedText,
+        range: NSRange,
+        fallback: CGRect
+    ) -> CGRect {
+        guard let swiftRange = Range(range, in: recognized.string),
+              let quad = try? recognized.boundingBox(for: swiftRange)
+        else {
+            return fallback
+        }
+        return quad.boundingBox
     }
 
     // MARK: - Codes

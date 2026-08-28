@@ -31,9 +31,18 @@ public struct EditorModifiers: OptionSet, Sendable, Hashable {
 public final class EditorDocumentModel {
     @ObservationIgnored private let logger = KadrLog.logger(.overlay)
 
-    public private(set) var document: AnnotationDocument
+    public internal(set) var document: AnnotationDocument
     public var tool: EditorTool = .select
     public var styleMemory = StyleMemory()
+
+    /// Auto-redaction review. These sit outside the document until the user accepts
+    /// (docs/03 §3, docs/06 M18) — detecting a secret must not blur it on its own.
+    public internal(set) var redactionCandidates: [RedactionCandidate] = []
+    public internal(set) var recognizedLines: [RecognizedLine] = []
+    public internal(set) var isFindingRedactions = false
+    public var redactionQuery = ""
+    public internal(set) var redactionAssistError: String?
+    public internal(set) var isRedactionReviewActive = false
 
     /// The annotation being drawn right now. It lives outside the document until the
     /// mouse comes up, so a half-drawn arrow never lands in the undo history.

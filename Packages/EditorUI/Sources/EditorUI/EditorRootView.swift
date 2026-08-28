@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import Shared
 import SwiftUI
 
 /// The editor window's content: toolbar, canvas, inspector (docs/03 §3).
@@ -10,6 +11,7 @@ import SwiftUI
 public struct EditorRootView: View {
     @Bindable private var model: EditorDocumentModel
     private let baseImage: CGImage
+    private weak var redactionAssist: (any RedactionAssisting)?
     private let onExport: (ExportAction) -> Void
 
     /// What the toolbar's export controls ask for.
@@ -22,16 +24,28 @@ public struct EditorRootView: View {
     public init(
         model: EditorDocumentModel,
         baseImage: CGImage,
+        redactionAssist: (any RedactionAssisting)? = nil,
         onExport: @escaping (ExportAction) -> Void
     ) {
         self.model = model
         self.baseImage = baseImage
+        self.redactionAssist = redactionAssist
         self.onExport = onExport
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            EditorToolbar(model: model, onExport: onExport)
+            EditorToolbar(
+                model: model,
+                onExport: onExport,
+                onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } }
+            )
+            if model.hasRedactionReviewChrome {
+                Divider()
+                EditorRedactionReviewStrip(model: model) {
+                    Task { await runFind() }
+                }
+            }
             Divider()
             HStack(spacing: 0) {
                 CanvasRepresentable(model: model, baseImage: baseImage)
@@ -42,6 +56,26 @@ public struct EditorRootView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 480)
+    }
+
+    private func runAutoRedact() async {
+        guard let redactionAssist else { return }
+        model.startRedactionSearch()
+        do {
+            let analysis = try await redactionAssist.analyzeForRedaction(baseImage)
+            model.beginRedactionReview(analysis)
+        } catch {
+            model.failRedactionReview(error.localizedDescription)
+        }
+    }
+
+    private func runFind() async {
+        if model.recognizedLines.isEmpty {
+            await runAutoRedact()
+            return
+        }
+        model.stageQueryMatches()
+        model.reopenRedactionReview()
     }
 }
 

@@ -91,6 +91,16 @@ struct TextRecognizerTests {
             options: TextRecognitionOptions(detectsCodes: false)
         )
         #expect(analysis.codes.isEmpty)
+        #expect(analysis.candidates.isEmpty, "redaction candidates are opt-in")
+    }
+
+    @Test("Redaction candidates stay off unless asked")
+    func redactionCandidatesAreLazy() async throws {
+        let analysis = try await recognizer.analyze(
+            pngData: makeTextImage("user@example.com"),
+            options: TextRecognitionOptions(detectsCodes: false)
+        )
+        #expect(analysis.candidates.isEmpty)
     }
 }
 
@@ -136,12 +146,19 @@ struct VisionAnalysisTests {
             codes: [DetectedCode(payload: "x", symbology: "QR", boundingBox: .zero)]
         )
         let data = try JSONEncoder().encode(analysis)
-        #expect(try JSONDecoder().decode(VisionAnalysis.self, from: data) == analysis)
+        let decoded = try JSONDecoder().decode(VisionAnalysis.self, from: data)
+        #expect(decoded == analysis)
+        #expect(decoded.candidates.isEmpty)
     }
 
     @Test("Options round-trip too")
     func optionsCodable() throws {
-        let options = TextRecognitionOptions(preservesLineBreaks: false, languages: ["en"], detectsCodes: false)
+        let options = TextRecognitionOptions(
+            preservesLineBreaks: false,
+            languages: ["en"],
+            detectsCodes: false,
+            includeRedactionCandidates: true
+        )
         let data = try JSONEncoder().encode(options)
         #expect(try JSONDecoder().decode(TextRecognitionOptions.self, from: data) == options)
     }

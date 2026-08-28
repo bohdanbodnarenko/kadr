@@ -5,6 +5,7 @@ import SwiftUI
 struct EditorToolbar: View {
     @Bindable var model: EditorDocumentModel
     let onExport: (EditorRootView.ExportAction) -> Void
+    var onAutoRedact: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12,10 +13,25 @@ struct EditorToolbar: View {
             Divider().frame(height: 20)
             historyControls
             Spacer()
+            if onAutoRedact != nil {
+                autoRedact
+                Divider().frame(height: 20)
+            }
             exportControls
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var autoRedact: some View {
+        Button {
+            onAutoRedact?()
+        } label: {
+            Label("Auto-redact", systemImage: "eye.slash")
+        }
+        .help("Find emails, cards, and keys, then review before blurring")
+        .disabled(model.isFindingRedactions)
+        .controlSize(.small)
     }
 
     private var tools: some View {
