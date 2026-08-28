@@ -134,6 +134,9 @@ struct QuickAccessCardView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            if item.wasCompressed {
+                compressionBadge
+            }
             if item.isStaged {
                 Image(systemName: "tray")
                     .font(.caption2)
@@ -142,6 +145,28 @@ struct QuickAccessCardView: View {
             }
         }
         .frame(height: Self.actionRowHeight)
+    }
+
+    /// What the last compression achieved (docs/09 U2.4).
+    ///
+    /// Shown even when it achieved nothing: a flat screenshot re-encodes larger than its
+    /// PNG, and a badge that only ever appears on success would leave the user pressing
+    /// the button again wondering whether it worked.
+    @ViewBuilder
+    private var compressionBadge: some View {
+        if let savings = item.compressionSavings, savings > 0 {
+            Text("−\(Int((savings * 100).rounded()))%")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Color.green.opacity(0.22), in: Capsule())
+                .help("The compressed copy is on the clipboard.")
+        } else {
+            Text("no smaller")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .help("This capture is already about as small as it gets.")
+        }
     }
 
     /// The buttons the user's layout asks for, in the order they asked for them

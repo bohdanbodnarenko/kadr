@@ -118,6 +118,19 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
         InteractiveRegionTracker.shared.update(at: NSEvent.mouseLocation)
     }
 
+    /// Rebuilds the card's content after its item changed (docs/09 U2.4).
+    ///
+    /// The hosting view holds a value, not a reference, so a card whose item has gained a
+    /// savings badge needs a new root rather than a redraw.
+    func refresh(item: QuickAccessItem, settings: AppSettings, actions: QuickAccessCardActions) {
+        hostingView.rootView = QuickAccessCardView(
+            item: item,
+            actions: actions,
+            width: CGFloat(settings.overlayCardWidth),
+            layout: settings.cardLayout
+        )
+    }
+
     /// Applies the stacking transform: cards behind the front one shrink and fade.
     func setStackDepth(_ depth: Int, origin: CGPoint) {
         setFrameOrigin(origin)

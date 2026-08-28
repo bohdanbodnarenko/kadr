@@ -1,8 +1,15 @@
 import SettingsKit
+import Shared
 import SwiftUI
 
 /// Quick Access Overlay settings (docs/03 §8.3): corner, size, timeout, stacking.
 struct OverlayPane: View {
+    /// The sizes worth offering. Round numbers people recognise from upload limits, rather
+    /// than a slider that invites picking 237 KB.
+    private static let compressionTargets = [
+        128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024, 2 * 1024 * 1024
+    ]
+
     @Bindable var settings: AppSettings
 
     var body: some View {
@@ -56,6 +63,24 @@ struct OverlayPane: View {
 
             Section("Card buttons") {
                 CardLayoutEditor(settings: settings)
+            }
+
+            Section("Compress") {
+                Picker("Format", selection: $settings.compressionFormat) {
+                    ForEach(CompressedImageFormat.allCases, id: \.self) { format in
+                        Text(format.title).tag(format)
+                    }
+                }
+                Picker("Aim for", selection: $settings.compressionTargetBytes) {
+                    ForEach(Self.compressionTargets, id: \.self) { bytes in
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+                            .tag(bytes)
+                    }
+                }
+                Text("Compressing copies a smaller version to the clipboard. "
+                    + "The capture itself is left at full quality.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

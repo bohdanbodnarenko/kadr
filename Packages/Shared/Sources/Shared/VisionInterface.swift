@@ -386,6 +386,16 @@ public protocol VisionServiceProtocol {
         reply: @escaping @Sendable (Data?, (any Error)?) -> Void
     )
 
+    /// Re-encodes a capture smaller (docs/09 U2.4).
+    ///
+    /// In the helper because a compression decodes the capture and encodes it several
+    /// times over while it searches for a size — exactly the memory the agent must not be
+    /// spending (docs/04 §1, §7 rule 4).
+    func compressImage(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
     /// Encodes a recording as a GIF, or estimates its size.
     ///
     /// In the helper because an encode holds the frames it is working on, and that is
@@ -448,6 +458,8 @@ public enum VisionServiceError: Int, Error, Sendable, Codable {
     case historyUnavailable = 6
     case noSubjectFound = 7
     case maskFailed = 8
+    /// The capture could not be re-encoded smaller (docs/09 U2.4).
+    case compressionFailed = 9
 
     public var localizedDescription: String {
         switch self {
@@ -458,6 +470,7 @@ public enum VisionServiceError: Int, Error, Sendable, Codable {
         case .notEnoughFrames: "A scrolling capture needs at least two frames."
         case .historyUnavailable: "Kadr could not open the capture library."
         case .noSubjectFound: "Kadr could not find a subject in this capture."
+        case .compressionFailed: "Kadr could not compress this capture."
         case .maskFailed: "Kadr could not separate the subject from the background."
         }
     }

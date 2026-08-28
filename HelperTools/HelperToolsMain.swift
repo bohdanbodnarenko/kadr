@@ -22,6 +22,48 @@ final class VisionService: NSObject, VisionServiceProtocol {
     private let subjectMasker = SubjectMaskGenerator()
     private let logger = KadrLog.logger(.capture)
 
+    /// Re-encodes a capture smaller (docs/09 U2.4).
+    ///
+    /// Here rather than in the agent because the search decodes the capture and encodes it
+    /// several times over — the memory the agent must not be spending (docs/04 §7 rule 4).
+    /// The helper's idle countdown covers the whole thing, so it exits once the card is
+    /// done with it.
+    func compressImage(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+
+        let request: CompressRequest
+        do {
+            request = try JSONDecoder().decode(CompressRequest.self, from: requestData)
+        } catch {
+            IdleTerminator.shared.endTransaction()
+            reply(nil, VisionServiceError.invalidRequest)
+            return
+        }
+
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                let format = CompressedImageFormat(rawValue: request.format) ?? .heic
+                let result = try ImageCompressor().compress(
+                    fileAt: URL(fileURLWithPath: request.sourcePath),
+                    options: CompressionOptions(targetBytes: request.targetBytes, format: format)
+                )
+                let destination = URL(fileURLWithPath: request.destinationPath)
+                try result.data.write(to: destination, options: .atomic)
+
+                let response = CompressResponse(
+                    path: destination.path,
+                    originalBytes: result.originalBytes,
+                    compressedBytes: result.compressedBytes,
+                    quality: result.quality
+                )
+                try reply(JSONEncoder().encode(response), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
     func encodeGIF(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
         IdleTerminator.shared.beginTransaction()
 

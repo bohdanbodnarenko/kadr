@@ -31,6 +31,13 @@ struct QuickAccessItem: Identifiable, Sendable {
         isVideo ? .recording : .screenshot
     }
 
+    /// How much smaller the last compression made it, or nil if it was not worth doing
+    /// (docs/09 U2.4). Only set once `wasCompressed` is true.
+    var compressionSavings: Double?
+    /// Whether compression has been tried, so the badge can say "no smaller" rather than
+    /// showing nothing and looking broken.
+    var wasCompressed = false
+
     /// How HistoryKit should classify this capture (docs/03 §5).
     var historyKind: HistoryItemKind = .image
     /// The name to show on the card when the file on disk is content-addressed.

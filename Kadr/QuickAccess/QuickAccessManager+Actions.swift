@@ -32,6 +32,7 @@ extension QuickAccessManager {
         actions.textAvailable = !item.isVideo
         actions.trim = { [weak self] in self?.trim(item) }
         actions.engage = { [weak self] in self?.noteEngagement(with: item) }
+        actions.compress = { [weak self] in self?.compress(item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
         return actions
     }
@@ -176,6 +177,57 @@ extension QuickAccessManager {
         finalizeIfStaged(item)
         let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
         openInEditor(url)
+    }
+
+    /// Re-encodes a capture smaller and copies it (docs/09 U2.4).
+    ///
+    /// Copies rather than replaces. Compression is lossy, and the case it exists for is
+    /// "this needs to fit in a chat window" — a one-off need that must not cost the user
+    /// the full-quality file they still have.
+    func compress(_ item: QuickAccessItem) {
+        guard !item.isVideo else { return }
+        finalizeIfStaged(item)
+        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let format = settings.compressionFormat
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-compressed-\(UUID().uuidString)")
+            .appendingPathExtension(format.fileExtension)
+
+        Task { [weak self] in
+            guard let self else { return }
+            defer { vision.disconnect() }
+            do {
+                let response = try await vision.compressImage(CompressRequest(
+                    sourcePath: url.path,
+                    destinationPath: destination.path,
+                    targetBytes: settings.compressionTargetBytes,
+                    format: format.rawValue
+                ))
+                guard response.isWorthwhile else {
+                    // A screenshot of flat colour re-encodes larger than its PNG. Saying
+                    // so beats putting a bigger file on the clipboard and calling it
+                    // compressed.
+                    try? FileManager.default.removeItem(at: destination)
+                    showCompressionResult(nil, for: item)
+                    return
+                }
+                copyFile(at: URL(fileURLWithPath: response.path))
+                showCompressionResult(response, for: item)
+            } catch {
+                logger.error("Compression failed: \(error.localizedDescription, privacy: .public)")
+                try? FileManager.default.removeItem(at: destination)
+                showCompressionResult(nil, for: item)
+            }
+        }
+    }
+
+    /// Puts the savings on the card, or says there were none.
+    private func showCompressionResult(_ response: CompressResponse?, for item: QuickAccessItem) {
+        guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        panels[index].item.compressionSavings = response.map(\.savingsFraction)
+        panels[index].item.wasCompressed = true
+        let entry = panels[index]
+        entry.panel.refresh(item: entry.item, settings: settings, actions: actions(for: entry.item))
     }
 
     /// Recognises the text in a card's capture and copies it (docs/03 §1.7, §2).

@@ -69,6 +69,23 @@ public final class VisionClient {
         }
     }
 
+    /// Re-encodes a capture smaller, in the helper (docs/09 U2.4).
+    ///
+    /// Paths cross the wire rather than pixels: a compression decodes the capture and
+    /// encodes it several times over while it searches for a size, and the point of doing
+    /// that in the helper is that the agent never holds any of it.
+    public func compressImage(_ request: CompressRequest) async throws -> CompressResponse {
+        let state = signposter.beginInterval("compress")
+        defer { signposter.endInterval("compress", state) }
+
+        let requestData = try JSONEncoder().encode(request)
+        // A handful of encodes of one still; generous for a slow machine, bounded so a
+        // wedged helper cannot leave the card spinning.
+        return try await send(timeout: .seconds(60), fallback: .compressionFailed) { service, reply in
+            service.compressImage(requestData: requestData, reply: reply)
+        }
+    }
+
     /// Stitches a scrolling capture, in the helper (docs/03 §1.6).
     ///
     /// Paths again, for the same reason as the GIF encoder and then some: a long scroll is

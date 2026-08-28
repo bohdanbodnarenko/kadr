@@ -66,3 +66,34 @@ public enum ImageFormat: String, CaseIterable, Sendable {
         }
     }
 }
+
+/// The lossy formats the Compress action offers (docs/09 U2.4).
+///
+/// Here rather than in MediaExport for the same reason `ImageFormat` is: the setting that
+/// picks it and the encoder that honours it are sibling packages that cannot import each
+/// other (docs/04 §2).
+public enum CompressedImageFormat: String, Sendable, Hashable, Codable, CaseIterable {
+    case heic
+    case jpeg
+
+    public var contentType: UTType {
+        switch self {
+        case .heic: .heic
+        case .jpeg: .jpeg
+        }
+    }
+
+    public var fileExtension: String {
+        switch self {
+        case .heic: "heic"
+        case .jpeg: "jpg"
+        }
+    }
+
+    public var title: String {
+        switch self {
+        case .heic: "HEIC"
+        case .jpeg: "JPEG"
+        }
+    }
+}

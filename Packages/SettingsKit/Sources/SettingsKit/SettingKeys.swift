@@ -13,6 +13,12 @@ public enum SettingKeys {
     public static let afterCapture = SettingKey("general.afterCapture", default: AfterCaptureMatrix.standard)
     /// Which actions a card offers, and where (docs/09 U2.3).
     public static let cardLayout = SettingKey("overlay.cardLayout", default: CardLayout.standard)
+    /// What the Compress action aims for (docs/09 U2.4). A quarter of a megabyte pastes
+    /// into anything and still reads as a screenshot.
+    public static let compressionTargetBytes = SettingKey("overlay.compressionTargetBytes", default: 256 * 1024)
+    /// HEIC or JPEG. HEIC is about half the size at the same quality and every Mac since
+    /// 2017 reads it, but a file going to a stranger's Windows machine had better be JPEG.
+    public static let compressionFormat = SettingKey("overlay.compressionFormat", default: CompressedImageFormat.heic)
     public static let saveFolderPath = SettingKey("general.saveFolderPath", default: "")
     public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
     public static let imageFormat = SettingKey("general.imageFormat", default: ImageFormat.png)
