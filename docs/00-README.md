@@ -14,6 +14,9 @@
 | [`04-swift-architecture.md`](04-swift-architecture.md) | The modern Swift architecture: 3-process RAM strategy, SPM module layout, ScreenCaptureKit pipeline, overlay-window recipes, Swift 6.2 concurrency, distribution, decision log |
 | [`05-cross-platform-gpui.md`](05-cross-platform-gpui.md) | The gpui/Rust evaluation: framework maturity, crate-by-crate platform matrix, Wayland reality, RAM comparison, and the recommendation |
 | [`06-implementation-guide.md`](06-implementation-guide.md) | The build plan: 25 milestones in dependency order, each with a paste-ready AI coding prompt and "done when" acceptance checks, plus the repo `CLAUDE.md` template |
+| [`07-code-review-2026-08.md`](07-code-review-2026-08.md) | Code review of the implemented M0–M18 codebase: 3 critical, 6 high, 11 medium findings with file:line, plus the compliance scorecard |
+| [`08-screendrop-analysis.md`](08-screendrop-analysis.md) | Source-level study of Screendrop (CC0): what it does better, what we keep, the license caution on its tldraw-derived `Engine/`, and the ranked steal list |
+| [`09-uplift-plan.md`](09-uplift-plan.md) | The post-M18 roadmap: Sprint U0 (fixes) → U1 (editor uplift) → U2 (UX) → U3 (recording studio), superseding docs/06 ordering for remaining work |
 
 ## The five decisions that matter (summary)
 
