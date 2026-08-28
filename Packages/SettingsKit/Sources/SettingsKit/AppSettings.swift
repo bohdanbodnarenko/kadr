@@ -162,6 +162,11 @@ public final class AppSettings {
         afterCapture[kind]
     }
 
+    /// Which actions a card offers, and where (docs/09 U2.3).
+    public var cardLayout: CardLayout {
+        didSet { store[SettingKeys.cardLayout] = cardLayout }
+    }
+
     /// Empty means "not chosen yet"; reads resolve to the Desktop, like macOS screenshots.
     public var saveFolderPath: String {
         didSet { store[SettingKeys.saveFolderPath] = saveFolderPath }
@@ -378,6 +383,7 @@ public final class AppSettings {
         hasCompletedOnboarding = store[SettingKeys.hasCompletedOnboarding]
         defaultAction = store[SettingKeys.defaultAction]
         afterCapture = store[SettingKeys.afterCapture]
+        cardLayout = store[SettingKeys.cardLayout]
         saveFolderPath = store[SettingKeys.saveFolderPath]
         filenameTemplate = store[SettingKeys.filenameTemplate]
         imageFormat = store[SettingKeys.imageFormat]
@@ -435,6 +441,7 @@ public final class AppSettings {
     public func resetToDefaults() {
         defaultAction = SettingKeys.defaultAction.defaultValue
         afterCapture = SettingKeys.afterCapture.defaultValue
+        cardLayout = SettingKeys.cardLayout.defaultValue
         saveFolderPath = SettingKeys.saveFolderPath.defaultValue
         filenameTemplate = SettingKeys.filenameTemplate.defaultValue
         imageFormat = SettingKeys.imageFormat.defaultValue

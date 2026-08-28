@@ -2,6 +2,15 @@
   "originHash" : "fe3120be940da15941c6502c78ecae6540b6de0fa0c3498ac53c1fdfaf2d2e36",
   "pins" : [
     {
+      "identity" : "grdb.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/GRDB.swift.git",
+      "state" : {
+        "revision" : "b83108d10f42680d78f23fe4d4d80fc88dab3212",
+        "version" : "7.11.1"
+      }
+    },
+    {
       "identity" : "keyboardshortcuts",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sindresorhus/KeyboardShortcuts",

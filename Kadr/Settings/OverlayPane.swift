@@ -53,6 +53,10 @@ struct OverlayPane: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Card buttons") {
+                CardLayoutEditor(settings: settings)
+            }
         }
         .formStyle(.grouped)
     }

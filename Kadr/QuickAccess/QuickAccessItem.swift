@@ -2,6 +2,7 @@ import CaptureCore
 import CoreGraphics
 import Foundation
 import HistoryKit
+import SettingsKit
 import Shared
 import UniformTypeIdentifiers
 
@@ -23,6 +24,13 @@ struct QuickAccessItem: Identifiable, Sendable {
     /// True for a screen recording, whose card shows a poster frame and a play badge
     /// rather than a thumbnail (docs/03 §1.8).
     var isVideo = false
+
+    /// Which row of the after-capture matrix and the card layout this item belongs to
+    /// (docs/09 U2.2, U2.3).
+    var captureKind: CaptureKind {
+        isVideo ? .recording : .screenshot
+    }
+
     /// How HistoryKit should classify this capture (docs/03 §5).
     var historyKind: HistoryItemKind = .image
     /// The name to show on the card when the file on disk is content-addressed.

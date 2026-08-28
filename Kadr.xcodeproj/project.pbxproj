@@ -784,7 +784,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = KadrEditor/Info.plist;
+				INFOPLIST_FILE = Resources/KadrEditor-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -813,7 +813,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = KadrEditor/Info.plist;
+				INFOPLIST_FILE = Resources/KadrEditor-Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (

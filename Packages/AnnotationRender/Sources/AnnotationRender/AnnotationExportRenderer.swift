@@ -2,6 +2,7 @@ import AnnotationModel
 import CoreGraphics
 import CoreText
 import Foundation
+import os
 import Shared
 
 /// Replays a document into a bitmap for export (docs/04 §6).

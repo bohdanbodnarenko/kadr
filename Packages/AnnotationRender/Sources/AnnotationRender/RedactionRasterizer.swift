@@ -2,6 +2,7 @@ import AnnotationModel
 import CoreGraphics
 import CoreImage
 import Foundation
+import os
 import Shared
 
 /// Burns blur and pixelate regions into the image itself (docs/03 §3, docs/04 §6).

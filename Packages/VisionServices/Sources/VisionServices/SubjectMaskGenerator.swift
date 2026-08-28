@@ -2,6 +2,7 @@ import CoreGraphics
 import CoreImage
 import Foundation
 import ImageIO
+import os
 import Shared
 import UniformTypeIdentifiers
 import Vision

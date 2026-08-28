@@ -1,5 +1,6 @@
 import AppKit
 import HistoryKit
+import SettingsKit
 import Shared
 import SwiftUI
 
@@ -19,6 +20,8 @@ struct QuickAccessCardActions {
     var dragCompleted: @MainActor @Sendable (Bool) -> Void = { _ in }
     /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
     var exportGIF: () -> Void = {}
+    /// Re-encodes the capture smaller and copies it (docs/09 U2.4).
+    var compress: () -> Void = {}
     /// Opens a recording in the trim window (docs/03 §1.8). Only offered on a recording.
     var trim: () -> Void = {}
     var trimAvailable = false
@@ -35,6 +38,8 @@ struct QuickAccessCardView: View {
     let item: QuickAccessItem
     let actions: QuickAccessCardActions
     let width: CGFloat
+    /// Which buttons this card offers, and where (docs/09 U2.3).
+    var layout: CardLayout = .standard
 
     @State private var isHovering = false
     @State private var isExpanded = false
@@ -139,44 +144,74 @@ struct QuickAccessCardView: View {
         .frame(height: Self.actionRowHeight)
     }
 
+    /// The buttons the user's layout asks for, in the order they asked for them
+    /// (docs/09 U2.3).
+    ///
+    /// The layout is read rather than hard-coded, and filtered by what the capture is:
+    /// one layout serves both kinds, so placing Trim shows it on recordings and hides it
+    /// on screenshots without anybody keeping two layouts in step.
     private var actionRow: some View {
         HStack(spacing: 2) {
-            action("Copy", systemImage: "doc.on.doc", action: actions.copy)
-            action("Save", systemImage: "square.and.arrow.down", action: actions.save)
-            action(
-                "Annotate",
-                systemImage: "pencil.tip.crop.circle",
-                enabled: actions.annotateAvailable,
-                action: actions.annotate
-            )
-            if item.isVideo {
-                // A recording gets Trim and GIF where a screenshot gets Pin and OCR;
-                // neither of those means anything for a movie (docs/03 §1.8, §2).
-                action(
-                    "Trim",
-                    systemImage: "scissors",
-                    enabled: actions.trimAvailable,
-                    action: actions.trim
-                )
-                action("Export GIF", systemImage: "square.stack.3d.down.right", action: actions.exportGIF)
-            } else {
-                action("Pin", systemImage: "pin", enabled: actions.pinAvailable, action: actions.pin)
-                action(
-                    "Copy Text",
-                    systemImage: "text.viewfinder",
-                    enabled: actions.textAvailable,
-                    action: actions.recognizeText
-                )
+            ForEach(layout.actions(in: .column, for: item.captureKind), id: \.self) { action in
+                button(for: action)
             }
+        }
+        .frame(height: Self.actionRowHeight)
+    }
+
+    /// The corner buttons, which are always visible.
+    private func corner(_ slot: CardSlot) -> some View {
+        ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { action in
+            button(for: action)
+                .background(.regularMaterial, in: Circle())
+        }
+    }
+
+    @ViewBuilder
+    private func button(for cardAction: CardAction) -> some View {
+        switch cardAction {
+        case .share:
+            // ShareLink is its own control: it needs the item, not a closure, so the
+            // system picker can offer the right services for the file.
             ShareLink(item: item.fileURL) {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: cardAction.systemImage)
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(.borderless)
             .help("Share")
-            action("Delete", systemImage: "trash", action: actions.delete)
+        default:
+            action(
+                cardAction.title,
+                systemImage: cardAction.systemImage,
+                enabled: isEnabled(cardAction),
+                action: handler(for: cardAction)
+            )
         }
-        .frame(height: Self.actionRowHeight)
+    }
+
+    private func isEnabled(_ cardAction: CardAction) -> Bool {
+        switch cardAction {
+        case .annotate: actions.annotateAvailable
+        case .pin: actions.pinAvailable
+        case .recognizeText: actions.textAvailable
+        case .trim: actions.trimAvailable
+        default: true
+        }
+    }
+
+    private func handler(for cardAction: CardAction) -> () -> Void {
+        switch cardAction {
+        case .copy: actions.copy
+        case .save: actions.save
+        case .annotate: actions.annotate
+        case .pin: actions.pin
+        case .recognizeText: actions.recognizeText
+        case .trim: actions.trim
+        case .exportGIF: actions.exportGIF
+        case .compress: actions.compress
+        case .delete: actions.delete
+        case .share: {}
+        }
     }
 
     private func action(

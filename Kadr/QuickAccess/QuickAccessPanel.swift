@@ -35,7 +35,8 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
         hostingView = NSHostingView(rootView: QuickAccessCardView(
             item: item,
             actions: actions,
-            width: width
+            width: width,
+            layout: settings.cardLayout
         ))
 
         super.init(

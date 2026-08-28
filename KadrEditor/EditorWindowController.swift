@@ -169,10 +169,14 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     private func trackChangesForAutosave() {
         withObservationTracking {
             _ = model.document.commands
-        } onChange: {
-            Task { @MainActor [weak self] in
-                self?.scheduleAutosave()
-                self?.trackChangesForAutosave()
+        } onChange: { [weak self] in
+            // Weak in the outer closure as well as the inner one: capturing strongly here
+            // and weakly there means the observation holds the window controller alive
+            // until the next change, which for a window nobody touches again is forever.
+            Task { @MainActor in
+                guard let self else { return }
+                self.scheduleAutosave()
+                self.trackChangesForAutosave()
             }
         }
     }

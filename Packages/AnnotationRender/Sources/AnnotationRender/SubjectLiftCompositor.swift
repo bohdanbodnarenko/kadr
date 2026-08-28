@@ -2,6 +2,7 @@ import AnnotationModel
 import CoreGraphics
 import CoreImage
 import Foundation
+import os
 import Shared
 
 /// Applies background removal to the base image (docs/03 §3 P3, docs/06 M23).

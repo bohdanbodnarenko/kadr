@@ -11,6 +11,8 @@ public enum SettingKeys {
     public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)
     /// What happens after each kind of capture (docs/09 U2.2).
     public static let afterCapture = SettingKey("general.afterCapture", default: AfterCaptureMatrix.standard)
+    /// Which actions a card offers, and where (docs/09 U2.3).
+    public static let cardLayout = SettingKey("overlay.cardLayout", default: CardLayout.standard)
     public static let saveFolderPath = SettingKey("general.saveFolderPath", default: "")
     public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
     public static let imageFormat = SettingKey("general.imageFormat", default: ImageFormat.png)
