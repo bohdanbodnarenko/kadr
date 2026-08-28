@@ -15,6 +15,9 @@ import Foundation
 /// 4. **Email** — addr-spec with a real TLD, not `user@localhost`.
 /// 5. **Phone** — separators or a leading `+`, so a 16-digit card is not a phone.
 /// 6. **API key** — known prefixes (AWS, Stripe, GitHub, …) plus a high-entropy fallback.
+/// 7. **Labelled credential** — the value after `password:`, `token=`, `Bearer ` and the
+///    like. Only the value, never the label: redacting the whole line hides which field
+///    was censored, and a reviewer needs to see that it was the password (docs/09 U1.6).
 public struct SecretScanner: Sendable {
     public init() {}
 
@@ -32,6 +35,7 @@ public struct SecretScanner: Sendable {
         found.append(contentsOf: find(pattern: email, kind: .email, in: text))
         found.append(contentsOf: find(pattern: phone, kind: .phone, in: text))
         found.append(contentsOf: findAPIKeys(in: text))
+        found.append(contentsOf: findLabelledCredentials(in: text))
         return collapsingOverlaps(found)
     }
 
@@ -122,6 +126,35 @@ public struct SecretScanner: Sendable {
     /// Mixed-charset tokens that are not English and not a SHA-1 hex digest.
     private static let apiKeyEntropy = regex(#"\b[A-Za-z0-9_\-+/=]{24,80}\b"#, options: [])
 
+    /// The words that make whatever follows them a secret.
+    ///
+    /// This is the detector no amount of pattern matching replaces: `hunter2` is a perfectly
+    /// ordinary string, and the only thing that marks it as a password is the word in front
+    /// of it. Every other detector recognises the *value*; this one recognises the *label*.
+    private static let credentialLabel =
+        #"(?:pass(?:word|phrase|wd)?|pwd|secret|client[ _\-]?secret|token|access[ _\-]?token"#
+            + #"|refresh[ _\-]?token|api[ _\-]?key|apikey|access[ _\-]?key|private[ _\-]?key"#
+            + #"|licen[cs]e[ _\-]?key|auth(?:orization)?|pin|otp|cvv|cvc)"#
+
+    /// `password: "hunter 2"` — a quoted value may contain spaces, so it is matched first.
+    private static let quotedCredential = regex(
+        credentialLabel + #"\s*[:=]\s*["']([^"'\r\n]{3,})["']"#,
+        options: [.caseInsensitive]
+    )
+
+    /// `password: hunter2`, `token=abc123`. The value runs to the first space.
+    private static let bareCredential = regex(
+        credentialLabel + #"\s*[:=]\s*([^\s"']{3,})"#,
+        options: [.caseInsensitive]
+    )
+
+    /// `Authorization: Bearer eyJ…` — the separator is the space after the scheme name,
+    /// which is the one place a credential has no colon in front of it.
+    private static let bearerCredential = regex(
+        #"\bbearer\s+([^\s"']{8,})"#,
+        options: [.caseInsensitive]
+    )
+
     // MARK: - Finders
 
     private static func find(
@@ -179,6 +212,47 @@ public struct SecretScanner: Sendable {
             ))
         }
         return found
+    }
+
+    /// Values a label vouched for, reported without the label.
+    ///
+    /// The range returned is the capture group's, not the whole match's — so
+    /// `password: hunter2` proposes a box over `hunter2` alone. Redacting the label too
+    /// would hide *which* field was censored, and a reviewer accepting a candidate needs to
+    /// see that it was the password rather than the username (docs/09 U1.6).
+    private static func findLabelledCredentials(in text: String) -> [SecretMatch] {
+        var found: [SecretMatch] = []
+        // Bearer first: `Authorization: Bearer abc…` also matches the bare pattern, whose
+        // "value" would be the word `Bearer` itself.
+        for pattern in [bearerCredential, quotedCredential, bareCredential] {
+            for result in matches(pattern, in: text) {
+                let range = result.range(at: 1)
+                guard range.location != NSNotFound, range.length > 0 else { continue }
+                let value = (text as NSString).substring(with: range)
+                guard !isPlaceholder(value), !isAuthenticationScheme(value) else { continue }
+                found.append(SecretMatch(
+                    kind: .credential,
+                    text: value,
+                    location: range.location,
+                    length: range.length
+                ))
+            }
+        }
+        return found
+    }
+
+    /// Whether a "value" is really the name of an authentication scheme, which means the
+    /// secret is the word after it rather than this one.
+    private static func isAuthenticationScheme(_ value: String) -> Bool {
+        ["bearer", "basic", "digest", "token", "negotiate"].contains(value.lowercased())
+    }
+
+    /// Whether a value is the *absence* of a secret: an already-masked field, or the
+    /// punctuation a form leaves behind. Proposing a redaction over `••••••` is noise in
+    /// the review strip, and noise is what makes a review step get skipped.
+    private static func isPlaceholder(_ value: String) -> Bool {
+        let masks: Set<Character> = ["*", "•", "●", "·", "-", "_", ".", "#", "x", "X"]
+        return value.allSatisfy { masks.contains($0) }
     }
 
     // MARK: - Checksums
@@ -246,6 +320,16 @@ public struct SecretScanner: Sendable {
 
     private static func looksLikeHighEntropyKey(_ token: String) -> Bool {
         guard token.count >= 24, token.count <= 80 else { return false }
+        // `name=value` is an assignment, not a key. Base64 padding is the only `=` a real
+        // token carries, and it is always at the end.
+        if String(token.reversed().drop(while: { $0 == "=" })).contains("=") {
+            return false
+        }
+        // A file path is the single most common long mixed-case token in a screenshot of a
+        // terminal, and it is not a credential.
+        if looksLikeAPath(token) {
+            return false
+        }
         // Git SHAs and similar hex blobs are common in screenshots and are not keys.
         let hex = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
         if token.unicodeScalars.allSatisfy({ hex.contains($0) }) {
@@ -259,6 +343,18 @@ public struct SecretScanner: Sendable {
         let classes = characterClasses(in: token)
         guard classes >= 3 else { return false }
         return shannonEntropy(token) >= 3.5
+    }
+
+    /// Slash-separated runs of plain words: `Users/alice/Library/Application`.
+    ///
+    /// Base64 tokens contain slashes too, which is why the test is on the *segments*
+    /// rather than on the slash — a segment of letters only is a directory name.
+    private static func looksLikeAPath(_ token: String) -> Bool {
+        let segments = token.split(separator: "/", omittingEmptySubsequences: true)
+        guard segments.count >= 2 else { return false }
+        return segments.allSatisfy { segment in
+            segment.allSatisfy(\.isLetter)
+        }
     }
 
     private static func characterClasses(in token: String) -> Int {
@@ -278,24 +374,79 @@ public struct SecretScanner: Sendable {
         return classes
     }
 
+    /// Overlapping hits, resolved: same-kind spans merge, different-kind spans defer to
+    /// whichever started first and ran longest.
+    ///
+    /// Merging matters for the same kind because two detectors finding overlapping halves
+    /// of one card number would otherwise redact one half and leave the other visible —
+    /// the worst possible outcome for a security feature. Different kinds are *not* merged,
+    /// because a box covering an email and a phone number has to be labelled one of them,
+    /// and a mislabelled candidate is one a reviewer accepts without reading.
     private static func collapsingOverlaps(_ matches: [SecretMatch]) -> [SecretMatch] {
         let ranked = matches.sorted { left, right in
+            // Precedence first: when two detectors disagree about a span, the one that
+            // knows more about it wins. A labelled credential knows the value is a secret
+            // *and* where the value starts; an entropy guess knows neither.
+            if precedence(left.kind) != precedence(right.kind) {
+                return precedence(left.kind) < precedence(right.kind)
+            }
             if left.location != right.location {
                 return left.location < right.location
             }
             return left.length > right.length
         }
+
         var accepted: [SecretMatch] = []
         accepted.reserveCapacity(ranked.count)
         for match in ranked {
-            let overlaps = accepted.contains { existing in
+            // Touching counts as overlapping for the merge: two adjacent halves of one
+            // secret leave no gap between them.
+            if let index = accepted.firstIndex(where: { existing in
+                existing.kind == match.kind && touchesOrOverlaps(existing, match)
+            }) {
+                accepted[index] = merged(accepted[index], match)
+                continue
+            }
+            let clashes = accepted.contains { existing in
                 NSIntersectionRange(existing.nsRange, match.nsRange).length > 0
             }
-            if !overlaps {
+            if !clashes {
                 accepted.append(match)
             }
         }
-        return accepted
+        return accepted.sorted { $0.location < $1.location }
+    }
+
+    /// How much a detector knows, lowest first. Ties are broken by position and length.
+    private static func precedence(_ kind: SecretKind) -> Int {
+        switch kind {
+        case .credential: 0
+        case .jwt: 1
+        case .creditCard: 2
+        case .iban: 3
+        case .email: 4
+        case .phone: 5
+        case .apiKey: 6
+        case .custom: 7
+        }
+    }
+
+    private static func touchesOrOverlaps(_ lhs: SecretMatch, _ rhs: SecretMatch) -> Bool {
+        let leftEnd = lhs.location + lhs.length
+        let rightEnd = rhs.location + rhs.length
+        return lhs.location <= rightEnd && rhs.location <= leftEnd
+    }
+
+    /// One span covering both, keeping the text of whichever contributed more of it.
+    private static func merged(_ lhs: SecretMatch, _ rhs: SecretMatch) -> SecretMatch {
+        let location = min(lhs.location, rhs.location)
+        let end = max(lhs.location + lhs.length, rhs.location + rhs.length)
+        return SecretMatch(
+            kind: lhs.kind,
+            text: lhs.length >= rhs.length ? lhs.text : rhs.text,
+            location: location,
+            length: end - location
+        )
     }
 
     private static func matches(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {

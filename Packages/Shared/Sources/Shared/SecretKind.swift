@@ -12,6 +12,10 @@ public enum SecretKind: String, Codable, Sendable, Hashable, CaseIterable {
     case iban
     case jwt
     case apiKey
+    /// A value that a label said was secret — `password: hunter2` — whatever it looks
+    /// like. The only detector that catches a weak password, because nothing about
+    /// "hunter2" is detectable except the word in front of it (docs/09 U1.6).
+    case credential
     /// A user-typed find-field match, not a built-in detector.
     case custom
 
@@ -23,6 +27,7 @@ public enum SecretKind: String, Codable, Sendable, Hashable, CaseIterable {
         case .iban: "IBAN"
         case .jwt: "JWT"
         case .apiKey: "API key"
+        case .credential: "Password or token"
         case .custom: "Match"
         }
     }
