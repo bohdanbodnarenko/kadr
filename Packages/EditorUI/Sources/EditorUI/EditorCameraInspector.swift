@@ -22,37 +22,35 @@ struct EditorCameraInspector: View {
 
             if isEnabled {
                 presets
-                slider(
-                    "Tilt",
-                    binding: tiltBinding,
-                    range: -AnnotationCameraSpec.maximumTilt
-                        ... AnnotationCameraSpec.maximumTilt,
-                    suffix: "°"
+                InspectorSlider(
+                    title: "Tilt",
+                    value: tiltBinding,
+                    range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
+                    format: .degrees
                 )
-                slider(
-                    "Orbit",
-                    binding: orbitBinding,
-                    range: -AnnotationCameraSpec.maximumTilt
-                        ... AnnotationCameraSpec.maximumTilt,
-                    suffix: "°"
+                InspectorSlider(
+                    title: "Orbit",
+                    value: orbitBinding,
+                    range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
+                    format: .degrees
                 )
-                slider("Roll", binding: rollBinding, range: -180 ... 180, suffix: "°")
-                slider(
-                    "Lens",
-                    binding: fieldOfViewBinding,
-                    range: AnnotationCameraSpec.minimumFieldOfView ... AnnotationCameraSpec.maximumFieldOfView,
-                    suffix: "°"
+                InspectorSlider(title: "Roll", value: rollBinding, range: -180 ... 180, format: .degrees)
+                InspectorSlider(
+                    title: "Lens",
+                    value: fieldOfViewBinding,
+                    range: AnnotationCameraSpec.minimumFieldOfView
+                        ... AnnotationCameraSpec.maximumFieldOfView,
+                    format: .degrees
                 )
                 .help("A narrow lens flattens the perspective; a wide one exaggerates it.")
-                slider(
-                    "Zoom",
-                    binding: zoomBinding,
+                InspectorSlider(
+                    title: "Zoom",
+                    value: zoomBinding,
                     range: AnnotationCameraSpec.minimumZoom ... AnnotationCameraSpec.maximumZoom,
-                    suffix: "×",
-                    decimals: 2
+                    format: .multiplier
                 )
-                slider("Pan X", binding: panXBinding, range: -0.5 ... 0.5, suffix: "", decimals: 2)
-                slider("Pan Y", binding: panYBinding, range: -0.5 ... 0.5, suffix: "", decimals: 2)
+                InspectorSlider(title: "Pan X", value: panXBinding, range: -0.5 ... 0.5, format: .percent)
+                InspectorSlider(title: "Pan Y", value: panYBinding, range: -0.5 ... 0.5, format: .percent)
                 Button("Reset") { model.applyCamera(.identity) }
             }
         }
@@ -74,18 +72,6 @@ struct EditorCameraInspector: View {
             Text("Lean").tag("lean")
             Text("Hero").tag("hero")
             Text("Overhead").tag("overhead")
-        }
-    }
-
-    private func slider(
-        _ title: String,
-        binding: Binding<Double>,
-        range: ClosedRange<Double>,
-        suffix: String,
-        decimals: Int = 0
-    ) -> some View {
-        Slider(value: binding, in: range) {
-            Text("\(title) \(binding.wrappedValue, specifier: "%.\(decimals)f")\(suffix)")
         }
     }
 

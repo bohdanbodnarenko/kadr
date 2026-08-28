@@ -45,6 +45,7 @@ struct EditorInspector: View {
                 }
             }
 
+            EditorStylePresetInspector(model: model)
             EditorBeautifyInspector(model: model)
             EditorCameraInspector(model: model)
             EditorBlurInspector(model: model)

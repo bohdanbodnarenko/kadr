@@ -2,8 +2,8 @@ import AnnotationModel
 import AppKit
 import SwiftUI
 
-/// Canvas chrome: padding, backdrop, corners, shadow, aspect, alignment, saved presets
-/// (docs/03 §3 P2, docs/09 U1.1).
+/// Canvas chrome: padding, backdrop, corners, shadow, aspect, alignment, border
+/// (docs/03 §3 P2, docs/09 U1.1, U1.4).
 ///
 /// Lives as its own inspector section so it stays visible regardless of the pointer tool.
 ///
@@ -11,13 +11,11 @@ import SwiftUI
 /// that is what the model stores and what makes a preset carry between a tweet-sized crop
 /// and a 5K screenshot. Showing points here would show a number that means something
 /// different on every capture.
+///
+/// Whole looks are saved and applied in `EditorStylePresetInspector`, not here: a
+/// background alone is not a look (docs/09 U1.5).
 struct EditorBeautifyInspector: View {
     @Bindable var model: EditorDocumentModel
-    @State private var saved: [BeautifyPresetStore.Saved] = []
-    @State private var isNamingPreset = false
-    @State private var newPresetName = ""
-
-    private let presetStore = BeautifyPresetStore()
 
     private var spec: BeautifySpec {
         model.document.beautify ?? BeautifySpec(padding: .zero, cornerRadius: .zero, shadow: .none)
@@ -38,13 +36,8 @@ struct EditorBeautifyInspector: View {
             Toggle("Add a background", isOn: enabledBinding)
 
             if isEnabled {
-                presets
-                Slider(value: paddingBinding, in: 0 ... 0.35, step: 0.005) {
-                    Text("Padding \(percent(spec.padding))")
-                }
-                Slider(value: radiusBinding, in: 0 ... 0.15, step: 0.0025) {
-                    Text("Corners \(percent(spec.cornerRadius))")
-                }
+                InspectorSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
+                InspectorSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
                 Toggle("Shadow", isOn: shadowBinding)
                 Picker("Aspect", selection: aspectBinding) {
                     ForEach(BeautifyAspect.allCases, id: \.self) { aspect in
@@ -56,16 +49,7 @@ struct EditorBeautifyInspector: View {
                 BeautifyBackdropPicker(backdrop: spec.backdrop) { backdrop in
                     commit { $0.backdrop = backdrop }
                 }
-                if !saved.isEmpty {
-                    savedPresets
-                }
             }
-        }
-        .onAppear { saved = presetStore.load() }
-        .alert("Save Preset", isPresented: $isNamingPreset) {
-            TextField("Name", text: $newPresetName)
-            Button("Save") { saveCurrentPreset() }
-            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -88,48 +72,8 @@ struct EditorBeautifyInspector: View {
     private var border: some View {
         Toggle("Border", isOn: borderBinding)
         if spec.border.isEnabled {
-            Slider(value: borderThicknessBinding, in: 0.002 ... 0.06, step: 0.002) {
-                Text("Thickness \(percent(spec.border.thickness))")
-            }
+            InspectorSlider(title: "Thickness", value: borderThicknessBinding, range: 0.002 ... 0.06)
             ColorPicker("Border colour", selection: borderColourBinding)
-        }
-    }
-
-    private var presets: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Picker("Look", selection: Binding(
-                get: { "" },
-                set: { id in
-                    guard let preset = BeautifyPreset.builtIn.first(where: { $0.id == id }) else { return }
-                    model.applyBeautify(preset.spec)
-                }
-            )) {
-                Text("Built-in…").tag("")
-                ForEach(BeautifyPreset.builtIn) { preset in
-                    Text(preset.title).tag(preset.id)
-                }
-            }
-            Button("Save current look…") {
-                newPresetName = ""
-                isNamingPreset = true
-            }
-        }
-    }
-
-    private var savedPresets: some View {
-        ForEach(saved) { preset in
-            HStack {
-                Button(preset.name) { model.applyBeautify(preset.spec) }
-                    .buttonStyle(.plain)
-                Spacer()
-                Button(role: .destructive) {
-                    presetStore.remove(id: preset.id)
-                    saved = presetStore.load()
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-            }
         }
     }
 
@@ -211,20 +155,9 @@ struct EditorBeautifyInspector: View {
         )
     }
 
-    private func percent(_ metric: BeautifyMetric) -> String {
-        "\(Int((metric.fraction(shortestEdge: shortestEdge) * 100).rounded()))%"
-    }
-
     private func commit(_ change: (inout BeautifySpec) -> Void) {
         var next = spec
         change(&next)
         model.applyBeautify(next)
-    }
-
-    private func saveCurrentPreset() {
-        let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, let current = model.document.beautify else { return }
-        presetStore.add(name: name, spec: current)
-        saved = presetStore.load()
     }
 }

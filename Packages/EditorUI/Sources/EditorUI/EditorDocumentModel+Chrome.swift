@@ -69,4 +69,9 @@ public extension EditorDocumentModel {
     func clearWatermark() {
         document.setWatermark(nil)
     }
+
+    /// Wears a whole look, in one undo step (docs/09 U1.5).
+    func applyStylePreset(_ preset: StylePreset) {
+        document.applyStylePreset(preset)
+    }
 }

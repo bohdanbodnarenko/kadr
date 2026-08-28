@@ -36,19 +36,16 @@ struct EditorBlurInspector: View {
                     }
                 }
 
-                Slider(value: radiusBinding, in: 0 ... 0.2, step: 0.005) {
-                    Text("Strength \(percent(spec.radius))")
-                }
-                Slider(value: focusBinding, in: 0 ... 1, step: 0.01) {
-                    Text("Sharp area \(Int(spec.focusRadius * 100))%")
-                }
-                Slider(value: falloffBinding, in: 0 ... 1.5, step: 0.01) {
-                    Text("Falloff \(Int(spec.falloffRadius * 100))%")
-                }
+                InspectorSlider(title: "Strength", value: radiusBinding, range: 0 ... 0.2)
+                InspectorSlider(title: "Sharp area", value: focusBinding, range: 0 ... 1)
+                InspectorSlider(title: "Falloff", value: falloffBinding, range: 0 ... 1.5)
                 if spec.shape == .directional {
-                    Slider(value: angleBinding, in: 0 ... 360, step: 15) {
-                        Text("Direction \(Int(spec.angleDegrees))°")
-                    }
+                    InspectorSlider(
+                        title: "Direction",
+                        value: angleBinding,
+                        range: 0 ... 360,
+                        format: .degrees
+                    )
                 }
                 Toggle("Soften the middle instead", isOn: invertedBinding)
                 Button("Reset") { model.applyProgressiveBlur(.focus) }
@@ -60,10 +57,6 @@ struct EditorBlurInspector: View {
     private var shortestEdge: CGFloat {
         let size = model.document.contentRect.size
         return max(min(size.width, size.height), 1)
-    }
-
-    private func percent(_ metric: BeautifyMetric) -> String {
-        "\(Int((metric.fraction(shortestEdge: shortestEdge) * 100).rounded()))%"
     }
 
     // MARK: - Bindings

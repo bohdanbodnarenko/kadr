@@ -30,9 +30,12 @@ struct EditorWatermarkInspector: View {
                     .help("A repeated mark survives being cropped; a single one is a signature.")
 
                 if spec.isTiled {
-                    Slider(value: spacingBinding, in: 1 ... 6, step: 0.1) {
-                        Text("Spacing \(spec.spacing, specifier: "%.1f")×")
-                    }
+                    InspectorSlider(
+                        title: "Spacing",
+                        value: spacingBinding,
+                        range: 1 ... 6,
+                        format: .multiplier
+                    )
                 } else {
                     HStack(alignment: .top) {
                         Text("Corner")
@@ -41,15 +44,9 @@ struct EditorWatermarkInspector: View {
                     }
                 }
 
-                Slider(value: sizeBinding, in: 0.01 ... 0.15, step: 0.005) {
-                    Text("Size \(percent(spec.fontSize))")
-                }
-                Slider(value: opacityBinding, in: 0 ... 1, step: 0.05) {
-                    Text("Opacity \(Int(spec.opacity * 100))%")
-                }
-                Slider(value: rotationBinding, in: -90 ... 90, step: 5) {
-                    Text("Angle \(Int(spec.rotationDegrees))°")
-                }
+                InspectorSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
+                InspectorSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
+                InspectorSlider(title: "Angle", value: rotationBinding, range: -90 ... 90, format: .degrees)
                 ColorPicker("Colour", selection: colourBinding)
             }
         }
@@ -60,10 +57,6 @@ struct EditorWatermarkInspector: View {
     private var shortestEdge: CGFloat {
         let size = model.document.canvasRect.size
         return max(min(size.width, size.height), 1)
-    }
-
-    private func percent(_ metric: BeautifyMetric) -> String {
-        "\(Int((metric.fraction(shortestEdge: shortestEdge) * 100).rounded()))%"
     }
 
     // MARK: - Bindings
