@@ -13,6 +13,8 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
     case pin
     case recognizeText
     case trim
+    /// Open a recording in the studio, where its cuts, zooms and camera live (docs/09 U3).
+    case studio
     case exportGIF
     case compress
     case share
@@ -26,6 +28,7 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
         case .pin: "Pin"
         case .recognizeText: "Copy Text"
         case .trim: "Trim"
+        case .studio: "Studio"
         case .exportGIF: "Export GIF"
         case .compress: "Compress"
         case .share: "Share"
@@ -41,6 +44,7 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
         case .pin: "pin"
         case .recognizeText: "text.viewfinder"
         case .trim: "scissors"
+        case .studio: "wand.and.stars"
         case .exportGIF: "square.stack.3d.down.right"
         case .compress: "arrow.down.right.and.arrow.up.left"
         case .share: "square.and.arrow.up"
@@ -54,7 +58,7 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
     /// nothing is worse than a missing one (docs/07 M8).
     public func applies(to kind: CaptureKind) -> Bool {
         switch kind {
-        case .screenshot: self != .trim && self != .exportGIF
+        case .screenshot: self != .trim && self != .studio && self != .exportGIF
         case .recording: self != .annotate && self != .pin && self != .recognizeText
         }
     }
@@ -97,7 +101,12 @@ public enum CardSlot: String, CaseIterable, Sendable, Codable {
 /// Ordinary value semantics on purpose: the settings pane edits a copy and commits it, so a
 /// half-finished drag never reaches the cards on screen.
 public struct CardLayout: Hashable, Sendable, Codable {
-    /// The most actions the expanded row will hold before the card runs out of width.
+    /// The most actions a card's expanded row will hold before it runs out of width.
+    ///
+    /// Counted per kind of capture, not across the stored row. One layout serves both
+    /// kinds and each card drops what does not apply, so a row holding every screenshot
+    /// action *and* every recording action shows at most a few of each — capping the
+    /// stored list would refuse arrangements that fit comfortably on both cards.
     public static let columnCapacity = 8
 
     /// One action per corner, or none.
@@ -107,16 +116,23 @@ public struct CardLayout: Hashable, Sendable, Codable {
 
     public init(corners: [CardSlot: CardAction] = [:], column: [CardAction] = []) {
         self.corners = corners.filter(\.key.isCorner)
-        self.column = Array(column.prefix(Self.columnCapacity))
+        // Deduplicated rather than truncated: the cap is a per-kind display limit and is
+        // applied where the row is read. What must never happen at any length is the same
+        // action appearing twice.
+        var seen: Set<CardAction> = []
+        self.column = column.filter { seen.insert($0).inserted }
     }
 
     /// Kadr's own layout, and what the pane resets to.
     ///
-    /// It is the row the cards have always had, so somebody who never opens the editor sees
-    /// no change at all — the feature is opt-in by being invisible until used.
+    /// One layout serves both kinds and each card drops what does not apply, so the
+    /// recording-only actions cost a screenshot nothing by being here. Which is why they
+    /// are: Studio and Trim were both placeable and neither was placed, so a recording's
+    /// card offered Copy, Save, Share and Delete and no way at all to edit the thing it
+    /// was a card for.
     public static let standard = CardLayout(
         corners: [:],
-        column: [.copy, .save, .annotate, .pin, .recognizeText, .share, .delete]
+        column: [.copy, .save, .annotate, .pin, .recognizeText, .studio, .trim, .share, .delete]
     )
 
     /// Every action currently placed anywhere.
@@ -137,7 +153,7 @@ public struct CardLayout: Hashable, Sendable, Codable {
     public func actions(in slot: CardSlot, for kind: CaptureKind) -> [CardAction] {
         switch slot {
         case .column:
-            column.filter { $0.applies(to: kind) }
+            Array(column.filter { $0.applies(to: kind) }.prefix(Self.columnCapacity))
         default:
             corners[slot].flatMap { $0.applies(to: kind) ? [$0] : [] } ?? []
         }
@@ -154,13 +170,23 @@ public struct CardLayout: Hashable, Sendable, Codable {
         switch slot {
         case .column:
             let position = min(max(index ?? column.count, 0), column.count)
-            guard column.count < Self.columnCapacity else { return }
+            // Refused only when it would overflow a card this action actually appears on.
+            // Placing Trim cannot be blocked by a row full of screenshot actions, because
+            // the two are never drawn together.
+            guard fits(action) else { return }
             column.insert(action, at: position)
         default:
             // A corner holds one, so placing into a full corner displaces what was there
             // rather than refusing — the user is pointing at the corner they want.
             corners[slot] = action
         }
+    }
+
+    /// Whether adding an action leaves every card it appears on within its width.
+    private func fits(_ action: CardAction) -> Bool {
+        CaptureKind.allCases
+            .filter { action.applies(to: $0) }
+            .allSatisfy { actions(in: .column, for: $0).count < Self.columnCapacity }
     }
 
     /// Takes an action off the card entirely.

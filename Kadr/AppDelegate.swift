@@ -114,6 +114,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Launch
 
+    /// Where each kind of capture goes once it exists.
+    ///
+    /// Its own method rather than more lines in `applicationDidFinishLaunching`, which is
+    /// already a list of everything the agent sets up and gains a line every time anything
+    /// is added to it.
+    private func connectCaptureCallbacks() {
+        // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
+        recording.onFinished = { [weak self] result in
+            self?.areaCapture.showRecording(at: result.fileURL)
+        }
+        // …and opens in the studio if the after-capture matrix asks for it (docs/09 U2.2).
+        //
+        // The session rather than the movie: the movie alone opens for trimming, which is
+        // the same recording with none of the sidecar that makes it worth editing.
+        recording.onStudioSessionReady = { [weak self] session, _ in
+            guard let self else { return }
+            guard settings.afterCaptureActions(for: .recording).contains(.openEditor) else { return }
+            EditorLauncher().open(session.directory)
+        }
+        // A stitched page goes to the overlay and the editor (docs/03 §1.6).
+        scrollCapture.onFinished = { [weak self] url, size in
+            self?.areaCapture.showScrollingCapture(at: url, pixelSize: size)
+        }
+        // The menu bar shows the recording's state and elapsed time (docs/03 §8.1).
+        recording.onStateChanged = { [weak self] in
+            self?.refreshStatusItemIcon()
+        }
+    }
+
     private func beginLaunchInterval() {
         launchStartedAt = .now
         launchInterval = signposter.beginInterval("launch")
@@ -163,31 +192,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.error("Another Kadr already owns the automation port")
         }
 
-        // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
-        recording.onFinished = { [weak self] result in
-            self?.areaCapture.showRecording(at: result.fileURL)
-        }
-        // …and opens in the studio if the after-capture matrix asks for it (docs/09 U2.2).
-        //
-        // The session rather than the movie: the movie alone opens for trimming, which is
-        // the same recording with none of the sidecar that makes it worth editing.
-        recording.onStudioSessionReady = { [weak self] session, _ in
-            guard let self else { return }
-            guard settings.afterCaptureActions(for: .recording).contains(.openEditor) else { return }
-            EditorLauncher().open(session.directory)
-        }
-        // A stitched page goes to the overlay and the editor (docs/03 §1.6).
-        scrollCapture.onFinished = { [weak self] url, size in
-            self?.areaCapture.showScrollingCapture(at: url, pixelSize: size)
-        }
-        // The menu bar shows the recording's state and elapsed time (docs/03 §8.1).
-        recording.onStateChanged = { [weak self] in
-            self?.refreshStatusItemIcon()
-        }
+        connectCaptureCallbacks()
 
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
+
+        // Studio sessions, likewise once and never on a timer (docs/09 U3.1). A session
+        // whose footage is the last copy is never swept, however old it is.
+        StudioSessionRecorder.sweep()
 
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.

@@ -25,6 +25,10 @@ struct QuickAccessCardActions {
     /// Opens a recording in the trim window (docs/03 §1.8). Only offered on a recording.
     var trim: () -> Void = {}
     var trimAvailable = false
+    /// Opens a recording in the studio (docs/09 U3). Offered only when the recording still
+    /// has a session beside it — without one there is nothing to edit but the trim.
+    var studio: () -> Void = {}
+    var studioAvailable = false
     /// The user has touched this card, so it stops closing on its own (docs/09 U2.1).
     var engage: () -> Void = {}
     /// Whether Annotate, Pin and OCR do anything yet.
@@ -220,23 +224,36 @@ struct QuickAccessCardView: View {
         case .pin: actions.pinAvailable
         case .recognizeText: actions.textAvailable
         case .trim: actions.trimAvailable
+        case .studio: actions.studioAvailable
         default: true
         }
     }
 
+    /// What each button does.
+    ///
+    /// A table rather than a switch: it is a lookup with one arm per action and no
+    /// branching worth the name, and as a switch it reads to a complexity check as a
+    /// function that decides eleven things.
+    ///
+    /// Share is absent on purpose — it is drawn by its own case above, because
+    /// `NSSharingServicePicker` needs the button's frame to point at.
+    private var handlers: [CardAction: () -> Void] {
+        [
+            .copy: actions.copy,
+            .save: actions.save,
+            .annotate: actions.annotate,
+            .pin: actions.pin,
+            .recognizeText: actions.recognizeText,
+            .trim: actions.trim,
+            .studio: actions.studio,
+            .exportGIF: actions.exportGIF,
+            .compress: actions.compress,
+            .delete: actions.delete
+        ]
+    }
+
     private func handler(for cardAction: CardAction) -> () -> Void {
-        switch cardAction {
-        case .copy: actions.copy
-        case .save: actions.save
-        case .annotate: actions.annotate
-        case .pin: actions.pin
-        case .recognizeText: actions.recognizeText
-        case .trim: actions.trim
-        case .exportGIF: actions.exportGIF
-        case .compress: actions.compress
-        case .delete: actions.delete
-        case .share: {}
-        }
+        handlers[cardAction] ?? {}
     }
 
     private func action(

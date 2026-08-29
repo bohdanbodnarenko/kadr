@@ -48,13 +48,43 @@ struct CardLayoutTests {
         #expect(!layout.placedActions.contains(.copy), "the displaced action leaves the card")
     }
 
-    @Test("The row holds a bounded number of actions")
+    /// The bound is on what a card *draws*, not on what the layout stores. One layout
+    /// serves both kinds and each drops what does not apply, so a row naming every action
+    /// shows eight on a screenshot and eight on a recording — and bounding the stored list
+    /// would refuse an arrangement that fits comfortably on both.
+    @Test("No card draws more actions than fit on it")
     func columnCapacity() {
         var layout = CardLayout()
         for action in CardAction.allCases {
             layout.place(action, in: .column)
         }
-        #expect(layout.column.count <= CardLayout.columnCapacity)
+        for kind in CaptureKind.allCases {
+            #expect(layout.actions(in: .column, for: kind).count <= CardLayout.columnCapacity)
+        }
+    }
+
+    /// The other half: the cap still refuses, it just counts the right things. Filling a
+    /// card's worth of one kind stops the next action of that kind going on.
+    @Test("A full card refuses another action of the same kind")
+    func fullCardRefuses() {
+        var layout = CardLayout()
+        let screenshotActions = CardAction.allCases.filter { $0.applies(to: .screenshot) }
+        for action in screenshotActions {
+            layout.place(action, in: .column)
+        }
+        #expect(layout.actions(in: .column, for: .screenshot).count == CardLayout.columnCapacity)
+
+        // Every screenshot action is placed, so nothing is left to refuse — the refusal is
+        // observable by rebuilding a layout that is over the line for one kind only.
+        var crowded = CardLayout(column: Array(screenshotActions.prefix(CardLayout.columnCapacity)))
+        crowded.place(.trim, in: .column)
+        #expect(crowded.column.contains(.trim), "a recording action was blocked by a full screenshot row")
+    }
+
+    @Test("The row never holds the same action twice")
+    func noDuplicates() {
+        let layout = CardLayout(column: [.copy, .save, .copy, .save])
+        #expect(layout.column == [.copy, .save])
     }
 
     @Test("An action can be placed at a position in the row")

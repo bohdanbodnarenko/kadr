@@ -44,6 +44,8 @@ struct AdvancedPane: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            StudioStorageSection()
+
             Section("Reset") {
                 Button("Reset All Settings…", role: .destructive) {
                     showsResetConfirmation = true

@@ -168,6 +168,30 @@ final class StudioSessionRecorder {
         return RecordingSession.defaultRoot(applicationSupport: support)
     }
 
+    // MARK: - Housekeeping
+
+    /// The store over the sessions folder, if there is one to look at.
+    static func store() -> RecordingSessionStore? {
+        root().map(RecordingSessionStore.init(root:))
+    }
+
+    /// Tidies the sessions folder. Called once at launch, never on a timer.
+    ///
+    /// Two sweeps with different rules. Packages with no footage in them are litter from a
+    /// recording that failed before writing a frame, and go immediately. Packages that have
+    /// aged out go only when the footage is still linked from the user's own recording —
+    /// a session holding the last copy *is* the recording, and is kept however old it is.
+    static func sweep() {
+        guard let store = store() else { return }
+        store.sweepEmpty()
+        store.sweepExpired()
+    }
+
+    /// The session belonging to a recording, if it still has one.
+    static func session(forRecordingAt url: URL) -> RecordingSession? {
+        store()?.session(forFootageAt: url)
+    }
+
     // MARK: - Seams
 
     /// Starts a session in a given folder, without a telemetry tap or a camera.

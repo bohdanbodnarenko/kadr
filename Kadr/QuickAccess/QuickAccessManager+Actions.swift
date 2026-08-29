@@ -6,6 +6,7 @@ import os
 import OverlayKit
 import SettingsKit
 import Shared
+import StudioCore
 import UniformTypeIdentifiers
 
 /// What a card's buttons do (docs/03 §2, §1.7, §1.8).
@@ -34,7 +35,24 @@ extension QuickAccessManager {
         actions.engage = { [weak self] in self?.noteEngagement(with: item) }
         actions.compress = { [weak self] in self?.compress(item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
+        actions.studio = { [weak self] in self?.openStudio(item) }
+        // Asked once, when the card is built, rather than on every redraw: it is a
+        // directory scan, and a card redraws whenever anything on screen moves.
+        actions.studioAvailable = item.isVideo
+            && editor.isAvailable
+            && StudioSessionRecorder.session(forRecordingAt: item.fileURL) != nil
         return actions
+    }
+
+    /// Opens a recording's studio session (docs/09 U3).
+    ///
+    /// The session rather than the movie: the movie alone opens for trimming, which is the
+    /// same recording with none of the sidecar that makes it worth editing. Silent when
+    /// there is no session, because the button is not offered in that case — this is the
+    /// belt to that braces, for a session swept between the card appearing and the click.
+    func openStudio(_ item: QuickAccessItem) {
+        guard let session = StudioSessionRecorder.session(forRecordingAt: item.fileURL) else { return }
+        openInEditor(session.directory)
     }
 
     /// Turns a recording into a GIF, asking first if it is going to be large (docs/03 §1.8).
