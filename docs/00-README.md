@@ -17,6 +17,7 @@
 | [`07-code-review-2026-08.md`](07-code-review-2026-08.md) | Code review of the implemented M0–M18 codebase: 3 critical, 6 high, 11 medium findings with file:line, plus the compliance scorecard |
 | [`08-screendrop-analysis.md`](08-screendrop-analysis.md) | Source-level study of Screendrop (CC0): what it does better, what we keep, the license caution on its tldraw-derived `Engine/`, and the ranked steal list |
 | [`09-uplift-plan.md`](09-uplift-plan.md) | The post-M18 roadmap: Sprint U0 (fixes) → U1 (editor uplift) → U2 (UX) → U3 (recording studio), superseding docs/06 ordering for remaining work |
+| [`10-road-to-v1.md`](10-road-to-v1.md) | **Current plan.** Post-U3 review and the road to v1.0: sprints R0 (correctness — the studio telemetry chain is inert) → R1 (performance) → R2 (memory + CI gates) → R3 (polish), plus the two governance decisions |
 
 ## The five decisions that matter (summary)
 

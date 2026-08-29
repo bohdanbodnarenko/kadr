@@ -67,16 +67,18 @@ VisionServices (XPC helper) — rule 2 above, checked by CI.
 
 ## Commands
 
+`make help` lists them. The Makefile is the single definition — CI runs the same targets,
+so a command that passes there is the command you ran.
+
 ```sh
-# build the agent
-xcodebuild -workspace Kadr.xcworkspace -scheme Kadr -configuration Debug build
-
-# test one package (all of them: for p in Packages/*/; do (cd "$p" && swift test); done)
-cd Packages/Shared && swift test
-
-# the checks CI runs
-swiftlint lint --strict
-swiftformat --lint .
-Scripts/check-layering.sh
-Scripts/check-size.sh
+make build           # build the agent app
+make test            # every package's tests, then the app's
+make lint check      # swiftlint, swiftformat, layering, size
+make install         # build signed and install into /Applications
+make all             # what CI runs
 ```
+
+One package at a time: `make test-package PACKAGE=Shared`.
+
+Do not add a command here that is not a target. Four copies of the build line — this file,
+`ci.yml`, and whatever was in a shell history — is how they drift.
