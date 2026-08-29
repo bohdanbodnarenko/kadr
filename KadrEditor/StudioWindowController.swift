@@ -110,6 +110,10 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
     /// footage was never touched. There is nothing to lose by closing and nothing to ask
     /// about — reopening the session lands exactly where this left off.
     func windowWillClose(_ notification: Notification) {
+        // Committing is what makes this a *clean* close rather than a disappearance. The
+        // agent offers to recover sessions that have a draft and no commit, so a window
+        // that closes without one leaves its recording looking interrupted forever.
+        model.commitOnClose()
         hostingView = nil
         window?.contentView = nil
         window = nil

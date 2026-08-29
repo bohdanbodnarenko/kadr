@@ -24,7 +24,7 @@ public actor RecordingEngine {
     private let signposter = KadrLog.signposter(.recording)
     private let stitcher: any SegmentStitching
     private let compositor = FrameCompositor()
-    private let ownBundleIdentifier: String?
+    let ownBundleIdentifier: String?
 
     private var stream: SCStream?
     private var output: StreamOutput?
@@ -35,8 +35,8 @@ public actor RecordingEngine {
     private var pixelSize = PixelSize(width: 0, height: 0)
     private var segments: [URL] = []
     private var sessionDirectory: URL?
-    private var accumulatedDuration: TimeInterval = 0
-    private var segmentStartTime: CMTime?
+    var accumulatedDuration: TimeInterval = 0
+    var segmentStartTime: CMTime?
 
     /// Supplies click halos, keystrokes and the webcam picture, frame by frame.
     ///
@@ -74,6 +74,17 @@ public actor RecordingEngine {
     public func setOverlayProvider(_ provider: (any RecordingOverlayProviding)?) {
         overlayProvider = provider
     }
+
+    var geometryObserver: (@Sendable (CGRect, CGFloat, TimeInterval) -> Void)?
+    var lastContentRect: CGRect?
+    var pointPixelScale: CGFloat = 2
+
+    /// How far a window has to move before it counts as having moved.
+    ///
+    /// SCK's content rect jitters by fractions of a point between otherwise identical
+    /// frames, and reporting that would turn "the window moved twice" into a geometry
+    /// sample per frame — which is the cost this design exists to avoid.
+    static let geometryTolerance: CGFloat = 0.5
 
     // MARK: - Lifecycle
 
@@ -315,8 +326,11 @@ public actor RecordingEngine {
     private func consume(_ box: SampleBufferBox) async {
         guard state == .recording, let writer else { return }
 
-        if box.kind == .video, let overlayProvider {
-            composite(overlayProvider, into: box.buffer)
+        if box.kind == .video {
+            reportGeometry(of: box)
+            if let overlayProvider {
+                composite(overlayProvider, into: box.buffer)
+            }
         }
         await writer.append(box)
     }
@@ -334,92 +348,6 @@ public actor RecordingEngine {
 
         let overlay = provider.overlay(atRecordingTime: accumulatedDuration + elapsed)
         compositor.draw(overlay, into: pixelBuffer)
-    }
-
-    // MARK: - Targets
-
-    private func shareableContent() async throws -> SCShareableContent {
-        do {
-            return try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        } catch {
-            throw RecordingError.targetUnavailable
-        }
-    }
-
-    /// What one target resolves to: what to capture, how big, and which part of it.
-    private struct CaptureSetup {
-        let filter: SCContentFilter
-        let pixelSize: PixelSize
-        /// Display-local points for a region; `nil` captures the whole filter.
-        let sourceRect: CGRect?
-    }
-
-    private func makeFilter(
-        for target: RecordingTarget,
-        in content: SCShareableContent
-    ) throws -> CaptureSetup {
-        switch target {
-        case let .display(displayID):
-            guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-                throw RecordingError.targetUnavailable
-            }
-            let filter = filterExcludingOwnWindows(display: display, in: content)
-            return CaptureSetup(filter: filter, pixelSize: pixelSize(of: filter), sourceRect: nil)
-
-        case let .window(windowID):
-            guard let window = content.windows.first(where: { $0.windowID == windowID }) else {
-                throw RecordingError.targetUnavailable
-            }
-            let filter = SCContentFilter(desktopIndependentWindow: window)
-            return CaptureSetup(filter: filter, pixelSize: pixelSize(of: filter), sourceRect: nil)
-
-        case let .region(rect, displayID):
-            guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
-                throw RecordingError.targetUnavailable
-            }
-            let filter = filterExcludingOwnWindows(display: display, in: content)
-            let scale = CGFloat(filter.pointPixelScale)
-            let geometry = DisplayGeometry(
-                displayID: displayID,
-                frame: DisplayRect(cgRect: display.frame),
-                scale: DisplayScale(scale)
-            )
-            guard let clamped = geometry.clamped(rect) else { throw RecordingError.targetUnavailable }
-            let local = geometry.localRect(for: clamped)
-            let pixels = geometry.pixels(for: local)
-            return CaptureSetup(
-                filter: filter,
-                // Even dimensions: hardware encoders reject odd ones.
-                pixelSize: PixelSize(width: even(pixels.width), height: even(pixels.height)),
-                sourceRect: local.cgRect
-            )
-        }
-    }
-
-    private func filterExcludingOwnWindows(display: SCDisplay, in content: SCShareableContent) -> SCContentFilter {
-        guard let ownBundleIdentifier else {
-            return SCContentFilter(display: display, excludingWindows: [])
-        }
-        let own = content.applications.filter { $0.bundleIdentifier == ownBundleIdentifier }
-        guard !own.isEmpty else {
-            return SCContentFilter(display: display, excludingWindows: [])
-        }
-        // The recording HUD and the stop button belong to Kadr, and none of it should
-        // appear in the recording (docs/03 §1.8).
-        return SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
-    }
-
-    private func pixelSize(of filter: SCContentFilter) -> PixelSize {
-        let scale = CGFloat(filter.pointPixelScale)
-        return PixelSize(
-            width: even(Int((filter.contentRect.width * scale).rounded())),
-            height: even(Int((filter.contentRect.height * scale).rounded()))
-        )
-    }
-
-    /// Hardware encoders require even dimensions.
-    private func even(_ value: Int) -> Int {
-        value % 2 == 0 ? value : value - 1
     }
 }
 
@@ -456,7 +384,11 @@ private final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @u
             // SCK only sends a frame when something changed, and marks the rest. Anything
             // that is not a complete frame is not a picture.
             guard isComplete(sampleBuffer) else { return }
-            continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .video))
+            continuation.yield(SampleBufferBox(
+                buffer: sampleBuffer,
+                kind: .video,
+                contentRect: contentRect(sampleBuffer)
+            ))
         case .audio:
             continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .systemAudio))
         default:
@@ -477,8 +409,23 @@ private final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @u
         continuation.finish()
     }
 
+    /// Where the captured content was on screen for this frame.
+    ///
+    /// A window recording's content moves when the window does, and this attachment is the
+    /// only account of where it went. Read here, on the frame it belongs to, because that
+    /// is the only place the two are known to correspond.
+    func contentRect(_ buffer: CMSampleBuffer) -> CGRect? {
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
+            as? [[SCStreamFrameInfo: Any]],
+            let raw = attachments.first?[.contentRect] as? [String: Any]
+        else {
+            return nil
+        }
+        return CGRect(dictionaryRepresentation: raw as CFDictionary)
+    }
+
     /// Reads SCK's per-frame status out of the buffer's attachments.
-    private func isComplete(_ buffer: CMSampleBuffer) -> Bool {
+    func isComplete(_ buffer: CMSampleBuffer) -> Bool {
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
             as? [[SCStreamFrameInfo: Any]],
             let raw = attachments.first?[.status] as? Int,

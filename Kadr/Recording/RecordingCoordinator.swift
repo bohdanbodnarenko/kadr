@@ -150,6 +150,7 @@ final class RecordingCoordinator {
             } catch {
                 stopOverlays()
                 studio.cancel()
+                stopGeometryObserver()
                 hygiene?.endRecording()
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
@@ -186,24 +187,52 @@ final class RecordingCoordinator {
     }
 
     /// Whether this recording keeps a studio session beside it.
-    ///
-    /// A window recording does not: a window moves while it is being recorded, so a click's
-    /// position in the frame cannot be derived from where it landed on screen, and a
-    /// sidecar of pointer positions that are wrong is worse than no sidecar. Per-frame
-    /// window geometry is what fixes this, and it is not captured yet.
     private var capturesStudioSession: Bool {
-        settings.recordingCapturesStudioSession && !isWindowRecording
+        settings.recordingCapturesStudioSession
     }
 
     @ObservationIgnored private var isWindowRecording = false
+    /// Follows a recorded window so a click can be placed against where it was at the time.
+    @ObservationIgnored private var windowConverter: MovingWindowConverter?
 
     /// Starts the studio sidecar, if this recording is keeping one.
+    ///
+    /// A window recording takes a different converter from a display or a region. Those sit
+    /// still, so where a click lands on screen fixes where it lands in the frame once and
+    /// for all. A window moves, so the same click means different things at different
+    /// moments — and the converter has to ask the engine where the window is now rather
+    /// than having been told once at the start.
     private func startStudioSession(for target: RecordingTarget) {
         guard capturesStudioSession else { return }
-        studio.start(
-            recordsCamera: settings.recordingShowsWebcam,
-            pointConverter: Self.pointConverter(for: target)
-        )
+
+        var converter = Self.pointConverter(for: target)
+        if isWindowRecording {
+            let moving = MovingWindowConverter()
+            windowConverter = moving
+            converter = moving.converter()
+        }
+
+        studio.start(recordsCamera: settings.recordingShowsWebcam, pointConverter: converter)
+        observeGeometry()
+    }
+
+    /// Feeds the engine's content-rect changes to the sidecar and the converter.
+    private func observeGeometry() {
+        Task { [weak self] in
+            await self?.engine.setGeometryObserver { [weak self] rect, scale, time in
+                Task { @MainActor [weak self] in
+                    self?.windowConverter?.update(rect, scale: scale)
+                    self?.studio.noteGeometry(rect, at: time)
+                }
+            }
+        }
+    }
+
+    /// Stops watching where the window is. The observer holds this coordinator, so leaving
+    /// it attached after a recording keeps the engine pointed at a recording that is over.
+    private func stopGeometryObserver() {
+        windowConverter = nil
+        Task { [weak self] in await self?.engine.setGeometryObserver(nil) }
     }
 
     /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
@@ -333,6 +362,7 @@ final class RecordingCoordinator {
         stopTicking()
         focus.disable()
         stopOverlays()
+        stopGeometryObserver()
         hygiene?.endRecording()
 
         let destination = destinationURL()
@@ -372,6 +402,7 @@ final class RecordingCoordinator {
         stopOverlays()
         hygiene?.endRecording()
         studio.cancel()
+        stopGeometryObserver()
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle

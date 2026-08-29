@@ -143,6 +143,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Reopens the recordings a crash left mid-edit (docs/09 U3.1).
+    ///
+    /// Every one of them, rather than a chooser. A session only counts as unfinished when
+    /// it has footage and an uncommitted draft — somebody was editing it when the process
+    /// went away — and there is rarely more than one. Asking which of your interrupted
+    /// recordings you would like back is a question with an obvious answer.
+    private func recoverUnfinishedRecordings() {
+        let sessions = StudioSessionRecorder.unfinishedSessions()
+        guard !sessions.isEmpty else { return }
+        let launcher = EditorLauncher()
+        for session in sessions {
+            launcher.open(session.directory)
+        }
+        logger.info("Reopened \(sessions.count, privacy: .public) unfinished recording(s)")
+    }
+
     private func beginLaunchInterval() {
         launchStartedAt = .now
         launchInterval = signposter.beginInterval("launch")
@@ -168,6 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
             },
             openHistory: { [weak self] in self?.openHistory() },
+            unfinishedRecordings: { StudioSessionRecorder.unfinishedCount() },
+            recoverRecordings: { [weak self] in self?.recoverUnfinishedRecordings() },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
         )
         endLaunchInterval()

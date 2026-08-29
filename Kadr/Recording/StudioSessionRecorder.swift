@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import ImageIO
 import os
 import RecordingCore
 import Shared
 import StudioCore
+import UniformTypeIdentifiers
 
 /// Captures the sidecar that makes a recording editable in the studio (docs/09 U3.1).
 ///
@@ -55,6 +57,7 @@ final class StudioSessionRecorder {
 
         self.session = session
         startedAt = Date()
+        geometry.reset()
         telemetry.start(pointConverter: pointConverter)
         if recordsCamera {
             camera.start(writingTo: session.cameraURL)
@@ -71,6 +74,22 @@ final class StudioSessionRecorder {
         telemetry.advance(to: elapsed)
     }
 
+    // MARK: - Where the window is
+
+    /// Where the recorded content sits on screen right now, and how it has moved.
+    ///
+    /// Kept here rather than inside the telemetry recorder because it belongs to the
+    /// *capture*, not to the pointer: the same answer places a click, and is written to the
+    /// sidecar so the studio can anchor a zoom to a button rather than to a screen position
+    /// the button has since left.
+    @ObservationIgnored private var geometry = WindowGeometryTracker()
+
+    /// Notes that the recorded content has moved.
+    func noteGeometry(_ frame: CGRect, at time: TimeInterval) {
+        guard session != nil else { return }
+        geometry.record(frame, at: time)
+    }
+
     /// Finishes the session around a completed recording, and returns it.
     ///
     /// Returns nil when there is nothing worth keeping — no session was started, or the
@@ -79,7 +98,9 @@ final class StudioSessionRecorder {
     func finish(with result: RecordingResult) async -> RecordingSession? {
         guard let session else { return nil }
         self.session = nil
-        let captured = telemetry.stop()
+        var captured = telemetry.stop()
+        captured.windowGeometry = geometry.samples
+        geometry.reset()
         await camera.finish()
 
         guard attach(result.fileURL, to: session) else {
@@ -107,8 +128,39 @@ final class StudioSessionRecorder {
             return nil
         }
 
+        await writePoster(for: session)
         logger.info("Studio session ready: \(session.directory.lastPathComponent, privacy: .public)")
         return session
+    }
+
+    /// Writes a still from the recording into the session (docs/09 U3.1).
+    ///
+    /// So that anything showing a session — the recovery prompt, a future browser — can
+    /// show what it is without decoding a movie to find out. A recovery list that has to
+    /// open four recordings to draw itself is a recovery list that appears slowly at exactly
+    /// the moment somebody is anxious about their work.
+    ///
+    /// Best-effort: a session with no poster is a session that shows a placeholder, which is
+    /// not worth failing a recording over.
+    private func writePoster(for session: RecordingSession) async {
+        guard let image = await VideoPosterFrame.posterFrame(of: session.screenURL, maxPixelSize: 640) else {
+            return
+        }
+        guard let destination = CGImageDestinationCreateWithURL(
+            session.posterURL as CFURL,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return
+        }
+        // Modest quality on purpose: this is a thumbnail beside a movie, and a poster that
+        // costs a megabyte would be most of what a session weighs once its footage is
+        // shared with the user's own recording.
+        CGImageDestinationAddImage(destination, image, [
+            kCGImageDestinationLossyCompressionQuality: 0.7
+        ] as CFDictionary)
+        CGImageDestinationFinalize(destination)
     }
 
     func cancel() {
@@ -190,6 +242,19 @@ final class StudioSessionRecorder {
     /// The session belonging to a recording, if it still has one.
     static func session(forRecordingAt url: URL) -> RecordingSession? {
         store()?.session(forFootageAt: url)
+    }
+
+    /// Sessions a crash left mid-edit: footage, a draft, and no committed edit.
+    ///
+    /// A session with a committed edit was finished with at some point, so reopening it is
+    /// the user's business rather than a rescue. The distinction is what keeps the recovery
+    /// prompt rare enough to mean something.
+    static func unfinishedSessions() -> [RecordingSession] {
+        store()?.sessionsNeedingRecovery() ?? []
+    }
+
+    static func unfinishedCount() -> Int {
+        unfinishedSessions().count
     }
 
     // MARK: - Seams

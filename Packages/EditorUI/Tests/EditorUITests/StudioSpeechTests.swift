@@ -100,4 +100,47 @@ struct StudioSpeechTests {
         #expect(studio.installProgress == first)
         studio.cancelSpeechModelInstall()
     }
+
+    // MARK: - Clean closes
+
+    /// The distinction crash recovery rests on: a draft says somebody was in the middle of
+    /// this, a commit says they stopped on purpose. Without the commit every session anyone
+    /// ever opened would look interrupted forever.
+    @Test("A freshly edited session looks unfinished until it is closed")
+    func editingLeavesASessionUnfinished() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        #expect(!studio.session.needsRecovery, "an untouched session is not a rescue")
+
+        studio.change { $0.showsClicks = false }
+        #expect(studio.session.needsRecovery, "an edit in progress should read as interrupted")
+
+        studio.commitOnClose()
+        #expect(!studio.session.needsRecovery, "a session closed on purpose is not a rescue")
+    }
+
+    /// Reopening has to land where the user left off, so the draft outlives the commit
+    /// rather than being cleared by it.
+    @Test("Committing on close keeps the draft")
+    func commitKeepsTheDraft() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.change { $0.camera.sizeFraction = 0.4 }
+        studio.commitOnClose()
+
+        let reopened = try #require(StudioDocumentModel(session: studio.session))
+        #expect(reopened.edit.camera.sizeFraction == 0.4)
+    }
+
+    @Test("Exporting also settles the session")
+    func exportCommits() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.change { $0.showsKeystrokes = false }
+        studio.commitOnClose()
+        #expect(!studio.session.needsRecovery)
+    }
 }

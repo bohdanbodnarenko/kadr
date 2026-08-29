@@ -32,6 +32,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let reopenFromHistory: (HistoryRecord) -> Void
     private let canRestore: () -> Bool
     private let openHistory: () -> Void
+    /// How many recordings a crash left mid-edit, and how to reopen them (docs/09 U3.1).
+    private let unfinishedRecordings: () -> Int
+    private let recoverRecordings: () -> Void
     private let desktopIconsHidden: () -> Bool
 
     init(
@@ -49,6 +52,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         reopenFromHistory: @escaping (HistoryRecord) -> Void = { _ in },
         canRestore: @escaping () -> Bool = { true },
         openHistory: @escaping () -> Void = {},
+        unfinishedRecordings: @escaping () -> Int = { 0 },
+        recoverRecordings: @escaping () -> Void = {},
         desktopIconsHidden: @escaping () -> Bool = { false }
     ) {
         self.perform = perform
@@ -65,6 +70,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.reopenFromHistory = reopenFromHistory
         self.canRestore = canRestore
         self.openHistory = openHistory
+        self.unfinishedRecordings = unfinishedRecordings
+        self.recoverRecordings = recoverRecordings
         self.desktopIconsHidden = desktopIconsHidden
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
@@ -250,6 +257,31 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         closePinsItem.target = self
         menu.addItem(closePinsItem)
+
+        addRecoveryItem(to: menu)
+    }
+
+    /// Offers to reopen recordings a crash left mid-edit (docs/09 U3.1).
+    ///
+    /// Absent rather than disabled when there are none, which is the opposite of the rule
+    /// the rest of this menu follows — and deliberately so. A permanently visible "Recover"
+    /// invites somebody to wonder what went wrong every time they open the menu, and the
+    /// answer is almost always nothing. It appears when there is something to recover and
+    /// disappears once there is not.
+    private func addRecoveryItem(to menu: NSMenu) {
+        let count = unfinishedRecordings()
+        guard count > 0 else { return }
+
+        let title = count == 1
+            ? "Recover Unfinished Recording…"
+            : "Recover \(count) Unfinished Recordings…"
+        let item = NSMenuItem(title: title, action: #selector(didSelectRecover), keyEquivalent: "")
+        item.target = self
+        menu.addItem(item)
+    }
+
+    @objc private func didSelectRecover() {
+        recoverRecordings()
     }
 
     private func addApplicationItems(to menu: NSMenu) {

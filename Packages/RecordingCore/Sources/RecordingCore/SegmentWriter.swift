@@ -14,6 +14,19 @@ import Shared
 struct SampleBufferBox: @unchecked Sendable {
     let buffer: CMSampleBuffer
     let kind: Kind
+    /// Where the recorded content sat on screen when this frame was taken, from SCK's own
+    /// per-frame attachment (docs/09 U3.1).
+    ///
+    /// Carried on the frame rather than asked for separately, because it is only true *of*
+    /// a frame: a window that moves mid-recording has a different answer for every one, and
+    /// a rect read a moment later describes a moment the footage does not show.
+    let contentRect: CGRect?
+
+    init(buffer: CMSampleBuffer, kind: Kind, contentRect: CGRect? = nil) {
+        self.buffer = buffer
+        self.kind = kind
+        self.contentRect = contentRect
+    }
 
     enum Kind: Sendable {
         case video
