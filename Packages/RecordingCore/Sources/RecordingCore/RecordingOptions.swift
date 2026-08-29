@@ -165,9 +165,24 @@ public enum RecordingTarget: Sendable, Hashable {
 /// Where a recording is in its life.
 public enum RecordingState: Sendable, Equatable {
     case idle
+    /// Asked for, and not yet running (docs/10 R0.3).
+    ///
+    /// Starting a capture is several hundred milliseconds of asking ScreenCaptureKit for
+    /// permission, content and a stream. Without a state for that window the app is idle by
+    /// its own account while a recording is being set up, so a second trigger starts a
+    /// second one — and the second one's failure path tears down the first.
+    case starting
     case recording
     case paused
     case finishing
+
+    /// Whether a recording exists, including one still being set up.
+    ///
+    /// The question every caller actually means. `== .recording` is the question almost
+    /// nobody means, and answering the wrong one is what let two recordings overlap.
+    public var isActive: Bool {
+        self != .idle
+    }
 }
 
 /// A finished recording.

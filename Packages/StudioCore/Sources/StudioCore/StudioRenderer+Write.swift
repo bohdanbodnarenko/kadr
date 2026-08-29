@@ -23,8 +23,32 @@ extension StudioRenderer {
         let plan = composer.plan
         try? FileManager.default.removeItem(at: destination)
 
+        // Every failure out of this function has to leave nothing behind (docs/10 R0.4).
+        //
+        // The destination is removed up front, so a render that throws halfway — cancelled,
+        // out of disk, refused by the encoder — used to leave a partial `.mov` at the path
+        // the user chose. The studio said the export failed and Finder showed a file that
+        // played for seven minutes of a ten-minute recording, which is worse than no file:
+        // one of those is obviously missing and the other is quietly wrong.
+        //
+        // The reader and writer are cancelled too. Left running they hold decoders, an
+        // encode session and the destination's file handle for as long as the process
+        // lives.
+        // `open` holds whatever has been created so far, so the cleanup can reach it
+        // whichever line threw.
+        var finished = false
+        var open = OpenResources()
+        defer {
+            if !finished {
+                open.cancel()
+                try? FileManager.default.removeItem(at: destination)
+            }
+        }
+
         let reader = try makeReader(state)
+        open.reader = reader
         let writer = try makeWriter(destination: destination, size: plan.outputSize, options: options, state: state)
+        open.writer = writer
 
         guard reader.reader.startReading() else {
             throw RenderError.couldNotCreateReader(reader.reader.error?.localizedDescription ?? "unknown")
@@ -81,6 +105,8 @@ extension StudioRenderer {
             throw RenderError.writingFailed("no frames were composed")
         }
         progress?(1)
+        // Past every throw: the file at the destination is now the whole export.
+        finished = true
 
         return Output(
             fileURL: destination,
@@ -88,6 +114,23 @@ extension StudioRenderer {
             duration: state.duration,
             frameCount: frameCount
         )
+    }
+
+    /// What a failed render has to shut down and delete.
+    ///
+    /// A tiny box rather than two optionals threaded through the function, because the
+    /// cleanup has to run from a `defer` declared before either exists — and a `defer` that
+    /// can only see half of what a failure created is a `defer` that leaks the other half.
+    struct OpenResources {
+        var reader: ReaderBundle?
+        var writer: WriterBundle?
+
+        /// Left running, these hold decoders, an encode session and the destination's file
+        /// handle for as long as the process lives.
+        func cancel() {
+            reader?.reader.cancelReading()
+            writer?.writer.cancelWriting()
+        }
     }
 
     // MARK: - Reading

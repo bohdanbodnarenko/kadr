@@ -72,8 +72,12 @@ final class RecordingCoordinator {
         self.hygiene = hygiene
     }
 
+    /// Whether a recording exists — including one still starting up.
+    ///
+    /// Everything that guards against a second recording asks this, so it has to be true
+    /// for the whole life of one, not just the part after the stream is running.
     var isRecording: Bool {
-        state == .recording || state == .paused
+        state.isActive && state != .finishing
     }
 
     /// Elapsed time as the menu bar shows it.
@@ -126,6 +130,17 @@ final class RecordingCoordinator {
     }
 
     private func start(target: RecordingTarget) {
+        // Claimed synchronously, before the first await (docs/10 R0.3).
+        //
+        // Setting up a capture is a few hundred milliseconds of asking ScreenCaptureKit
+        // for permission, content and a stream. `state` used to become `.recording` only
+        // after all of it, so throughout that window the app reported itself idle, the
+        // menu items stayed enabled, and a second press started a second recording — whose
+        // failure path then ran `studio.cancel()`, deleting the *first* recording's session
+        // directory, and put the desktop icons back while the first was still filming.
+        guard !isRecording else { return }
+        state = .starting
+
         if case .window = target {
             isWindowRecording = true
         } else {
@@ -156,6 +171,7 @@ final class RecordingCoordinator {
                 stopGeometryObserver()
                 teleprompter.stop()
                 hygiene?.endRecording()
+                state = .idle
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
             }
@@ -266,54 +282,6 @@ final class RecordingCoordinator {
         Task { await engine.setOverlayProvider(nil) }
     }
 
-    /// Maps a screen click into the recorded frame's own pixels.
-    ///
-    /// Clicks arrive in AppKit's screen space; the frame is in the recorded area's pixels
-    /// with a top-left origin. Getting this wrong puts the halo somewhere else entirely,
-    /// which is why it goes through `Shared.Geometry` rather than ad-hoc arithmetic.
-    private static func pointConverter(
-        for target: RecordingTarget
-    ) -> @Sendable (CGPoint) -> CGPoint? {
-        let space = GlobalCoordinateSpace.current
-        let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
-
-        switch target {
-        case let .display(displayID):
-            guard let screen = screens.first(where: { $0.displayID == displayID }) else {
-                return { _ in nil }
-            }
-            let frame = screen.frame.cgRect
-            let scale = screen.backingScaleFactor
-            return { point in
-                guard frame.contains(point) else { return nil }
-                return CGPoint(
-                    x: (point.x - frame.minX) * scale,
-                    y: (frame.maxY - point.y) * scale
-                )
-            }
-
-        case let .region(rect, displayID):
-            guard let screen = screens.first(where: { $0.displayID == displayID }) else {
-                return { _ in nil }
-            }
-            let scale = screen.backingScaleFactor
-            let regionInScreenSpace = rect.inScreenSpace(space)
-            return { point in
-                guard regionInScreenSpace.cgRect.contains(point) else { return nil }
-                return CGPoint(
-                    x: (point.x - regionInScreenSpace.minX) * scale,
-                    y: (regionInScreenSpace.maxY - point.y) * scale
-                )
-            }
-
-        case .window:
-            // A window moves while being recorded, so a click's position within the frame
-            // cannot be derived from where it landed on screen. Halos are left off rather
-            // than drawn in the wrong place.
-            return { _ in nil }
-        }
-    }
-
     private var currentOptions: RecordingOptions {
         let requestedRate = overrides.frameRate ?? settings.recordingFrameRate.rawValue
         return RecordingOptions(
@@ -384,6 +352,14 @@ final class RecordingCoordinator {
             completion?(.failed("Nothing is recording."))
             return
         }
+        // Stopped before the stream came up. There is no footage to finalise, so this is a
+        // cancellation — finalising would ask the engine to stop something it never started
+        // and report "recording failed to finish" for a recording that never began.
+        guard state != .starting else {
+            cancel()
+            completion?(.cancelled)
+            return
+        }
         automationCompletion = completion
         state = .finishing
         stopTicking()
@@ -425,6 +401,7 @@ final class RecordingCoordinator {
 
     func cancel() {
         guard isRecording else { return }
+        state = .idle
         stopTicking()
         focus.disable()
         stopOverlays()

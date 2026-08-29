@@ -191,4 +191,70 @@ struct StudioRendererTests {
         #expect(large <= 60_000_000)
         #expect(StudioRenderer.bitRate(for: .zero, frameRate: 0) >= 1_500_000)
     }
+
+    // MARK: - Failure leaves nothing behind
+
+    /// A partial file at the path the user chose is worse than no file: one of those is
+    /// obviously missing and the other plays for seven minutes of a ten-minute recording
+    /// and looks finished (docs/10 R0.4).
+    @Test("A cancelled render leaves no file at the destination")
+    func cancellationLeavesNothing() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // Twenty seconds so the render cannot possibly finish inside the pause below — a
+        // three-second one completed first and kept its file, which looked like a failure
+        // of the cleanup and was a failure of the test.
+        let movie = try await Media.makeMovie(seconds: 20, in: folder)
+        let destination = folder.appendingPathComponent("out.mov")
+
+        let task = Task {
+            try await StudioRenderer().render(
+                source(screen: movie, edit: Media.edit(duration: 20)),
+                to: destination,
+                options: options
+            )
+        }
+        // Long enough that the writer exists and frames are going in, short enough that
+        // hundreds remain.
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+        _ = try? await task.value
+
+        #expect(
+            !FileManager.default.fileExists(atPath: destination.path),
+            "a cancelled export left a partial movie behind"
+        )
+    }
+
+    /// The same guarantee on the path that fails before a frame is written.
+    @Test("A render that cannot start leaves no file at the destination")
+    func failedStartLeavesNothing() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let notAMovie = folder.appendingPathComponent("nope.mov")
+        try Data("this is not a movie".utf8).write(to: notAMovie)
+        let destination = folder.appendingPathComponent("out.mov")
+
+        _ = try? await StudioRenderer().render(
+            StudioRenderer.Source(screen: notAMovie, edit: Media.edit(duration: 1)),
+            to: destination
+        )
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    /// And the case that must *not* clean up: a render that finished.
+    @Test("A finished render keeps its file")
+    func successKeepsTheFile() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await Media.makeMovie(seconds: 1, in: folder)
+        let destination = folder.appendingPathComponent("out.mov")
+
+        try await StudioRenderer().render(
+            source(screen: movie, edit: Media.edit(duration: 1)),
+            to: destination,
+            options: options
+        )
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+    }
 }
