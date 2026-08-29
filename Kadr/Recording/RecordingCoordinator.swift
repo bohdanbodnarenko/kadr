@@ -20,7 +20,7 @@ final class RecordingCoordinator {
     @ObservationIgnored private let engine = RecordingEngine()
     @ObservationIgnored private let captureEngine: CaptureEngine
     @ObservationIgnored private let permissions: PermissionCoordinator
-    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let overlay: SelectionOverlayController
     @ObservationIgnored private let hygiene: DesktopHygieneController?
     @ObservationIgnored private let focus = FocusMode()
@@ -53,9 +53,9 @@ final class RecordingCoordinator {
     ///
     /// The only repeating timer in the app, and it exists solely while a recording is
     /// running — the idle path still has none (PRD §8).
-    @ObservationIgnored private var tickTask: Task<Void, Never>?
-    @ObservationIgnored private var startedAt: Date?
-    @ObservationIgnored private var pausedDuration: TimeInterval = 0
+    @ObservationIgnored var tickTask: Task<Void, Never>?
+    @ObservationIgnored var startedAt: Date?
+    @ObservationIgnored var pausedDuration: TimeInterval = 0
     @ObservationIgnored private var pausedAt: Date?
 
     init(
@@ -448,28 +448,13 @@ final class RecordingCoordinator {
         automationCompletion(outcome)
     }
 
-    // MARK: - Plumbing
+    // MARK: - The clock the menu bar reads
 
-    /// Where the finished recording lands.
+    /// Ticks the elapsed time while recording.
     ///
-    /// Counted like every other capture: two recordings stopped inside the same second
-    /// used to resolve to the same name, and the second overwrote the first (docs/07 M6).
-    private func destinationURL() -> URL {
-        let template = FilenameTemplate("Kadr recording {date} {time}")
-        let context = FilenameContext(applicationName: "Screen", date: Date())
-        let folder = settings.saveFolder
-
-        if let url = try? CaptureFileWriter().availableURL(
-            in: folder,
-            template: template,
-            context: context,
-            fileExtension: "mp4"
-        ) {
-            return url
-        }
-        return folder.appendingPathComponent(template.expand(context)).appendingPathExtension("mp4")
-    }
-
+    /// Kept beside the state rather than in the plumbing extension because it writes
+    /// `elapsed`, whose setter is private to this file — and an extension that cannot
+    /// reach the thing it exists to update is worse than no extension.
     private func startTicking() {
         stopTicking()
         tickTask = Task { [weak self] in
