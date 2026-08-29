@@ -40,6 +40,21 @@ extension String: SettingValue {
     }
 }
 
+/// For the settings that are genuinely continuous — a reading rate, a font size — where
+/// rounding to whole numbers would make a slider step visibly.
+///
+/// Read through `as? Double` rather than `defaults.double(forKey:)`, which cannot tell an
+/// absent key from a stored zero and would silently turn "never set" into a rate of nothing.
+extension Double: SettingValue {
+    public static func read(from defaults: UserDefaults, forKey key: String) -> Double? {
+        defaults.object(forKey: key) as? Double
+    }
+
+    public func write(to defaults: UserDefaults, forKey key: String) {
+        defaults.set(self, forKey: key)
+    }
+}
+
 /// String-backed enums get their conformance for free; an unknown raw value reads as
 /// `nil` and therefore falls back to the key's default rather than trapping.
 public extension SettingValue where Self: RawRepresentable, Self.RawValue == String {

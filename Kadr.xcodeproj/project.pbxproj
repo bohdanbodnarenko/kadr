@@ -682,6 +682,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
 				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -718,6 +719,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
 				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
 				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				LD_RUNPATH_SEARCH_PATHS = (

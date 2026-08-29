@@ -34,6 +34,13 @@ public extension AppSettings {
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
         recordingCapturesStudioSession = SettingKeys.recordingCapturesStudioSession.defaultValue
         recordingReconstructsCursor = SettingKeys.recordingReconstructsCursor.defaultValue
+        teleprompterEnabled = SettingKeys.teleprompterEnabled.defaultValue
+        teleprompterScript = SettingKeys.teleprompterScript.defaultValue
+        teleprompterWordsPerMinute = SettingKeys.teleprompterWordsPerMinute.defaultValue
+        teleprompterFontSize = SettingKeys.teleprompterFontSize.defaultValue
+        teleprompterMirrored = SettingKeys.teleprompterMirrored.defaultValue
+        teleprompterFollowsSpeech = SettingKeys.teleprompterFollowsSpeech.defaultValue
+        teleprompterFrame = SettingKeys.teleprompterFrame.defaultValue
         scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
         scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
         scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue

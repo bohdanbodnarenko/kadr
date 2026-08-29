@@ -134,6 +134,36 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingReconstructsCursor] = recordingReconstructsCursor }
     }
 
+    public var teleprompterEnabled: Bool {
+        didSet { store[SettingKeys.teleprompterEnabled] = teleprompterEnabled }
+    }
+
+    public var teleprompterScript: String {
+        didSet { store[SettingKeys.teleprompterScript] = teleprompterScript }
+    }
+
+    public var teleprompterWordsPerMinute: Double {
+        didSet { store[SettingKeys.teleprompterWordsPerMinute] = teleprompterWordsPerMinute }
+    }
+
+    public var teleprompterFontSize: Double {
+        didSet { store[SettingKeys.teleprompterFontSize] = teleprompterFontSize }
+    }
+
+    public var teleprompterMirrored: Bool {
+        didSet { store[SettingKeys.teleprompterMirrored] = teleprompterMirrored }
+    }
+
+    public var teleprompterFollowsSpeech: Bool {
+        didSet { store[SettingKeys.teleprompterFollowsSpeech] = teleprompterFollowsSpeech }
+    }
+
+    /// Nil rather than empty when it has never been placed, so the panel can tell "put it
+    /// where I left it" from "this is the first time".
+    public var teleprompterFrame: String? {
+        didSet { store[SettingKeys.teleprompterFrame] = teleprompterFrame ?? "" }
+    }
+
     public var scrollAutoScroll: Bool {
         didSet { store[SettingKeys.scrollAutoScroll] = scrollAutoScroll }
     }
@@ -296,6 +326,13 @@ public final class AppSettings {
         recordingShowsWebcam = store[SettingKeys.recordingShowsWebcam]
         recordingCapturesStudioSession = store[SettingKeys.recordingCapturesStudioSession]
         recordingReconstructsCursor = store[SettingKeys.recordingReconstructsCursor]
+        teleprompterEnabled = store[SettingKeys.teleprompterEnabled]
+        teleprompterScript = store[SettingKeys.teleprompterScript]
+        teleprompterWordsPerMinute = store[SettingKeys.teleprompterWordsPerMinute]
+        teleprompterFontSize = store[SettingKeys.teleprompterFontSize]
+        teleprompterMirrored = store[SettingKeys.teleprompterMirrored]
+        teleprompterFollowsSpeech = store[SettingKeys.teleprompterFollowsSpeech]
+        teleprompterFrame = store[SettingKeys.teleprompterFrame]
         scrollAutoScroll = store[SettingKeys.scrollAutoScroll]
         scrollStepPoints = store[SettingKeys.scrollStepPoints]
         scrollFrameRate = store[SettingKeys.scrollFrameRate]

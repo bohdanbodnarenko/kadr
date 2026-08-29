@@ -68,6 +68,8 @@ struct RecordingPane: View {
                 Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
             }
 
+            TeleprompterSection(settings: settings)
+
             Section("Studio") {
                 Toggle("Keep recordings editable in the studio", isOn: $settings.recordingCapturesStudioSession)
                 Text("Saves the pointer's path, clicks and shortcuts beside the recording so "

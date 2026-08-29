@@ -78,6 +78,26 @@ public enum SettingKeys {
         "recording.reconstructsCursor",
         default: false
     )
+
+    // MARK: - Teleprompter (docs/08)
+
+    /// Show the script while recording.
+    public static let teleprompterEnabled = SettingKey("teleprompter.enabled", default: false)
+    /// The script itself. Kept in settings rather than a file because it is one text field
+    /// somebody edits in Settings and reads back an hour later, not a document.
+    public static let teleprompterScript = SettingKey("teleprompter.script", default: "")
+    /// How fast the script scrolls when nothing is following the reader.
+    public static let teleprompterWordsPerMinute = SettingKey("teleprompter.wordsPerMinute", default: 120.0)
+    public static let teleprompterFontSize = SettingKey("teleprompter.fontSize", default: 30.0)
+    /// Reverse the text, for reading off a beam-splitter glass.
+    public static let teleprompterMirrored = SettingKey("teleprompter.mirrored", default: false)
+    /// Follow the reader's voice rather than scrolling at a fixed rate.
+    ///
+    /// Off by default: it listens to the microphone for the length of a recording, which is
+    /// not something to switch on for somebody.
+    public static let teleprompterFollowsSpeech = SettingKey("teleprompter.followsSpeech", default: false)
+    /// Where the panel was left, so it comes back where the reader put it.
+    public static let teleprompterFrame = SettingKey("teleprompter.frame", default: "")
     /// Keep the display's HDR range in recordings (macOS 15+, docs/06 M25).
     public static let recordingDynamicRange = SettingKey(
         "recording.dynamicRange",

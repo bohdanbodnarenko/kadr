@@ -29,6 +29,8 @@ final class RecordingCoordinator {
     @ObservationIgnored private let overlaySource = RecordingOverlaySource()
     /// The sidecar that makes a recording editable in the studio afterwards (docs/09 U3.1).
     @ObservationIgnored private let studio = StudioSessionRecorder()
+    /// The script somebody reads from while recording (docs/08).
+    @ObservationIgnored private lazy var teleprompter = TeleprompterController(settings: settings)
     @ObservationIgnored private let logger = KadrLog.logger(.recording)
 
     /// What the status item shows.
@@ -135,6 +137,7 @@ final class RecordingCoordinator {
             do {
                 startOverlays(for: target)
                 startStudioSession(for: target)
+                teleprompter.start()
                 try await engine.start(target: target, options: options)
                 state = .recording
                 startedAt = Date()
@@ -151,6 +154,7 @@ final class RecordingCoordinator {
                 stopOverlays()
                 studio.cancel()
                 stopGeometryObserver()
+                teleprompter.stop()
                 hygiene?.endRecording()
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
@@ -324,6 +328,9 @@ final class RecordingCoordinator {
         Task { [weak self] in
             guard let self else { return }
             try? await engine.pause()
+            // The script holds where it is: a prompter that keeps scrolling through a
+            // pause is one the reader has to scroll back on when they resume.
+            teleprompter.pause()
             state = .paused
             pausedAt = Date()
             stopTicking()
@@ -342,6 +349,7 @@ final class RecordingCoordinator {
             }
             pausedAt = nil
             state = .recording
+            teleprompter.resume()
             // The sidecar's clock skips the pause too. A pointer track that kept running
             // through it would place the cursor where the footage never showed it.
             if let startedAt {
@@ -363,6 +371,7 @@ final class RecordingCoordinator {
         focus.disable()
         stopOverlays()
         stopGeometryObserver()
+        teleprompter.stop()
         hygiene?.endRecording()
 
         let destination = destinationURL()
@@ -403,6 +412,7 @@ final class RecordingCoordinator {
         hygiene?.endRecording()
         studio.cancel()
         stopGeometryObserver()
+        teleprompter.stop()
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle
