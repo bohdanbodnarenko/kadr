@@ -58,6 +58,26 @@ public enum SettingKeys {
         default: true
     )
     public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
+    /// Keep the pointer track, clicks and chords alongside a recording so it can be
+    /// edited in the studio afterwards (docs/09 U3.1).
+    ///
+    /// On by default: the sidecar is a few kilobytes, it is the only thing that makes
+    /// smooth zooms and reconstructed clicks possible later, and a recording made without
+    /// it can never be given them — the information is gone the moment the recording ends.
+    public static let recordingCapturesStudioSession = SettingKey(
+        "recording.capturesStudioSession",
+        default: true
+    )
+    /// Record without the system cursor and draw it back in the studio (docs/09 U3.1).
+    ///
+    /// Off by default, because it trades something certain for something conditional: the
+    /// file that lands in the save folder has no pointer in it at all, and only a studio
+    /// export brings one back. Worth turning on for a recording that will be edited, and
+    /// wrong for one that will be dragged straight into a message.
+    public static let recordingReconstructsCursor = SettingKey(
+        "recording.reconstructsCursor",
+        default: false
+    )
     /// Keep the display's HDR range in recordings (macOS 15+, docs/06 M25).
     public static let recordingDynamicRange = SettingKey(
         "recording.dynamicRange",

@@ -126,6 +126,14 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingShowsWebcam] = recordingShowsWebcam }
     }
 
+    public var recordingCapturesStudioSession: Bool {
+        didSet { store[SettingKeys.recordingCapturesStudioSession] = recordingCapturesStudioSession }
+    }
+
+    public var recordingReconstructsCursor: Bool {
+        didSet { store[SettingKeys.recordingReconstructsCursor] = recordingReconstructsCursor }
+    }
+
     public var scrollAutoScroll: Bool {
         didSet { store[SettingKeys.scrollAutoScroll] = scrollAutoScroll }
     }
@@ -286,6 +294,8 @@ public final class AppSettings {
         recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]
         recordingKeystrokesShortcutsOnly = store[SettingKeys.recordingKeystrokesShortcutsOnly]
         recordingShowsWebcam = store[SettingKeys.recordingShowsWebcam]
+        recordingCapturesStudioSession = store[SettingKeys.recordingCapturesStudioSession]
+        recordingReconstructsCursor = store[SettingKeys.recordingReconstructsCursor]
         scrollAutoScroll = store[SettingKeys.scrollAutoScroll]
         scrollStepPoints = store[SettingKeys.scrollStepPoints]
         scrollFrameRate = store[SettingKeys.scrollFrameRate]
@@ -319,56 +329,5 @@ public final class AppSettings {
     public static var defaultSaveFolder: URL {
         FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-    }
-
-    /// Restores every key to its default. Used by Settings → Advanced → Reset (docs/03 §8.3).
-    public func resetToDefaults() {
-        defaultAction = SettingKeys.defaultAction.defaultValue
-        afterCapture = SettingKeys.afterCapture.defaultValue
-        compressionTargetBytes = SettingKeys.compressionTargetBytes.defaultValue
-        compressionFormat = SettingKeys.compressionFormat.defaultValue
-        cardLayout = SettingKeys.cardLayout.defaultValue
-        saveFolderPath = SettingKeys.saveFolderPath.defaultValue
-        filenameTemplate = SettingKeys.filenameTemplate.defaultValue
-        imageFormat = SettingKeys.imageFormat.defaultValue
-        downscaleRetinaCaptures = SettingKeys.downscaleRetinaCaptures.defaultValue
-        includesCursor = SettingKeys.includesCursor.defaultValue
-        windowShadow = SettingKeys.windowShadow.defaultValue
-        transparentWindowBackground = SettingKeys.transparentWindowBackground.defaultValue
-        ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
-        recordingFrameRate = SettingKeys.recordingFrameRate.defaultValue
-        recordingCodec = SettingKeys.recordingCodec.defaultValue
-        recordsSystemAudio = SettingKeys.recordsSystemAudio.defaultValue
-        recordsMicrophone = SettingKeys.recordsMicrophone.defaultValue
-        recordingShowsCursor = SettingKeys.recordingShowsCursor.defaultValue
-        recordingEnablesFocus = SettingKeys.recordingEnablesFocus.defaultValue
-        recordingShowsClicks = SettingKeys.recordingShowsClicks.defaultValue
-        recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
-        recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
-        recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
-        scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
-        scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
-        scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue
-        scrollReviewsSeams = SettingKeys.scrollReviewsSeams.defaultValue
-        selfTimer = SettingKeys.selfTimer.defaultValue
-        customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
-        overlayCorner = SettingKeys.overlayCorner.defaultValue
-        overlayCardWidth = SettingKeys.overlayCardWidth.defaultValue
-        overlayTimeout = SettingKeys.overlayTimeout.defaultValue
-        overlayMaxVisibleCards = SettingKeys.overlayMaxVisibleCards.defaultValue
-        overlayOnPrimaryDisplay = SettingKeys.overlayOnPrimaryDisplay.defaultValue
-        overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
-        historyRetention = SettingKeys.historyRetention.defaultValue
-        historySizeCap = SettingKeys.historySizeCap.defaultValue
-        historyIndexesText = SettingKeys.historyIndexesText.defaultValue
-        desktopIconsHidden = SettingKeys.desktopIconsHidden.defaultValue
-        hideDesktopDuringCapture = SettingKeys.hideDesktopDuringCapture.defaultValue
-        hideDesktopDuringRecording = SettingKeys.hideDesktopDuringRecording.defaultValue
-        captureWallpaper = SettingKeys.captureWallpaper.defaultValue
-        captureWallpaperImagePath = SettingKeys.captureWallpaperImagePath.defaultValue
-        capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
-        captureSnapsToEdges = SettingKeys.captureSnapsToEdges.defaultValue
-        captureDynamicRange = SettingKeys.captureDynamicRange.defaultValue
-        recordingDynamicRange = SettingKeys.recordingDynamicRange.defaultValue
     }
 }

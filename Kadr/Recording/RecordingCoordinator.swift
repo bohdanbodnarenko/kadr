@@ -8,6 +8,7 @@ import RecordingCore
 import SelectionUI
 import SettingsKit
 import Shared
+import StudioCore
 
 /// Drives screen recording end to end (docs/03 §1.8).
 ///
@@ -26,6 +27,8 @@ final class RecordingCoordinator {
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
     @ObservationIgnored private let overlaySource = RecordingOverlaySource()
+    /// The sidecar that makes a recording editable in the studio afterwards (docs/09 U3.1).
+    @ObservationIgnored private let studio = StudioSessionRecorder()
     @ObservationIgnored private let logger = KadrLog.logger(.recording)
 
     /// What the status item shows.
@@ -39,6 +42,8 @@ final class RecordingCoordinator {
 
     /// A finished recording, ready for the overlay.
     var onFinished: ((RecordingResult) -> Void)?
+    /// A finished recording that also has a studio session, so the editor can open it.
+    var onStudioSessionReady: ((RecordingSession, RecordingResult) -> Void)?
     /// Fired whenever the state or the clock moves, so the menu bar can follow.
     var onStateChanged: (() -> Void)?
 
@@ -119,11 +124,17 @@ final class RecordingCoordinator {
     }
 
     private func start(target: RecordingTarget) {
+        if case .window = target {
+            isWindowRecording = true
+        } else {
+            isWindowRecording = false
+        }
         let options = currentOptions
         Task { [weak self] in
             guard let self else { return }
             do {
                 startOverlays(for: target)
+                startStudioSession(for: target)
                 try await engine.start(target: target, options: options)
                 state = .recording
                 startedAt = Date()
@@ -138,6 +149,7 @@ final class RecordingCoordinator {
                 logger.info("Recording started")
             } catch {
                 stopOverlays()
+                studio.cancel()
                 hygiene?.endRecording()
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
@@ -148,9 +160,14 @@ final class RecordingCoordinator {
     /// Turns on only the overlays the user asked for, and tells the engine where to get
     /// them (docs/03 §1.8).
     private func startOverlays(for target: RecordingTarget) {
+        // The webcam belongs to one of the two paths, never both: a studio session records
+        // the camera to its own file so the bubble stays editable, and macOS will not hand
+        // the same device to two capture sessions. Baking a bubble that can no longer be
+        // moved is also the exact decision the studio exists to postpone.
+        let bakesWebcam = settings.recordingShowsWebcam && !capturesStudioSession
         let wantsAny = settings.recordingShowsClicks
             || settings.recordingShowsKeystrokes
-            || settings.recordingShowsWebcam
+            || bakesWebcam
         guard wantsAny else {
             Task { await engine.setOverlayProvider(nil) }
             return
@@ -160,12 +177,33 @@ final class RecordingCoordinator {
         configuration.showsClicks = settings.recordingShowsClicks
         configuration.showsKeystrokes = settings.recordingShowsKeystrokes
         configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
-        configuration.showsWebcam = settings.recordingShowsWebcam
+        configuration.showsWebcam = bakesWebcam
         configuration.pointConverter = Self.pointConverter(for: target)
 
         overlaySource.start(configuration: configuration)
         let source = overlaySource
         Task { await engine.setOverlayProvider(source) }
+    }
+
+    /// Whether this recording keeps a studio session beside it.
+    ///
+    /// A window recording does not: a window moves while it is being recorded, so a click's
+    /// position in the frame cannot be derived from where it landed on screen, and a
+    /// sidecar of pointer positions that are wrong is worse than no sidecar. Per-frame
+    /// window geometry is what fixes this, and it is not captured yet.
+    private var capturesStudioSession: Bool {
+        settings.recordingCapturesStudioSession && !isWindowRecording
+    }
+
+    @ObservationIgnored private var isWindowRecording = false
+
+    /// Starts the studio sidecar, if this recording is keeping one.
+    private func startStudioSession(for target: RecordingTarget) {
+        guard capturesStudioSession else { return }
+        studio.start(
+            recordsCamera: settings.recordingShowsWebcam,
+            pointConverter: Self.pointConverter(for: target)
+        )
     }
 
     /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
@@ -232,9 +270,22 @@ final class RecordingCoordinator {
             codec: settings.recordingCodec == .hevc ? .hevc : .h264,
             capturesSystemAudio: overrides.recordsSystemAudio ?? settings.recordsSystemAudio,
             capturesMicrophone: overrides.recordsMicrophone ?? settings.recordsMicrophone,
-            showsCursor: settings.recordingShowsCursor,
+            showsCursor: showsCursor,
             dynamicRange: settings.recordingDynamicRange
         )
+    }
+
+    /// Whether the system cursor is baked into the recording.
+    ///
+    /// Left out only when the user has asked the studio to draw it back, and only when
+    /// there is a session to draw it back from. A cursor cannot be added to footage that
+    /// never had one and has no sidecar either, so recording without one in that case would
+    /// simply lose the pointer (docs/09 U3.1).
+    private var showsCursor: Bool {
+        guard settings.recordingReconstructsCursor, capturesStudioSession else {
+            return settings.recordingShowsCursor
+        }
+        return false
     }
 
     // MARK: - Controlling
@@ -262,6 +313,11 @@ final class RecordingCoordinator {
             }
             pausedAt = nil
             state = .recording
+            // The sidecar's clock skips the pause too. A pointer track that kept running
+            // through it would place the cursor where the footage never showed it.
+            if let startedAt {
+                studio.advance(to: Date().timeIntervalSince(startedAt) - pausedDuration)
+            }
             startTicking()
         }
     }
@@ -288,12 +344,21 @@ final class RecordingCoordinator {
                 elapsed = 0
                 overrides = .none
                 logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
+
+                // The card goes up before the session is assembled. Linking the footage and
+                // writing the sidecar takes a moment, and making the user wait for it would
+                // put a delay between stopping and seeing the recording that the recording
+                // itself does not have.
                 report(.file(result.fileURL))
                 onFinished?(result)
+                if let session = await studio.finish(with: result) {
+                    onStudioSessionReady?(session, result)
+                }
             } catch {
                 state = .idle
                 elapsed = 0
                 overrides = .none
+                studio.cancel()
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
                 report(.failed(error.localizedDescription))
             }
@@ -306,6 +371,7 @@ final class RecordingCoordinator {
         focus.disable()
         stopOverlays()
         hygiene?.endRecording()
+        studio.cancel()
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle

@@ -68,6 +68,24 @@ struct RecordingPane: View {
                 Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
             }
 
+            Section("Studio") {
+                Toggle("Keep recordings editable in the studio", isOn: $settings.recordingCapturesStudioSession)
+                Text("Saves the pointer's path, clicks and shortcuts beside the recording so "
+                    + "it can be given smooth zooms and reconstructed clicks later. It is a "
+                    + "few kilobytes, and a recording made without it can never be given "
+                    + "them — the information is gone once the recording ends.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Toggle("Record without the pointer and draw it back", isOn: $settings.recordingReconstructsCursor)
+                    .disabled(!settings.recordingCapturesStudioSession)
+                Text("Makes zooms follow the pointer smoothly instead of dragging a "
+                    + "stuck-on cursor with them. The saved file has no pointer in it at "
+                    + "all until the studio puts one back, so leave this off for recordings "
+                    + "you send straight on.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section {
                 Toggle("Reduce interruptions while recording", isOn: $settings.recordingEnablesFocus)
                 Toggle("Hide desktop icons while recording", isOn: $settings.hideDesktopDuringRecording)
