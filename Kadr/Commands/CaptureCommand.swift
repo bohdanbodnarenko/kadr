@@ -43,14 +43,6 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         }
     }
 
-    /// Whether the command does something yet.
-    ///
-    /// Menu items for unimplemented commands are shown but disabled, so the menu is an
-    /// honest map of the app rather than a list that grows unpredictably.
-    var isAvailable: Bool {
-        true
-    }
-
     /// Commands the menu offers directly. `capturePreviousArea` is a hotkey-only
     /// repeat of the last region, so it stays off the menu (docs/03 §8.1).
     static var menuCommands: [CaptureCommand] {

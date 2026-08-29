@@ -48,22 +48,3 @@ public enum WindowSpace {
         )
     }
 }
-
-public extension InputTelemetry {
-    /// Where the recorded content was at an instant, if it was ever recorded.
-    ///
-    /// The last sample at or before the time asked for: a window is where it was put until
-    /// it is moved again, and interpolating between two positions would invent a glide
-    /// across a jump somebody made instantly.
-    func windowFrame(at time: TimeInterval) -> CGRect? {
-        windowGeometry.last { $0.time <= time }?.frame ?? windowGeometry.first?.frame
-    }
-
-    /// Whether the recorded content moved or changed size during the recording.
-    ///
-    /// One sample means it was noted once and never changed; none means it was a display or
-    /// a region, which cannot move at all.
-    var windowMoved: Bool {
-        windowGeometry.count > 1
-    }
-}

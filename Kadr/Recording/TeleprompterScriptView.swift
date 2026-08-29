@@ -102,21 +102,66 @@ final class TeleprompterScriptView: NSView {
         }
 
         // The reader's line is held at the middle and the text moves under it.
-        let current = currentLineIndex(in: layout)
-        let offset = bounds.midY - (CGFloat(current) + 0.5) * layout.lineHeight
+        //
+        // Fractional, not the line's index. Offsetting by whole lines would hold the text
+        // still until the reader crossed into the next one and then jump it a whole line —
+        // which is the stutter the continuous position exists to avoid, and it would make
+        // every frame between two lines a redraw producing identical pixels.
+        let current = currentLine(in: layout)
+        let offset = bounds.midY - (current + 0.5) * layout.lineHeight
 
-        for (index, line) in layout.lines.enumerated() {
-            let y = offset + CGFloat(index) * layout.lineHeight
-            guard y > -layout.lineHeight, y < bounds.height + layout.lineHeight else { continue }
+        // Only the lines that can be on screen. A prompter holds a whole script — a
+        // thousand lines is an ordinary talk — and visiting all of them to reject all but
+        // six is work repeated on every frame of a recording.
+        let visible = visibleRange(offset: offset, lineHeight: layout.lineHeight, count: layout.lines.count)
+        let currentIndex = Int(current)
 
+        for index in visible {
             // Read lines dim rather than disappear: somebody who loses their place looks
             // *back*, and a prompter that erases what it has passed cannot help them.
-            let alpha = index < current ? style.pastOpacity : 1
-            context.setAlpha(alpha)
-            context.textPosition = CGPoint(x: 24, y: y + layout.lineHeight * 0.75)
-            CTLineDraw(line, context)
+            context.setAlpha(index < currentIndex ? style.pastOpacity : 1)
+            context.textPosition = CGPoint(
+                x: 24,
+                y: offset + CGFloat(index) * layout.lineHeight + layout.lineHeight * 0.75
+            )
+            CTLineDraw(layout.lines[index], context)
         }
         context.setAlpha(1)
+        drawProgress(in: context)
+    }
+
+    /// Which lines can appear, given where the text has scrolled to.
+    ///
+    /// Arithmetic rather than a filter: the answer is a contiguous run, and computing its
+    /// ends costs the same whether the script is six lines or six thousand.
+    private func visibleRange(offset: CGFloat, lineHeight: CGFloat, count: Int) -> Range<Int> {
+        guard lineHeight > 0, count > 0 else { return 0 ..< 0 }
+        let first = Int(((-lineHeight - offset) / lineHeight).rounded(.up))
+        let last = Int(((bounds.height + lineHeight - offset) / lineHeight).rounded(.down))
+        let lower = min(max(first, 0), count)
+        let upper = min(max(last + 1, lower), count)
+        return lower ..< upper
+    }
+
+    /// A thin bar showing how much of the script is left.
+    ///
+    /// Worth the few pixels: somebody reading aloud cannot see how far down the page they
+    /// are, because the page moves under a fixed line. The bar is the only thing on the
+    /// panel that answers "how much more".
+    private func drawProgress(in context: CGContext) {
+        let progress = script.progress(atWord: Int(position))
+        let height: CGFloat = 3
+        let track = CGRect(x: 0, y: bounds.height - height, width: bounds.width, height: height)
+
+        context.setFillColor(NSColor.secondaryLabelColor.withAlphaComponent(0.2).cgColor)
+        context.fill(track)
+        context.setFillColor(NSColor.controlAccentColor.cgColor)
+        context.fill(CGRect(
+            x: 0,
+            y: track.minY,
+            width: bounds.width * CGFloat(progress),
+            height: height
+        ))
     }
 
     private func drawPlaceholder(in context: CGContext) {
@@ -199,10 +244,59 @@ final class TeleprompterScriptView: NSView {
         )
     }
 
-    /// Which laid-out line the reader's word falls on.
-    private func currentLineIndex(in layout: Layout) -> Int {
-        let word = Int(position.rounded(.down))
-        guard let index = layout.firstWord.lastIndex(where: { $0 <= word }) else { return 0 }
-        return index
+    // MARK: - Seams
+
+    /// How far the text has scrolled, for a test that cannot read pixels.
+    var scrollOffsetForTesting: CGFloat {
+        let layout = layoutIfNeeded()
+        return bounds.midY - (currentLine(in: layout) + 0.5) * layout.lineHeight
+    }
+
+    /// Which lines would be drawn right now.
+    ///
+    /// Guarded the same way `draw` is: an empty script shows the placeholder and draws no
+    /// lines at all, and a seam that reported otherwise would be describing a path that
+    /// never runs.
+    var visibleRangeForTesting: Range<Int> {
+        guard !script.isEmpty else { return 0 ..< 0 }
+        let layout = layoutIfNeeded()
+        guard !layout.lines.isEmpty else { return 0 ..< 0 }
+        let offset = bounds.midY - (currentLine(in: layout) + 0.5) * layout.lineHeight
+        return visibleRange(offset: offset, lineHeight: layout.lineHeight, count: layout.lines.count)
+    }
+
+    /// Where the reader is, in lines, including the fraction through the current one.
+    ///
+    /// The fraction is what makes the scroll continuous: a reader halfway through a line's
+    /// words is halfway between that line and the next, and the text is offset accordingly.
+    private func currentLine(in layout: Layout) -> CGFloat {
+        guard !layout.firstWord.isEmpty else { return 0 }
+        let index = lineIndex(forWord: Int(position), in: layout)
+        let start = layout.firstWord[index]
+        let next = index + 1 < layout.firstWord.count ? layout.firstWord[index + 1] : start + 1
+        let span = Double(max(next - start, 1))
+        let within = min(max((position - Double(start)) / span, 0), 1)
+        return CGFloat(index) + CGFloat(within)
+    }
+
+    /// Which laid-out line a word falls on.
+    ///
+    /// A binary search: `firstWord` is sorted by construction, this runs on every frame of
+    /// a scroll, and a linear scan over a long script is the sort of cost that only shows
+    /// up on the machine of somebody with a long script.
+    private func lineIndex(forWord word: Int, in layout: Layout) -> Int {
+        var low = 0
+        var high = layout.firstWord.count - 1
+        var result = 0
+        while low <= high {
+            let mid = (low + high) / 2
+            if layout.firstWord[mid] <= word {
+                result = mid
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return result
     }
 }

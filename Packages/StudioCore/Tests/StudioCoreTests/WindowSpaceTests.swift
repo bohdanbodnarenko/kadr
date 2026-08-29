@@ -129,45 +129,4 @@ struct WindowSpaceTests {
         )
         #expect(point == nil)
     }
-
-    // MARK: - Reading the samples back
-
-    @Test("The frame at a time is the last one recorded before it")
-    func frameAtTime() {
-        var telemetry = InputTelemetry()
-        telemetry.windowGeometry = [
-            WindowGeometrySample(time: 0, frame: window),
-            WindowGeometrySample(time: 5, frame: window.offsetBy(dx: 300, dy: 0))
-        ]
-        #expect(telemetry.windowFrame(at: 2)?.minX == 100)
-        #expect(telemetry.windowFrame(at: 7)?.minX == 400)
-    }
-
-    /// Asked before the first sample — a click in the first frames of a recording — the
-    /// answer is the first position rather than nothing, because that is where the window
-    /// was.
-    @Test("A time before the first sample uses the first position")
-    func frameBeforeTheFirstSample() {
-        var telemetry = InputTelemetry()
-        telemetry.windowGeometry = [WindowGeometrySample(time: 3, frame: window)]
-        #expect(telemetry.windowFrame(at: 0)?.minX == 100)
-    }
-
-    @Test("A recording with no geometry has no frame to report")
-    func noGeometry() {
-        #expect(InputTelemetry().windowFrame(at: 1) == nil)
-        #expect(!InputTelemetry().windowMoved)
-    }
-
-    /// One sample is a window that was noted once and never moved; a display or a region
-    /// produces none at all.
-    @Test("Movement is more than one sample")
-    func movementNeedsTwoSamples() {
-        var telemetry = InputTelemetry()
-        telemetry.windowGeometry = [WindowGeometrySample(time: 0, frame: window)]
-        #expect(!telemetry.windowMoved)
-
-        telemetry.windowGeometry.append(WindowGeometrySample(time: 4, frame: window.offsetBy(dx: 10, dy: 0)))
-        #expect(telemetry.windowMoved)
-    }
 }

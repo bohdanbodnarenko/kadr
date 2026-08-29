@@ -22,7 +22,6 @@ struct ScrollCaptureTests {
     func commandExists() {
         #expect(CaptureCommand.allCases.contains(.captureScrolling))
         #expect(CaptureCommand.menuCommands.contains(.captureScrolling))
-        #expect(CaptureCommand.captureScrolling.isAvailable)
         #expect(CaptureCommand.captureScrolling.shortcutName.rawValue == "captureScrolling")
     }
 

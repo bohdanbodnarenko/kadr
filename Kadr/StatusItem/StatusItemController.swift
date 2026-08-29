@@ -166,7 +166,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.target = self
             item.representedObject = command.rawValue
             item.setShortcut(for: command.shortcutName)
-            item.isEnabled = command.isAvailable
             menu.addItem(item)
         }
 
@@ -176,7 +175,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.target = self
             item.representedObject = command.rawValue
             item.setShortcut(for: command.shortcutName)
-            item.isEnabled = command.isAvailable
             if command == .toggleDesktopIcons {
                 let hidden = desktopIconsHidden()
                 item.title = hidden ? "Show Desktop Icons" : "Hide Desktop Icons"

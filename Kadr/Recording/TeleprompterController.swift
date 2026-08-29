@@ -23,6 +23,13 @@ final class TeleprompterController {
     private var panel: TeleprompterPanel?
     private var link: DisplayLinkDriver?
     private var follower: LiveSpeechFollower?
+    /// The pace and look, read when they change rather than on every frame.
+    ///
+    /// `@Observable` charges a registrar lookup for each property read, and the scroll
+    /// reads these at the display's refresh rate for the length of a recording. Cached and
+    /// re-read on change, that becomes a handful of reads per session.
+    private var pacing = TeleprompterPacing()
+    private var settingsObservation: SettingsObservation?
 
     /// Where the reader is, in words. Fractional so the scroll is continuous.
     private var position: Double = 0
@@ -66,6 +73,8 @@ final class TeleprompterController {
         startedAt = Date()
         isPaused = false
 
+        syncFromSettings()
+        observeSettings()
         link = DisplayLinkDriver { [weak self] in self?.tick() }
         link?.start()
         startFollowingIfWanted(script: script)
@@ -75,6 +84,8 @@ final class TeleprompterController {
     func stop() {
         guard panel != nil else { return }
         saveFrame()
+        settingsObservation?.cancel()
+        settingsObservation = nil
         link?.stop()
         link = nil
         follower?.stop()
@@ -111,7 +122,6 @@ final class TeleprompterController {
             // under their eyes at the moment they are trying to read it.
             position += (Double(followed) - position) * Self.followEasing
         } else {
-            let pacing = TeleprompterPacing(wordsPerMinute: settings.teleprompterWordsPerMinute)
             position = startedFrom + pacing.position(after: Date().timeIntervalSince(startedAt))
         }
         panel.position = position
@@ -144,6 +154,47 @@ final class TeleprompterController {
 
     // MARK: - Settings
 
+    /// Applies the pace and the look, and keeps the scroll continuous across a pace change.
+    ///
+    /// The elapsed clock is rebased rather than left alone: the position is derived from
+    /// how long the reader has been going, so changing the rate mid-recording without
+    /// rebasing would recompute the whole scroll at the new rate and jump the script to
+    /// wherever that lands.
+    private func syncFromSettings() {
+        let updated = TeleprompterPacing(wordsPerMinute: settings.teleprompterWordsPerMinute)
+        if updated != pacing {
+            pacing = updated
+            startedFrom = position
+            startedAt = isPaused ? nil : Date()
+        }
+        panel?.style = style
+    }
+
+    /// Watches the settings that change what is on screen.
+    ///
+    /// `withObservationTracking` fires once and has to be re-armed, which is exactly the
+    /// shape wanted here: no polling, no per-frame reads, and nothing running once the
+    /// prompter is down.
+    private func observeSettings() {
+        let observation = SettingsObservation()
+        settingsObservation = observation
+        arm(observation)
+    }
+
+    private func arm(_ observation: SettingsObservation) {
+        withObservationTracking {
+            _ = settings.teleprompterWordsPerMinute
+            _ = settings.teleprompterFontSize
+            _ = settings.teleprompterMirrored
+        } onChange: {
+            Task { @MainActor [weak self] in
+                guard let self, let observation = settingsObservation, !observation.isCancelled else { return }
+                syncFromSettings()
+                arm(observation)
+            }
+        }
+    }
+
     private var style: TeleprompterAppearance {
         TeleprompterAppearance(
             fontSize: settings.teleprompterFontSize,
@@ -161,6 +212,20 @@ final class TeleprompterController {
     private func saveFrame() {
         guard let panel else { return }
         settings.teleprompterFrame = NSStringFromRect(panel.frame)
+    }
+}
+
+/// A live observation of the settings, and a way to stop it.
+///
+/// `withObservationTracking` cannot be cancelled, so cancellation is a flag the re-arming
+/// closure checks: the last callback after the prompter closes finds it set and stops
+/// rather than arming another.
+@MainActor
+final class SettingsObservation {
+    private(set) var isCancelled = false
+
+    func cancel() {
+        isCancelled = true
     }
 }
 

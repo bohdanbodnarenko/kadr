@@ -177,4 +177,82 @@ struct TeleprompterTests {
         #expect(!saved.isEmpty, "the prompter forgot where it was")
         #expect(NSRectFromString(saved).width > 0)
     }
+
+    // MARK: - Scrolling
+
+    private func scriptView(text: String, width: CGFloat = 400) -> TeleprompterScriptView {
+        let view = TeleprompterScriptView(frame: NSRect(x: 0, y: 0, width: width, height: 200))
+        view.script = TeleprompterScript(text: text)
+        return view
+    }
+
+    /// The scroll has to be continuous. Offsetting by whole lines holds the text still
+    /// until the reader crosses into the next one and then jumps it a whole line, which is
+    /// the stutter the fractional position exists to avoid.
+    @Test("The text moves between words, not only between lines")
+    func scrollIsContinuous() {
+        let view = scriptView(text: "one two three four five six seven eight nine ten")
+        view.position = 0
+        let atStart = view.scrollOffsetForTesting
+        view.position = 0.5
+        let halfAWordLater = view.scrollOffsetForTesting
+        #expect(atStart != halfAWordLater, "the text did not move for half a word")
+    }
+
+    @Test("Reading on scrolls the text upward")
+    func scrollsUpward() {
+        let view = scriptView(text: (0 ..< 40).map { "word\($0)" }.joined(separator: " "))
+        view.position = 0
+        let early = view.scrollOffsetForTesting
+        view.position = 20
+        #expect(view.scrollOffsetForTesting < early, "reading on did not move the text up")
+    }
+
+    // MARK: - Only drawing what shows
+
+    /// A prompter holds a whole script — a thousand lines is an ordinary talk — and
+    /// visiting all of them to reject all but a handful is work repeated every frame of a
+    /// recording.
+    @Test("Only the lines that fit on screen are drawn")
+    func drawsOnlyVisibleLines() {
+        let view = scriptView(text: (0 ..< 500).map { "line \($0)" }.joined(separator: "\n"))
+        view.position = 250
+        let visible = view.visibleRangeForTesting
+        #expect(visible.count < 40, "\(visible.count) lines would be drawn for a screen that fits a handful")
+        #expect(!visible.isEmpty)
+    }
+
+    /// `position` counts words, and each line here is two of them — so the reader at word
+    /// 100 is on line 50. Getting that wrong in a test is how a prompter ships scrolled to
+    /// twice the right place.
+    @Test("The visible lines surround the reader's own line")
+    func visibleLinesSurroundTheReader() {
+        let view = scriptView(text: (0 ..< 200).map { "line \($0)" }.joined(separator: "\n"))
+        view.position = 100
+        let visible = view.visibleRangeForTesting
+        #expect(visible.contains(50), "the reader's line is not among the ones being drawn")
+    }
+
+    @Test("A reader at the very start does not ask for lines above the script")
+    func visibleRangeAtTheStart() {
+        let view = scriptView(text: (0 ..< 50).map { "line \($0)" }.joined(separator: "\n"))
+        view.position = 0
+        let visible = view.visibleRangeForTesting
+        #expect(visible.lowerBound >= 0)
+        #expect(visible.upperBound <= 50)
+    }
+
+    @Test("A reader at the very end does not ask for lines past it")
+    func visibleRangeAtTheEnd() {
+        let view = scriptView(text: (0 ..< 50).map { "line \($0)" }.joined(separator: "\n"))
+        view.position = 49
+        let visible = view.visibleRangeForTesting
+        #expect(visible.upperBound <= 50)
+    }
+
+    @Test("An empty script asks for nothing")
+    func visibleRangeOfNothing() {
+        let view = scriptView(text: "")
+        #expect(view.visibleRangeForTesting.isEmpty)
+    }
 }
