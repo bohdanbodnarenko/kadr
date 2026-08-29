@@ -3,6 +3,7 @@ import AppKit
 import EditorUI
 import os
 import Shared
+import StudioCore
 
 /// The editor process (docs/04 §1, §6).
 ///
@@ -28,6 +29,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [EditorWindowController] = []
     /// Trim windows, which are the same idea over a recording (docs/03 §1.8).
     private var trimWindows: [TrimWindowController] = []
+    private var studioWindows: [StudioWindowController] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -94,6 +96,15 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         let state = signposter.beginInterval("openCapture")
         defer { signposter.endInterval("openCapture", state) }
 
+        // A recording session opens into the studio. Checked before the trim window,
+        // because a `.kadrrec` contains a movie and would otherwise be opened for trimming
+        // — which is the same recording with none of the sidecar that makes it worth
+        // editing (docs/09 U3).
+        if url.pathExtension.lowercased() == RecordingSession.fileExtension {
+            openInStudio(RecordingSession(directory: url))
+            return
+        }
+
         // A recording opens into the trim window; there is nothing to annotate on a movie,
         // and Trim is what its card offers (docs/03 §1.8, docs/07 M8).
         if TrimWindowController.handles(url) {
@@ -112,6 +123,21 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
             presentOpenFailure(for: url, error: error)
+        }
+    }
+
+    private func openInStudio(_ session: RecordingSession) {
+        do {
+            let controller = try StudioWindowController(session: session)
+            controller.onClose = { [weak self, weak controller] in
+                self?.studioWindows.removeAll { $0 === controller }
+            }
+            studioWindows.append(controller)
+            controller.show()
+            logger.info("Opened \(session.directory.lastPathComponent, privacy: .public) in the studio")
+        } catch {
+            logger.error("Could not open the studio: \(error.localizedDescription, privacy: .public)")
+            presentOpenFailure(for: session.directory, error: error)
         }
     }
 

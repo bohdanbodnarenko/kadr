@@ -446,9 +446,11 @@ enum CursorArtwork {
 /// The one CoreImage context the studio renders through.
 ///
 /// Shared because a `CIContext` carries compiled kernels and a texture cache, and building
-/// one per frame is most of the cost of a frame.
-enum StudioRenderContext {
-    static let shared = CIContext(options: [
+/// one per frame is most of the cost of a frame. Public so the editor's preview renders
+/// through the same one — a second context would produce the same pixels, eventually, after
+/// compiling the same kernels again.
+public enum StudioRenderContext {
+    public static let shared = CIContext(options: [
         .cacheIntermediates: false,
         .workingColorSpace: CGColorSpace(name: CGColorSpace.sRGB) as Any
     ])

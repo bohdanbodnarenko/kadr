@@ -6,6 +6,7 @@ import RecordingCore
 import SelectionUI
 import SettingsKit
 import Shared
+import StudioCore
 
 /// The resident agent (docs/04 §1, §3).
 ///
@@ -165,6 +166,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
         recording.onFinished = { [weak self] result in
             self?.areaCapture.showRecording(at: result.fileURL)
+        }
+        // …and opens in the studio if the after-capture matrix asks for it (docs/09 U2.2).
+        //
+        // The session rather than the movie: the movie alone opens for trimming, which is
+        // the same recording with none of the sidecar that makes it worth editing.
+        recording.onStudioSessionReady = { [weak self] session, _ in
+            guard let self else { return }
+            guard settings.afterCaptureActions(for: .recording).contains(.openEditor) else { return }
+            EditorLauncher().open(session.directory)
         }
         // A stitched page goes to the overlay and the editor (docs/03 §1.6).
         scrollCapture.onFinished = { [weak self] url, size in

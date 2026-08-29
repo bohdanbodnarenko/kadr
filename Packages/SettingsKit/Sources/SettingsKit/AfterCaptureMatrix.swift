@@ -28,7 +28,8 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
     public static let annotate = AfterCaptureActions(rawValue: 1 << 3)
     /// Pin it to the screen.
     public static let pin = AfterCaptureActions(rawValue: 1 << 4)
-    /// Open a recording in the trim window — and, once the studio lands, in the studio.
+    /// Open a recording in the studio, where its cuts, zooms and camera are edited
+    /// (docs/09 U3). A recording with no studio session opens for trimming instead.
     public static let openEditor = AfterCaptureActions(rawValue: 1 << 5)
 
     public static let none: AfterCaptureActions = []
@@ -45,7 +46,7 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
         case .save: "Save to the folder"
         case .annotate: "Open for annotation"
         case .pin: "Pin to the screen"
-        case .openEditor: "Open the trim editor"
+        case .openEditor: "Open in the studio"
         default: "Several actions"
         }
     }
