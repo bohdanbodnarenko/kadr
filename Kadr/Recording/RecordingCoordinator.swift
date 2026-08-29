@@ -217,7 +217,26 @@ final class RecordingCoordinator {
         }
 
         studio.start(recordsCamera: settings.recordingShowsWebcam, pointConverter: converter)
+        observeClock()
         observeGeometry()
+    }
+
+    /// Feeds the recording's clock to the sidecar (docs/10 R0.1).
+    ///
+    /// Installed for every studio capture and nothing else. Without it the telemetry
+    /// recorder's clock never moves: every click and chord is stamped zero, and the
+    /// sample-rate gate — which asks whether enough time has passed since the last sample —
+    /// compares zero against zero and refuses every pointer sample after the first.
+    private func observeClock() {
+        Task { [weak self] in
+            await self?.engine.setClockObserver { [weak self] time in
+                Task { @MainActor [weak self] in self?.studio.advance(to: time) }
+            }
+        }
+    }
+
+    private func stopClockObserver() {
+        Task { [weak self] in await self?.engine.setClockObserver(nil) }
     }
 
     /// Feeds the engine's content-rect changes to the sidecar and the converter.
@@ -237,6 +256,7 @@ final class RecordingCoordinator {
     private func stopGeometryObserver() {
         windowConverter = nil
         Task { [weak self] in await self?.engine.setGeometryObserver(nil) }
+        stopClockObserver()
     }
 
     /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
@@ -350,11 +370,10 @@ final class RecordingCoordinator {
             pausedAt = nil
             state = .recording
             teleprompter.resume()
-            // The sidecar's clock skips the pause too. A pointer track that kept running
-            // through it would place the cursor where the footage never showed it.
-            if let startedAt {
-                studio.advance(to: Date().timeIntervalSince(startedAt) - pausedDuration)
-            }
+            // The sidecar's clock needs no nudge here. It comes from the engine, which
+            // counts composited frames and so has already left the pause out — deriving a
+            // second answer from the wall clock would only give the two something to
+            // disagree about.
             startTicking()
         }
     }

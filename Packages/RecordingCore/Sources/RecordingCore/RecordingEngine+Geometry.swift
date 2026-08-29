@@ -29,19 +29,14 @@ extension RecordingEngine {
     }
 
     /// Tells the observer when the content has moved.
-    func reportGeometry(of box: SampleBufferBox) {
+    func reportGeometry(of box: SampleBufferBox, at time: TimeInterval) {
         guard let observer = geometryObserver, let rect = box.contentRect else { return }
         guard Self.hasMoved(from: lastContentRect, to: rect) else { return }
         lastContentRect = rect
 
-        let presentation = CMSampleBufferGetPresentationTimeStamp(box.buffer)
-        if segmentStartTime == nil {
-            segmentStartTime = presentation
-        }
-        let elapsed = segmentStartTime.map { CMTimeGetSeconds(CMTimeSubtract(presentation, $0)) } ?? 0
         // Recording time, not wall-clock: a pause takes time out of the footage, and a
         // geometry sample stamped with the clock would point at a moment the file skips.
-        observer(rect, pointPixelScale, accumulatedDuration + elapsed)
+        observer(rect, pointPixelScale, time)
     }
 
     /// Whether a content rect has actually changed, as against jittering.

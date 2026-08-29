@@ -140,6 +140,21 @@ final class PointerTelemetryRecorder {
         ))
     }
 
+    // MARK: - Seams
+
+    /// Drives one pointer event, for a test that has no event tap.
+    ///
+    /// The tap needs an accessibility grant and a real pointer; the *clock* needs neither,
+    /// and the clock is what was broken. Declaring the whole of telemetry untestable is how
+    /// a frozen timestamp shipped through a suite that passed.
+    func recordPointerForTesting(at screenPoint: CGPoint) {
+        recordPointer(at: screenPoint)
+    }
+
+    func recordClickForTesting(at screenPoint: CGPoint) {
+        recordClick(at: screenPoint, button: .left, isDown: true)
+    }
+
     private func recordKeystroke(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) {
         guard isRecording else { return }
         // The privacy rule lives in `TelemetryPolicy` and returns nil for plain typing, so

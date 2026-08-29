@@ -15,10 +15,10 @@
 		KADR000000000000000000CD /* AutomationKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000069 /* AutomationKit */; };
 		KADR000000000000000000CE /* SettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006A /* SettingsKit */; };
 		KADR000000000000000000CF /* RecordingCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006B /* RecordingCore */; };
-		KADR000000000000000000FE /* StudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioCore */; };
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
 		KADR000000000000000000D1 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006D /* AnnotationRender */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
+		KADR000000000000000000FE /* StudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioCore */; };
 		KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000301 /* KeyboardShortcuts */; };
 		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
 		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
@@ -791,7 +791,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Resources/KadrEditor-Info.plist;
+				INFOPLIST_FILE = "Resources/KadrEditor-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -821,7 +821,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Resources/KadrEditor-Info.plist;
+				INFOPLIST_FILE = "Resources/KadrEditor-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Editor";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1012,10 +1012,6 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RecordingCore;
 		};
-		KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/StudioCore;
-		};
 		KADR00000000000000000009 /* XCLocalSwiftPackageReference "Packages/SelectionUI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/SelectionUI;
@@ -1031,6 +1027,10 @@
 		KADR0000000000000000000C /* XCLocalSwiftPackageReference "Packages/EditorUI" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/EditorUI;
+		};
+		KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/StudioCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -1086,10 +1086,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RecordingCore;
 		};
-		KADR000000000000000000FF /* StudioCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = StudioCore;
-		};
 		KADR0000000000000000006C /* SelectionUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SelectionUI;
@@ -1101,6 +1097,10 @@
 		KADR0000000000000000006E /* HistoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = HistoryKit;
+		};
+		KADR000000000000000000FF /* StudioCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioCore;
 		};
 		KADR00000000000000000301 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;

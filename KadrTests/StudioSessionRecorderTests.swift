@@ -9,9 +9,13 @@ import Testing
 ///
 /// The parts tested here are the ones that decide whether an edit is possible later: that
 /// the footage really is attached, that the manifest remembers what cannot be re-derived,
-/// and that a failure leaves no half-built package behind. Capturing the telemetry itself
-/// needs an event tap and a real pointer, and its judgement lives in `TelemetryPolicy`,
-/// which is tested exhaustively in StudioCore.
+/// and that a failure leaves no half-built package behind.
+///
+/// The clock is tested too, and it was not. This file used to say telemetry capture "needs
+/// an event tap and a real pointer" and stopped there — true of the tap, false of the
+/// clock, which is a number with a setter. A frozen clock made every event in the sidecar
+/// land at zero and the sample-rate gate reject everything after the first sample, and this
+/// suite passed throughout (docs/10 R0.1).
 @MainActor
 @Suite("Studio session recorder")
 struct StudioSessionRecorderTests {

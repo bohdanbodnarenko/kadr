@@ -70,6 +70,24 @@ public actor RecordingEngine {
         }
     #endif
 
+    /// Watches the recording's own clock (docs/10 R0.1).
+    ///
+    /// Its own channel rather than a side effect of drawing overlays. The clock was
+    /// previously published only to the overlay provider, and the coordinator installs one
+    /// of those only when the user has asked for a halo or a keystroke caption — so a
+    /// studio capture, which is exactly the case that wants no overlays, received no clock
+    /// at all. Every event in the sidecar was stamped zero, the sample-rate gate compared
+    /// zero against zero and refused everything after the first, and the flagship shipped
+    /// inert.
+    ///
+    /// Called on every composited frame with pauses already removed, so a caller can stamp
+    /// an event against the footage without knowing what a pause is.
+    public func setClockObserver(_ observer: (@Sendable (TimeInterval) -> Void)?) {
+        clockObserver = observer
+    }
+
+    private var clockObserver: (@Sendable (TimeInterval) -> Void)?
+
     /// Sets what gets drawn into frames. Nil turns overlays off entirely.
     public func setOverlayProvider(_ provider: (any RecordingOverlayProviding)?) {
         overlayProvider = provider
@@ -327,17 +345,26 @@ public actor RecordingEngine {
         guard state == .recording, let writer else { return }
 
         if box.kind == .video {
-            reportGeometry(of: box)
+            let time = recordingTime(of: box.buffer)
+            reportGeometry(of: box, at: time)
+            // Published before the overlay is drawn, and whether or not one is drawn. The
+            // clock is the recording's own account of where it is; anything that wants to
+            // stamp an event against the footage needs it, and the sidecar needs it most
+            // when the user has asked for no overlays at all.
+            clockObserver?(time)
             if let overlayProvider {
-                composite(overlayProvider, into: box.buffer)
+                composite(overlayProvider, into: box.buffer, at: time)
             }
         }
         await writer.append(box)
     }
 
-    private func composite(_ provider: any RecordingOverlayProviding, into buffer: CMSampleBuffer) {
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
-
+    /// Where this frame sits in the recording, pauses already taken out.
+    ///
+    /// One definition, used by the overlays, the geometry samples and the sidecar — which
+    /// is the point. Three callers deriving "how far in are we" separately is three chances
+    /// to disagree about what a pause did.
+    private func recordingTime(of buffer: CMSampleBuffer) -> TimeInterval {
         let presentation = CMSampleBufferGetPresentationTimeStamp(buffer)
         if segmentStartTime == nil {
             segmentStartTime = presentation
@@ -345,9 +372,16 @@ public actor RecordingEngine {
         let elapsed = segmentStartTime.map {
             CMTimeGetSeconds(CMTimeSubtract(presentation, $0))
         } ?? 0
+        return accumulatedDuration + elapsed
+    }
 
-        let overlay = provider.overlay(atRecordingTime: accumulatedDuration + elapsed)
-        compositor.draw(overlay, into: pixelBuffer)
+    private func composite(
+        _ provider: any RecordingOverlayProviding,
+        into buffer: CMSampleBuffer,
+        at time: TimeInterval
+    ) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
+        compositor.draw(provider.overlay(atRecordingTime: time), into: pixelBuffer)
     }
 }
 

@@ -92,10 +92,13 @@ test-package: ## Run one package's tests (PACKAGE=Shared)
 	@test -n "$(PACKAGE)" || { printf 'Set PACKAGE, e.g. make test-package PACKAGE=Shared\n' >&2; exit 2; }
 	@cd Packages/$(PACKAGE) && swift test
 
+# Not `-quiet`: it suppresses the test summary, which is the entire output anybody wants
+# from a test run. The build targets keep it; this one cannot.
 test-app: ## Run the agent app's tests
 	@xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
-		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet \
-		-only-testing:KadrTests $(UNSIGNED)
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
+		-only-testing:KadrTests $(UNSIGNED) \
+		| grep -E '✔|✘|Test run|error:' || true
 
 # MARK: - Static checks
 
