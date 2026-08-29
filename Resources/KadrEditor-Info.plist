@@ -53,9 +53,30 @@
 				<string>com.apple.quicktime-movie</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Kadr Recording</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSTypeIsPackage</key>
+			<true/>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>app.kadr.recording-session</string>
+			</array>
+		</dict>
 	</array>
 
-	<!-- The `.kadr` project format is Kadr's own, so Kadr declares it. -->
+	<!-- Removing filler words needs to know where the words are (docs/09 U3.6).
+
+	     On-device only: `requiresOnDeviceRecognition` is set unconditionally, so the
+	     recording is never uploaded for transcription. -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Kadr transcribes a recording on this Mac, and only when you ask it to, so it can offer to cut out filler words and long pauses. The recording is never uploaded.</string>
+
+	<!-- Kadr's own formats, so Kadr declares them. -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -73,6 +94,23 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>kadr</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>app.kadr.recording-session</string>
+			<key>UTTypeDescription</key>
+			<string>Kadr Recording</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>kadrrec</string>
 				</array>
 			</dict>
 		</dict>

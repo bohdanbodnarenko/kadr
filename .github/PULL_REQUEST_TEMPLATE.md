@@ -35,7 +35,24 @@ machine-translated into this repository.
 
 CLAUDE.md rule 1: no networking anywhere outside the Sparkle update integration. There are
 no upload or share-by-URL features — sharing is drag-and-drop and `NSSharingServicePicker`.
-This includes system APIs that reach the network on Kadr's behalf: a speech, translation or
-model-download call that leaves the machine is a network call Kadr made.
 
-- [ ] This PR adds no networking, and no system API that fetches or uploads on Kadr's behalf.
+**Nothing the user made ever leaves the machine.** No capture, recording, transcript or
+audio is uploaded, for any reason, including to a system API that would do the uploading —
+`requiresOnDeviceRecognition` and its equivalents are set unconditionally, never
+conditionally on a fallback.
+
+There is one narrow exception, and adding to it needs the same argument this one made.
+`SpeechModelInstaller` downloads Apple's on-device speech model, on these terms:
+
+- **A person pressed a button that says so.** No feature path and no launch path calls it.
+- **Nothing waits for it.** Every feature works with whatever is installed and fails cleanly
+  when nothing is. Offline, the app behaves exactly as it would if the installer did not
+  exist.
+- **It is cancellable**, and cancelling leaves everything as it was.
+- **It fetches a model, not a user's data.** The direction matters: the model comes here so
+  the recording does not have to go there.
+
+- [ ] This PR adds no networking beyond Sparkle and that exception, and uploads nothing the
+      user made.
+- [ ] Any system API that can fetch on Kadr's behalf is called only from an explicit user
+      action, never blocks a feature, and is cancellable.

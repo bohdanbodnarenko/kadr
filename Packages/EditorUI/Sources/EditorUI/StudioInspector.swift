@@ -17,9 +17,79 @@ struct StudioInspector: View {
             shapeSection
             cameraSection
             overlaySection
+            speechSection
             presetSection
         }
         .formStyle(.grouped)
+        .task { await model.refreshSpeechStatus() }
+    }
+
+    // MARK: - Speech
+
+    /// Removing filler words and long pauses (docs/09 U3.6).
+    ///
+    /// The download is a separate control from the tidy-up, deliberately. Merging them
+    /// would mean pressing "tidy up" could start a several-hundred-megabyte fetch, which is
+    /// not what that button says it does — and on a machine with no network it would be a
+    /// button that hangs instead of one that explains.
+    private var speechSection: some View {
+        Section("Speech") {
+            switch model.speechStatus {
+            case .installed, .notApplicable, .none:
+                tidyControl
+            case .available:
+                Text("Removing filler words needs the language model for your language, which "
+                    + "this Mac does not have yet. Everything else in the studio works without it.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                installControl
+            case .downloading:
+                installControl
+            case .unsupported:
+                Text("macOS has no speech model for your language, so filler words cannot be "
+                    + "found automatically.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tidyControl: some View {
+        if model.isTranscribing {
+            HStack {
+                ProgressView().controlSize(.small)
+                Text("Listening to the recording…")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Button("Remove filler words and long pauses") {
+                Task { await model.tidySpeech() }
+            }
+            Text("Cuts \u{201C}um\u{201D} and pauses over a second. They become clip boundaries, "
+                + "so one undo puts them all back and the recording is never altered.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var installControl: some View {
+        if let progress = model.installProgress {
+            VStack(alignment: .leading, spacing: 6) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                Button("Cancel download") { model.cancelSpeechModelInstall() }
+                    .controlSize(.small)
+            }
+        } else {
+            Button("Download the language model…") { model.installSpeechModel() }
+            Text("Downloads Apple's on-device model. It is the only thing in the studio that "
+                + "uses the network, it is optional, and your recording is never uploaded — "
+                + "the model comes here, the audio stays.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - The selected zoom

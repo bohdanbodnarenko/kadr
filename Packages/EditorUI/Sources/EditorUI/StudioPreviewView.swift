@@ -93,7 +93,7 @@ actor StudioPreviewRenderer {
         plan: StudioRenderPlan,
         frameRate: Int
     ) async -> CGImage? {
-        guard let generator else { return nil }
+        guard generator != nil else { return nil }
         // Edited time is not source time once anything has been cut or sped up, and asking
         // the generator for the wrong one shows the frame from before the edit. A playhead
         // past the end has no source frame at all, which is a blank preview rather than a

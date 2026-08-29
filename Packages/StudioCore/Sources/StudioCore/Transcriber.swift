@@ -31,13 +31,15 @@ public enum TranscriptionError: Error, Equatable, Sendable {
 
 /// Transcribes with the newest speech API this machine can actually run.
 ///
-/// On device, always. Neither backend is allowed to fall back to Apple's servers: CLAUDE.md
-/// rule 1 is about network calls Kadr makes, and a speech API that uploads the user's
-/// recording is a network call Kadr made. Nor does Kadr ask the system to *download* a
-/// model, which is the same fetch wearing a system-provided coat — a machine without one
-/// gets no transcript, which is a smaller failure than either. Availability is settled
-/// before the feature is offered, so the button is absent rather than present and
-/// disappointing.
+/// On device, always. Neither backend may fall back to Apple's servers: rule 1 is about
+/// network calls Kadr makes, and a speech API that uploads the user's recording is a
+/// network call Kadr made. That one is absolute — the audio never leaves the machine.
+///
+/// Fetching the *model* is a separate question with a separate answer, and it lives in
+/// `SpeechModelInstaller` rather than here on purpose. Nothing on this path downloads
+/// anything and nothing on this path waits for a download: transcription uses whatever is
+/// already installed and fails cleanly when nothing is. A machine that is offline behaves
+/// exactly as it would have if the installer did not exist.
 public struct AudioTranscriber: Transcribing {
     private let logger = KadrLog.logger(.recording)
     private let locale: Locale
@@ -100,6 +102,10 @@ struct AnalyzerTranscriber: Transcribing {
     }
 
     func transcribe(audioAt url: URL) async throws -> Transcript {
+        // `.installed` and nothing else. A model that is merely *supported* would be
+        // downloaded by `SpeechAnalyzer` on demand, which would turn a transcription into a
+        // silent multi-hundred-megabyte fetch and block until it finished. Downloading is
+        // the installer's job, and only when somebody asked for it.
         guard let module = await module(),
               await AssetInventory.status(forModules: [module]) == .installed
         else {

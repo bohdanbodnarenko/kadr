@@ -43,6 +43,24 @@ public struct StudioRootView: View {
         } message: {
             Text(model.failure ?? "")
         }
+        // A second alert rather than one that carries a severity: some of what the studio
+        // reports is good news — "removed four passages" — and putting it through the
+        // failure path would make every success look like a problem.
+        .alert(
+            "Studio",
+            isPresented: Binding(
+                get: { model.notice != nil },
+                set: {
+                    if !$0 {
+                        model.notice = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") { model.notice = nil }
+        } message: {
+            Text(model.notice ?? "")
+        }
     }
 
     // MARK: - Below the preview

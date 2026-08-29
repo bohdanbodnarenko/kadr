@@ -51,6 +51,27 @@ public final class StudioDocumentModel {
     /// Set when something went wrong that the user should see.
     public var failure: String?
 
+    /// Set when something worked and saying so is the whole feedback.
+    public var notice: String?
+
+    // MARK: - Speech
+
+    /// Whether this language can be transcribed, once somebody has asked.
+    ///
+    /// Nil until asked, and asked only when the studio shows the speech controls. Checking
+    /// at launch would consult the asset catalogue for every recording somebody opens,
+    /// including the ones they never intend to transcribe.
+    public private(set) var speechStatus: SpeechModelInstaller.Status?
+
+    /// Progress of a model download the user started, or nil if none is running.
+    public private(set) var installProgress: Double?
+
+    /// Whether a transcription is running.
+    public private(set) var isTranscribing = false
+
+    @ObservationIgnored private var installTask: Task<Void, Never>?
+    @ObservationIgnored private var progressObservation: NSKeyValueObservation?
+
     @ObservationIgnored private var undoStack: [StudioEdit] = []
     @ObservationIgnored private var redoStack: [StudioEdit] = []
 
@@ -251,6 +272,102 @@ public final class StudioDocumentModel {
 
     public func apply(_ preset: StudioPreset) {
         change { $0 = preset.applied(to: $0) }
+    }
+
+    // MARK: - Speech
+
+    /// Finds out whether this language can be transcribed.
+    ///
+    /// Cheap, and safe to call repeatedly: it reads the system's catalogue and never
+    /// downloads. Called when the speech controls appear so a model installed in System
+    /// Settings since the window opened is noticed.
+    public func refreshSpeechStatus() async {
+        speechStatus = await SpeechModelInstaller().status()
+    }
+
+    /// Downloads the language model, because the user pressed the button that says so.
+    ///
+    /// The only thing in the studio that touches the network, and it is entirely optional:
+    /// everything else in this window works with the machine unplugged, and a failed or
+    /// cancelled download leaves the studio exactly as it was.
+    public func installSpeechModel() {
+        guard installTask == nil else { return }
+        installProgress = 0
+
+        // `@MainActor` on the task rather than hopping inside it: the model is main-actor
+        // isolated, so every line below already belongs here, and the alternative is
+        // sending `self` across an isolation boundary it never actually crosses.
+        installTask = Task { @MainActor [self] in
+            defer {
+                installTask = nil
+                installProgress = nil
+                progressObservation = nil
+            }
+            do {
+                try await SpeechModelInstaller().install { progress in
+                    Task { @MainActor [weak self] in self?.observe(progress) }
+                }
+                await refreshSpeechStatus()
+                notice = "The language model is installed. Speech is ready to use."
+            } catch is CancellationError {
+                // Silent: the user cancelled it, so they already know.
+            } catch {
+                failure = "The language model could not be downloaded: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// Stops a download in progress.
+    public func cancelSpeechModelInstall() {
+        installTask?.cancel()
+        installTask = nil
+        installProgress = nil
+        progressObservation = nil
+    }
+
+    /// Follows the system's `Progress` so the bar moves.
+    private func observe(_ progress: Progress) {
+        progressObservation = progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
+            let fraction = progress.fractionCompleted
+            Task { @MainActor [weak self] in self?.installProgress = fraction }
+        }
+    }
+
+    /// Transcribes the recording and cuts the filler words and long pauses out.
+    ///
+    /// The cuts land as clip boundaries like every other edit, so they are undoable in one
+    /// step and the footage is untouched. Nothing here downloads anything: if the model is
+    /// not installed this reports that and stops, which is why the button that offers to
+    /// install one is a separate button.
+    public func tidySpeech() async {
+        guard !isTranscribing else { return }
+        guard await AudioTranscriber.requestAuthorization() else {
+            failure = "Kadr needs permission to use speech recognition. Grant it in System Settings ▸ "
+                + "Privacy & Security ▸ Speech Recognition."
+            return
+        }
+        isTranscribing = true
+        defer { isTranscribing = false }
+
+        do {
+            let transcript = try await AudioTranscriber().transcribe(audioAt: session.screenURL)
+            let planner = TranscriptCutPlanner()
+            let cuts = planner.cuts(for: transcript, duration: edit.duration)
+            guard !cuts.isEmpty else {
+                notice = "There were no filler words or long pauses to remove."
+                return
+            }
+            change { $0.clips = planner.applying(cuts, to: $0.duration) }
+            playhead = min(playhead, edit.duration)
+            notice = "Removed \(cuts.count) \(cuts.count == 1 ? "passage" : "passages")."
+        } catch TranscriptionError.unavailableOnDevice {
+            await refreshSpeechStatus()
+            failure = "There is no speech model on this Mac for your language yet."
+        } catch TranscriptionError.noAudioTrack {
+            failure = "This recording has no sound in it."
+        } catch {
+            failure = "The recording could not be transcribed: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Saving
