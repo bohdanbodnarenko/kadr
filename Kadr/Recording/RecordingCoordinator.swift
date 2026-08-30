@@ -156,6 +156,20 @@ final class RecordingCoordinator {
                 teleprompter.start()
                 await CaptureExclusionPush.into(engine)
                 try await engine.start(target: target, options: options)
+                // Still ours to claim (docs/11 S0.3).
+                //
+                // Everything above suspends, and Stop and Cancel both run to completion
+                // during those suspensions: they set `.idle`, tear the overlays down and
+                // call `studio.cancel()`, which deletes the session directory. Announcing
+                // `.recording` afterwards resurrected a recording the user had already
+                // stopped — the menu-bar timer counted up against a session that no longer
+                // existed on disk. If the state moved out from under us, the engine has
+                // already been told to stand down and there is nothing here to claim.
+                guard state == .starting else {
+                    await engine.cancel()
+                    logger.info("Recording was stopped while it was still starting")
+                    return
+                }
                 state = .recording
                 startedAt = Date()
                 overlaySource.resetClock()
@@ -174,6 +188,13 @@ final class RecordingCoordinator {
                 teleprompter.stop()
                 hygiene?.endRecording()
                 state = .idle
+                // A cancellation is not a capture failure. Feeding it to the permission
+                // tracker would count the user's own Escape as evidence that screen
+                // recording is broken, and eventually prompt them to fix a working grant.
+                guard error as? RecordingError != .cancelledDuringStart else {
+                    logger.info("Recording was cancelled while it was still starting")
+                    return
+                }
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
             }

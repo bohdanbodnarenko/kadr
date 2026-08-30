@@ -20,20 +20,49 @@ public actor RecordingEngine {
     /// retained frames (docs/07 H6).
     static let sampleBufferDepth = 3
 
-    private let logger = KadrLog.logger(.recording)
+    let logger = KadrLog.logger(.recording)
     private let signposter = KadrLog.signposter(.recording)
-    private let stitcher: any SegmentStitching
-    private let compositor = FrameCompositor()
+    let stitcher: any SegmentStitching
+    let compositor = FrameCompositor()
 
     private var stream: SCStream?
-    private var output: StreamOutput?
-    private var writer: SegmentWriter?
-    private var consumeTask: Task<Void, Never>?
+    var output: StreamOutput?
+    var writer: (any SegmentWriting)?
+    let makeWriter: SegmentWriterFactory
+    var consumeTask: Task<Void, Never>?
 
-    private var options = RecordingOptions()
-    private var pixelSize = PixelSize(width: 0, height: 0)
-    private var segments: [URL] = []
-    private var sessionDirectory: URL?
+    /// Which recording the engine is currently setting up or running.
+    ///
+    /// Starting takes several hundred milliseconds of ScreenCaptureKit, and an actor runs
+    /// other work across every suspension in it — so a `cancel()` could delete the session
+    /// out from under a start that was still in flight, and the start would then resume
+    /// and announce `.recording` over the top of it. The result was a recording that
+    /// existed only in the menu bar: `state == .recording`, `writer == nil`, every frame
+    /// dropped, desktop icons still hidden, and Stop reporting `noFramesCaptured`
+    /// (docs/11 S0.3).
+    ///
+    /// A generation is the smallest thing that tells a resuming start "the recording you
+    /// were setting up is gone". `cancel` bumps it; `start` checks it after every await.
+    var generation = 0
+
+    /// The close that is currently in flight, if any (docs/11 S0.3).
+    ///
+    /// `closeSegment` suspends twice, and an actor is free to run other work across a
+    /// suspension — so Pause-then-Stop inside `finishWriting`'s 100–300 ms window used to
+    /// re-enter it with the same writer still in the field. The segment's length was added
+    /// to `accumulatedDuration` twice, and the inflated figure went into
+    /// `CaptureManifest.duration` verbatim, so the studio timeline was longer than the
+    /// footage and the playhead scrubbed into nothing.
+    ///
+    /// The writer now leaves the field before the first suspension and the second caller
+    /// waits for the first rather than racing it. Waiting is the part that matters: Stop
+    /// must not stitch a `segments` array that Pause has not finished appending to.
+    var segmentClose: Task<Void, Never>?
+
+    var options = RecordingOptions()
+    var pixelSize = PixelSize(width: 0, height: 0)
+    var segments: [URL] = []
+    var sessionDirectory: URL?
     var accumulatedDuration: TimeInterval = 0
     var segmentStartTime: CMTime?
 
@@ -43,14 +72,36 @@ public actor RecordingEngine {
     /// and because the monitors that feed it belong to the app, not to the pipeline.
     private var overlayProvider: (any RecordingOverlayProviding)?
 
-    public private(set) var state: RecordingState = .idle
+    /// Setter is module-internal rather than file-private: the lifecycle that drives this
+    /// state machine lives in `RecordingEngine+Lifecycle.swift`, and a module is the right
+    /// granularity for it — nothing outside `RecordingCore` can move a recording's state.
+    public internal(set) var state: RecordingState = .idle
 
     /// Window numbers to leave out of display and region recordings (docs/10 R3.2).
     public private(set) var excludedWindowIDs: Set<CGWindowID> = []
 
     public init(stitcher: any SegmentStitching = SegmentStitcher()) {
         self.stitcher = stitcher
+        makeWriter = { fileURL, pixelWidth, pixelHeight, options in
+            try SegmentWriter(
+                fileURL: fileURL,
+                pixelWidth: pixelWidth,
+                pixelHeight: pixelHeight,
+                options: options
+            )
+        }
     }
+
+    #if DEBUG
+        /// Builds an engine whose segments are written by something the caller controls.
+        ///
+        /// The label is required, so this cannot be reached by accident from the public
+        /// initialiser (docs/11 S1).
+        init(stitcher: any SegmentStitching = SegmentStitcher(), makeWriter: @escaping SegmentWriterFactory) {
+            self.stitcher = stitcher
+            self.makeWriter = makeWriter
+        }
+    #endif
 
     public func setExcludedWindowIDs(_ ids: Set<CGWindowID>) {
         excludedWindowIDs = ids
@@ -63,12 +114,42 @@ public actor RecordingEngine {
         /// ScreenCaptureKit and a real display, which CI has neither of — but the state
         /// machine `stop` drives is exactly where the review found a recording could brick
         /// (docs/07 C3). Debug-only, so it cannot exist in a shipped build.
-        func primeForTesting(state: RecordingState, segments: [URL], sessionDirectory: URL?) {
+        func primeForTesting(
+            state: RecordingState,
+            segments: [URL],
+            sessionDirectory: URL?,
+            writer: (any SegmentWriting)? = nil
+        ) {
             self.state = state
             self.segments = segments
             self.sessionDirectory = sessionDirectory
-            accumulatedDuration = 1
+            self.writer = writer
+            accumulatedDuration = writer == nil ? 1 : 0
             pixelSize = PixelSize(width: 100, height: 100)
+        }
+
+        /// What `start` claims before its first suspension.
+        func beginStartForTesting() -> Int {
+            state = .starting
+            return beginGeneration()
+        }
+
+        /// What `start` does when it resumes from that suspension.
+        ///
+        /// `start` itself cannot run in CI — it needs a display and a TCC grant — but the
+        /// race S0.3 closes is entirely about what happens on the way *back*, so this is
+        /// the resumption with the same generation check the real one performs.
+        func finishStartForTesting(token: Int) throws {
+            try checkAlive(token)
+            state = .recording
+        }
+
+        var accumulatedDurationForTesting: TimeInterval {
+            accumulatedDuration
+        }
+
+        var segmentsForTesting: [URL] {
+            segments
         }
     #endif
 
@@ -106,152 +187,9 @@ public actor RecordingEngine {
     /// sample per frame — which is the cost this design exists to avoid.
     static let geometryTolerance: CGFloat = 0.5
 
-    // MARK: - Lifecycle
-
-    /// Starts recording. The first segment begins immediately.
-    public func start(target: RecordingTarget, options: RecordingOptions) async throws {
-        guard state == .idle else { throw RecordingError.alreadyRecording }
-        self.options = options
-
-        let content = try await shareableContent()
-        let capture = try makeFilter(for: target, in: content)
-        pixelSize = capture.pixelSize
-
-        // Everything for this recording lives in one directory, so a crash leaves an
-        // obvious place to recover segments from.
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr-Recording-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        sessionDirectory = directory
-        segments = []
-        accumulatedDuration = 0
-
-        try await beginSegment()
-        try await startStream(filter: capture.filter, sourceRect: capture.sourceRect)
-        state = .recording
-        logger.info(
-            "Recording started at \(self.pixelSize.width, privacy: .public)×\(self.pixelSize.height, privacy: .public)"
-        )
-    }
-
-    /// Pauses by closing the current segment (docs/04 §4.3).
-    ///
-    /// The stream keeps running but its frames are discarded, so resuming does not pay to
-    /// rebuild it — and the closed segment is already a playable file.
-    public func pause() async throws {
-        guard state == .recording else { throw RecordingError.notRecording }
-        state = .paused
-        await closeSegment()
-    }
-
-    public func resume() async throws {
-        guard state == .paused else { throw RecordingError.notRecording }
-        try await beginSegment()
-        state = .recording
-    }
-
-    /// Stops and returns the finished file.
-    public func stop(savingTo destination: URL) async throws -> RecordingResult {
-        guard state == .recording || state == .paused else { throw RecordingError.notRecording }
-        state = .finishing
-
-        // Whatever happens below, the engine comes back to `.idle`. Leaving it in
-        // `.finishing` is what made a single failed stitch brick recording until relaunch:
-        // the menu bar reads "not recording" while every later start throws (docs/07 C3).
-        defer { state = .idle }
-
-        await closeSegment()
-        await stopStream()
-
-        guard !segments.isEmpty else {
-            cleanUp()
-            throw RecordingError.noFramesCaptured
-        }
-
-        do {
-            let url = try await stitcher.stitch(segments, to: destination)
-            let result = RecordingResult(
-                fileURL: url,
-                duration: accumulatedDuration,
-                pixelSize: pixelSize,
-                options: options
-            )
-            cleanUp()
-            return result
-        } catch {
-            // Keep the footage. Segments are finalised and individually playable by
-            // design (docs/04 §4.3), so a failed join costs the user a join — not their
-            // recording. The directory is surfaced rather than deleted.
-            let directory = sessionDirectory
-            logger.error("Stitch failed: \(error.localizedDescription, privacy: .public)")
-            releaseSession(deletingFiles: false)
-            throw RecordingError.stitchFailed(
-                reason: error.localizedDescription,
-                segmentDirectory: directory?.path
-            )
-        }
-    }
-
-    /// Abandons the recording and deletes what it wrote.
-    public func cancel() async {
-        await writer?.cancel()
-        writer = nil
-        await stopStream()
-        for segment in segments {
-            try? FileManager.default.removeItem(at: segment)
-        }
-        cleanUp()
-        state = .idle
-        logger.info("Recording cancelled")
-    }
-
-    // MARK: - Segments
-
-    private func beginSegment() async throws {
-        guard let sessionDirectory else { throw RecordingError.notRecording }
-        // Each segment carries its own timeline; overlay timing counts from the whole
-        // recording, so the segment's origin is reset and the accumulated duration added.
-        segmentStartTime = nil
-        let url = sessionDirectory.appendingPathComponent("segment-\(segments.count).mp4")
-        writer = try SegmentWriter(
-            fileURL: url,
-            pixelWidth: pixelSize.width,
-            pixelHeight: pixelSize.height,
-            options: options
-        )
-    }
-
-    private func closeSegment() async {
-        guard let writer else { return }
-        accumulatedDuration += await writer.duration
-        if let url = await writer.finish() {
-            segments.append(url)
-        }
-        self.writer = nil
-    }
-
-    private func cleanUp() {
-        releaseSession(deletingFiles: true)
-    }
-
-    /// Lets go of the session.
-    ///
-    /// - Parameter deletingFiles: false leaves the segments on disk, which is what a
-    ///   failed stitch needs — the engine is finished with them, the user is not.
-    private func releaseSession(deletingFiles: Bool) {
-        consumeTask?.cancel()
-        consumeTask = nil
-        output = nil
-        segments = []
-        if deletingFiles, let sessionDirectory {
-            try? FileManager.default.removeItem(at: sessionDirectory)
-        }
-        sessionDirectory = nil
-    }
-
     // MARK: - Stream
 
-    private func startStream(filter: SCContentFilter, sourceRect: CGRect?) async throws {
+    func startStream(filter: SCContentFilter, sourceRect: CGRect?) async throws {
         let configuration = SCStreamConfiguration()
         configuration.width = pixelSize.width
         configuration.height = pixelSize.height
@@ -330,7 +268,7 @@ public actor RecordingEngine {
         return (stream, output)
     }
 
-    private func stopStream() async {
+    func stopStream() async {
         guard let stream else { return }
         try? await stream.stopCapture()
         self.stream = nil
@@ -391,11 +329,11 @@ public actor RecordingEngine {
 ///
 /// It does one thing: forward the buffer. Anything more here — encoding, allocation, a
 /// hop to an actor — would block SCK's queue and drop frames.
-private final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     let queue = DispatchQueue(label: "app.kadr.recording.samples", qos: .userInitiated)
     private let continuation: AsyncStream<SampleBufferBox>.Continuation
     let buffers: AsyncStream<SampleBufferBox>
-    private let logger = KadrLog.logger(.recording)
+    let logger = KadrLog.logger(.recording)
 
     override init() {
         // `makeStream` hands back the stream and its continuation together, which avoids

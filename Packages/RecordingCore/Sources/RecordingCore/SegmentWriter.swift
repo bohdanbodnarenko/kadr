@@ -35,13 +35,38 @@ struct SampleBufferBox: @unchecked Sendable {
     }
 }
 
+/// What `RecordingEngine` needs from the thing that writes a segment.
+///
+/// A protocol so the engine's state machine can be tested without a display, a TCC grant
+/// or an encoder (docs/11 S1). Every race S0.3 closes lives inside the window where
+/// `finish()` is suspended — in production that is 100–300 ms of `AVAssetWriter` and
+/// unobservable from a test, so a fake whose `finish()` the test decides when to complete
+/// turns the window from the thing that makes the bug unreproducible into the thing the
+/// test is about.
+protocol SegmentWriting: Actor {
+    /// The wall-clock length written so far.
+    var duration: TimeInterval { get }
+    @discardableResult
+    func append(_ box: SampleBufferBox) -> Bool
+    func finish() async -> URL?
+    func cancel() async
+}
+
+/// Makes the writer for one segment. Injected so tests can supply a fake.
+typealias SegmentWriterFactory = @Sendable (
+    _ fileURL: URL,
+    _ pixelWidth: Int,
+    _ pixelHeight: Int,
+    _ options: RecordingOptions
+) throws -> any SegmentWriting
+
 /// Writes one continuous stretch of recording to one file.
 ///
 /// Recordings are made of segments, one per pause/resume span. That is what makes
 /// pause/resume gapless *and* crash-safe: every segment is finalised as it ends, so a
 /// process that dies mid-recording leaves playable files behind rather than a truncated
 /// one (docs/03 §1.8 accept list).
-actor SegmentWriter {
+actor SegmentWriter: SegmentWriting {
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
     private let audioInput: AVAssetWriterInput?
@@ -139,11 +164,27 @@ actor SegmentWriter {
         return CMTimeGetSeconds(CMTimeSubtract(last, first))
     }
 
-    /// Finishes the file. Safe to call twice.
+    /// Finishes the file.
+    ///
+    /// Reentrancy-safe, and it genuinely was not before: it set `isFinished` on the way in
+    /// and then suspended for the 100–300 ms `finishWriting` takes, so a second caller in
+    /// that window was handed `fileURL` for a file still being written and went off to
+    /// stitch it (docs/11 S0.3). A second caller now waits for the first and gets the same
+    /// answer, which is what "safe to call twice" was always supposed to mean.
     func finish() async -> URL? {
-        guard !isFinished else { return fileURL }
+        if let finishing {
+            return await finishing.value
+        }
+        guard !isFinished else { return nil }
         isFinished = true
+        let finishing = Task { await self.finishWriting() }
+        self.finishing = finishing
+        return await finishing.value
+    }
 
+    private var finishing: Task<URL?, Never>?
+
+    private func finishWriting() async -> URL? {
         videoInput.markAsFinished()
         audioInput?.markAsFinished()
         microphoneInput?.markAsFinished()

@@ -206,6 +206,12 @@ public enum RecordingError: Error, Equatable, Sendable {
     case couldNotCreateWriter(String)
     case writingFailed(String)
     case noFramesCaptured
+    /// The recording was cancelled while it was still being set up (docs/11 S0.3).
+    ///
+    /// Not a failure the user needs telling about — they are the one who cancelled — but
+    /// the in-flight `start` has to be told something, because the alternative is that it
+    /// resumes and announces a recording whose session directory has already been deleted.
+    case cancelledDuringStart
     /// The segments were captured but could not be joined — a full disk, an unwritable
     /// destination. Carries where the (individually playable) segments are, because
     /// losing footage to a failed join is not an acceptable outcome (docs/09 U0.3).
@@ -225,6 +231,8 @@ extension RecordingError: LocalizedError {
             reason
         case .noFramesCaptured:
             "The recording captured no frames."
+        case .cancelledDuringStart:
+            "The recording was cancelled before it began."
         case let .stitchFailed(reason, directory):
             if let directory {
                 "Kadr could not join the recording (\(reason)). The parts are still in \(directory)."
