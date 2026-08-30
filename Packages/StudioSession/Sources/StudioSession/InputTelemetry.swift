@@ -188,20 +188,4 @@ public enum TelemetrySource: String, Codable, Sendable, CaseIterable {
         case .sampler: "Sampled"
         }
     }
-
-    /// Whether this source sees button presses at all.
-    public var capturesClicks: Bool {
-        self != .sampler
-    }
-
-    /// What to tell the user when the reconstruction is not as good as it could be.
-    public var limitation: String? {
-        switch self {
-        case .eventTap: nil
-        case .appKitMonitors:
-            "Kadr could not watch the pointer continuously, so its motion is approximate."
-        case .sampler:
-            "Kadr could not watch clicks during this recording; only pointer motion was captured."
-        }
-    }
 }

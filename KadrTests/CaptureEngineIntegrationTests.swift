@@ -32,8 +32,7 @@ struct CaptureEngineIntegrationTests {
         CaptureEngine(
             frontmostApplication: FixedFrontmostApplication(
                 AppIdentity(name: "Test", bundleIdentifier: "app.kadr.tests")
-            ),
-            ownBundleIdentifier: nil
+            )
         )
     }
 
@@ -141,8 +140,7 @@ struct CaptureEngineIntegrationTests {
 struct CaptureLatencyTests {
     private func makeEngine() -> CaptureEngine {
         CaptureEngine(
-            frontmostApplication: FixedFrontmostApplication(nil),
-            ownBundleIdentifier: nil
+            frontmostApplication: FixedFrontmostApplication(nil)
         )
     }
 

@@ -28,7 +28,7 @@ import StudioSession
 /// tap somebody has to trust rather than verify.
 @MainActor
 final class PointerTelemetryRecorder {
-    private let logger = KadrLog.logger(.recording)
+    let logger = KadrLog.logger(.recording)
 
     private var pointer: [PointerSample] = []
     private var clicks: [ClickEvent] = []
@@ -39,22 +39,28 @@ final class PointerTelemetryRecorder {
     private var cursorIndices: [Data: Int] = [:]
 
     private var source: TelemetrySource = .sampler
-    private var isRecording = false
+    var isRecording = false
     private var journal: TelemetryJournal?
     /// Last recording-time a chunk was flushed. Zero until the first sample.
     private var lastFlushTime: TimeInterval = 0
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private var monitors: [Any] = []
-    private var samplerTask: Task<Void, Never>?
+    var eventTap: CFMachPort?
+    var runLoopSource: CFRunLoopSource?
+    var monitors: [Any] = []
+    var samplerTask: Task<Void, Never>?
 
     /// Where the recording is now, in its own time. Set by the engine as it composites, so
     /// the sidecar and the footage share one clock — the fix docs/07 M2 made for the live
     /// overlay, applied from the start here.
     private var recordingTime: TimeInterval = 0
     /// Maps a screen point into the recorded area's pixels.
-    private var pointConverter: @Sendable (CGPoint) -> CGPoint? = { $0 }
+    /// Screen space in, recorded pixels out (docs/11 S0.1).
+    ///
+    /// Typed, because the two global point spaces on macOS are vertical mirrors of each
+    /// other and both are spelled `CGPoint`.
+    private var pointConverter: @Sendable (ScreenPoint) -> PixelPoint? = { PixelPoint(x: $0.x, y: $0.y) }
+    /// The flip axis between the two global spaces, read when the recording starts.
+    var space = GlobalCoordinateSpace.current
 
     var isActive: Bool {
         isRecording
@@ -72,11 +78,16 @@ final class PointerTelemetryRecorder {
     /// Starts watching. Nothing is installed until this is called, and everything is torn
     /// down by `stop` — an idle agent has no tap, no monitors and no timer.
     func start(
-        pointConverter: @escaping @Sendable (CGPoint) -> CGPoint?,
+        pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?,
+        space: GlobalCoordinateSpace = .current,
         journalURL: URL? = nil
     ) {
         guard !isRecording else { return }
         self.pointConverter = pointConverter
+        // Passed in rather than read here, so a test can describe the display arrangement
+        // it is asserting about. The flip axis is the primary display's height, and a test
+        // that had to match whatever machine it ran on would assert nothing portable.
+        self.space = space
         pointer = []
         clicks = []
         keystrokes = []
@@ -99,11 +110,19 @@ final class PointerTelemetryRecorder {
             journal = nil
         }
 
-        let availability = TelemetryPolicy.Availability(
-            hasEventTap: startEventTap(),
-            hasAppKitMonitors: startMonitors()
-        )
-        source = TelemetryPolicy.source(for: availability)
+        // One rung, not all of them (docs/11 S0.2). This used to start the tap *and* the
+        // monitors and then merely label which had won, so both fed the recorder: every
+        // press produced two events at the same instant, and after C1's mirror one of the
+        // two was in the wrong place. The ladder is a fallback, not a chorus.
+        let hasEventTap = startEventTap()
+        let hasMonitors = hasEventTap ? false : startMonitors()
+        source = TelemetryPolicy.source(for: TelemetryPolicy.Availability(
+            hasEventTap: hasEventTap,
+            hasAppKitMonitors: hasMonitors
+        ))
+        // Keystrokes always come from a monitor: the tap's mask carries no `keyDown`, so
+        // the tap winning the pointer does not mean it can hear the keyboard.
+        startKeystrokeMonitor()
         if source == .sampler {
             startSampler()
         }
@@ -166,8 +185,8 @@ final class PointerTelemetryRecorder {
 
     // MARK: - Recording events
 
-    private func recordPointer(at screenPoint: CGPoint) {
-        guard isRecording, let position = pointConverter(screenPoint) else { return }
+    func recordPointer(at screenPoint: ScreenPoint) {
+        guard isRecording, let position = pointConverter(screenPoint)?.cgPoint else { return }
         guard TelemetryPolicy.shouldRecord(position, at: recordingTime, lastSample: pointer.last) else {
             return
         }
@@ -178,8 +197,17 @@ final class PointerTelemetryRecorder {
         ))
     }
 
-    private func recordClick(at screenPoint: CGPoint, button: ClickEvent.Button, isDown: Bool) {
-        guard isRecording, let position = pointConverter(screenPoint) else { return }
+    func recordClick(at screenPoint: ScreenPoint, button: ClickEvent.Button, isDown: Bool) {
+        guard isRecording, let position = pointConverter(screenPoint)?.cgPoint else { return }
+        // One event per physical click (docs/11 S0.2). Both rungs of the ladder used to
+        // run at once and only the *label* said which had won, so every press appended
+        // two events at the same instant — and after the mirror above, one of them was in
+        // the wrong place. The ladder now tears the loser down, and this is the belt to
+        // those braces: a duplicate at the same time, button and state is the same click
+        // seen twice, and a real double-click is two presses milliseconds apart.
+        if isDuplicate(of: clicks.last, button: button, isDown: isDown) {
+            return
+        }
         clicks.append(ClickEvent(
             time: recordingTime,
             position: position,
@@ -188,6 +216,23 @@ final class PointerTelemetryRecorder {
         ))
     }
 
+    /// Whether this event is one the recorder has already seen.
+    ///
+    /// The same button, in the same state, within a hair of the same instant is one
+    /// physical click observed twice rather than two clicks.
+    private func isDuplicate(of last: ClickEvent?, button: ClickEvent.Button, isDown: Bool) -> Bool {
+        guard let last else { return false }
+        return last.button == button
+            && last.isDown == isDown
+            && recordingTime - last.time < Self.clickCoalescingWindow
+    }
+
+    /// Two presses closer together than this are one press seen twice.
+    ///
+    /// Well under the shortest deliberate double-click — macOS's own maximum interval is
+    /// a quarter of a second — so a real double-click still records two events.
+    private static let clickCoalescingWindow: TimeInterval = 0.01
+
     // MARK: - Seams
 
     /// Drives one pointer event, for a test that has no event tap.
@@ -195,15 +240,28 @@ final class PointerTelemetryRecorder {
     /// The tap needs an accessibility grant and a real pointer; the *clock* needs neither,
     /// and the clock is what was broken. Declaring the whole of telemetry untestable is how
     /// a frozen timestamp shipped through a suite that passed.
-    func recordPointerForTesting(at screenPoint: CGPoint) {
+    func recordPointerForTesting(at screenPoint: ScreenPoint) {
         recordPointer(at: screenPoint)
     }
 
-    func recordClickForTesting(at screenPoint: CGPoint) {
+    func recordClickForTesting(at screenPoint: ScreenPoint) {
         recordClick(at: screenPoint, button: .left, isDown: true)
     }
 
-    private func recordKeystroke(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) {
+    /// Drives the tap's own path, in the space a `CGEvent` actually uses.
+    ///
+    /// The seam C1 lived on: a test that only calls `recordPointerForTesting` never
+    /// exercises the conversion the tap has to perform, which is precisely why an identity
+    /// converter and 1,688 passing tests missed a vertical mirror.
+    func recordTapEventForTesting(type: CGEventType, at displayLocation: CGPoint) {
+        handleTapEvent(type: type, at: displayLocation)
+    }
+
+    func recordMonitorEventForTesting(type: NSEvent.EventType, at screenLocation: CGPoint) {
+        handleMonitorEvent(type: type, at: screenLocation)
+    }
+
+    func recordKeystroke(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) {
         guard isRecording else { return }
         // The privacy rule lives in `TelemetryPolicy` and returns nil for plain typing, so
         // there is nothing here to get wrong or to make configurable.
@@ -307,187 +365,5 @@ final class PointerTelemetryRecorder {
         cursorFingerprints[fingerprint] = index
         lastCursorIndex = index
         return index
-    }
-
-    // MARK: - The three sources
-
-    /// A listen-only tap. Returns whether it could be created.
-    private func startEventTap() -> Bool {
-        let mask = (1 << CGEventType.mouseMoved.rawValue)
-            | (1 << CGEventType.leftMouseDragged.rawValue)
-            | (1 << CGEventType.rightMouseDragged.rawValue)
-            | (1 << CGEventType.leftMouseDown.rawValue)
-            | (1 << CGEventType.leftMouseUp.rawValue)
-            | (1 << CGEventType.rightMouseDown.rawValue)
-            | (1 << CGEventType.rightMouseUp.rawValue)
-
-        let callback: CGEventTapCallBack = { _, type, event, context in
-            guard let context else { return Unmanaged.passUnretained(event) }
-            let recorder = Unmanaged<PointerTelemetryRecorder>.fromOpaque(context).takeUnretainedValue()
-            let location = event.location
-            // Straight back out: macOS disables a tap whose callback runs long, and the
-            // work belongs on the main actor anyway.
-            MainActor.assumeIsolated {
-                recorder.handleTapEvent(type: type, at: location)
-            }
-            // Unmodified, always. A listen-only tap that returned anything else would be
-            // editing another app's input.
-            return Unmanaged.passUnretained(event)
-        }
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            logger.info("No event tap; falling back to monitors")
-            return false
-        }
-
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        eventTap = tap
-        runLoopSource = source
-        return true
-    }
-
-    private func handleTapEvent(type: CGEventType, at location: CGPoint) {
-        switch type {
-        case .mouseMoved, .leftMouseDragged, .rightMouseDragged:
-            recordPointer(at: location)
-        case .leftMouseDown:
-            recordClick(at: location, button: .left, isDown: true)
-        case .leftMouseUp:
-            recordClick(at: location, button: .left, isDown: false)
-        case .rightMouseDown:
-            recordClick(at: location, button: .right, isDown: true)
-        case .rightMouseUp:
-            recordClick(at: location, button: .right, isDown: false)
-        default:
-            break
-        }
-    }
-
-    /// AppKit monitors, which need no permission. Returns whether they were installed.
-    private func startMonitors() -> Bool {
-        let mouse: NSEvent.EventTypeMask = [
-            .mouseMoved, .leftMouseDragged, .rightMouseDragged,
-            .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp
-        ]
-        // The event itself is not `Sendable`, so what crosses into the isolated call is
-        // the handful of values read from it — which is all the recorder wants anyway.
-        let mouseHandler: @Sendable (NSEvent) -> Void = { [weak self] event in
-            let type = event.type
-            let location = NSEvent.mouseLocation
-            MainActor.assumeIsolated {
-                self?.handleMonitorEvent(type: type, at: location)
-            }
-        }
-        guard let mouseMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: mouse,
-            handler: mouseHandler
-        ) else {
-            return false
-        }
-        monitors.append(mouseMonitor)
-
-        // Keystrokes need Accessibility too; without it this simply returns nil and the
-        // sidecar has no captions, which is a smaller loss than no telemetry at all.
-        let keyHandler: @Sendable (NSEvent) -> Void = { [weak self] event in
-            let characters = event.charactersIgnoringModifiers
-            let keyCode = event.keyCode
-            let flags = event.modifierFlags
-            MainActor.assumeIsolated {
-                self?.recordKeystroke(characters: characters, keyCode: keyCode, flags: flags)
-            }
-        }
-        if let keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown], handler: keyHandler) {
-            monitors.append(keyMonitor)
-        }
-        return true
-    }
-
-    private func handleMonitorEvent(type: NSEvent.EventType, at location: CGPoint) {
-        switch type {
-        case .mouseMoved, .leftMouseDragged, .rightMouseDragged:
-            recordPointer(at: location)
-        case .leftMouseDown:
-            recordClick(at: location, button: .left, isDown: true)
-        case .leftMouseUp:
-            recordClick(at: location, button: .left, isDown: false)
-        case .rightMouseDown:
-            recordClick(at: location, button: .right, isDown: true)
-        case .rightMouseUp:
-            recordClick(at: location, button: .right, isDown: false)
-        default:
-            break
-        }
-    }
-
-    /// The floor: read the pointer on a schedule.
-    ///
-    /// A `Task` rather than a `Timer`, and only while recording — the agent's zero-timer
-    /// rule is about the idle process, and this exists solely between start and stop.
-    private func startSampler() {
-        samplerTask = Task { [weak self] in
-            let interval = Duration.seconds(1 / TelemetryPolicy.sampleRate)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
-                guard let self, isRecording else { return }
-                recordPointer(at: NSEvent.mouseLocation)
-            }
-        }
-    }
-
-    // MARK: - Key mapping
-
-    /// The named keys worth captioning, by virtual key code.
-    ///
-    /// A table rather than a switch: this is a lookup, and writing it as control flow both
-    /// reads as a decision it is not and counts against the complexity budget.
-    private static let specialKeyCodes: [UInt16: TelemetryPolicy.SpecialKey] = [
-        36: .returnKey,
-        76: .enter,
-        48: .tab,
-        53: .escape,
-        51: .delete,
-        117: .forwardDelete,
-        126: .upArrow,
-        125: .downArrow,
-        123: .leftArrow,
-        124: .rightArrow,
-        116: .pageUp,
-        121: .pageDown,
-        115: .home,
-        119: .end,
-        49: .space
-    ]
-
-    private static func specialKey(for keyCode: UInt16) -> TelemetryPolicy.SpecialKey? {
-        specialKeyCodes[keyCode]
-    }
-
-    private static func modifiers(from flags: NSEvent.ModifierFlags) -> TelemetryPolicy.Modifiers {
-        var modifiers = TelemetryPolicy.Modifiers()
-        if flags.contains(.command) {
-            modifiers.insert(.command)
-        }
-        if flags.contains(.shift) {
-            modifiers.insert(.shift)
-        }
-        if flags.contains(.option) {
-            modifiers.insert(.option)
-        }
-        if flags.contains(.control) {
-            modifiers.insert(.control)
-        }
-        if flags.contains(.function) {
-            modifiers.insert(.function)
-        }
-        return modifiers
     }
 }

@@ -163,4 +163,22 @@ struct PermissionCoordinatorTests {
         #expect(access.requestCount == 1)
         #expect(coordinator.state == .granted)
     }
+
+    @Test("Probing never asks, so it cannot re-present the TCC sheet")
+    func probingDoesNotRequest() async {
+        let access = FakeAccess()
+        let coordinator = PermissionCoordinator(access: access)
+        coordinator.beginProbing(every: .milliseconds(1))
+        try? await Task.sleep(for: .milliseconds(20))
+        coordinator.endProbing()
+
+        #expect(access.requestCount == 0)
+        #expect(access.probeCount >= 1)
+    }
+
+    @Test("The system probe is the silent preflight, not a ScreenCaptureKit call")
+    func systemProbeMatchesPreflight() async {
+        let access = SystemScreenRecordingAccess()
+        #expect(await access.probe() == access.preflight())
+    }
 }

@@ -123,7 +123,7 @@ Pointer/click/keystroke arrays grow unbounded in the agent for the length of a r
 | Studio RSS (10-min session, scrubbed) | < 250 MB / 350 fail | `check-perf.sh --studio` |
 | Studio scrub latency | < 50 ms | `EditorUITests` — catches R1.1 |
 | Studio export throughput + linearity | ≥ 1.5× realtime; `t(10m) < 2.5·t(4m)` | pure Swift test — catches R1.2 |
-| Composer per-frame O(1) in telemetry size | < 20% growth 1k → 100k samples | `StudioCoreTests` |
+| Composer per-frame O(1) in telemetry size | < 20% growth 1k → 100k samples | `StudioRenderTests` |
 | Agent RSS with History window open | < 30 MB | catches R2.4 |
 | Agent RSS during a 10-min recording | < 60 MB | catches R1.3/R2.5 |
 | Agent RSS after 10 captures + editor closed | back < 60 MB in 30 s (in PRD §8, never implemented) | scripted |

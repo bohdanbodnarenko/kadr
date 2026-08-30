@@ -35,6 +35,16 @@ struct StudioRenderPlanTests {
         #expect(plan.scale(at: 0) == 1)
     }
 
+    @Test("A free crop shrinks the source before the aspect reframe")
+    func freeCrop() {
+        var cropped = edit()
+        cropped.cropRect = CGRect(x: 0.25, y: 0, width: 0.5, height: 1)
+        let plan = StudioRenderPlan(edit: cropped, sourceSize: size)
+        #expect(abs(plan.crop.minX - size.width * 0.25) < 0.001)
+        #expect(abs(plan.crop.width - size.width * 0.5) < 0.001)
+        #expect(plan.outputSize.width <= size.width * 0.5 + 1)
+    }
+
     @Test("A point maps to itself when nothing is cropped or zoomed")
     func identityMapping() {
         let plan = StudioRenderPlan(edit: edit(), sourceSize: size)

@@ -102,9 +102,12 @@ Explicitly **not** in MVP: recording, scrolling capture, backgrounds, history.
 | Hotkey → selection overlay visible | **< 100 ms** (freeze-frame path, per display) | signpost timing in CI on reference hw |
 | Selection → image on clipboard | < 150 ms for a 5K display region | signpost timing |
 | App bundle size | < 15 MB DMG | CI check |
-| Idle CPU | 0.0% (no timers, no polling) | 60 s Instruments sample must show no wakeups from our code |
-| Cold launch to menu-bar ready | < 300 ms | signpost |
+| Idle CPU | 0.0% (no timers, no polling). Sparkle's daily check is coalesced by `NSBackgroundActivityScheduler` rather than a repeating timer. | 60 s sample must show no wakeups from our code except that coalesced check |
+| Cold launch to status item | < 150 ms | signpost `launchToStatusItem` |
+| Cold launch to hotkeys armed | < 300 ms | signpost `launchToHotkeyArmed` |
 | Recording overhead | < 15% CPU at 1080p60 HEVC on M1 | manual benchmark per release |
+| Editor idle RSS (5K capture open) | < 120 MB warn / 180 MB fail | `check-perf.sh --editor` |
+| Studio RSS (10-min session, scrubbed) | < 250 MB warn / 350 MB fail | `check-perf.sh --studio` |
 
 Engineering strategy to meet these (details in doc 04): AppKit-first shell with no persistent SwiftUI scene at idle; lazy framework loading; editor in a separate process so Vision models and bitmaps die with the window; IOSurface end-to-end capture path; ImageIO-downsampled thumbnails; strict "no timers at idle" rule.
 

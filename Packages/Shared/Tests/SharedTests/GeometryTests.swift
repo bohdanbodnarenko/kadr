@@ -197,3 +197,36 @@ struct ClampingTests {
         #expect(builtIn.clamped(DisplayRect(x: 2560, y: 0, width: 100, height: 100)) == nil)
     }
 }
+
+@Suite("Screen rect to pixel point")
+struct PixelPointTests {
+    private let frame = ScreenRect(x: 100, y: 200, width: 400, height: 300)
+    private let scale = DisplayScale(2)
+
+    @Test("The top of the rect is the top of the frame")
+    func topMapsNearOrigin() throws {
+        let point = try #require(frame.pixelPoint(for: ScreenPoint(x: 100, y: 499), scale: scale))
+        #expect(point.x == 0)
+        #expect(abs(point.y - 2) < 0.001)
+    }
+
+    @Test("The bottom-left of the rect is the bottom of the frame")
+    func bottomLeftIsBottom() throws {
+        let point = try #require(frame.pixelPoint(for: ScreenPoint(x: 100, y: 200), scale: scale))
+        #expect(point.x == 0)
+        #expect(point.y == 600)
+    }
+
+    @Test("A click outside the rect is rejected")
+    func outsideIsNil() {
+        #expect(frame.pixelPoint(for: ScreenPoint(x: 50, y: 350), scale: scale) == nil)
+        #expect(frame.contains(ScreenPoint(x: 50, y: 350)) == false)
+    }
+
+    @Test("A click inside is in backing pixels")
+    func insideIsScaled() throws {
+        let point = try #require(frame.pixelPoint(for: ScreenPoint(x: 200, y: 350), scale: scale))
+        #expect(point.x == 200)
+        #expect(point.y == 300)
+    }
+}

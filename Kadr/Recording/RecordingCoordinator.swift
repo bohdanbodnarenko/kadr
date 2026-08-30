@@ -108,6 +108,7 @@ final class RecordingCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
+                await CaptureExclusionPush.into(captureEngine)
                 let freezes = try await captureEngine.freezeAllDisplays()
                 permissions.noteCaptureSuccess()
                 overlay.present(
@@ -153,6 +154,7 @@ final class RecordingCoordinator {
                 startOverlays(for: target)
                 startStudioSession(for: target)
                 teleprompter.start()
+                await CaptureExclusionPush.into(engine)
                 try await engine.start(target: target, options: options)
                 state = .recording
                 startedAt = Date()
@@ -315,7 +317,12 @@ final class RecordingCoordinator {
         guard state == .recording else { return }
         Task { [weak self] in
             guard let self else { return }
-            try? await engine.pause()
+            do {
+                try await engine.pause()
+            } catch {
+                logger.error("Could not pause: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             // The script holds where it is: a prompter that keeps scrolling through a
             // pause is one the reader has to scroll back on when they resume.
             teleprompter.pause()
@@ -329,7 +336,12 @@ final class RecordingCoordinator {
         guard state == .paused else { return }
         Task { [weak self] in
             guard let self else { return }
-            try? await engine.resume()
+            do {
+                try await engine.resume()
+            } catch {
+                logger.error("Could not resume: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             if let pausedAt {
                 // Paused time is time the user chose not to record, so the clock skips it
                 // exactly as the file does.

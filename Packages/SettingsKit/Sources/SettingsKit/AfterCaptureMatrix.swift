@@ -142,20 +142,6 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
         let recording: AfterCaptureActions = action.savesToFolder ? [.overlay, .save] : [.overlay]
         return AfterCaptureMatrix(screenshot: screenshot, recording: recording)
     }
-
-    /// The nearest old-style action, for the code paths that still take one.
-    ///
-    /// Lossy on purpose: the whole point of the matrix is that it says things the enum
-    /// cannot. This is the bridge while the rest of the app catches up, not a round trip.
-    public func legacyAction(for kind: CaptureKind) -> DefaultCaptureAction {
-        let actions = self[kind]
-        return switch (actions.contains(.copy), actions.contains(.save)) {
-        case (true, true): .copyAndSave
-        case (true, false): .copyToClipboard
-        case (false, true): .saveToFolder
-        case (false, false): .overlayOnly
-        }
-    }
 }
 
 /// Stored as two integers rather than as JSON.

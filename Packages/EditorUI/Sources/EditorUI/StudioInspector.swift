@@ -15,6 +15,7 @@ struct StudioInspector: View {
         Form {
             selectedZoomSection
             shapeSection
+            cropSection
             cameraSection
             overlaySection
             speechSection
@@ -148,6 +149,70 @@ struct StudioInspector: View {
             }
             .disabled(model.edit.reframe.aspect == .original)
         }
+    }
+
+    // MARK: - Crop
+
+    /// An arbitrary rectangle in the recording, applied before the aspect reframe
+    /// (docs/10 R3.5).
+    private var cropSection: some View {
+        Section("Crop") {
+            LabeledContent("Left") {
+                Slider(value: cropX, in: 0 ... 0.9)
+            }
+            LabeledContent("Bottom") {
+                Slider(value: cropY, in: 0 ... 0.9)
+            }
+            LabeledContent("Width") {
+                Slider(value: cropWidth, in: 0.1 ... 1)
+            }
+            LabeledContent("Height") {
+                Slider(value: cropHeight, in: 0.1 ... 1)
+            }
+            Button("Reset crop") { model.change { $0.cropRect = nil } }
+                .disabled(model.edit.cropRect == nil)
+        }
+    }
+
+    private var normalizedCrop: CGRect {
+        model.edit.cropRect ?? CGRect(x: 0, y: 0, width: 1, height: 1)
+    }
+
+    private var cropX: Binding<Double> {
+        cropEdge(get: { $0.origin.x }, set: { $0.origin.x = $1 })
+    }
+
+    private var cropY: Binding<Double> {
+        cropEdge(get: { $0.origin.y }, set: { $0.origin.y = $1 })
+    }
+
+    private var cropWidth: Binding<Double> {
+        cropEdge(get: { $0.width }, set: { $0.size.width = $1 })
+    }
+
+    private var cropHeight: Binding<Double> {
+        cropEdge(get: { $0.height }, set: { $0.size.height = $1 })
+    }
+
+    private func cropEdge(
+        get: @escaping (CGRect) -> CGFloat,
+        set: @escaping (inout CGRect, Double) -> Void
+    ) -> Binding<Double> {
+        Binding(
+            get: { Double(get(normalizedCrop)) },
+            set: { value in
+                var rect = normalizedCrop
+                set(&rect, value)
+                let x = min(max(rect.origin.x, 0), 0.95)
+                let y = min(max(rect.origin.y, 0), 0.95)
+                let width = min(max(rect.width, 0.05), 1 - x)
+                let height = min(max(rect.height, 0.05), 1 - y)
+                let next = CGRect(x: x, y: y, width: width, height: height)
+                model.change {
+                    $0.cropRect = next == CGRect(x: 0, y: 0, width: 1, height: 1) ? nil : next
+                }
+            }
+        )
     }
 
     // MARK: - Camera

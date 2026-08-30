@@ -64,6 +64,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     /// Only files from outside: a capture the agent just took is already Kadr's, and
     /// copying it again would leave two of everything.
     private func imported(_ url: URL) -> URL? {
+        guard url.pathExtension.lowercased() != StylePresetTransfer.pathExtension else { return nil }
         guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
         return CaptureImporter().copyIntoLibrary(url)
     }
@@ -78,6 +79,21 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         }
         let kadr = support.appendingPathComponent("Kadr", isDirectory: true).standardizedFileURL.path
         return url.standardizedFileURL.path.hasPrefix(kadr)
+    }
+
+    private func importStylePreset(_ url: URL) {
+        do {
+            let preset = try StylePresetTransfer.decoding(Data(contentsOf: url))
+            _ = StylePresetStore().add(preset)
+            let alert = NSAlert()
+            alert.messageText = "Imported “\(preset.name)”."
+            alert.informativeText = "The look is in the editor’s Look list. Open a capture to apply it."
+            alert.alertStyle = .informational
+            alert.runModal()
+            logger.info("Imported look \(preset.name, privacy: .public)")
+        } catch {
+            presentOpenFailure(for: url, error: error)
+        }
     }
 
     /// The File ▸ Open command, for a capture Kadr never took.
@@ -95,6 +111,11 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     private func open(_ url: URL) {
         let state = signposter.beginInterval("openCapture")
         defer { signposter.endInterval("openCapture", state) }
+
+        if url.pathExtension.lowercased() == StylePresetTransfer.pathExtension {
+            importStylePreset(url)
+            return
+        }
 
         // A recording session opens into the studio. Checked before the trim window,
         // because a `.kadrrec` contains a movie and would otherwise be opened for trimming

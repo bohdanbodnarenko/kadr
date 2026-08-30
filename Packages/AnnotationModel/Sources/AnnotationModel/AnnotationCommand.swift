@@ -37,10 +37,6 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
         self.endBinding = endBinding
     }
 
-    public var isCurved: Bool {
-        controlPoint != nil
-    }
-
     private enum CodingKeys: String, CodingKey {
         case id, start, end, controlPoint, head, stroke, startBinding, endBinding
     }
@@ -258,16 +254,6 @@ public struct MeasureSpec: Codable, Hashable, Sendable {
         hypot(end.x - start.x, end.y - start.y)
     }
 
-    /// Whether the drag is close enough to one axis to be read as a straight measurement.
-    ///
-    /// Most measurements are horizontal or vertical — the width of a gutter, the height
-    /// of a row — and a distance line that renders at 0.4° off true looks like a mistake.
-    public var isAxisAligned: Bool {
-        let dx = abs(end.x - start.x)
-        let dy = abs(end.y - start.y)
-        return min(dx, dy) <= max(dx, dy) * 0.02
-    }
-
     /// The label, in points and — when the capture is Retina — pixels.
     ///
     /// - Parameter scale: the base image's pixels per point.
@@ -432,15 +418,5 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     public var isCanvasChrome: Bool {
         self == .crop || self == .beautify || self == .subjectLift || self == .camera
             || self == .progressiveBlur || self == .watermark
-    }
-
-    /// Tools the pointer can draw with.
-    ///
-    /// Beautify and background removal are actions in the chrome rather than things you
-    /// draw, and an image arrives by being dropped rather than by being drawn — but once
-    /// it is there it selects and moves like anything else (docs/06 M24).
-    public var isPointerTool: Bool {
-        self != .beautify && self != .subjectLift && self != .image && self != .camera
-            && self != .progressiveBlur && self != .watermark
     }
 }

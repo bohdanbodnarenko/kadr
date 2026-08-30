@@ -65,6 +65,10 @@ Packages/
                       templates, GIF encode orchestration.
   HistoryKit/         Capture records, thumbnail pipeline (ImageIO downsample),
                       SQLite (GRDB) index + FTS5, retention/eviction.
+  StudioSession/      Agent-linkable studio models: session packages, input
+                      telemetry, clips, the edit document. Foundation/CoreGraphics.
+  StudioRender/       Studio frame composer, exporter, cursor reconstruction,
+                      transcription. Editor-only (docs/10 R2.1).
   AutomationKit/      URL-scheme + CLI verb parsing → typed AppCommand values.
   SettingsKit/        UserDefaults-backed @Observable settings, migration.
   Shared/             Logging (os.Logger + signposts), geometry helpers
@@ -99,7 +103,7 @@ Rules: packages compile with **Swift 6 language mode, strict concurrency** from 
 
 ### 4.1 Permission state machine (CaptureCore)
 
-States: `unknown → denied → granted → revoked`. Preflight via `CGPreflightScreenCaptureAccess()`; request via `CGRequestScreenCaptureAccess()`; detect grant by polling `SCShareableContent` **only during onboarding** (event-driven elsewhere). First grant requires app relaunch — onboarding automates it (relaunch helper). macOS 15+: expect the ~monthly re-approval nag; detect revocation by SCK error and surface the re-grant sheet. `SCContentSharingPicker` is wired as an alternate no-TCC path for window/display capture (used in the "no permission yet" state so the app is useful immediately).
+States: `unknown → denied → granted → revoked`. Preflight via `CGPreflightScreenCaptureAccess()`; request via `CGRequestScreenCaptureAccess()`; detect grant by polling `CGPreflightScreenCaptureAccess` **only during onboarding** (event-driven elsewhere). Do **not** poll `SCShareableContent` for this: on macOS 15+ that call presents the "screen and audio" TCC sheet, and a one-second loop re-presents it even when the System Settings toggle is already on. First grant requires app relaunch — onboarding automates it (relaunch helper). macOS 15+: expect the ~monthly re-approval nag; detect revocation by SCK error and surface the re-grant sheet. `SCContentSharingPicker` is wired as an alternate no-TCC path for window/display capture (used in the "no permission yet" state so the app is useful immediately).
 
 ### 4.2 Still capture
 
@@ -197,7 +201,7 @@ final class NonActivatingPanel: NSPanel {
 - **Sparkle 2**: EdDSA-signed appcast on GitHub Releases/Pages; delta updates; `generate_appcast` in CI. Update checks opt-in-by-default-on with clear setting (the agent's only background network touch).
 - Artifacts: notarized DMG + Homebrew cask (`brew install --cask kadr`); `--version`-stamped reproducible-ish builds (stretch).
 - **No sandbox** (auto-scroll needs synthesized events; save-anywhere UX; SMAppService helpers) — a future reduced MAS variant is possible since SCK + Carbon hotkeys are sandbox-compatible, but not a goal.
-- Entitlements: none beyond Hardened Runtime defaults; `NSMicrophoneUsageDescription` for recording mic; no persistent-content-capture (Apple won't grant it to a screenshot utility; design assumes the monthly re-approval exists).
+- Entitlements: none beyond Hardened Runtime defaults; usage strings for the microphone (recording), camera (webcam overlay) and on-device speech recognition (teleprompter follow / studio tidy); no persistent-content-capture (Apple won't grant it to a screenshot utility; design assumes the monthly re-approval exists). The editor additionally declares `CFBundleDocumentTypes` for images, movies, `.kadr` projects, `.kadrrec` sessions and `.kadrpreset` looks (docs/09 U1.8, docs/10 R3.5).
 
 ## 11. Testing & CI
 

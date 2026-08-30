@@ -18,8 +18,6 @@
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
 		KADR000000000000000000FE /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioSession */; };
-		KADR00000000000000000445 /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000425 /* StudioSession */; };
-		KADR00000000000000000446 /* StudioRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000426 /* StudioRender */; };
 		KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000301 /* KeyboardShortcuts */; };
 		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
 		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
@@ -27,6 +25,8 @@
 		KADR00000000000000000442 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000422 /* AnnotationRender */; };
 		KADR00000000000000000443 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000423 /* MediaExport */; };
 		KADR00000000000000000444 /* EditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000424 /* EditorUI */; };
+		KADR00000000000000000445 /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000425 /* StudioSession */; };
+		KADR00000000000000000446 /* StudioRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000426 /* StudioRender */; };
 		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; };
 		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
 		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
@@ -1106,14 +1106,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = StudioSession;
 		};
-		KADR00000000000000000425 /* StudioSession */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = StudioSession;
-		};
-		KADR00000000000000000426 /* StudioRender */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = StudioRender;
-		};
 		KADR00000000000000000301 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = KADR00000000000000000300 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
@@ -1138,6 +1130,14 @@
 		KADR00000000000000000424 /* EditorUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = EditorUI;
+		};
+		KADR00000000000000000425 /* StudioSession */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioSession;
+		};
+		KADR00000000000000000426 /* StudioRender */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioRender;
 		};
 		KADR00000000000000000520 /* Shared */ = {
 			isa = XCSwiftPackageProductDependency;

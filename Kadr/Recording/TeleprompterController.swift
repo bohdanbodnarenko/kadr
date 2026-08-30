@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import os
+import OverlayKit
 import SettingsKit
 import Shared
 import StudioSession

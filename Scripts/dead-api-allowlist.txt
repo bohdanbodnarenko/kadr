@@ -1,0 +1,10 @@
+# Public symbols that tests mention and production does not call, on purpose.
+# Each line is a member name. Justify a new entry in the PR, not here.
+#
+# Package identity, read by the module tests and by nothing else.
+name
+# Codable / decode defaults, exercised by round-trip tests.
+currentVersion
+comparisonID
+# RenderStamp.digest is called from StudioDocumentModel; keep listed if the
+# scanner cannot see across the optional unwrap. Leave empty of that name.

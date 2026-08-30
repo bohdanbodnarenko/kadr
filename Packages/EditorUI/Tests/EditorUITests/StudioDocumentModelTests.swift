@@ -353,6 +353,17 @@ struct StudioDocumentModelTests {
         #expect(studio.playhead <= studio.edit.duration)
     }
 
+    @Test("A speed below 1 or above 8 is clamped rather than reversing the clip")
+    func speedIsClamped() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.setSpeedAtPlayhead(0)
+        #expect(studio.edit.clips.clips[0].speed == Clip.minimumSpeed)
+        studio.setSpeedAtPlayhead(99)
+        #expect(studio.edit.clips.clips[0].speed == Clip.maximumSpeed)
+    }
+
     @Test("The playhead cannot be dragged outside the recording")
     func playheadStaysInRange() throws {
         let folder = scratch()
@@ -388,11 +399,11 @@ struct StudioDocumentModelTests {
 
     // MARK: - Export state
 
-    @Test("An edit that has never been exported is not up to date")
+    @Test("An edit that has never been exported has no render stamp")
     func exportStateStartsStale() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder)
-        #expect(!studio.isExportUpToDate)
+        #expect(SessionDocument(session: studio.session).renderStamp() == nil)
     }
 }

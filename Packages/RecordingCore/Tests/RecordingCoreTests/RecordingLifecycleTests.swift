@@ -54,7 +54,6 @@ struct RecordingLifecycleTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .succeed)
         )
         await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
@@ -75,7 +74,6 @@ struct RecordingLifecycleTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .fail("no space left on device"))
         )
         await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
@@ -92,7 +90,6 @@ struct RecordingLifecycleTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .fail("unwritable folder"))
         )
         await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
@@ -126,7 +123,6 @@ struct RecordingLifecycleTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .fail("disk full"))
         )
         await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
@@ -148,7 +144,6 @@ struct RecordingLifecycleTests {
     func stopWithNoSegments() async throws {
         let directory = scratch()
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .succeed)
         )
         await engine.primeForTesting(state: .recording, segments: [], sessionDirectory: directory)
@@ -162,7 +157,7 @@ struct RecordingLifecycleTests {
 
     @Test("Stopping when nothing is recording is refused, not crashed")
     func stopWhenIdle() async {
-        let engine = RecordingEngine(ownBundleIdentifier: nil, stitcher: StubStitcher(behaviour: .succeed))
+        let engine = RecordingEngine(stitcher: StubStitcher(behaviour: .succeed))
         await #expect(throws: RecordingError.notRecording) {
             try await engine.stop(savingTo: FileManager.default.temporaryDirectory.appendingPathComponent("x.mp4"))
         }
@@ -174,7 +169,6 @@ struct RecordingLifecycleTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         let engine = RecordingEngine(
-            ownBundleIdentifier: nil,
             stitcher: StubStitcher(behaviour: .succeed)
         )
         await engine.primeForTesting(state: .paused, segments: segments, sessionDirectory: directory)
@@ -187,7 +181,7 @@ struct RecordingLifecycleTests {
     @Test("Cancelling from any state ends idle and takes the footage with it")
     func cancelCleansUp() async throws {
         let (directory, segments) = try session()
-        let engine = RecordingEngine(ownBundleIdentifier: nil, stitcher: StubStitcher(behaviour: .succeed))
+        let engine = RecordingEngine(stitcher: StubStitcher(behaviour: .succeed))
         await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
 
         await engine.cancel()

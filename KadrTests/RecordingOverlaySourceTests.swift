@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import RecordingCore
+import Shared
 import Testing
 @testable import Kadr
 
@@ -89,7 +90,7 @@ struct RecordingOverlayClockTests {
         var configuration = RecordingOverlaySource.Configuration()
         configuration.showsClicks = true
         // The overlay maps screen points through this; identity keeps the test about time.
-        configuration.pointConverter = { $0 }
+        configuration.pointConverter = { PixelPoint(x: $0.x, y: $0.y) }
         source.start(configuration: configuration)
         return source
     }
@@ -101,7 +102,7 @@ struct RecordingOverlayClockTests {
 
         // The engine has composited up to 5 s of recording.
         _ = source.overlay(atRecordingTime: 5)
-        source.recordClickForTesting(at: CGPoint(x: 10, y: 10))
+        source.recordClickForTesting(at: ScreenPoint(x: 10, y: 10))
 
         // A frame a moment later must show the halo at the very start of its life.
         let overlay = source.overlay(atRecordingTime: 5.1)
@@ -119,7 +120,7 @@ struct RecordingOverlayClockTests {
         _ = source.overlay(atRecordingTime: 3)
         // …the user pauses for a while, and recording time stays put…
         _ = source.overlay(atRecordingTime: 3)
-        source.recordClickForTesting(at: CGPoint(x: 1, y: 1))
+        source.recordClickForTesting(at: ScreenPoint(x: 1, y: 1))
 
         let overlay = source.overlay(atRecordingTime: 3.05)
         #expect(overlay.clicks.count == 1, "a wall-clock stamp would sit in the future and never draw")
@@ -131,7 +132,7 @@ struct RecordingOverlayClockTests {
         defer { source.stop() }
 
         _ = source.overlay(atRecordingTime: 0)
-        source.recordClickForTesting(at: CGPoint(x: 2, y: 2))
+        source.recordClickForTesting(at: ScreenPoint(x: 2, y: 2))
         #expect(source.overlay(atRecordingTime: 0.1).clicks.count == 1)
         #expect(source.overlay(atRecordingTime: 30).clicks.isEmpty, "old halos must not accumulate")
     }
@@ -143,7 +144,7 @@ struct RecordingOverlayClockTests {
 
         _ = source.overlay(atRecordingTime: 42)
         source.resetClock()
-        source.recordClickForTesting(at: CGPoint(x: 3, y: 3))
+        source.recordClickForTesting(at: ScreenPoint(x: 3, y: 3))
 
         #expect(source.overlay(atRecordingTime: 0.1).clicks.count == 1)
     }

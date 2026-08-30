@@ -286,6 +286,14 @@ public final class EditorDocumentModel {
         document.bringToFront(document.selection)
     }
 
+    public func bringSelectionForward() {
+        document.bringForward(document.selection)
+    }
+
+    public func sendSelectionBackward() {
+        document.sendBackward(document.selection)
+    }
+
     // MARK: - Drafting
 
     private func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {

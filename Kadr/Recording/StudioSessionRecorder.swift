@@ -42,7 +42,7 @@ final class StudioSessionRecorder {
     ///   the point is outside the recorded area and is simply not recorded.
     func start(
         recordsCamera: Bool,
-        pointConverter: @escaping @Sendable (CGPoint) -> CGPoint?
+        pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?
     ) {
         guard session == nil else { return }
         guard let root = Self.root() else {
@@ -213,6 +213,11 @@ final class StudioSessionRecorder {
         }
         do {
             try manager.copyItem(at: footage, to: session.screenURL)
+            // A copy is not a hard link: referenceCount is 1 even though the original
+            // still exists on another volume, and treating it as the only copy would
+            // keep every external-disk recording in Application Support forever
+            // (docs/10 R3.5).
+            session.markFootageAsCopy()
             return true
         } catch {
             logger.error("Could not attach the recording: \(error.localizedDescription, privacy: .public)")

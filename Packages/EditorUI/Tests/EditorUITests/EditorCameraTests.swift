@@ -125,7 +125,6 @@ struct EditorCameraTests {
         let command = AnnotationCommand.camera(.hero)
         #expect(!command.isSelectable)
         #expect(AnnotationTool.camera.isCanvasChrome)
-        #expect(!AnnotationTool.camera.isPointerTool)
     }
 
     @Test("Selecting everything does not select the camera")

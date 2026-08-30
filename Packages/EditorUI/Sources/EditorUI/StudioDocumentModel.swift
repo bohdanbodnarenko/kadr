@@ -187,16 +187,21 @@ public final class StudioDocumentModel {
     /// result as run once, and appending would stack cues on top of each other.
     public func planSmartZooms() {
         let planner = ZoomCuePlanner()
-        // Planned from clicks already on the edited timeline (docs/10 R0.2). `zooms` is
-        // documented as edited time, and the sidecar's clicks are in source time — cues
-        // planned from the raw ones land wherever the cuts have since moved the footage.
-        let clicks = editedTelemetry.clicks
-        let planned = planner.cues(for: clicks, in: manifest.pixelSize, duration: edit.duration)
-        guard !planned.isEmpty else {
+        // Planned from the sidecar in source time, then rewritten onto the edited
+        // timeline. Clicks already on the edited timeline would be planned twice against
+        // cuts that have already moved them, and a second press of the button would not
+        // be a no-op (docs/10 R0.2, R3.3).
+        let planned = planner.cues(
+            for: telemetry.clicks,
+            in: manifest.pixelSize,
+            duration: manifest.duration
+        )
+        let rebased = edit.clips.rebasing(planned)
+        guard !rebased.isEmpty else {
             failure = "There were no click clusters to zoom to in this recording."
             return
         }
-        change { $0.zooms = planned }
+        change { $0.zooms = $0.clips.rebasing(planned) }
         selectedZoom = nil
     }
 
@@ -274,11 +279,8 @@ public final class StudioDocumentModel {
     /// Sets the speed of the clip under the playhead.
     public func setSpeedAtPlayhead(_ speed: Double) {
         guard let index = clipIndex(at: playhead) else { return }
-        change {
-            var clips = $0.clips.clips
-            clips[index].speed = speed
-            $0.clips = ClipTimeline(clips: clips)
-        }
+        let id = edit.clips.clips[index].id
+        change { $0.clips.setSpeed(speed, for: id) }
         playhead = min(playhead, edit.duration)
     }
 
@@ -394,7 +396,12 @@ public final class StudioDocumentModel {
                 failure = Self.tidyRefusal
                 return
             }
-            change { $0.clips = planner.applying(cuts, to: manifest.duration) }
+            let timeline = planner.applying(cuts, to: manifest.duration)
+            guard !timeline.clips.isEmpty, timeline.editedDuration > 0 else {
+                notice = "Tidying would leave nothing to play. The recording was left as it is."
+                return
+            }
+            change { $0.clips = timeline }
             playhead = min(playhead, edit.duration)
             notice = "Removed \(cuts.count) \(cuts.count == 1 ? "passage" : "passages")."
         } catch TranscriptionError.unavailableOnDevice {
@@ -474,8 +481,12 @@ public final class StudioDocumentModel {
                     Task { @MainActor in self?.exportProgress = value }
                 }
             )
+            guard let digest = RenderStamp.digest(of: edit) else {
+                exportProgress = nil
+                return
+            }
             try? document.write(RenderStamp(
-                editDigest: RenderStamp.digest(of: edit),
+                editDigest: digest,
                 outputPath: output.fileURL.path,
                 pixelSize: output.pixelSize
             ))
@@ -485,15 +496,5 @@ public final class StudioDocumentModel {
             failure = "The export failed: \(error.localizedDescription)"
             logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    /// Whether the last export still matches the current edit.
-    ///
-    /// What lets the window say "exported" rather than offering to render the same thing
-    /// again — and, more usefully, stop saying it the moment anything changes.
-    public var isExportUpToDate: Bool {
-        guard let stamp = document.renderStamp() else { return false }
-        guard FileManager.default.fileExists(atPath: stamp.outputPath) else { return false }
-        return stamp.editDigest == RenderStamp.digest(of: edit)
     }
 }

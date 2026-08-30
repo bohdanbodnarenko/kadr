@@ -17,6 +17,9 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     public var zooms: [ZoomCue]
     /// The shape the video comes out.
     public var reframe: Reframe
+    /// Optional free crop in normalised 0…1 source space, applied before the aspect reframe
+    /// (docs/10 R3.5). Nil means the whole frame.
+    public var cropRect: CGRect?
     /// Where the webcam sits.
     public var camera: CameraBubble
     /// Whether to draw the reconstructed cursor.
@@ -35,6 +38,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         clips: ClipTimeline = ClipTimeline(),
         zooms: [ZoomCue] = [],
         reframe: Reframe = .original,
+        cropRect: CGRect? = nil,
         camera: CameraBubble = .standard,
         showsCursor: Bool = true,
         showsClicks: Bool = true,
@@ -44,6 +48,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         self.clips = clips
         self.zooms = zooms
         self.reframe = reframe
+        self.cropRect = cropRect
         self.camera = camera
         self.showsCursor = showsCursor
         self.showsClicks = showsClicks
@@ -60,16 +65,63 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         clips.editedDuration
     }
 
-    /// The cues as they should be rendered, with the reframe's corrections applied.
+    /// The cues as they should be rendered, with the combined crop applied.
     ///
-    /// Computed rather than stored, so changing the aspect ratio re-plans the camera
-    /// immediately instead of leaving cues that point off the new frame.
+    /// Computed rather than stored, so changing the aspect ratio or the free crop re-plans
+    /// the camera immediately instead of leaving cues that point off the new frame.
     public func renderableZooms(in size: CGSize) -> [ZoomCue] {
-        reframe.replanning(zooms, in: size)
+        let crop = sourceRect(for: size)
+        guard crop.width > 0, crop.height > 0 else { return zooms }
+        let identity = crop.origin == .zero
+            && abs(crop.width - size.width) < 0.5
+            && abs(crop.height - size.height) < 0.5
+        guard !identity else { return zooms }
+
+        let inherentZoom = size.width / crop.width
+        return zooms.map { cue in
+            var replanned = cue
+            let anchor = cue.anchor.point(in: size)
+            let pulled = CGPoint(
+                x: min(max(anchor.x, crop.minX), crop.maxX),
+                y: min(max(anchor.y, crop.minY), crop.maxY)
+            )
+            replanned.anchor = .fixed(pulled)
+            replanned.magnification = max(cue.magnification / inherentZoom, 1)
+            return replanned
+        }
+    }
+
+    /// The part of the recording that survives the free crop and then the aspect reframe,
+    /// in source pixels.
+    public func sourceRect(for size: CGSize) -> CGRect {
+        let free = pixelCrop(in: size)
+        let inner = reframe.sourceRect(for: free.size)
+        return inner.offsetBy(dx: free.minX, dy: free.minY)
+    }
+
+    /// The exported frame's pixel size after the free crop and the aspect reframe.
+    public func outputSize(for size: CGSize) -> CGSize {
+        reframe.outputSize(for: pixelCrop(in: size).size)
+    }
+
+    /// The free crop as a pixel rect, or the whole frame when there is none.
+    public func pixelCrop(in size: CGSize) -> CGRect {
+        guard let cropRect else { return CGRect(origin: .zero, size: size) }
+        let x = min(max(cropRect.origin.x, 0), 1)
+        let y = min(max(cropRect.origin.y, 0), 1)
+        let width = min(max(cropRect.width, 0), 1 - x)
+        let height = min(max(cropRect.height, 0), 1 - y)
+        guard width > 0, height > 0 else { return CGRect(origin: .zero, size: size) }
+        return CGRect(
+            x: x * size.width,
+            y: y * size.height,
+            width: width * size.width,
+            height: height * size.height
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, clips, zooms, reframe, camera, showsCursor, showsClicks, showsKeystrokes
+        case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes
     }
 
     /// Every field defaults, so an edit written by a later Kadr still opens — it simply
@@ -81,6 +133,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
             clips: container.decodeIfPresent(ClipTimeline.self, forKey: .clips) ?? ClipTimeline(),
             zooms: container.decodeIfPresent([ZoomCue].self, forKey: .zooms) ?? [],
             reframe: container.decodeIfPresent(Reframe.self, forKey: .reframe) ?? .original,
+            cropRect: container.decodeIfPresent(CGRect.self, forKey: .cropRect),
             camera: container.decodeIfPresent(CameraBubble.self, forKey: .camera) ?? .standard,
             showsCursor: container.decodeIfPresent(Bool.self, forKey: .showsCursor) ?? true,
             showsClicks: container.decodeIfPresent(Bool.self, forKey: .showsClicks) ?? true,

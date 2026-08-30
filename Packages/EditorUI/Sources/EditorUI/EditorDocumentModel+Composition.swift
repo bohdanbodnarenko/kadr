@@ -4,16 +4,6 @@ import Foundation
 
 /// Building a composition out of more than one capture (docs/03 §3 P2, docs/06 M24).
 public extension EditorDocumentModel {
-    /// The images placed on the canvas, in z-order.
-    var insertedImages: [ImageSpec] {
-        document.commands.compactMap { command in
-            if case let .image(spec) = command {
-                return spec
-            }
-            return nil
-        }
-    }
-
     /// The selected image, when exactly one is selected — what the inspector edits.
     var selectedImage: ImageSpec? {
         guard selection.count == 1, let id = selection.first else { return nil }

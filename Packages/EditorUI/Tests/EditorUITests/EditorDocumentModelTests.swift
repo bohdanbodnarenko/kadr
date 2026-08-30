@@ -346,6 +346,9 @@ struct EditorToolTests {
     @Test("Every annotation tool the pointer can draw is reachable from the toolbar")
     func everyAnnotationToolIsReachable() {
         let reachable = Set(EditorTool.allCases.compactMap(\.annotation))
-        #expect(reachable == Set(AnnotationTool.allCases.filter(\.isPointerTool)))
+        let chrome: Set<AnnotationTool> = [
+            .beautify, .subjectLift, .image, .camera, .progressiveBlur, .watermark
+        ]
+        #expect(reachable == Set(AnnotationTool.allCases).subtracting(chrome))
     }
 }

@@ -1,18 +1,18 @@
 import AppKit
 import Foundation
 
-/// The windows a capture must not photograph (docs/09 U2.1).
+/// The windows a capture must not photograph (docs/09 U2.1, docs/10 R3.2).
 ///
 /// Kadr's own overlays have to stay out of its own captures: a card sitting over the region
 /// the user selected, or the selection overlay itself during a re-freeze, ends up in the
-/// file. Until now that was done by excluding the whole *application*, which works and is
-/// blunt — it also makes it impossible to screenshot Kadr's Settings window to file a bug
-/// about it.
+/// file. Excluding the whole application works and is blunt — it also makes it impossible
+/// to screenshot Kadr's Settings window to file a bug about it.
 ///
-/// A registry is the precise version. Overlays put themselves on it; ordinary windows —
-/// Settings, the editor, the history browser — do not, and are capturable like any other
-/// app's. What is excluded becomes a decision each window makes about itself rather than a
-/// property of the process.
+/// A registry is the precise version. Overlays put themselves on it (every
+/// `NonActivatingPanel` does this when it comes on screen); ordinary windows — Settings,
+/// the editor, the history browser — do not, and are capturable like any other app's. The
+/// capture engines look the IDs up as `SCWindow`s and pass them to
+/// `SCContentFilter(display:excludingWindows:)`. Empty means exclude nothing.
 ///
 /// References are weak, and dead ones are swept on every read: a panel that has been closed
 /// has no window number worth excluding, and a registry that leaked its members would leak

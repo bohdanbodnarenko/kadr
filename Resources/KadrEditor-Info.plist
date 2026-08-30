@@ -67,6 +67,18 @@
 				<string>app.kadr.recording-session</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Kadr Look</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>app.kadr.preset</string>
+			</array>
+		</dict>
 	</array>
 
 	<!-- Removing filler words needs to know where the words are (docs/09 U3.6).
@@ -111,6 +123,24 @@
 				<key>public.filename-extension</key>
 				<array>
 					<string>kadrrec</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>app.kadr.preset</string>
+			<key>UTTypeDescription</key>
+			<string>Kadr Look</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>kadrpreset</string>
 				</array>
 			</dict>
 		</dict>

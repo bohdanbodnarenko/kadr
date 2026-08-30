@@ -70,7 +70,11 @@ struct SessionDocumentTests {
         try document.writeDraft(StubEdit(zoomCount: 5, title: "draft"))
 
         #expect(document.edit(StubEdit.self)?.title == "draft")
-        #expect(document.committedEdit(StubEdit.self)?.title == "committed")
+        let committed = try JSONDecoder().decode(
+            StubEdit.self,
+            from: Data(contentsOf: scratch.session.editURL)
+        )
+        #expect(committed.title == "committed")
     }
 
     @Test("With no draft the committed edit is what opens")
@@ -157,6 +161,12 @@ struct SessionDocumentTests {
         #expect(!stamp.matches(editDigest: "abc", pixelSize: CGSize(width: 1280, height: 720)))
     }
 
+    @Test("An empty digest is a miss, even against another empty digest")
+    func emptyDigestNeverMatches() {
+        let stamp = RenderStamp(editDigest: "", outputPath: "/tmp/out.mp4", pixelSize: .zero)
+        #expect(!stamp.matches(editDigest: "", pixelSize: .zero))
+    }
+
     /// A stamp naming a file the user has since moved is a stamp for nothing.
     @Test("A stamp whose file has gone does not match")
     func stampWithoutItsFile() {
@@ -220,21 +230,9 @@ struct InputTelemetryTests {
 
     /// Each layer can fail independently and silently, so a reconstruction has to be able
     /// to explain itself rather than just looking bad.
-    @Test("Every source says what it cannot do", arguments: TelemetrySource.allCases)
+    @Test("Every source has a title", arguments: TelemetrySource.allCases)
     func sourcesExplainThemselves(source: TelemetrySource) {
-        if source == .eventTap {
-            #expect(source.limitation == nil, "the good path has nothing to apologise for")
-        } else {
-            #expect(source.limitation != nil, "\(source) should say what it missed")
-        }
         #expect(!source.title.isEmpty)
-    }
-
-    @Test("Only the sampler misses clicks entirely")
-    func clickCapability() {
-        #expect(TelemetrySource.eventTap.capturesClicks)
-        #expect(TelemetrySource.appKitMonitors.capturesClicks)
-        #expect(!TelemetrySource.sampler.capturesClicks)
     }
 
     /// A recording's sidecar must never become a keylogger: only chords and special keys

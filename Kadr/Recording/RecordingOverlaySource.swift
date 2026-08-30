@@ -34,12 +34,16 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         var showsWebcam = false
         var webcamIsCircular = true
         /// Maps a screen point into the recorded area's own coordinates.
-        var pointConverter: @Sendable (CGPoint) -> CGPoint? = { $0 }
+        /// Screen space in, recorded pixels out — typed, for the reason C1 records
+        /// (docs/11 S0.1).
+        var pointConverter: @Sendable (ScreenPoint) -> PixelPoint? = { PixelPoint(x: $0.x, y: $0.y) }
     }
 
     /// A click as it was observed, before it is turned into something to draw.
     private struct RecordedClick {
-        let position: CGPoint
+        /// AppKit's global screen space, origin bottom-left — `NSEvent.mouseLocation`.
+        /// Named rather than a bare `CGPoint`, which is the whole of C1 (docs/11 S0.1).
+        let position: ScreenPoint
         let time: TimeInterval
         let isRight: Bool
     }
@@ -129,7 +133,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             clicks.removeAll { seconds - $0.time > Self.pulseDuration }
 
             let pulses = clicks.compactMap { click -> ClickPulse? in
-                guard let point = configuration.pointConverter(click.position) else { return nil }
+                guard let point = configuration.pointConverter(click.position)?.cgPoint else { return nil }
                 let age = seconds - click.time
                 guard age >= 0 else { return nil }
                 return ClickPulse(
@@ -178,7 +182,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         /// A test seam: the real path is a global `NSEvent` monitor, which needs a running
         /// event loop and a user. The thing worth testing is which *clock* the click is
         /// stamped with (docs/07 M2), and that is all this bypasses.
-        func recordClickForTesting(at position: CGPoint, isRight: Bool = false) {
+        func recordClickForTesting(at position: ScreenPoint, isRight: Bool = false) {
             lock.withLock {
                 clicks.append(RecordedClick(position: position, time: elapsedLocked(), isRight: isRight))
             }
@@ -196,7 +200,11 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             let isRight = event.type == .rightMouseDown
             let location = NSEvent.mouseLocation
             lock.withLock {
-                clicks.append(RecordedClick(position: location, time: elapsedLocked(), isRight: isRight))
+                clicks.append(RecordedClick(
+                    position: ScreenPoint(x: location.x, y: location.y),
+                    time: elapsedLocked(),
+                    isRight: isRight
+                ))
                 // A stuck monitor must not grow this without bound.
                 if clicks.count > 32 {
                     clicks.removeFirst(clicks.count - 32)

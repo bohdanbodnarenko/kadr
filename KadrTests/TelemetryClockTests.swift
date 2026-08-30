@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import RecordingCore
+import Shared
 import StudioSession
 import Testing
 @testable import Kadr
@@ -18,11 +19,18 @@ import Testing
 @MainActor
 @Suite("Telemetry clock")
 struct TelemetryClockTests {
-    private func recorder() -> PointerTelemetryRecorder {
+    /// A recorder over a real screen-to-pixel conversion.
+    ///
+    /// Not an identity function. The previous version of this file passed `{ $0 }`, and
+    /// that single decision is why 1,688 tests missed a vertical mirror on the seam these
+    /// tests exist to cover: an identity converter exercises no conversion, so the tap's
+    /// coordinate space never mattered to anything under test (docs/11 C1).
+    private func recorder(
+        screen: ScreenRect = ScreenRect(x: 0, y: 0, width: 1000, height: 800),
+        scale: DisplayScale = DisplayScale(2)
+    ) -> PointerTelemetryRecorder {
         let recorder = PointerTelemetryRecorder()
-        // An identity converter: the conversion is `WindowSpace`'s business and is tested
-        // there. What matters here is that the *time* moves.
-        recorder.start(pointConverter: { $0 })
+        recorder.start(pointConverter: { screen.pixelPoint(for: $0, scale: scale) })
         return recorder
     }
 
@@ -36,7 +44,7 @@ struct TelemetryClockTests {
         let recorder = recorder()
         for step in 0 ..< 10 {
             recorder.advance(to: Double(step) * 0.1)
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step) * 40, y: 100))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step) * 40, y: 100))
         }
         let telemetry = recorder.stop()
         #expect(telemetry.pointer.count >= 8, "only \(telemetry.pointer.count) samples were kept")
@@ -48,9 +56,9 @@ struct TelemetryClockTests {
     func samplesCarryDistinctTimes() {
         let recorder = recorder()
         recorder.advance(to: 1)
-        recorder.recordPointerForTesting(at: CGPoint(x: 10, y: 10))
+        recorder.recordPointerForTesting(at: ScreenPoint(x: 10, y: 10))
         recorder.advance(to: 2)
-        recorder.recordPointerForTesting(at: CGPoint(x: 400, y: 400))
+        recorder.recordPointerForTesting(at: ScreenPoint(x: 400, y: 400))
 
         let pointer = recorder.stop().pointer
         #expect(pointer.count == 2)
@@ -64,7 +72,7 @@ struct TelemetryClockTests {
     func frozenClockKeepsOnlyOne() {
         let recorder = recorder()
         for step in 0 ..< 10 {
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step) * 40, y: 100))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step) * 40, y: 100))
         }
         #expect(recorder.stop().pointer.count == 1)
     }
@@ -75,7 +83,7 @@ struct TelemetryClockTests {
     func clicksAreStamped() {
         let recorder = recorder()
         recorder.advance(to: 4.25)
-        recorder.recordClickForTesting(at: CGPoint(x: 100, y: 100))
+        recorder.recordClickForTesting(at: ScreenPoint(x: 100, y: 100))
 
         let clicks = recorder.stop().clicks
         #expect(clicks.count == 1)
@@ -89,7 +97,7 @@ struct TelemetryClockTests {
         let recorder = recorder()
         for step in 0 ..< 50 {
             recorder.advance(to: Double(step) * 0.1)
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step) * 20, y: 100))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step) * 20, y: 100))
         }
         let telemetry = recorder.stop()
         let span = (telemetry.pointer.last?.time ?? 0) - (telemetry.pointer.first?.time ?? 0)
@@ -144,14 +152,14 @@ struct TelemetryClockTests {
         // Warmed: the first sample legitimately encodes, and one encode is the point.
         for step in 0 ..< 5 {
             recorder.advance(to: Double(step) * 0.02)
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step), y: 10))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step), y: 10))
         }
 
         let samples = 2000
         let start = ContinuousClock.now
         for step in 0 ..< samples {
             recorder.advance(to: 1 + Double(step) * 0.02)
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step % 500), y: 10))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step % 500), y: 10))
         }
         let elapsed = Double((ContinuousClock.now - start).components.attoseconds) / 1e18
         let perSample = elapsed / Double(samples)
@@ -167,7 +175,7 @@ struct TelemetryClockTests {
         let recorder = recorder()
         for step in 0 ..< 500 {
             recorder.advance(to: Double(step) * 0.02)
-            recorder.recordPointerForTesting(at: CGPoint(x: Double(step % 400), y: 10))
+            recorder.recordPointerForTesting(at: ScreenPoint(x: Double(step % 400), y: 10))
         }
         #expect(recorder.stop().cursors.count <= 2, "the cursor artwork was stored more than once")
     }

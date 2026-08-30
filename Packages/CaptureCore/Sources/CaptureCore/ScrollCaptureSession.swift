@@ -29,16 +29,16 @@ public actor ScrollCaptureSession {
     public private(set) var framePaths: [URL] = []
     public private(set) var pixelSize = PixelSize(width: 0, height: 0)
     private var isCapturing = false
+    private var excludedWindowIDs: Set<CGWindowID> = []
 
     /// Called on the main actor as each frame lands, for the growing-strip preview and the
     /// settle detection the auto tier needs.
     private var onFrame: (@Sendable (ScrollFrameNote) -> Void)?
 
-    /// Kadr's own bundle, so its windows can be kept out of the frames.
-    private let ownBundleIdentifier: String?
+    public init() {}
 
-    public init(ownBundleIdentifier: String? = Bundle.main.bundleIdentifier) {
-        self.ownBundleIdentifier = ownBundleIdentifier
+    public func setExcludedWindowIDs(_ ids: Set<CGWindowID>) {
+        excludedWindowIDs = ids
     }
 
     /// What the caller learns about a frame without being handed the frame.
@@ -72,11 +72,9 @@ public actor ScrollCaptureSession {
 
         // A scroll capture runs for seconds while the user scrolls, which is plenty of
         // time for a card to appear over the region and be stitched into the result
-        // (docs/07 LOW).
-        let own = ownBundleIdentifier.map { identifier in
-            content.applications.filter { $0.bundleIdentifier == identifier }
-        } ?? []
-        let filter = CaptureEngine.filter(for: display, excluding: own)
+        // (docs/07 LOW, docs/10 R3.2).
+        let excluded = CaptureEngine.windows(matching: excludedWindowIDs, in: content)
+        let filter = CaptureEngine.filter(for: display, excluding: excluded)
         let geometry = DisplayGeometry(
             displayID: displayID,
             frame: DisplayRect(cgRect: display.frame),

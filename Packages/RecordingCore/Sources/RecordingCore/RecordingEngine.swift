@@ -24,7 +24,6 @@ public actor RecordingEngine {
     private let signposter = KadrLog.signposter(.recording)
     private let stitcher: any SegmentStitching
     private let compositor = FrameCompositor()
-    let ownBundleIdentifier: String?
 
     private var stream: SCStream?
     private var output: StreamOutput?
@@ -46,12 +45,15 @@ public actor RecordingEngine {
 
     public private(set) var state: RecordingState = .idle
 
-    public init(
-        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier,
-        stitcher: any SegmentStitching = SegmentStitcher()
-    ) {
-        self.ownBundleIdentifier = ownBundleIdentifier
+    /// Window numbers to leave out of display and region recordings (docs/10 R3.2).
+    public private(set) var excludedWindowIDs: Set<CGWindowID> = []
+
+    public init(stitcher: any SegmentStitching = SegmentStitcher()) {
         self.stitcher = stitcher
+    }
+
+    public func setExcludedWindowIDs(_ ids: Set<CGWindowID>) {
+        excludedWindowIDs = ids
     }
 
     #if DEBUG

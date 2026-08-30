@@ -68,16 +68,10 @@ extension RecordingEngine {
     }
 
     func filterExcludingOwnWindows(display: SCDisplay, in content: SCShareableContent) -> SCContentFilter {
-        guard let ownBundleIdentifier else {
-            return SCContentFilter(display: display, excludingWindows: [])
-        }
-        let own = content.applications.filter { $0.bundleIdentifier == ownBundleIdentifier }
-        guard !own.isEmpty else {
-            return SCContentFilter(display: display, excludingWindows: [])
-        }
-        // The recording HUD and the stop button belong to Kadr, and none of it should
-        // appear in the recording (docs/03 §1.8).
-        return SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
+        // Per-window, never the whole app: the HUD and stop button register themselves,
+        // Settings does not (docs/10 R3.2).
+        let windows = content.windows.filter { excludedWindowIDs.contains($0.windowID) }
+        return SCContentFilter(display: display, excludingWindows: windows)
     }
 
     func pixelSize(of filter: SCContentFilter) -> PixelSize {

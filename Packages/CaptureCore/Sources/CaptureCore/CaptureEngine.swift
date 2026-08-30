@@ -23,7 +23,6 @@ public actor CaptureEngine {
     private let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
     private let frontmostApplication: any FrontmostApplicationProviding
-    private let ownBundleIdentifier: String?
 
     /// Whether captures keep the display's HDR range (docs/06 M25).
     ///
@@ -32,16 +31,26 @@ public actor CaptureEngine {
     /// callers would only make each of those calls harder to read.
     public private(set) var dynamicRange: DynamicRange = .standard
 
+    /// Window numbers to leave out of display and region captures (docs/10 R3.2).
+    ///
+    /// Per-window rather than the whole app: overlays register themselves, Settings does
+    /// not, and a bug report can include a screenshot of the Settings window. Empty means
+    /// exclude nothing. The agent pushes the registry here before each freeze or capture
+    /// because OverlayKit cannot import this package.
+    public private(set) var excludedWindowIDs: Set<CGWindowID> = []
+
     public func setDynamicRange(_ range: DynamicRange) {
         dynamicRange = range.resolved
     }
 
+    public func setExcludedWindowIDs(_ ids: Set<CGWindowID>) {
+        excludedWindowIDs = ids
+    }
+
     public init(
-        frontmostApplication: any FrontmostApplicationProviding = WorkspaceFrontmostApplication(),
-        ownBundleIdentifier: String? = Bundle.main.bundleIdentifier
+        frontmostApplication: any FrontmostApplicationProviding = WorkspaceFrontmostApplication()
     ) {
         self.frontmostApplication = frontmostApplication
-        self.ownBundleIdentifier = ownBundleIdentifier
     }
 
     // MARK: - Content
@@ -64,7 +73,9 @@ public actor CaptureEngine {
         defer { signposter.endInterval("freezeAllDisplays", state) }
 
         let content = try await content(onScreenWindowsOnly: true)
-        let excluded = options.excludesOwnWindows ? ownApplications(in: content) : []
+        let excluded = options.excludesOwnWindows
+            ? Self.windows(matching: excludedWindowIDs, in: content)
+            : []
         // Read once, off the actor, so the concurrent freezes agree with each other and
         // with the capture that is cropped out of them (docs/04 §4.2).
         let range = dynamicRange
@@ -107,7 +118,10 @@ public actor CaptureEngine {
             throw CaptureError.displayNotFound(displayID)
         }
 
-        let filter = Self.filter(for: display, excluding: excludesOwnWindows ? ownApplications(in: content) : [])
+        let filter = Self.filter(
+            for: display,
+            excluding: excludesOwnWindows ? Self.windows(matching: excludedWindowIDs, in: content) : []
+        )
         let scale = DisplayScale(CGFloat(filter.pointPixelScale))
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = includesCursor
@@ -185,7 +199,10 @@ public actor CaptureEngine {
         // Kadr's own windows are excluded here too, not just in the full-display paths: a
         // card or a pin sitting over the region the user selected ends up in the file
         // otherwise (docs/07 LOW).
-        let filter = Self.filter(for: display, excluding: excludesOwnWindows ? ownApplications(in: content) : [])
+        let filter = Self.filter(
+            for: display,
+            excluding: excludesOwnWindows ? Self.windows(matching: excludedWindowIDs, in: content) : []
+        )
         let geometry = DisplayGeometry(
             displayID: displayID,
             frame: DisplayRect(cgRect: display.frame),
@@ -289,11 +306,11 @@ public actor CaptureEngine {
 
     private nonisolated func freeze(
         display: SCDisplay,
-        excluding applications: [SCRunningApplication],
+        excluding windows: [SCWindow],
         options: FreezeOptions,
         dynamicRange: DynamicRange = .standard
     ) async throws -> DisplayFreeze {
-        let filter = Self.filter(for: display, excluding: applications)
+        let filter = Self.filter(for: display, excluding: windows)
         if #available(macOS 14.2, *) {
             filter.includeMenuBar = !options.excludesMenuBar
         }
@@ -352,11 +369,6 @@ public actor CaptureEngine {
         }
     }
 
-    private func ownApplications(in content: SCShareableContent) -> [SCRunningApplication] {
-        guard let ownBundleIdentifier else { return [] }
-        return content.applications.filter { $0.bundleIdentifier == ownBundleIdentifier }
-    }
-
     /// The geometry half of a capture's metadata, grouped so the builder stays
     /// readable at its three call sites.
     struct CaptureOrigin {
@@ -384,17 +396,25 @@ public actor CaptureEngine {
         )
     }
 
-    /// A display filter, with `applications` left out of it.
+    /// A display filter with specific windows left out of it (docs/10 R3.2).
     ///
-    /// One place, because "which windows are in the shot" is a decision every capture path
-    /// has to make the same way — and three of them used to answer it differently.
+    /// Always `excludingWindows`, never the whole application: overlays belong on the
+    /// list, Settings does not, and whole-app exclusion made Kadr's own windows
+    /// un-screenshotable.
     nonisolated static func filter(
         for display: SCDisplay,
-        excluding applications: [SCRunningApplication]
+        excluding windows: [SCWindow]
     ) -> SCContentFilter {
-        applications.isEmpty
-            ? SCContentFilter(display: display, excludingWindows: [])
-            : SCContentFilter(display: display, excludingApplications: applications, exceptingWindows: [])
+        SCContentFilter(display: display, excludingWindows: windows)
+    }
+
+    /// The shareable windows whose IDs are currently registered for exclusion.
+    nonisolated static func windows(
+        matching ids: Set<CGWindowID>,
+        in content: SCShareableContent
+    ) -> [SCWindow] {
+        guard !ids.isEmpty else { return [] }
+        return content.windows.filter { ids.contains($0.windowID) }
     }
 
     private func snapshot(of content: SCShareableContent) -> ShareableContentSnapshot {

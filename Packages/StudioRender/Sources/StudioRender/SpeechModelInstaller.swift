@@ -38,16 +38,6 @@ public struct SpeechModelInstaller: Sendable {
         /// This system is too old for `SpeechAnalyzer`, so there is nothing to install —
         /// `SFSpeechRecognizer` uses whatever the system already has.
         case notApplicable
-
-        /// Whether transcription can run right now without fetching anything.
-        public var isReady: Bool {
-            self == .installed
-        }
-
-        /// Whether offering a download would do anything.
-        public var canInstall: Bool {
-            self == .available
-        }
     }
 
     public enum InstallError: Error, Equatable, Sendable {

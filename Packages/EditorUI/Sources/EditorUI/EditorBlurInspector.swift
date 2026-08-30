@@ -49,6 +49,7 @@ struct EditorBlurInspector: View {
                 }
                 Toggle("Soften the middle instead", isOn: invertedBinding)
                 Button("Reset") { model.applyProgressiveBlur(.focus) }
+                Button("Obscure centre") { model.applyProgressiveBlur(.obscureCentre) }
             }
         }
     }

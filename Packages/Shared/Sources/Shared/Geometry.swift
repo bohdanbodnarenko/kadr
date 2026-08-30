@@ -90,6 +90,24 @@ public struct ScreenRect: Hashable, Sendable, Codable {
     public var isEmpty: Bool {
         width <= 0 || height <= 0
     }
+
+    public func contains(_ point: ScreenPoint) -> Bool {
+        point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
+    }
+
+    /// A screen point in this rect's own backing pixels, origin top-left.
+    ///
+    /// Clicks arrive in AppKit space (origin bottom-left). Captured frames are pixels
+    /// with a top-left origin. This is the one conversion both the display recorder and
+    /// the region recorder must use — doing the Y-flip ad-hoc is how a halo lands on
+    /// the wrong edge (docs/10 R3.5).
+    public func pixelPoint(for point: ScreenPoint, scale: DisplayScale) -> PixelPoint? {
+        guard contains(point) else { return nil }
+        return PixelPoint(
+            x: (point.x - minX) * scale.factor,
+            y: (maxY - point.y) * scale.factor
+        )
+    }
 }
 
 // MARK: - Display space (CoreGraphics / ScreenCaptureKit, top-left origin, points)
@@ -164,6 +182,24 @@ public struct DisplayRect: Hashable, Sendable {
 
 // MARK: - Pixels
 
+/// A point in a capture's backing store: origin top-left, unit pixels.
+///
+/// Distinct from `ScreenPoint` so a Y-flip cannot compile away. Sub-pixel values are
+/// allowed because a click is not required to land on a pixel centre.
+public struct PixelPoint: Hashable, Sendable, Codable {
+    public var x: CGFloat
+    public var y: CGFloat
+
+    public init(x: CGFloat, y: CGFloat) {
+        self.x = x
+        self.y = y
+    }
+
+    public var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+}
+
 /// An integral size in a display's backing store.
 public struct PixelSize: Hashable, Sendable, Codable {
     public var width: Int
@@ -219,6 +255,26 @@ public struct GlobalCoordinateSpace: Hashable, Sendable {
     /// height is the flip axis regardless of how the other displays are arranged.
     public static var current: GlobalCoordinateSpace {
         GlobalCoordinateSpace(primaryDisplayHeight: CGDisplayBounds(CGMainDisplayID()).height)
+    }
+}
+
+public extension DisplayPoint {
+    /// Flips into AppKit's bottom-left origin space (docs/11 S0.1).
+    ///
+    /// The rect pair has had this conversion since M0; the *point* pair never did, so
+    /// anything holding a single point had to flip it by hand or — as the event tap did —
+    /// not at all. A `CGEvent`'s `location` is display space; `NSEvent.mouseLocation` is
+    /// screen space; both are a bare `CGPoint`, and passing the first where the second was
+    /// expected mirrors every sample vertically with no symptom until something draws it.
+    func inScreenSpace(_ space: GlobalCoordinateSpace) -> ScreenPoint {
+        ScreenPoint(x: x, y: space.primaryDisplayHeight - y)
+    }
+}
+
+public extension ScreenPoint {
+    /// Flips into CoreGraphics' top-left origin space.
+    func inDisplaySpace(_ space: GlobalCoordinateSpace) -> DisplayPoint {
+        DisplayPoint(x: x, y: space.primaryDisplayHeight - y)
     }
 }
 

@@ -124,6 +124,31 @@ struct RecordingSessionSweepTests {
         #expect(session.hasFootage)
     }
 
+    /// Cross-volume attach copies rather than links, and a copy's link count is always 1.
+    /// Without the marker those sessions would never be swept (docs/10 R3.5).
+    @Test("An aged-out copy of footage that lives on another volume is swept")
+    func sweepsAnAgedCopy() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let aged = Date(timeIntervalSinceNow: -60 * 24 * 60 * 60)
+        let session = try makeSession(
+            in: root,
+            named: "old-copy",
+            modified: aged
+        )
+        session.markFootageAsCopy()
+        // Writing the marker updates the directory's mtime; put the clock back so
+        // age-based sweep still sees an old session.
+        try FileManager.default.setAttributes(
+            [.modificationDate: aged],
+            ofItemAtPath: session.directory.path
+        )
+
+        #expect(!session.holdsTheOnlyCopy)
+        #expect(RecordingSessionStore(root: root).sweepExpired() == 1)
+        #expect(!session.exists)
+    }
+
     @Test("A recent session is kept even when its footage is redundant")
     func keepsRecentSessions() throws {
         let root = scratch()

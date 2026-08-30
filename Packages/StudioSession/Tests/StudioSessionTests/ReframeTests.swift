@@ -155,6 +155,35 @@ struct StudioEditTests {
         #expect(edit.showsCursor)
     }
 
+    @Test("A free crop is applied before the aspect reframe")
+    func freeCropThenReframe() {
+        var edit = StudioEdit.untouched(duration: 1)
+        edit.cropRect = CGRect(x: 0.25, y: 0, width: 0.5, height: 1)
+        let free = edit.pixelCrop(in: size)
+        #expect(abs(free.minX - size.width * 0.25) < 0.001)
+        #expect(abs(free.width - size.width * 0.5) < 0.001)
+
+        edit.reframe = Reframe(aspect: .square, fill: .fill)
+        let combined = edit.sourceRect(for: size)
+        #expect(combined.minX >= free.minX - 0.001)
+        #expect(combined.maxX <= free.maxX + 0.001)
+        #expect(combined.width <= free.width + 0.001)
+    }
+
+    @Test("A missing crop is the whole frame")
+    func noCropIsIdentity() {
+        let edit = StudioEdit.untouched(duration: 1)
+        #expect(edit.pixelCrop(in: size) == CGRect(origin: .zero, size: size))
+        #expect(edit.sourceRect(for: size) == CGRect(origin: .zero, size: size))
+    }
+
+    @Test("An old edit without a crop field still opens")
+    func cropDefaultsAbsent() throws {
+        let json = #"{"version": 1}"#
+        let edit = try JSONDecoder().decode(StudioEdit.self, from: Data(json.utf8))
+        #expect(edit.cropRect == nil)
+    }
+
     /// Changing the aspect ratio must re-plan the camera immediately, not leave cues
     /// pointing off the new frame.
     @Test("Renderable zooms reflect the reframe")
@@ -219,6 +248,7 @@ struct StudioEditTests {
         edit.clips.split(atEdited: 4)
         edit.zooms = [ZoomCue(start: 1, duration: 2, magnification: 2)]
         edit.reframe = Reframe(aspect: .square)
+        edit.cropRect = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
         edit.camera = .rectangle
         edit.showsKeystrokes = false
 

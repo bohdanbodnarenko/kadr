@@ -105,6 +105,7 @@ final class ScrollCaptureCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
+                await CaptureExclusionPush.into(captureEngine)
                 let freezes = try await captureEngine.freezeAllDisplays()
                 permissions.noteCaptureSuccess()
                 overlay.present(
@@ -138,6 +139,7 @@ final class ScrollCaptureCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
+                await CaptureExclusionPush.into(session)
                 try await session.start(
                     region: rect,
                     on: display.displayID,

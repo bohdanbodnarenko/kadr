@@ -30,9 +30,9 @@ public struct StudioRenderPlan: Sendable {
     ///     settle together rather than one chasing the other.
     public init(edit: StudioEdit, sourceSize: CGSize, spring: MotionSpring = MotionSpring()) {
         self.sourceSize = sourceSize
-        let crop = edit.reframe.sourceRect(for: sourceSize)
+        let crop = edit.sourceRect(for: sourceSize)
         self.crop = crop
-        outputSize = Self.evenSize(edit.reframe.outputSize(for: sourceSize))
+        outputSize = Self.evenSize(edit.outputSize(for: sourceSize))
         duration = edit.duration
 
         // Cues are replanned for the crop and *then* moved into its coordinates. Both
@@ -40,8 +40,7 @@ public struct StudioRenderPlan: Sendable {
         // inside the crop and takes the crop's own zoom back out of the magnification,
         // and the translation is what makes the anchor mean the same point once the
         // timeline is built over the crop rather than the whole frame.
-        let replanned = edit.reframe
-            .replanning(edit.renderableZooms(in: sourceSize), in: sourceSize)
+        let replanned = edit.renderableZooms(in: sourceSize)
             .map { $0.translated(by: CGPoint(x: -crop.minX, y: -crop.minY), in: sourceSize) }
 
         viewports = ViewportTimeline(

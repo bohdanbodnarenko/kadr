@@ -14,7 +14,14 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
     /// How long a piece of the recording it is, before speed.
     public var sourceDuration: TimeInterval
     /// How fast to play it. 1 is real time; 2 is twice as fast.
-    public var speed: Double
+    public var speed: Double {
+        didSet {
+            let clamped = min(max(speed, Self.minimumSpeed), Self.maximumSpeed)
+            if speed != clamped {
+                speed = clamped
+            }
+        }
+    }
 
     public init(
         id: UUID = UUID(),

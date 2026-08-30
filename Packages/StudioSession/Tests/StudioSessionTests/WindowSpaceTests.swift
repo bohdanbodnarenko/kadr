@@ -129,4 +129,32 @@ struct WindowSpaceTests {
         )
         #expect(point == nil)
     }
+
+    /// SCK pins a shrunken window to the surface's top-left rather than stretching it to
+    /// fill. A click on the right edge of a half-width window is halfway across the frame,
+    /// not on the right edge of it (docs/10 R3.1).
+    @Test("A shrunken window pins its content to the top-left of the surface")
+    func shrinkPinsToTopLeft() throws {
+        let half = CGRect(x: 100, y: 200, width: 400, height: 600)
+        let rightEdge = try #require(WindowSpace.framePoint(
+            for: CGPoint(x: 499.999, y: 200),
+            contentRect: half,
+            pixelSize: pixelSize,
+            originalSize: window.size
+        ))
+        #expect(abs(rightEdge.x - 800) < 0.01, "half the original width occupies half the surface")
+        #expect(abs(rightEdge.y) < 0.001)
+    }
+
+    @Test("A click a third across a shrunken window stays a third across the content")
+    func shrinkKeepsTheFractionInsideTheContent() throws {
+        let half = CGRect(x: 100, y: 200, width: 400, height: 600)
+        let point = try #require(WindowSpace.framePoint(
+            for: CGPoint(x: 100 + 400.0 / 3.0, y: 200),
+            contentRect: half,
+            pixelSize: pixelSize,
+            originalSize: window.size
+        ))
+        #expect(abs(point.x - 800.0 / 3.0) < 0.001)
+    }
 }

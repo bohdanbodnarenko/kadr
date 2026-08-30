@@ -98,21 +98,25 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// Whether a cached render can be handed over instead of doing the work again.
     ///
     /// The file has to still be there: a stamp naming a file the user has since moved is a
-    /// stamp for nothing.
+    /// stamp for nothing. An empty digest is never a hit — two failed encodes used to
+    /// collide into shipping the wrong file (docs/10 R3.5).
     public func matches(editDigest: String, pixelSize: CGSize) -> Bool {
-        self.editDigest == editDigest
+        guard !editDigest.isEmpty, !self.editDigest.isEmpty else { return false }
+        return self.editDigest == editDigest
             && self.pixelSize == pixelSize
             && FileManager.default.fileExists(atPath: outputPath)
     }
 
-    /// The digest of an edit.
+    /// The digest of an edit, or nil if it could not be encoded.
     ///
     /// Encoded with sorted keys so the same edit always hashes the same way — without that
-    /// a dictionary's iteration order would make every second export a cache miss.
-    public static func digest(of value: some Encodable) -> String {
+    /// a dictionary's iteration order would make every second export a cache miss. Nil
+    /// rather than empty: an empty string compared equal to another empty string, which is
+    /// the exact "wrong file shipped" outcome this type exists to prevent.
+    public static func digest(of value: some Encodable) -> String? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(value) else { return "" }
+        guard let data = try? encoder.encode(value) else { return nil }
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
@@ -181,10 +185,6 @@ public struct SessionDocument: Sendable {
     /// when the app stopped, and it is the thing they would be surprised to lose.
     public func edit<Edit: Decodable>(_ type: Edit.Type) -> Edit? {
         read(type, from: session.draftEditURL) ?? read(type, from: session.editURL)
-    }
-
-    public func committedEdit<Edit: Decodable>(_ type: Edit.Type) -> Edit? {
-        read(type, from: session.editURL)
     }
 
     private func read<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {

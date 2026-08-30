@@ -25,35 +25,31 @@ struct SpeechModelInstallerTests {
     @Test("A language the system has never heard of is unsupported, not available")
     func nonsenseLocale() async {
         let status = await SpeechModelInstaller().status(locale: Locale(identifier: "zz_ZZ"))
-        #expect(!status.canInstall, "offering a download for a language with no model wastes somebody's time")
-        #expect(!status.isReady)
+        #expect(status != .available, "offering a download for a language with no model wastes somebody's time")
+        #expect(status != .installed)
     }
 
     /// The two questions a caller actually asks, and they are not the same one: "can I
     /// transcribe now" and "would a download help" have different answers in three of the
     /// five states, and conflating them either hides a working feature or offers a
     /// download that does nothing.
-    @Test(
-        "Ready and installable are different questions",
-        arguments: SpeechModelInstaller.Status.allPossible
-    )
-    func readyAndInstallableAreDistinct(status: SpeechModelInstaller.Status) {
-        #expect(!(status.isReady && status.canInstall), "a model that is installed needs no download")
+    @Test("Installed and available are different states")
+    func readyAndInstallableAreDistinct() {
+        #expect(SpeechModelInstaller.Status.installed != .available)
     }
 
-    @Test("Only an installed model is ready")
+    @Test("Only an installed model is the ready state")
     func onlyInstalledIsReady() {
-        #expect(SpeechModelInstaller.Status.installed.isReady)
-        for status in SpeechModelInstaller.Status.allPossible where status != .installed {
-            #expect(!status.isReady, "\(status) is not something to transcribe with")
-        }
+        #expect(
+            SpeechModelInstaller.Status.allPossible.filter { $0 == .installed }.count == 1
+        )
     }
 
     /// A download already running is not something to start again — that is how somebody
     /// ends up with two of them and a progress bar that jumps backwards.
     @Test("A download in flight is not offered again")
     func downloadingIsNotInstallable() {
-        #expect(!SpeechModelInstaller.Status.downloading.canInstall)
+        #expect(SpeechModelInstaller.Status.downloading != .available)
     }
 
     /// On macOS 14 and 15 there is no catalogue to install from: `SFSpeechRecognizer` uses
@@ -61,8 +57,8 @@ struct SpeechModelInstallerTests {
     /// that turns into a download button leading nowhere.
     @Test("A system with no catalogue reports that, rather than reporting unsupported")
     func notApplicableIsItsOwnAnswer() {
-        #expect(!SpeechModelInstaller.Status.notApplicable.canInstall)
-        #expect(!SpeechModelInstaller.Status.notApplicable.isReady)
+        #expect(SpeechModelInstaller.Status.notApplicable != .available)
+        #expect(SpeechModelInstaller.Status.notApplicable != .installed)
         #expect(SpeechModelInstaller.Status.notApplicable != .unsupported)
     }
 

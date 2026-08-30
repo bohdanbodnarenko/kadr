@@ -1,7 +1,6 @@
 import CoreGraphics
 import Foundation
 import os
-import ScreenCaptureKit
 import Shared
 
 /// The Screen Recording grant, as a state machine (docs/04 §4.1).
@@ -34,11 +33,17 @@ public protocol ScreenRecordingAccessProviding: Sendable {
     func preflight() -> Bool
     /// `CGRequestScreenCaptureAccess` — prompts the first time, no-ops afterwards.
     @discardableResult func request() -> Bool
-    /// Probes by asking for shareable content, which only succeeds with a live grant.
+    /// Silent live check, polled only while onboarding is on screen.
+    ///
+    /// Must not call ScreenCaptureKit: `SCShareableContent` presents the
+    /// "record this computer's screen and audio" sheet on macOS 15+, and a
+    /// one-second loop re-presents it even when the System Settings toggle is
+    /// already on (docs/04 §4.1).
     func probe() async -> Bool
 }
 
-/// The real implementation, talking to CoreGraphics and ScreenCaptureKit.
+/// The real implementation, talking to CoreGraphics. ScreenCaptureKit is not used
+/// here: asking for shareable content is a prompt on macOS 15+, not a check.
 public struct SystemScreenRecordingAccess: ScreenRecordingAccessProviding {
     public init() {}
 
@@ -52,12 +57,7 @@ public struct SystemScreenRecordingAccess: ScreenRecordingAccessProviding {
     }
 
     public func probe() async -> Bool {
-        do {
-            _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            return true
-        } catch {
-            return false
-        }
+        preflight()
     }
 }
 

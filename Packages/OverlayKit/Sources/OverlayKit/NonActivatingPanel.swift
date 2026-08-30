@@ -54,6 +54,31 @@ open class NonActivatingPanel: NSPanel {
         // Full-screen overlays have nothing to do with the Window menu.
         isExcludedFromWindowsMenu = true
     }
+
+    /// Registers for capture exclusion the moment the overlay is on screen (docs/10 R3.2).
+    ///
+    /// Overlays that also register themselves explicitly are harmless: the registry
+    /// deduplicates. Unregistering on `orderOut`/`close` is what keeps a dismissed
+    /// overlay from occupying a slot after it is gone.
+    override open func orderFront(_ sender: Any?) {
+        super.orderFront(sender)
+        CaptureExclusionRegistry.shared.register(self)
+    }
+
+    override open func orderFrontRegardless() {
+        super.orderFrontRegardless()
+        CaptureExclusionRegistry.shared.register(self)
+    }
+
+    override open func orderOut(_ sender: Any?) {
+        CaptureExclusionRegistry.shared.unregister(self)
+        super.orderOut(sender)
+    }
+
+    override open func close() {
+        CaptureExclusionRegistry.shared.unregister(self)
+        super.close()
+    }
 }
 
 /// A panel that can be shown on one screen and torn down again.

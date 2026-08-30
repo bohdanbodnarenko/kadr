@@ -153,8 +153,6 @@ public struct HistoryPolicy: Sendable, Hashable {
         self.sizeCapBytes = sizeCapBytes
         self.sessionStartedAt = sessionStartedAt
     }
-
-    public static let keepForever = HistoryPolicy()
 }
 
 /// Bytes and count currently on disk in the library.

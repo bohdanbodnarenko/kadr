@@ -40,6 +40,10 @@ struct EditorInspector: View {
             if !model.selection.isEmpty {
                 Section("Selection") {
                     Button("Bring to Front") { model.bringSelectionToFront() }
+                    Button("Bring Forward") { model.bringSelectionForward() }
+                        .keyboardShortcut("]", modifiers: .command)
+                    Button("Send Backward") { model.sendSelectionBackward() }
+                        .keyboardShortcut("[", modifiers: .command)
                     Button("Send to Back") { model.sendSelectionToBack() }
                     Button("Delete", role: .destructive) { model.deleteSelection() }
                 }

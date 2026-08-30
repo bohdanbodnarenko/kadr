@@ -1,23 +1,25 @@
 import CoreGraphics
 import Foundation
 
-/// Turning a screen point into a moving window's own pixels (docs/09 U3.1).
+/// Turning a screen point into a moving window's own pixels (docs/09 U3.1, docs/10 R3.1).
 ///
 /// A window recording is the one capture whose relationship to the screen changes while it
 /// runs. A display and a region sit still, so where a click lands on screen fixes where it
 /// lands in the frame once and for all; a window can be dragged and resized, and the same
 /// screen point means something different afterwards.
 ///
-/// Two corrections, and the second is the one that is easy to miss. Dragging shifts the
-/// origin, which is a subtraction. *Resizing* does not change the recording's pixel size at
-/// all — ScreenCaptureKit fixes that when the stream starts and scales the window into it —
-/// so a window made twice as wide has its content squeezed to half scale, and a conversion
-/// using the scale it started with puts every later click at twice the distance from the
-/// left edge that it should be.
+/// Two hops, and the second is the one that is easy to miss:
 ///
-/// Which is why this is proportional rather than scaled: a point a third of the way across
-/// the window is a third of the way across the frame, whatever the window's size has done
-/// since.
+/// 1. Map the screen point through the window's `contentRect` *now*, as a 0…1 fraction.
+/// 2. Place that fraction into the rectangle the window occupies *inside the fixed output
+///    surface*. ScreenCaptureKit chooses the surface size when the stream starts and never
+///    refits it. A shrink is scaled down and pinned to the surface's top-left; a grow is
+///    scaled to fit. Stretching the fraction across the whole surface after a shrink puts
+///    every later click too far from the origin — the bug Screendrop shipped a fix for
+///    as "click positions in window recordings".
+///
+/// Normalised here, at capture time, so the sidecar stores already-correct pixels and no
+/// consumer has to know windows move (docs/10 R3.1).
 public enum WindowSpace {
     /// The recording's pixel size, from the window's size when the stream started.
     ///
@@ -30,21 +32,47 @@ public enum WindowSpace {
         )
     }
 
+    /// Where the window's picture sits inside the fixed output, origin at the surface's
+    /// top-left, size in pixels.
+    ///
+    /// `originalSize` is the window in points when the stream started. `currentSize` is
+    /// it now. The ratio of the two, times the locked `pixelSize`, is how many pixels of
+    /// the surface actually show the window — never more than the surface itself.
+    public static func surfaceContentSize(
+        currentSize: CGSize,
+        originalSize: CGSize,
+        pixelSize: CGSize
+    ) -> CGSize {
+        guard originalSize.width > 0, originalSize.height > 0 else { return pixelSize }
+        return CGSize(
+            width: min(currentSize.width / originalSize.width * pixelSize.width, pixelSize.width),
+            height: min(currentSize.height / originalSize.height * pixelSize.height, pixelSize.height)
+        )
+    }
+
     /// Where a screen point falls in the recorded frame, or nil if it falls outside it.
     ///
     /// - Parameters:
     ///   - contentRect: where the window is on screen *now*, from SCK's per-frame attachment.
     ///   - pixelSize: the recording's fixed pixel size.
+    ///   - originalSize: the window's size when the stream started, in the same space as
+    ///     `contentRect`. Defaults to the current size, which is the identity hop.
     public static func framePoint(
         for screenPoint: CGPoint,
         contentRect: CGRect,
-        pixelSize: CGSize
+        pixelSize: CGSize,
+        originalSize: CGSize? = nil
     ) -> CGPoint? {
         guard contentRect.width > 0, contentRect.height > 0 else { return nil }
         guard contentRect.contains(screenPoint) else { return nil }
-        return CGPoint(
-            x: (screenPoint.x - contentRect.minX) / contentRect.width * pixelSize.width,
-            y: (screenPoint.y - contentRect.minY) / contentRect.height * pixelSize.height
+
+        let nx = (screenPoint.x - contentRect.minX) / contentRect.width
+        let ny = (screenPoint.y - contentRect.minY) / contentRect.height
+        let surface = surfaceContentSize(
+            currentSize: contentRect.size,
+            originalSize: originalSize ?? contentRect.size,
+            pixelSize: pixelSize
         )
+        return CGPoint(x: nx * surface.width, y: ny * surface.height)
     }
 }

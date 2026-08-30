@@ -192,8 +192,9 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         gestureBaseline = commands
     }
 
-    /// Whether a gesture is open. The view layer uses this to keep its live-drag path
-    /// and its rebuild-everything path from fighting.
+    /// Whether a gesture is open. Used to coalesce a drag into one undo step: while a
+    /// gesture is open, live edits amend the current history entry instead of pushing a
+    /// new one. The canvas drives `beginGesture`/`endGesture`; it does not poll this.
     public var isGestureOpen: Bool {
         gestureBaseline != nil
     }

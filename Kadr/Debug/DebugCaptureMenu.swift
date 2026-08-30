@@ -3,6 +3,7 @@
     import CaptureCore
     import ImageIO
     import os
+    import OverlayKit
     import Shared
     import UniformTypeIdentifiers
 
@@ -54,6 +55,7 @@
         @objc
         private func freezeAllDisplays() {
             run("freeze") {
+                await CaptureExclusionPush.into(self.engine)
                 let freezes = try await self.engine.freezeAllDisplays()
                 for freeze in freezes {
                     try self.write(freeze.image, named: "freeze-display-\(freeze.geometry.displayID)")
@@ -71,6 +73,7 @@
         @objc
         private func captureMainDisplay() {
             run("captureDisplay") {
+                await CaptureExclusionPush.into(self.engine)
                 let capture = try await self.engine.captureDisplay(CGMainDisplayID())
                 try self.write(capture.image, named: "display")
             }
@@ -79,6 +82,7 @@
         @objc
         private func captureRegion() {
             run("captureRegion") {
+                await CaptureExclusionPush.into(self.engine)
                 let snapshot = try await self.engine.shareableContent()
                 guard let display = snapshot.display(CGMainDisplayID()) ?? snapshot.displays.first else { return }
                 // A fixed rect 100 points in from the display's top-left corner.

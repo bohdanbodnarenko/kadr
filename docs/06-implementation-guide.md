@@ -105,8 +105,9 @@ Read docs/04-swift-architecture.md §4.1–4.2 and docs/03-features.md §1.1–1
 Implement in Packages/CaptureCore (agent-only, no UI):
 1. PermissionCoordinator: the unknown→denied→granted→revoked state machine
    from doc 04 §4.1. CGPreflightScreenCaptureAccess/CGRequestScreenCaptureAccess,
-   grant detection by SCShareableContent probe (polled ONLY while onboarding
-   is visible), relaunch helper for the first grant, revocation detection via
+   grant detection by CGPreflightScreenCaptureAccess (polled ONLY while
+   onboarding is visible; never SCShareableContent — that re-presents the TCC
+   sheet), relaunch helper for the first grant, revocation detection via
    SCK error mapping. Also expose an SCContentSharingPicker path that works
    with zero TCC permission.
 2. actor CaptureEngine with the API from doc 04 §4.2: freezeAllDisplays()

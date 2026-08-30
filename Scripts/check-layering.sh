@@ -222,6 +222,13 @@ for manifest in Packages/*/Package.swift; do
 done
 [ "$failures" -eq 0 ] && pass "package layering matches docs/04 §2"
 
+# ---------------------------------------------------------------- G. tested-only public API (docs/10 R3.3)
+if Scripts/check-dead-api.sh; then
+    :
+else
+    fail "dead-API check failed (docs/10 R3.3)"
+fi
+
 # ----------------------------------------------------------------
 echo
 if [ "$failures" -eq 0 ]; then

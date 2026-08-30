@@ -8,9 +8,10 @@ import Shared
 ///
 /// * **`ignoresMouseEvents`** — the badge sits over whatever the user is arranging
 ///   before the shot, and must never intercept a click.
-/// * **It belongs to Kadr**, so every capture path that excludes Kadr's own windows
-///   keeps it out of the picture. Doc 03 §1.5 requires the badge never to appear in the
-///   output, and excluding the app is how that is guaranteed rather than hoped for.
+/// * **It belongs to Kadr**, so every capture path that excludes registered overlay
+///   windows keeps it out of the picture. Doc 03 §1.5 requires the badge never to appear
+///   in the output; `NonActivatingPanel` registers itself on the capture-exclusion
+///   registry when it comes on screen (docs/10 R3.2).
 @MainActor
 public final class CountdownPanel {
     private static let size = CGSize(width: 96, height: 96)

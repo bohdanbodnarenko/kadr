@@ -140,6 +140,7 @@ final class AreaCaptureCoordinator {
                     // wallpaper afterwards leaves them in the shot and restarts the Finder
                     // for nothing (docs/07 H3).
                     await hygiene?.beginCaptureAndSettle()
+                    await CaptureExclusionPush.into(engine)
                     let captures = try await engine.captureAllDisplays(
                         includesCursor: includesCursor
                     )
@@ -170,6 +171,7 @@ final class AreaCaptureCoordinator {
                 // Applied before the freeze, because an area capture is cropped out of it
                 // and has to be in the same range as the file (docs/06 M25).
                 await engine.setDynamicRange(settings.captureDynamicRange)
+                await CaptureExclusionPush.into(engine)
                 let freezes = try await engine.freezeAllDisplays()
                 guard !Task.isCancelled else { return }
                 permissions.noteCaptureSuccess()
@@ -398,6 +400,7 @@ final class AreaCaptureCoordinator {
             do {
                 // Before the pixels, not after (docs/07 H3).
                 await hygiene?.beginCaptureAndSettle()
+                await CaptureExclusionPush.into(engine)
                 let capture = try await engine.captureRegion(
                     rect,
                     on: displayID,

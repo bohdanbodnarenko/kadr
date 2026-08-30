@@ -87,6 +87,26 @@ public struct RecordingSession: Sendable, Hashable {
         directory.appendingPathComponent("capture.json")
     }
 
+    /// Present when the footage was copied onto this volume rather than hard-linked
+    /// (docs/10 R3.5).
+    ///
+    /// A copy always has `referenceCount == 1`, so the usual "only copy" test would treat
+    /// every external-disk recording as unsweepable. The marker is the evidence that an
+    /// original exists elsewhere.
+    public var copyMarkerURL: URL {
+        directory.appendingPathComponent("copied.flag")
+    }
+
+    /// Records that `screen.mov` is a copy, not a hard link to the user's recording.
+    public func markFootageAsCopy() {
+        FileManager.default.createFile(atPath: copyMarkerURL.path, contents: Data())
+    }
+
+    /// Whether the footage was copied across volumes rather than linked.
+    public var footageIsACopy: Bool {
+        FileManager.default.fileExists(atPath: copyMarkerURL.path)
+    }
+
     /// The edit the user has committed.
     public var editURL: URL {
         directory.appendingPathComponent("edit.json")
@@ -159,6 +179,12 @@ public struct RecordingSession: Sendable, Hashable {
     /// already keeps.
     public var holdsTheOnlyCopy: Bool {
         guard hasFootage else { return false }
+        // A cross-volume copy is not the original. Age-based sweep is allowed; keeping it
+        // forever because the copy's link count is 1 is how Application Support grew
+        // without bound (docs/10 R3.5).
+        if footageIsACopy {
+            return false
+        }
         let links = (try? FileManager.default.attributesOfItem(atPath: screenURL.path)[.referenceCount]) as? Int
         // No answer means no evidence the footage is safe elsewhere, so it is treated as
         // the last copy: the cautious reading is the one that cannot lose anything.

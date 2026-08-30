@@ -79,13 +79,6 @@ public enum ArrowBindingResolver {
         return resolved
     }
 
-    /// Whether the arrow points at anything that still exists.
-    public static func isBound(_ spec: ArrowSpec, in commands: [AnnotationCommand]) -> Bool {
-        [spec.startBinding, spec.endBinding]
-            .compactMap(\.self)
-            .contains { target($0, in: commands) != nil }
-    }
-
     private static func target(
         _ binding: ArrowBinding,
         in commands: [AnnotationCommand]

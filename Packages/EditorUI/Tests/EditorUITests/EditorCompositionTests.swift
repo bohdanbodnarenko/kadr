@@ -16,6 +16,15 @@ struct EditorCompositionTests {
 
     private let png = Data([0x89, 0x50, 0x4E, 0x47])
 
+    private func insertedImages(in model: EditorDocumentModel) -> [ImageSpec] {
+        model.document.commands.compactMap { command in
+            if case let .image(spec) = command {
+                return spec
+            }
+            return nil
+        }
+    }
+
     @Test("Dropping an image adds it and selects it")
     func insertSelects() throws {
         let model = makeModel()
@@ -24,7 +33,7 @@ struct EditorCompositionTests {
             pixelSize: CGSize(width: 200, height: 100),
             at: CGPoint(x: 200, y: 150)
         ))
-        #expect(model.insertedImages.count == 1)
+        #expect(insertedImages(in: model).count == 1)
         #expect(model.selection == [id])
         #expect(model.selectedImage?.pngData == png)
     }
@@ -39,8 +48,8 @@ struct EditorCompositionTests {
                 at: CGPoint(x: 100 + index * 20, y: 100)
             )
         }
-        #expect(model.insertedImages.count == 3)
-        #expect(model.insertedImages.last?.pngData == Data([2]))
+        #expect(insertedImages(in: model).count == 3)
+        #expect(insertedImages(in: model).last?.pngData == Data([2]))
     }
 
     @Test("Empty data or a zero-sized image inserts nothing")
@@ -48,7 +57,7 @@ struct EditorCompositionTests {
         let model = makeModel()
         #expect(model.insertImage(pngData: Data(), pixelSize: CGSize(width: 10, height: 10), at: .zero) == nil)
         #expect(model.insertImage(pngData: png, pixelSize: .zero, at: .zero) == nil)
-        #expect(model.insertedImages.isEmpty)
+        #expect(insertedImages(in: model).isEmpty)
     }
 
     @Test("An inserted image can be moved like any other annotation")
@@ -88,7 +97,7 @@ struct EditorCompositionTests {
         model.undo()
         #expect(try #require(model.selectedImage).opacity == 1)
         model.undo()
-        #expect(model.insertedImages.isEmpty)
+        #expect(insertedImages(in: model).isEmpty)
     }
 
     @Test("With nothing selected there is no image to edit")
@@ -108,6 +117,6 @@ struct EditorCompositionTests {
         let model = makeModel()
         model.insertImage(pngData: png, pixelSize: CGSize(width: 100, height: 100), at: CGPoint(x: 200, y: 150))
         model.deleteSelection()
-        #expect(model.insertedImages.isEmpty)
+        #expect(insertedImages(in: model).isEmpty)
     }
 }

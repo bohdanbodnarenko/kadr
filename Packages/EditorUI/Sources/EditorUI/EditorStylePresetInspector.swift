@@ -1,5 +1,7 @@
 import AnnotationModel
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Whole looks: apply one, save one, see which one you are wearing (docs/09 U1.5).
 ///
@@ -31,6 +33,9 @@ struct EditorStylePresetInspector: View {
                     isNaming = true
                 }
                 .disabled(!hasAnyChrome)
+                Button("Export…") { exportCurrent() }
+                    .disabled(!hasAnyChrome)
+                Button("Import…") { importPreset() }
             }
 
             ForEach(presets) { preset in
@@ -105,5 +110,31 @@ struct EditorStylePresetInspector: View {
         let saved = StylePreset(name: name, capturing: model.document)
         presets = StylePreset.builtIn + store.add(saved)
         appliedID = saved.id
+    }
+
+    private func exportCurrent() {
+        let name = matchedPreset?.name ?? "Look"
+        let transfer = StylePresetTransfer(preset: StylePreset(name: name, capturing: model.document))
+        guard let data = try? transfer.encoded() else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(exportedAs: StylePresetTransfer.typeIdentifier)]
+        panel.nameFieldStringValue = "\(name).\(StylePresetTransfer.pathExtension)"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private func importPreset() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(exportedAs: StylePresetTransfer.typeIdentifier)]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url),
+              let preset = try? StylePresetTransfer.decoding(data)
+        else { return }
+        presets = StylePreset.builtIn + store.add(preset)
+        model.applyStylePreset(preset)
+        appliedID = preset.id
     }
 }

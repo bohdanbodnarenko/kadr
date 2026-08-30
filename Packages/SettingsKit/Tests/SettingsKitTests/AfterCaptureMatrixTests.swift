@@ -119,19 +119,6 @@ struct AfterCaptureMatrixTests {
         }
     }
 
-    @Test("The bridge back to an old-style action is the nearest one", arguments: [
-        (AfterCaptureActions([.overlay, .copy]), DefaultCaptureAction.copyToClipboard),
-        (AfterCaptureActions([.overlay, .save]), .saveToFolder),
-        (AfterCaptureActions([.overlay, .copy, .save]), .copyAndSave),
-        (AfterCaptureActions([.overlay]), .overlayOnly),
-        (AfterCaptureActions([.overlay, .pin]), .overlayOnly)
-    ])
-    func legacyBridge(actions: AfterCaptureActions, expected: DefaultCaptureAction) {
-        var matrix = AfterCaptureMatrix()
-        matrix[.screenshot] = actions
-        #expect(matrix.legacyAction(for: .screenshot) == expected)
-    }
-
     // MARK: - Storage
 
     private func throwawayDefaults() -> UserDefaults {

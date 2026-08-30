@@ -70,7 +70,7 @@ struct HistoryRetentionTests {
     func keepForever() async throws {
         let store = try HistoryStore.open(root: makeHistoryRoot())
         try await store.ingest(ingestDraft(seed: 1, capturedAt: Date(timeIntervalSince1970: 1)))
-        let report = try await store.applyRetention(.keepForever)
+        let report = try await store.applyRetention(HistoryPolicy())
         #expect(report.deletedCount == 0)
         #expect(try await store.storageUsage().itemCount == 1)
     }

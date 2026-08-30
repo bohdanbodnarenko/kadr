@@ -10,8 +10,9 @@ When a task references a doc section, read it before writing code.
    the Sparkle update integration. There are no upload/share/URL features —
    sharing is drag-and-drop + NSSharingServicePicker only. CI enforces this.
 2. RAM budget: agent idles <30 MB, zero timers, 0.0% CPU. The agent never
-   links EditorUI or VisionServices. Vision/encoders run in HelperTools
-   (self-terminating XPC); the editor is a separate app that dies on close.
+   links EditorUI, VisionServices, StudioRender or AnnotationRender. Vision/encoders
+   run in HelperTools (self-terminating XPC); the editor is a separate app that
+   dies on close. Sparkle's daily check is coalesced by NSBackgroundActivityScheduler.
 3. All screen capture via ScreenCaptureKit only — never CGWindowListCreateImage
    or CGDisplayCreateImage. All SCK calls stay in the agent process (TCC).
 4. AppKit owns windows (NonActivatingPanel recipes in docs/04 §5); SwiftUI is
@@ -45,7 +46,7 @@ Kadr.xcworkspace          open this, not the .xcodeproj
 Kadr.xcodeproj            the agent app target `Kadr` (LSUIElement, macOS 14+)
 Kadr/                     agent app sources (AppKit shell only)
 KadrTests/                agent app unit tests
-Packages/<Module>/        13 local SPM packages, docs/04 §2
+Packages/<Module>/        15 local SPM packages, docs/04 §2
 Scripts/                  check-layering.sh, check-size.sh
 .github/workflows/ci.yml  packages (matrix) · app build · lint + checks
 ```
@@ -58,12 +59,13 @@ enforced by `Scripts/check-layering.sh` and by the module tests.
 | Layer | Packages | Depends on |
 |---|---|---|
 | 0 | Shared | — |
-| 1 | CaptureCore, OverlayKit, AnnotationModel, MediaExport, VisionServices, AutomationKit, SettingsKit | Shared |
-| 2 | RecordingCore (CaptureCore), SelectionUI (OverlayKit), AnnotationRender (AnnotationModel), HistoryKit (MediaExport) | Shared + the package in brackets |
-| 3 | EditorUI | Shared, AnnotationModel, AnnotationRender, MediaExport |
+| 1 | CaptureCore, OverlayKit, AnnotationModel, MediaExport, VisionServices, AutomationKit, SettingsKit, StudioSession | Shared |
+| 2 | RecordingCore (CaptureCore), SelectionUI (OverlayKit), AnnotationRender (AnnotationModel), HistoryKit (MediaExport), StudioRender (StudioSession) | Shared + the package in brackets |
+| 3 | EditorUI | Shared, AnnotationModel, AnnotationRender, MediaExport, StudioSession, StudioRender |
 
-The agent app target links every package **except** EditorUI (editor app) and
-VisionServices (XPC helper) — rule 2 above, checked by CI.
+The agent app target links every package **except** EditorUI (editor app),
+VisionServices (XPC helper), StudioRender and AnnotationRender (editor-only,
+docs/10 R2.1) — rule 2 above, checked by CI.
 
 ## Commands
 
