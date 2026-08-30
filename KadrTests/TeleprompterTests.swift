@@ -2,13 +2,13 @@ import AppKit
 import Foundation
 import OverlayKit
 import SettingsKit
-import StudioCore
+import StudioSession
 import Testing
 @testable import Kadr
 
 /// The prompter as the agent runs it (docs/08).
 ///
-/// The reading, the pacing and the following are tested in StudioCore, where they are
+/// The reading, the pacing and the following are tested in StudioSession, where they are
 /// arithmetic. What is left here is what only the agent can be wrong about: that the panel
 /// stays out of the recording, that it appears only when there is something to read, and
 /// that it exists solely while a recording does.

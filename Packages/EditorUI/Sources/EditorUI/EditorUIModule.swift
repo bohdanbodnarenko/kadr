@@ -2,6 +2,8 @@ import AnnotationModel
 import AnnotationRender
 import MediaExport
 import Shared
+import StudioRender
+import StudioSession
 
 /// Placeholder for the `EditorUI` package.
 ///
@@ -24,6 +26,8 @@ public enum EditorUIModule {
         (SharedModule.identifier, SharedModule.layer),
         (AnnotationModelModule.identifier, AnnotationModelModule.layer),
         (AnnotationRenderModule.identifier, AnnotationRenderModule.layer),
-        (MediaExportModule.identifier, MediaExportModule.layer)
+        (MediaExportModule.identifier, MediaExportModule.layer),
+        (StudioSessionModule.identifier, StudioSessionModule.layer),
+        (StudioRenderModule.identifier, StudioRenderModule.layer)
     ]
 }

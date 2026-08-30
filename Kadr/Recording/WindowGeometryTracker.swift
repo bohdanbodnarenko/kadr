@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 import Shared
-import StudioCore
+import StudioSession
 
 /// Where the recorded content is on screen, as it changes (docs/09 U3.1).
 ///

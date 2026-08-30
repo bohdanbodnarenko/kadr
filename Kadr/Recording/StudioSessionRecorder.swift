@@ -4,7 +4,7 @@ import ImageIO
 import os
 import RecordingCore
 import Shared
-import StudioCore
+import StudioSession
 import UniformTypeIdentifiers
 
 /// Captures the sidecar that makes a recording editable in the studio (docs/09 U3.1).
@@ -63,7 +63,7 @@ final class StudioSessionRecorder {
         self.session = session
         startedAtUptime = ProcessInfo.processInfo.systemUptime
         geometry.reset()
-        telemetry.start(pointConverter: pointConverter)
+        telemetry.start(pointConverter: pointConverter, journalURL: session.inputJournalURL)
         if recordsCamera {
             camera.start(writingTo: session.cameraURL)
         }
@@ -116,6 +116,7 @@ final class StudioSessionRecorder {
         let document = SessionDocument(session: session)
         do {
             try document.write(captured)
+            try? FileManager.default.removeItem(at: session.inputJournalURL)
             try document.write(CaptureManifest(
                 pixelSize: CGSize(width: result.pixelSize.width, height: result.pixelSize.height),
                 scale: 1,

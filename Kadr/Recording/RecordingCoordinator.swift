@@ -8,7 +8,7 @@ import RecordingCore
 import SelectionUI
 import SettingsKit
 import Shared
-import StudioCore
+import StudioSession
 
 /// Drives screen recording end to end (docs/03 §1.8).
 ///

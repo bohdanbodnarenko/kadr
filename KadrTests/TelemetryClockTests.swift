@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import RecordingCore
-import StudioCore
+import StudioSession
 import Testing
 @testable import Kadr
 

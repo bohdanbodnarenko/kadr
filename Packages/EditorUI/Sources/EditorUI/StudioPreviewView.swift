@@ -1,7 +1,8 @@
 import AVFoundation
 import CoreImage
 import Foundation
-import StudioCore
+import StudioRender
+import StudioSession
 import SwiftUI
 
 /// The studio's picture (docs/09 U3.3).

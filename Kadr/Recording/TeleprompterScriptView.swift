@@ -1,7 +1,7 @@
 import AppKit
 import CoreText
 import Shared
-import StudioCore
+import StudioSession
 
 /// How the prompter looks, which is entirely about being readable at a glance.
 struct TeleprompterAppearance: Equatable {

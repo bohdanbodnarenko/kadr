@@ -1,7 +1,7 @@
 import AppKit
 import OverlayKit
 import Shared
-import StudioCore
+import StudioSession
 
 /// The floating script somebody reads from while recording (docs/08, teleprompter).
 ///

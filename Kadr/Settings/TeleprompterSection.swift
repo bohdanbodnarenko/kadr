@@ -1,5 +1,5 @@
 import SettingsKit
-import StudioCore
+import StudioSession
 import SwiftUI
 
 /// The script somebody reads from while recording, and how it behaves (docs/08).

@@ -25,6 +25,9 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
 
     private let fileURL: URL
     private let baseImage: CGImage
+    /// The immutable capture, encoded once at open so autosave does not re-PNG a 5K
+    /// image every 1.5 s (docs/10 R2.6).
+    private let cachedBasePNG: Data
     private let model: EditorDocumentModel
     private let renderer = AnnotationExportRenderer()
     private let logger = KadrLog.logger(.app)
@@ -53,6 +56,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 throw OpenError.unreadableImage(fileURL)
             }
             baseImage = image
+            cachedBasePNG = contents.baseImagePNG
             model = EditorDocumentModel(document: contents.document)
         } else {
             guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
@@ -61,6 +65,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 throw OpenError.unreadableImage(fileURL)
             }
             baseImage = image
+            cachedBasePNG = try Self.pngData(of: image)
 
             // Captures are written with a DPI tag that records their scale, so the editor
             // shows a Retina screenshot at the size the user selected rather than double.
@@ -199,14 +204,16 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     }
 
     private func writeAutosave() {
-        do {
-            let png = try Self.pngData(of: baseImage)
-            try autosave.write(
-                KadrDocumentFile.Contents(document: model.document, baseImagePNG: png),
-                for: fileURL
-            )
-        } catch {
-            logger.error("Could not autosave: \(error.localizedDescription, privacy: .public)")
+        let contents = KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG)
+        let snapshotURL = fileURL
+        let snapshotAutosave = autosave
+        let snapshotLogger = logger
+        Task.detached {
+            do {
+                try snapshotAutosave.write(contents, for: snapshotURL)
+            } catch {
+                snapshotLogger.error("Could not autosave: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -258,9 +265,8 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
             .deletingPathExtension()
             .appendingPathExtension(KadrDocumentFile.fileExtension)
         do {
-            let png = try Self.pngData(of: baseImage)
             try KadrDocumentFile.write(
-                KadrDocumentFile.Contents(document: model.document, baseImagePNG: png),
+                KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG),
                 to: destination
             )
             logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")

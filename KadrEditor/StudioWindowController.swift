@@ -2,7 +2,7 @@ import AppKit
 import EditorUI
 import os
 import Shared
-import StudioCore
+import StudioSession
 import SwiftUI
 import UniformTypeIdentifiers
 

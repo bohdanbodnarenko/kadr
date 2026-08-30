@@ -35,7 +35,7 @@ public struct RedactionRasterizer: Sendable {
     ) -> CGImage {
         guard !redactions.isEmpty else { return image }
 
-        let context = CIContext(options: [.useSoftwareRenderer: false])
+        let context = KadrRenderContext.shared
         var output = CIImage(cgImage: image)
         let extent = output.extent
         var generator = SeededGenerator(seed: randomSeed ?? UInt64.random(in: .min ... .max))

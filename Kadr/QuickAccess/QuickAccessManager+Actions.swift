@@ -6,7 +6,7 @@ import os
 import OverlayKit
 import SettingsKit
 import Shared
-import StudioCore
+import StudioSession
 import UniformTypeIdentifiers
 
 /// What a card's buttons do (docs/03 §2, §1.7, §1.8).

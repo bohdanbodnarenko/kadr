@@ -6,7 +6,7 @@ import RecordingCore
 import SelectionUI
 import SettingsKit
 import Shared
-import StudioCore
+import StudioSession
 
 /// The resident agent (docs/04 §1, §3).
 ///
@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = KadrLog.logger(.app)
     private let signposter = KadrLog.signposter(.app)
     private var launchInterval: OSSignpostIntervalState?
+    private var statusItemInterval: OSSignpostIntervalState?
     private var launchStartedAt: ContinuousClock.Instant?
 
     private var statusItemController: StatusItemController?
@@ -65,18 +66,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return created
     }
 
-    private lazy var scrollCapture = ScrollCaptureCoordinator(
-        captureEngine: captureEngine,
-        permissions: permissions,
-        settings: settings,
-        output: CaptureOutput(settings: settings)
-    )
-    private lazy var recording = RecordingCoordinator(
-        captureEngine: captureEngine,
-        permissions: permissions,
-        settings: settings,
-        hygiene: desktopHygiene
-    )
+    private var scrollCaptureStorage: ScrollCaptureCoordinator?
+    private var scrollCapture: ScrollCaptureCoordinator {
+        if let scrollCaptureStorage {
+            return scrollCaptureStorage
+        }
+        let created = ScrollCaptureCoordinator(
+            captureEngine: captureEngine,
+            permissions: permissions,
+            settings: settings,
+            output: CaptureOutput(settings: settings)
+        )
+        created.onFinished = { [weak self] url, size in
+            self?.areaCapture.showScrollingCapture(at: url, pixelSize: size)
+        }
+        scrollCaptureStorage = created
+        return created
+    }
+
+    private var recordingStorage: RecordingCoordinator?
+    private var recording: RecordingCoordinator {
+        if let recordingStorage {
+            return recordingStorage
+        }
+        let created = RecordingCoordinator(
+            captureEngine: captureEngine,
+            permissions: permissions,
+            settings: settings,
+            hygiene: desktopHygiene
+        )
+        created.onFinished = { [weak self] result in
+            self?.areaCapture.showRecording(at: result.fileURL)
+        }
+        created.onStudioSessionReady = { [weak self] session, _ in
+            guard let self else { return }
+            guard settings.afterCaptureActions(for: .recording).contains(.openEditor) else { return }
+            EditorLauncher().open(session.directory)
+        }
+        created.onStateChanged = { [weak self] in
+            self?.refreshStatusItemIcon()
+        }
+        recordingStorage = created
+        return created
+    }
 
     /// The automation frontends (docs/03 §8.4). The router is built lazily; the listener
     /// is one run-loop source with no thread and no timer behind it, which is what lets
@@ -99,9 +131,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         history: history
     )
 
-    /// Held from launch so Sparkle's controller exists before the app finishes starting,
-    /// which is what it expects.
-    private let updater = UpdaterManager.shared
+    /// Sparkle is constructed in `start()`, after the launch interval closes, so the
+    /// controller is not mapped before the app can answer a hotkey (docs/10 R2.3).
+    private lazy var updater = UpdaterManager.shared
 
     private lazy var onboarding = OnboardingWindowController(
         model: OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem),
@@ -113,35 +145,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #endif
 
     // MARK: - Launch
-
-    /// Where each kind of capture goes once it exists.
-    ///
-    /// Its own method rather than more lines in `applicationDidFinishLaunching`, which is
-    /// already a list of everything the agent sets up and gains a line every time anything
-    /// is added to it.
-    private func connectCaptureCallbacks() {
-        // A finished recording lands in the same overlay as a screenshot (docs/03 §1.8).
-        recording.onFinished = { [weak self] result in
-            self?.areaCapture.showRecording(at: result.fileURL)
-        }
-        // …and opens in the studio if the after-capture matrix asks for it (docs/09 U2.2).
-        //
-        // The session rather than the movie: the movie alone opens for trimming, which is
-        // the same recording with none of the sidecar that makes it worth editing.
-        recording.onStudioSessionReady = { [weak self] session, _ in
-            guard let self else { return }
-            guard settings.afterCaptureActions(for: .recording).contains(.openEditor) else { return }
-            EditorLauncher().open(session.directory)
-        }
-        // A stitched page goes to the overlay and the editor (docs/03 §1.6).
-        scrollCapture.onFinished = { [weak self] url, size in
-            self?.areaCapture.showScrollingCapture(at: url, pixelSize: size)
-        }
-        // The menu bar shows the recording's state and elapsed time (docs/03 §8.1).
-        recording.onStateChanged = { [weak self] in
-            self?.refreshStatusItemIcon()
-        }
-    }
 
     /// Reopens the recordings a crash left mid-edit (docs/09 U3.1).
     ///
@@ -161,12 +164,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginLaunchInterval() {
         launchStartedAt = .now
-        launchInterval = signposter.beginInterval("launch")
+        launchInterval = signposter.beginInterval("launchToHotkeyArmed")
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        statusItemInterval = signposter.beginInterval("launchToStatusItem")
         statusItemController = StatusItemController(
             perform: { [weak self] command in self?.perform(command) },
             openSettings: { [weak self] in self?.openSettings() },
@@ -188,10 +192,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recoverRecordings: { [weak self] in self?.recoverUnfinishedRecordings() },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
         )
-        endLaunchInterval()
+        endStatusItemInterval()
 
         hotkeyCenter = HotkeyCenter(perform: { [weak self] command in self?.perform(command) })
         hotkeyCenter?.start()
+        endLaunchInterval()
 
         updater.start()
 
@@ -209,8 +214,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             logger.error("Another Kadr already owns the automation port")
         }
-
-        connectCaptureCallbacks()
 
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
@@ -245,15 +248,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("Login item state: \(loginItemState, privacy: .public)")
     }
 
-    /// Ends the launch→statusItemReady interval budgeted at < 300 ms (PRD §8).
-    private func endLaunchInterval() {
-        if let launchInterval {
-            signposter.endInterval("launch", launchInterval)
-            self.launchInterval = nil
+    /// Ends the launch→statusItemReady interval budgeted at < 150 ms (docs/10 R2.7).
+    private func endStatusItemInterval() {
+        if let statusItemInterval {
+            signposter.endInterval("launchToStatusItem", statusItemInterval)
+            self.statusItemInterval = nil
         }
         if let launchStartedAt {
             let milliseconds = Double(launchStartedAt.duration(to: .now).components.attoseconds) / 1e15
             logger.info("Status item ready in \(milliseconds, format: .fixed(precision: 1), privacy: .public) ms")
+        }
+    }
+
+    /// Ends the launch→hotkeyArmed interval budgeted at < 300 ms (PRD §8, docs/10 R2.7).
+    private func endLaunchInterval() {
+        if let launchInterval {
+            signposter.endInterval("launchToHotkeyArmed", launchInterval)
+            self.launchInterval = nil
+        }
+        if let launchStartedAt {
+            let milliseconds = Double(launchStartedAt.duration(to: .now).components.attoseconds) / 1e15
+            logger.info("Hotkeys armed in \(milliseconds, format: .fixed(precision: 1), privacy: .public) ms")
             self.launchStartedAt = nil
         }
     }
@@ -304,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Keeps the menu bar in step with the recording.
     private func refreshStatusItemIcon() {
-        guard recording.isRecording else {
+        guard let recording = recordingStorage, recording.isRecording else {
             statusItemController?.showIdleIcon()
             return
         }
@@ -316,13 +331,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The menu's view of a recording in progress, or nil when nothing is recording.
     private func currentRecordingControls() -> RecordingControls? {
-        guard recording.isRecording else { return nil }
+        guard let recording = recordingStorage, recording.isRecording else { return nil }
         return RecordingControls(
             elapsedText: recording.elapsedText,
             isPaused: recording.state == .paused,
             stop: { [weak self] in self?.recording.stop() },
-            togglePause: { [weak self] in
-                guard let self else { return }
+            togglePause: {
                 if recording.state == .paused {
                     recording.resume()
                 } else {

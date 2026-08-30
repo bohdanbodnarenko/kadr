@@ -1,4 +1,5 @@
 import CoreGraphics
+import Dispatch
 import Foundation
 import ImageIO
 import os
@@ -25,13 +26,15 @@ public final class WallpaperCache: @unchecked Sendable {
 
     private let cache = NSCache<NSString, CacheEntry>()
     private let logger = KadrLog.logger(.overlay)
+    private var pressureSource: (any DispatchSourceMemoryPressure)?
 
-    /// Doubling buckets from 256 px up. Coarse on purpose: the point is that a slider drag
-    /// lands in one bucket, and finer buckets would defeat that.
-    public static let buckets: [Int] = [256, 512, 1024, 2048, 4096, 8192]
+    /// Doubling buckets from 256 px up, capped at 4096. A 8192 bucket is one 4096-class
+    /// wallpaper decoded at 67 MB — more than the whole cache is allowed to hold
+    /// (docs/10 R2.4).
+    public static let buckets: [Int] = [256, 512, 1024, 2048, 4096]
 
-    /// Roughly the budget docs/04 §7 leaves the editor for decorative pixels.
-    private static let byteLimit = 192 * 1024 * 1024
+    /// Roughly the budget docs/10 R2.4 leaves the editor for decorative pixels.
+    private static let byteLimit = 48 * 1024 * 1024
 
     private final class CacheEntry {
         let image: CGImage
@@ -43,6 +46,7 @@ public final class WallpaperCache: @unchecked Sendable {
 
     public init() {
         cache.totalCostLimit = Self.byteLimit
+        startWatchingMemoryPressure()
     }
 
     /// The bucket a request of `longestEdge` pixels rounds up into.
@@ -80,5 +84,18 @@ public final class WallpaperCache: @unchecked Sendable {
 
     public func removeAll() {
         cache.removeAllObjects()
+    }
+
+    private func startWatchingMemoryPressure() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: .global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            self?.logger.info("Memory pressure — dropping cached wallpapers")
+            self?.removeAll()
+        }
+        source.resume()
+        pressureSource = source
     }
 }

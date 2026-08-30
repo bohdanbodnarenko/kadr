@@ -313,7 +313,7 @@ struct WallpaperCacheTests {
         (256, 256),
         (257, 512),
         (1000, 1024),
-        (5000, 8192)
+        (5000, 4096)
     ])
     func bucketing(requested: CGFloat, expected: Int) {
         #expect(WallpaperCache.bucket(for: requested) == expected)
@@ -330,7 +330,9 @@ struct WallpaperCacheTests {
 
     @Test("A request beyond the largest bucket is capped rather than unbounded")
     func hugeRequestIsCapped() {
-        #expect(WallpaperCache.bucket(for: 100_000) == WallpaperCache.buckets.last)
+        #expect(WallpaperCache.buckets == [256, 512, 1024, 2048, 4096])
+        #expect(WallpaperCache.bucket(for: 100_000) == 4096)
+        #expect(WallpaperCache.bucket(for: 8192) == 4096)
     }
 
     @Test("A file that is not an image is refused, not crashed into")

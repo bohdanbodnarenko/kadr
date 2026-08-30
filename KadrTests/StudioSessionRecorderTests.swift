@@ -1,7 +1,7 @@
 import Foundation
 import RecordingCore
 import Shared
-import StudioCore
+import StudioSession
 import Testing
 @testable import Kadr
 

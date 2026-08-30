@@ -3,7 +3,7 @@ import AppKit
 import EditorUI
 import os
 import Shared
-import StudioCore
+import StudioSession
 
 /// The editor process (docs/04 §1, §6).
 ///

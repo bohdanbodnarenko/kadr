@@ -1,5 +1,6 @@
 import Foundation
-import StudioCore
+import StudioRender
+import StudioSession
 import Testing
 @testable import EditorUI
 

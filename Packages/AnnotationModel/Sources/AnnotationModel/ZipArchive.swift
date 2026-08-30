@@ -124,13 +124,22 @@ enum ZipArchive {
 
     // MARK: - CRC32
 
+    /// IEEE CRC-32 table, built once. A byte-at-a-time bit loop over a 5K PNG is tens of
+    /// millions of iterations on the main actor during autosave (docs/10 R2.6).
+    private static let table: [UInt32] = (0 ..< 256).map { index in
+        var crc = UInt32(index)
+        for _ in 0 ..< 8 {
+            crc = (crc >> 1) ^ (0xEDB8_8320 & (0 &- (crc & 1)))
+        }
+        return crc
+    }
+
     /// The standard CRC-32 zip files carry, so other tools accept what this writes.
     static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFF_FFFF
-        for byte in data {
-            crc ^= UInt32(byte)
-            for _ in 0 ..< 8 {
-                crc = (crc >> 1) ^ (0xEDB8_8320 & (0 &- (crc & 1)))
+        data.withUnsafeBytes { buffer in
+            for byte in buffer {
+                crc = Self.table[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
             }
         }
         return crc ^ 0xFFFF_FFFF

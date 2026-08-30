@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 import os
 import Shared
-import StudioCore
+import StudioSession
 
 /// Watches the pointer while a recording runs (docs/09 U3.1).
 ///
@@ -40,6 +40,9 @@ final class PointerTelemetryRecorder {
 
     private var source: TelemetrySource = .sampler
     private var isRecording = false
+    private var journal: TelemetryJournal?
+    /// Last recording-time a chunk was flushed. Zero until the first sample.
+    private var lastFlushTime: TimeInterval = 0
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -59,9 +62,19 @@ final class PointerTelemetryRecorder {
 
     // MARK: - Lifecycle
 
+    /// How often in-memory samples are flushed to the sidecar journal.
+    ///
+    /// A minute of 60 Hz pointer samples is about 150 KB. Holding the whole recording
+    /// would be 2.4 KB/s unbounded — 8.6 MB after an hour, with a 17 MB spike at the
+    /// array-doubling (docs/10 R2.5).
+    private static let flushInterval: TimeInterval = 60
+
     /// Starts watching. Nothing is installed until this is called, and everything is torn
     /// down by `stop` — an idle agent has no tap, no monitors and no timer.
-    func start(pointConverter: @escaping @Sendable (CGPoint) -> CGPoint?) {
+    func start(
+        pointConverter: @escaping @Sendable (CGPoint) -> CGPoint?,
+        journalURL: URL? = nil
+    ) {
         guard !isRecording else { return }
         self.pointConverter = pointConverter
         pointer = []
@@ -73,7 +86,18 @@ final class PointerTelemetryRecorder {
         lastCursorIndex = nil
         lastCursorCheck = -.infinity
         recordingTime = 0
+        lastFlushTime = 0
         isRecording = true
+        // One minute of 60 Hz samples, plus headroom so the first flush does not reallocate.
+        pointer.reserveCapacity(Int(TelemetryPolicy.sampleRate * Self.flushInterval) + 16)
+        clicks.reserveCapacity(256)
+        keystrokes.reserveCapacity(128)
+        if let journalURL {
+            journal = TelemetryJournal(url: journalURL)
+            journal?.remove()
+        } else {
+            journal = nil
+        }
 
         let availability = TelemetryPolicy.Availability(
             hasEventTap: startEventTap(),
@@ -104,10 +128,14 @@ final class PointerTelemetryRecorder {
         samplerTask?.cancel()
         samplerTask = nil
 
+        flush(force: true)
+        let flushed = journal?.load() ?? TelemetryJournal.Chunk()
+        journal = nil
+
         return InputTelemetry(
-            pointer: pointer,
-            clicks: clicks,
-            keystrokes: keystrokes,
+            pointer: flushed.pointer + pointer,
+            clicks: flushed.clicks + clicks,
+            keystrokes: flushed.keystrokes + keystrokes,
             cursors: cursors,
             source: source
         )
@@ -117,6 +145,23 @@ final class PointerTelemetryRecorder {
     /// the frames are.
     func advance(to time: TimeInterval) {
         recordingTime = time
+        flush(force: false)
+    }
+
+    /// Writes the in-memory samples to the journal and drops them, keeping capacity.
+    private func flush(force: Bool) {
+        guard let journal else { return }
+        guard force || recordingTime - lastFlushTime >= Self.flushInterval else { return }
+        let chunk = TelemetryJournal.Chunk(pointer: pointer, clicks: clicks, keystrokes: keystrokes)
+        do {
+            try journal.append(chunk)
+            pointer.removeAll(keepingCapacity: true)
+            clicks.removeAll(keepingCapacity: true)
+            keystrokes.removeAll(keepingCapacity: true)
+            lastFlushTime = recordingTime
+        } catch {
+            logger.error("Could not flush telemetry: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Recording events

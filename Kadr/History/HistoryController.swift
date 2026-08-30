@@ -94,10 +94,14 @@ final class HistoryController {
         store?.fileURL(for: record)
     }
 
-    func thumbnail(for record: HistoryRecord, maxPixelSize: Int) -> CGImage? {
+    func thumbnail(for record: HistoryRecord, maxPixelSize: Int, scope: ThumbnailCache.Scope = .grid) -> CGImage? {
         guard let store else { return nil }
         let url = store.thumbnailFileURL(for: record)
-        return cache.thumbnail(for: url, maxPixelSize: maxPixelSize)
+        return cache.thumbnail(for: url, maxPixelSize: maxPixelSize, scope: scope)
+    }
+
+    func purgeStripThumbnails() {
+        cache.purgeStrip()
     }
 
     func showWindow(reopen: @escaping (HistoryRecord) -> Void) {

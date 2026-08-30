@@ -16,10 +16,6 @@ import Shared
 enum CameraCompositor {
     private static let logger = KadrLog.logger(.capture)
 
-    /// A `CIContext` is expensive to build and safe to share; one per process rather than
-    /// one per render keeps a slider drag from constructing a Metal pipeline per frame.
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-
     /// Renders `card` — which occupies `cardRect` in canvas points — projected onto `quad`.
     ///
     /// - Parameters:
@@ -62,7 +58,7 @@ enum CameraCompositor {
             logger.error("The perspective camera produced no image; drawing the card flat")
             return nil
         }
-        return ciContext.createCGImage(output, from: pixelCanvas)
+        return KadrRenderContext.shared.createCGImage(output, from: pixelCanvas)
     }
 
     /// The path the projected card occupies, for casting its shadow.

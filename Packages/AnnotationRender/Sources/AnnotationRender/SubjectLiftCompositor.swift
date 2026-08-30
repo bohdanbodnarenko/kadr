@@ -27,7 +27,7 @@ public struct SubjectLiftCompositor: Sendable {
             return image
         }
 
-        let context = CIContext(options: [.useSoftwareRenderer: false])
+        let context = KadrRenderContext.shared
         let source = CIImage(cgImage: image)
         let extent = source.extent
 

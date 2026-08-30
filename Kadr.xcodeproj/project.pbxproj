@@ -16,9 +16,10 @@
 		KADR000000000000000000CE /* SettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006A /* SettingsKit */; };
 		KADR000000000000000000CF /* RecordingCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006B /* RecordingCore */; };
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
-		KADR000000000000000000D1 /* AnnotationRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006D /* AnnotationRender */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
-		KADR000000000000000000FE /* StudioCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioCore */; };
+		KADR000000000000000000FE /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR000000000000000000FF /* StudioSession */; };
+		KADR00000000000000000445 /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000425 /* StudioSession */; };
+		KADR00000000000000000446 /* StudioRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000426 /* StudioRender */; };
 		KADR00000000000000000302 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000301 /* KeyboardShortcuts */; };
 		KADR0000000000000000040A /* KadrEditor.app in Embed Editor */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000401 /* KadrEditor.app */; };
 		KADR00000000000000000440 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000420 /* Shared */; };
@@ -154,9 +155,8 @@
 				KADR000000000000000000CD /* AutomationKit in Frameworks */,
 				KADR000000000000000000CE /* SettingsKit in Frameworks */,
 				KADR000000000000000000CF /* RecordingCore in Frameworks */,
-				KADR000000000000000000FE /* StudioCore in Frameworks */,
+				KADR000000000000000000FE /* StudioSession in Frameworks */,
 				KADR000000000000000000D0 /* SelectionUI in Frameworks */,
-				KADR000000000000000000D1 /* AnnotationRender in Frameworks */,
 				KADR000000000000000000D2 /* HistoryKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -177,6 +177,8 @@
 				KADR00000000000000000442 /* AnnotationRender in Frameworks */,
 				KADR00000000000000000443 /* MediaExport in Frameworks */,
 				KADR00000000000000000444 /* EditorUI in Frameworks */,
+				KADR00000000000000000445 /* StudioSession in Frameworks */,
+				KADR00000000000000000446 /* StudioRender in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,9 +264,8 @@
 				KADR00000000000000000069 /* AutomationKit */,
 				KADR0000000000000000006A /* SettingsKit */,
 				KADR0000000000000000006B /* RecordingCore */,
-				KADR000000000000000000FF /* StudioCore */,
+				KADR000000000000000000FF /* StudioSession */,
 				KADR0000000000000000006C /* SelectionUI */,
-				KADR0000000000000000006D /* AnnotationRender */,
 				KADR0000000000000000006E /* HistoryKit */,
 			);
 			productName = Kadr;
@@ -316,6 +317,8 @@
 				KADR00000000000000000422 /* AnnotationRender */,
 				KADR00000000000000000423 /* MediaExport */,
 				KADR00000000000000000424 /* EditorUI */,
+				KADR00000000000000000425 /* StudioSession */,
+				KADR00000000000000000426 /* StudioRender */,
 			);
 			productName = KadrEditor;
 			productReference = KADR00000000000000000401 /* KadrEditor.app */;
@@ -410,7 +413,8 @@
 				KADR00000000000000000006 /* XCLocalSwiftPackageReference "Packages/AutomationKit" */,
 				KADR00000000000000000007 /* XCLocalSwiftPackageReference "Packages/SettingsKit" */,
 				KADR00000000000000000008 /* XCLocalSwiftPackageReference "Packages/RecordingCore" */,
-				KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */,
+				KADR00000000000000000010 /* XCLocalSwiftPackageReference "Packages/StudioSession" */,
+				KADR00000000000000000011 /* XCLocalSwiftPackageReference "Packages/StudioRender" */,
 				KADR00000000000000000009 /* XCLocalSwiftPackageReference "Packages/SelectionUI" */,
 				KADR0000000000000000000A /* XCLocalSwiftPackageReference "Packages/AnnotationRender" */,
 				KADR0000000000000000000B /* XCLocalSwiftPackageReference "Packages/HistoryKit" */,
@@ -1028,9 +1032,13 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/EditorUI;
 		};
-		KADR0000000000000000000F /* XCLocalSwiftPackageReference "Packages/StudioCore" */ = {
+		KADR00000000000000000010 /* XCLocalSwiftPackageReference "Packages/StudioSession" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = Packages/StudioCore;
+			relativePath = Packages/StudioSession;
+		};
+		KADR00000000000000000011 /* XCLocalSwiftPackageReference "Packages/StudioRender" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/StudioRender;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -1090,17 +1098,21 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = SelectionUI;
 		};
-		KADR0000000000000000006D /* AnnotationRender */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AnnotationRender;
-		};
 		KADR0000000000000000006E /* HistoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = HistoryKit;
 		};
-		KADR000000000000000000FF /* StudioCore */ = {
+		KADR000000000000000000FF /* StudioSession */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = StudioCore;
+			productName = StudioSession;
+		};
+		KADR00000000000000000425 /* StudioSession */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioSession;
+		};
+		KADR00000000000000000426 /* StudioRender */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = StudioRender;
 		};
 		KADR00000000000000000301 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;

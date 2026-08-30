@@ -1,7 +1,8 @@
 import Foundation
 import os
 import Shared
-import StudioCore
+import StudioRender
+import StudioSession
 
 /// The state of one recording being edited in the studio (docs/09 U3).
 ///

@@ -1,6 +1,6 @@
 import AppKit
 import Shared
-import StudioCore
+import StudioSession
 import SwiftUI
 
 /// What the studio's sessions are costing, and how to get it back (docs/09 U3.1).

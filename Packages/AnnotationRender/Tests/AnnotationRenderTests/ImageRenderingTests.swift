@@ -9,8 +9,14 @@ import UniformTypeIdentifiers
 /// Rendering an inserted image (docs/03 §3 P2, docs/06 M24).
 @Suite("Image rendering")
 struct ImageRenderingTests {
-    /// A solid blue PNG to drop onto a red canvas, so "did it draw?" is one pixel read.
-    private func makePNG(width: Int = 20, height: Int = 20) -> Data {
+    /// A solid-colour PNG. Default blue, so "did it draw?" is one pixel read against a red canvas.
+    private func makePNG(
+        width: Int = 20,
+        height: Int = 20,
+        red: CGFloat = 0,
+        green: CGFloat = 0,
+        blue: CGFloat = 1
+    ) -> Data {
         guard let context = CGContext(
             data: nil,
             width: width,
@@ -22,7 +28,7 @@ struct ImageRenderingTests {
         ) else {
             fatalError("Could not create a test bitmap")
         }
-        context.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))
+        context.setFillColor(CGColor(srgbRed: red, green: green, blue: blue, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
 
         guard let image = context.makeImage() else {
@@ -155,5 +161,22 @@ struct ImageRenderingTests {
         let second = ImageRendering.decode(png)
         #expect(first != nil)
         #expect(first === second)
+    }
+
+    @Test("Two different PNGs of the same size are not returned as each other")
+    func distinctImagesAreNotAliased() throws {
+        // Darwin's Data.hashValue hashes a bounded prefix. Two same-size PNGs share a
+        // header; keying the cache on that used to hand back the wrong image (docs/10 R2.4).
+        let blue = makePNG(red: 0, green: 0, blue: 1)
+        let red = makePNG(red: 1, green: 0, blue: 0)
+        let blueImage = try #require(ImageRendering.decode(blue))
+        let redImage = try #require(ImageRendering.decode(red))
+        #expect(blueImage !== redImage)
+
+        let blueAgain = try #require(ImageRendering.decode(blue))
+        #expect(blueAgain === blueImage)
+        let sample = pixel(blueAgain, x: 1, y: 1)
+        #expect(sample.blue > 200)
+        #expect(sample.red < 60)
     }
 }

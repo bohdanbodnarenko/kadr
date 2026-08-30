@@ -1,5 +1,5 @@
 import Foundation
-import StudioCore
+import StudioSession
 import SwiftUI
 
 /// The studio's controls (docs/09 U3.3–U3.5).

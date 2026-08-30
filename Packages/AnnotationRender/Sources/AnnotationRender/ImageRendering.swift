@@ -1,5 +1,6 @@
 import AnnotationModel
 import CoreGraphics
+import CryptoKit
 import Foundation
 import QuartzCore
 
@@ -39,19 +40,34 @@ enum ImageRendering {
 }
 
 /// A tiny bounded cache of decoded PNGs.
+///
+/// Keyed by SHA-256 of the bytes, not `Data.hashValue`. Darwin's `hashValue` hashes a
+/// bounded prefix and this cache used to return the hit without verifying the rest — two
+/// same-length PNGs with identical headers could hand back the wrong image (docs/10 R2.4).
+/// Bounded by bytes rather than count: sixteen 5K inserts would otherwise be ~944 MB.
 private final class ImageCache: @unchecked Sendable {
+    private struct Entry {
+        let image: CGImage
+        let cost: Int
+    }
+
     private let lock = NSLock()
-    private var entries: [Int: CGImage] = [:]
-    private var order: [Int] = []
-    private let limit = 16
+    private var entries: [SHA256.Digest: Entry] = [:]
+    private var order: [SHA256.Digest] = []
+    private var bytes = 0
+    /// One 5K capture is ~59 MB decoded. Keep a handful of inserts, not a handful of
+    /// full-res screenshots.
+    private let byteLimit = 32 * 1024 * 1024
 
     func image(for data: Data) -> CGImage? {
-        let key = data.hashValue
+        let key = SHA256.hash(data: data)
         lock.lock()
         defer { lock.unlock() }
 
         if let cached = entries[key] {
-            return cached
+            order.removeAll { $0 == key }
+            order.append(key)
+            return cached.image
         }
         guard let provider = CGDataProvider(data: data as CFData),
               let image = CGImage(
@@ -64,13 +80,21 @@ private final class ImageCache: @unchecked Sendable {
             return nil
         }
 
-        entries[key] = image
+        let cost = image.height * image.bytesPerRow
+        entries[key] = Entry(image: image, cost: cost)
         order.append(key)
-        if order.count > limit, let oldest = order.first {
-            order.removeFirst()
-            entries[oldest] = nil
-        }
+        bytes += cost
+        evictIfNeeded()
         return image
+    }
+
+    private func evictIfNeeded() {
+        while bytes > byteLimit, let oldest = order.first {
+            order.removeFirst()
+            if let removed = entries.removeValue(forKey: oldest) {
+                bytes -= removed.cost
+            }
+        }
     }
 }
 

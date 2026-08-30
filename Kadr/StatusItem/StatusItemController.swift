@@ -130,6 +130,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         addApplicationItems(to: menu)
     }
 
+    func menuDidClose(_ menu: NSMenu) {
+        history?.purgeStripThumbnails()
+    }
+
     /// Controls for a recording in progress.
     private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
         let status = NSMenuItem(title: "Recording — \(controls.elapsedText)", action: nil, keyEquivalent: "")
@@ -211,7 +215,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             menu.addItem(.separator())
             let strip = HistoryStripView(frame: .zero)
             strip.update(records: recent) { [weak self] record in
-                guard let cgImage = self?.history?.thumbnail(for: record, maxPixelSize: 112) else {
+                guard let cgImage = self?.history?.thumbnail(for: record, maxPixelSize: 112, scope: .strip) else {
                     return nil
                 }
                 return NSImage(cgImage: cgImage, size: HistoryStripView.thumbnailSize)

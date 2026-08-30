@@ -20,9 +20,6 @@ import Shared
 enum ProgressiveBlurCompositor {
     private static let logger = KadrLog.logger(.capture)
 
-    /// Shared: building a `CIContext` per frame would construct a Metal pipeline per frame.
-    private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
-
     /// Blurs `image`, which occupies `rect` in points, at `scale` pixels per point.
     ///
     /// Returns nil when CoreImage declines, so the caller can draw the image unblurred —
@@ -62,7 +59,7 @@ enum ProgressiveBlurCompositor {
             logger.error("The progressive blur produced no image; drawing it sharp")
             return nil
         }
-        return ciContext.createCGImage(output, from: pixelRect)
+        return KadrRenderContext.shared.createCGImage(output, from: pixelRect)
     }
 
     /// The greyscale ramp: black where the image stays sharp, white where it is fully

@@ -17,7 +17,8 @@ let package = Package(
         .package(path: "../AnnotationModel"),
         .package(path: "../AnnotationRender"),
         .package(path: "../MediaExport"),
-        .package(path: "../StudioCore")
+        .package(path: "../StudioSession"),
+        .package(path: "../StudioRender")
     ],
     targets: [
         .target(
@@ -27,7 +28,8 @@ let package = Package(
                 .product(name: "AnnotationModel", package: "AnnotationModel"),
                 .product(name: "AnnotationRender", package: "AnnotationRender"),
                 .product(name: "MediaExport", package: "MediaExport"),
-                .product(name: "StudioCore", package: "StudioCore")
+                .product(name: "StudioSession", package: "StudioSession"),
+                .product(name: "StudioRender", package: "StudioRender")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -35,7 +37,8 @@ let package = Package(
             name: "EditorUITests",
             dependencies: [
                 "EditorUI",
-                .product(name: "StudioCore", package: "StudioCore")
+                .product(name: "StudioSession", package: "StudioSession"),
+                .product(name: "StudioRender", package: "StudioRender")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )

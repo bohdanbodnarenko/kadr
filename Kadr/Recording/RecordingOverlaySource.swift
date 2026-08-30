@@ -293,7 +293,6 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
     private let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "app.kadr.recording.webcam")
     private let onFrame: @Sendable (CGImage?) -> Void
-    private let context = CIContext()
     private let logger = KadrLog.logger(.recording)
 
     init(onFrame: @escaping @Sendable (CGImage?) -> Void) {
@@ -314,6 +313,9 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
 
         let output = AVCaptureVideoDataOutput()
         output.alwaysDiscardsLateVideoFrames = true
+        output.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
         output.setSampleBufferDelegate(self, queue: queue)
         guard session.canAddOutput(output) else { return }
         session.addOutput(output)
@@ -346,9 +348,34 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
         from connection: AVCaptureConnection
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = context.createCGImage(image, from: image.extent) else { return }
+        guard let cgImage = Self.cgImage(from: pixelBuffer) else { return }
         onFrame(cgImage)
+    }
+
+    /// BGRA bytes to a `CGImage` without CoreImage, so the agent does not link it
+    /// (docs/10 R2.1).
+    private static func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
+            CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+        )
+        guard let context = CGContext(
+            data: base,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: bitmapInfo.rawValue
+        ) else {
+            return nil
+        }
+        return context.makeImage()
     }
 }
 

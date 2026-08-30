@@ -1,7 +1,7 @@
 import Foundation
 import SettingsKit
 import Shared
-import StudioCore
+import StudioSession
 import Testing
 @testable import Kadr
 

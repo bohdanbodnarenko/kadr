@@ -1,10 +1,11 @@
 import Foundation
-import StudioCore
+import StudioRender
+import StudioSession
 
 /// Everything the preview needs to draw a frame, built once per edit (docs/10 R1.1).
 ///
 /// Both halves are expensive and neither depends on the playhead. `StudioRenderPlan`
-/// integrates a spring at 240 Hz across the whole recording; `StudioFrameComposer`
+/// integrates a spring at 120 Hz across the whole recording; `StudioFrameComposer`
 /// integrates the cursor path again and decodes every cursor PNG. The preview used to build
 /// both on every scrub event — for a ten-minute recording that is around 288,000 spring
 /// evaluations and several megabytes of allocation per mouse-move, on the main actor, which

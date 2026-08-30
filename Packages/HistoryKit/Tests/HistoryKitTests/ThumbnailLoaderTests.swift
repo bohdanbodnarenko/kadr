@@ -153,4 +153,20 @@ struct ThumbnailCacheTests {
         let cache = ThumbnailCache()
         #expect(cache.thumbnail(for: URL(fileURLWithPath: "/nope.png"), maxPixelSize: 200) == nil)
     }
+
+    @Test("The strip and the grid do not evict each other")
+    func scopesAreIndependent() throws {
+        let cache = ThumbnailCache()
+        let url = try writeImage(width: 800, height: 600)
+
+        let strip = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .strip))
+        let grid = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .grid))
+        #expect(strip !== grid, "scopes should not share an entry")
+
+        cache.purgeStrip()
+        let stripAgain = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .strip))
+        let gridAgain = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .grid))
+        #expect(stripAgain !== strip, "the strip should have been purged")
+        #expect(gridAgain === grid, "purging the strip must not drop the grid")
+    }
 }

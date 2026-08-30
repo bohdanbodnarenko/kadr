@@ -3,7 +3,7 @@ import Foundation
 import os
 import SettingsKit
 import Shared
-import StudioCore
+import StudioSession
 
 /// Runs the prompter alongside a recording (docs/08, teleprompter).
 ///

@@ -1,5 +1,5 @@
 import Foundation
-import StudioCore
+import StudioSession
 import SwiftUI
 
 /// The clips, the zooms and the playhead, on one ruler (docs/09 U3.3, U3.4).

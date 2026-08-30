@@ -2,7 +2,6 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import Shared
-import VideoToolbox
 
 /// Video codecs Kadr records with (docs/03 §1.8).
 public enum RecordingCodec: String, CaseIterable, Sendable {
@@ -132,7 +131,7 @@ public struct RecordingOptions: Sendable, Hashable {
             // Main10 plus the HLG tag set: HLG rather than PQ because an HLG file still
             // looks right on an SDR display, and a screen recording is shared far more
             // often than it is graded (docs/04 §4.3).
-            compression[AVVideoProfileLevelKey] = kVTProfileLevel_HEVC_Main10_AutoLevel as String
+            compression[AVVideoProfileLevelKey] = "HEVC_Main10_AutoLevel"
             settings[AVVideoColorPropertiesKey] = [
                 AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
                 AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
