@@ -69,6 +69,9 @@ final class PointerTelemetryRecorder {
         keystrokes = []
         cursors = []
         cursorIndices = [:]
+        cursorFingerprints = [:]
+        lastCursorIndex = nil
+        lastCursorCheck = -.infinity
         recordingTime = 0
         isRecording = true
 
@@ -169,22 +172,86 @@ final class PointerTelemetryRecorder {
         keystrokes.append(KeystrokeEvent(time: recordingTime, caption: caption))
     }
 
+    /// Cheap evidence that this is a cursor already seen (docs/10 R1.3).
+    ///
+    /// Size and hotspot, and deliberately not the image's object identity: measured,
+    /// `NSCursor.currentSystem` hands back a fresh `NSImage` on every call — five hundred
+    /// calls produced five hundred distinct identities — so an identity key can never hit.
+    ///
+    /// Two different cursors *could* share a size and a hotspot, which is why this only
+    /// avoids the re-encode. What gets stored is still decided by comparing the bytes.
+    private struct CursorFingerprint: Hashable {
+        let width: CGFloat
+        let height: CGFloat
+        let hotspotX: CGFloat
+        let hotspotY: CGFloat
+
+        init(_ cursor: NSCursor) {
+            width = cursor.image.size.width
+            height = cursor.image.size.height
+            hotspotX = cursor.hotSpot.x
+            hotspotY = cursor.hotSpot.y
+        }
+    }
+
+    private var cursorFingerprints: [CursorFingerprint: Int] = [:]
+    private var lastCursorIndex: Int?
+    private var lastCursorCheck: TimeInterval = -.infinity
+
+    /// How often the cursor is actually looked up.
+    ///
+    /// `NSCursor.currentSystem` costs about 283µs a call — measured — because it asks the
+    /// window server. At sixty samples a second that is 17ms of every second spent finding
+    /// out that the pointer is still an arrow, on the main actor, inside the event-tap path
+    /// macOS disables if it runs long.
+    ///
+    /// A quarter of a second is the trade: a cursor that changes shape is drawn with its
+    /// old artwork for up to fifteen frames afterwards. The *position* is unaffected —
+    /// that comes from the event stream and stays continuous — so what lags is which
+    /// picture is drawn, which is the least noticeable thing about a reconstructed cursor
+    /// and the only one that costs a window-server round trip.
+    private static let cursorCheckInterval: TimeInterval = 0.25
+
     /// Records the cursor's current artwork, if it is one not seen before.
     ///
     /// Deduplicated by bytes: a recording uses a handful of cursors and touches them
     /// thousands of times, and a session that stored one PNG per sample would be larger
     /// than its own footage.
+    ///
+    /// The bytes are only *reached for* on a genuine miss. This runs on every pointer
+    /// sample — sixty times a second, on the main actor, inside the event-tap path macOS
+    /// disables if it runs long — and it used to TIFF-encode, bitmap-decode, PNG-encode and
+    /// then hash the whole `Data` every single time, for a cursor that changes perhaps
+    /// twenty times in a session (docs/10 R1.3).
     private func captureCurrentCursor() -> Int? {
+        guard recordingTime - lastCursorCheck >= Self.cursorCheckInterval else {
+            return lastCursorIndex
+        }
+        lastCursorCheck = recordingTime
+
         let cursor = NSCursor.currentSystem ?? NSCursor.arrow
+        let fingerprint = CursorFingerprint(cursor)
+        if let existing = cursorFingerprints[fingerprint] {
+            lastCursorIndex = existing
+            return existing
+        }
+
         guard let tiff = cursor.image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiff),
               let png = bitmap.representation(using: .png, properties: [:])
         else {
             return nil
         }
+
+        // Two fingerprints can still describe the same picture — a cursor rebuilt after a
+        // display change is a new object with the same artwork — so the byte comparison
+        // stays as the authority on what gets stored.
         if let existing = cursorIndices[png] {
+            cursorFingerprints[fingerprint] = existing
+            lastCursorIndex = existing
             return existing
         }
+
         let index = cursors.count
         cursors.append(CursorImage(
             pngData: png,
@@ -192,6 +259,8 @@ final class PointerTelemetryRecorder {
             size: cursor.image.size
         ))
         cursorIndices[png] = index
+        cursorFingerprints[fingerprint] = index
+        lastCursorIndex = index
         return index
     }
 

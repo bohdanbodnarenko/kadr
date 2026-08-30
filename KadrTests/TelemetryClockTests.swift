@@ -124,4 +124,51 @@ struct TelemetryClockTests {
         } ?? false
         #expect(installedWithSession, "the clock is not installed with the studio session")
     }
+
+    // MARK: - The cost of a sample
+
+    /// Recording a pointer sample used to TIFF-encode, bitmap-decode and PNG-encode the
+    /// cursor, then hash the whole `Data` — sixty times a second, on the main actor, inside
+    /// the event-tap path macOS disables if it runs long, for a cursor that changes perhaps
+    /// twenty times in a session (docs/10 R1.3).
+    ///
+    /// Timed rather than counted because the claim is about cost. Measured, the dominant
+    /// term was `NSCursor.currentSystem` at about 283µs a call — the window-server round
+    /// trip, not the encoding — so the fix is asking it four times a second rather than
+    /// sixty. The gate is loose enough to survive a loaded machine and far tighter than the
+    /// several hundred microseconds a per-sample lookup costs.
+    @Test("A pointer sample is cheap once the cursor has been seen")
+    func steadyStateSampleIsCheap() {
+        let recorder = recorder()
+
+        // Warmed: the first sample legitimately encodes, and one encode is the point.
+        for step in 0 ..< 5 {
+            recorder.advance(to: Double(step) * 0.02)
+            recorder.recordPointerForTesting(at: CGPoint(x: Double(step), y: 10))
+        }
+
+        let samples = 2000
+        let start = ContinuousClock.now
+        for step in 0 ..< samples {
+            recorder.advance(to: 1 + Double(step) * 0.02)
+            recorder.recordPointerForTesting(at: CGPoint(x: Double(step % 500), y: 10))
+        }
+        let elapsed = Double((ContinuousClock.now - start).components.attoseconds) / 1e18
+        let perSample = elapsed / Double(samples)
+
+        #expect(perSample < 0.000_1, "a pointer sample costs \(perSample * 1e6)µs")
+        _ = recorder.stop()
+    }
+
+    /// The other half: one cursor is stored once however many samples touch it. A session
+    /// that stored a PNG per sample would be larger than its own footage.
+    @Test("Thousands of samples store one cursor")
+    func cursorsAreStoredOnce() {
+        let recorder = recorder()
+        for step in 0 ..< 500 {
+            recorder.advance(to: Double(step) * 0.02)
+            recorder.recordPointerForTesting(at: CGPoint(x: Double(step % 400), y: 10))
+        }
+        #expect(recorder.stop().cursors.count <= 2, "the cursor artwork was stored more than once")
+    }
 }
