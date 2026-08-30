@@ -93,7 +93,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         let hosting = NSHostingView(rootView: root)
 
         let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: CGSize(width: 1100, height: 720)),
+            contentRect: CGRect(origin: .zero, size: EditorWindowGeometry.minSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -104,8 +104,20 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
-        window.center()
-        window.setFrameAutosaveName("app.kadr.Kadr.Editor.window")
+        let autosaveName = "app.kadr.Kadr.Editor.window"
+        if !window.setFrameUsingName(autosaveName) {
+            let screen = window.screen?.visibleFrame
+                ?? NSScreen.main?.visibleFrame
+                ?? CGRect(origin: .zero, size: CGSize(width: 1440, height: 900))
+            window.setFrame(
+                EditorWindowGeometry.preferredFrame(
+                    canvasSize: model.document.canvasRect.size,
+                    on: screen
+                ),
+                display: false
+            )
+        }
+        window.setFrameAutosaveName(autosaveName)
 
         self.window = window
         hostingView = hosting

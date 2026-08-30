@@ -4,28 +4,36 @@ import SwiftUI
 /// The tool picker and export controls (docs/03 §3).
 struct EditorToolbar: View {
     @Bindable var model: EditorDocumentModel
+    @Binding var isInspectorPresented: Bool
     let onExport: (EditorRootView.ExportAction) -> Void
     var onAutoRedact: (() -> Void)?
     var onRemoveBackground: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             tools
-            Divider().frame(height: 20)
+            Divider().frame(height: 18)
             historyControls
-            Spacer()
+            Spacer(minLength: 8)
             if onAutoRedact != nil {
                 autoRedact
-                Divider().frame(height: 20)
             }
             if onRemoveBackground != nil {
                 removeBackground
-                Divider().frame(height: 20)
             }
             exportControls
+            Button {
+                isInspectorPresented.toggle()
+            } label: {
+                Image(systemName: "sidebar.right")
+            }
+            .buttonStyle(.borderless)
+            .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+            .accessibilityLabel(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 7)
+        .background(.bar)
     }
 
     private var autoRedact: some View {
@@ -55,23 +63,36 @@ struct EditorToolbar: View {
     }
 
     private var tools: some View {
-        HStack(spacing: 2) {
-            ForEach(EditorTool.allCases, id: \.self) { tool in
+        HStack(spacing: 8) {
+            toolGroup([.select])
+            toolGroup([.arrow, .shape, .line, .freehand, .highlighter, .text])
+            toolGroup([.redaction, .counter, .crop, .measure])
+        }
+    }
+
+    private func toolGroup(_ tools: [EditorTool]) -> some View {
+        HStack(spacing: 1) {
+            ForEach(tools, id: \.self) { tool in
                 Button {
                     model.tool = tool
                 } label: {
                     Image(systemName: tool.symbolName)
-                        .frame(width: 28, height: 24)
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(width: 28, height: 26)
+                        .foregroundStyle(model.tool == tool ? Color.accentColor : Color.primary)
                 }
                 .buttonStyle(.borderless)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(model.tool == tool ? Color.accentColor.opacity(0.25) : .clear)
-                )
+                .background {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(model.tool == tool ? Color.accentColor.opacity(0.18) : .clear)
+                }
                 .help("\(tool.title) (\(String(tool.shortcut).uppercased()))")
                 .accessibilityLabel(tool.title)
+                .accessibilityAddTraits(model.tool == tool ? .isSelected : [])
             }
         }
+        .padding(2)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var historyControls: some View {

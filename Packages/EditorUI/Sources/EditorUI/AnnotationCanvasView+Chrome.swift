@@ -119,6 +119,8 @@ extension AnnotationCanvasView {
             contentHost.frame = bounds
             contentHost.cornerRadius = 0
             contentHost.masksToBounds = false
+            contentHost.borderWidth = 1
+            contentHost.borderColor = NSColor.separatorColor.cgColor
             let drawing = CGRect(origin: .zero, size: imageBounds.size)
             baseLayer.frame = drawing
             annotationLayer.frame = drawing
@@ -146,6 +148,8 @@ extension AnnotationCanvasView {
         contentHost.frame = layout.cardRect
         contentHost.cornerRadius = 0
         contentHost.masksToBounds = true
+        contentHost.borderWidth = 0
+        contentHost.borderColor = nil
         let cardMask = contentHost.mask as? CAShapeLayer ?? CAShapeLayer()
         cardMask.frame = CGRect(origin: .zero, size: layout.cardRect.size)
         cardMask.path = cardPath

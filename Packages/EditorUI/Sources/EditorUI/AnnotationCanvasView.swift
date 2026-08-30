@@ -81,7 +81,8 @@ public final class AnnotationCanvasView: NSView {
 
         wantsLayer = true
         guard let root = layer else { return }
-        root.backgroundColor = NSColor.underPageBackgroundColor.cgColor
+        root.backgroundColor = NSColor.clear.cgColor
+        root.isOpaque = false
 
         backdropLayer.addSublayer(gradientLayer)
         root.addSublayer(backdropLayer)
@@ -115,6 +116,10 @@ public final class AnnotationCanvasView: NSView {
     /// CoreGraphics' flipped space.
     override public var isFlipped: Bool {
         true
+    }
+
+    override public var isOpaque: Bool {
+        false
     }
 
     override public var acceptsFirstResponder: Bool {

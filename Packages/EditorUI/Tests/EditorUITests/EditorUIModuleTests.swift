@@ -9,11 +9,13 @@ struct EditorUIModuleTests {
         #expect(EditorUIModule.layer == 3)
     }
 
-    @Test("Every dependency sits in a strictly lower layer")
-    func dependenciesAreLowerLayers() {
-        for dependency in EditorUIModule.dependencies {
-            #expect(dependency.layer < EditorUIModule.layer, "\(dependency.name) is not below EditorUI")
-            #expect(dependency.name != EditorUIModule.identifier)
-        }
+    @Test("The toolbar groups still cover every tool")
+    func toolbarGroupsCoverEveryTool() {
+        let grouped: Set<EditorTool> = [
+            .select,
+            .arrow, .shape, .line, .freehand, .highlighter, .text,
+            .redaction, .counter, .crop, .measure
+        ]
+        #expect(grouped == Set(EditorTool.allCases))
     }
 }

@@ -15,6 +15,9 @@ public struct EditorRootView: View {
     private weak var subjectLift: (any SubjectLifting)?
     private let onExport: (ExportAction) -> Void
 
+    @State private var canvasSession = EditorCanvasSession()
+    @State private var isInspectorPresented = true
+
     /// What the toolbar's export controls ask for.
     public enum ExportAction: Sendable {
         case copy
@@ -42,6 +45,7 @@ public struct EditorRootView: View {
         VStack(spacing: 0) {
             EditorToolbar(
                 model: model,
+                isInspectorPresented: $isInspectorPresented,
                 onExport: onExport,
                 onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } },
                 onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } }
@@ -54,14 +58,74 @@ public struct EditorRootView: View {
             }
             Divider()
             HStack(spacing: 0) {
-                CanvasRepresentable(model: model, baseImage: baseImage)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                Divider()
-                EditorInspector(model: model)
-                    .frame(width: 260)
+                workspace
+                if isInspectorPresented {
+                    Divider()
+                    EditorInspector(model: model)
+                        .frame(width: EditorWindowGeometry.inspectorWidth)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: isInspectorPresented)
         }
         .frame(minWidth: 720, minHeight: 480)
+        .background(zoomKeyCommands)
+    }
+
+    private var workspace: some View {
+        ZStack {
+            EditorWorkspaceBackground()
+            EditorCanvasHost(
+                model: model,
+                baseImage: baseImage,
+                session: canvasSession,
+                isCropping: model.tool == .crop,
+                zoomToFit: canvasSession.zoomToFit,
+                magnification: canvasSession.magnification
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottomLeading) {
+            EditorZoomControl(session: canvasSession)
+                .padding(.leading, 16)
+                .padding(.bottom, 16)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if model.tool == .crop {
+                EditorCanvasSizeBadge(size: cropBadgeSize)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: model.tool)
+    }
+
+    private var cropBadgeSize: CGSize {
+        let points = model.document.crop?.rect.size ?? model.document.canvasRect.size
+        let scale = model.document.baseImage.scale
+        return CGSize(width: points.width * scale, height: points.height * scale)
+    }
+
+    /// Menu shortcuts only fire when that menu is in the responder chain; these buttons
+    /// keep Fit / actual size / zoom reachable from the canvas (docs/06 M7).
+    private var zoomKeyCommands: some View {
+        Group {
+            Button("Zoom In") { canvasSession.zoomIn() }
+                .keyboardShortcut("+", modifiers: .command)
+            Button("Zoom In") { canvasSession.zoomIn() }
+                .keyboardShortcut("=", modifiers: .command)
+            Button("Zoom Out") { canvasSession.zoomOut() }
+                .keyboardShortcut("-", modifiers: .command)
+            Button("Fit Canvas") { canvasSession.fit() }
+                .keyboardShortcut("1", modifiers: .command)
+            Button("Actual Size") { canvasSession.setPercent(100) }
+                .keyboardShortcut("0", modifiers: .command)
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 
     private func runAutoRedact() async {
@@ -105,67 +169,5 @@ public struct EditorRootView: View {
         }
         model.stageQueryMatches()
         model.reopenRedactionReview()
-    }
-}
-
-/// Hosts the CALayer canvas inside SwiftUI.
-private struct CanvasRepresentable: NSViewRepresentable {
-    let model: EditorDocumentModel
-    let baseImage: CGImage
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let canvas = AnnotationCanvasView(model: model, baseImage: baseImage)
-        let scrollView = NSScrollView()
-        scrollView.documentView = canvas
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        // Pinch to zoom (docs/03 §3).
-        scrollView.allowsMagnification = true
-        scrollView.minMagnification = 0.1
-        scrollView.maxMagnification = 8
-        scrollView.backgroundColor = .underPageBackgroundColor
-        context.coordinator.canvas = canvas
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        // The document may have changed under us — undo, an inspector edit, a menu
-        // command — so the layer tree is rebuilt from the model.
-        context.coordinator.canvas?.documentChangedExternally()
-
-        if !context.coordinator.hasChosenInitialZoom, scrollView.bounds.width > 1 {
-            context.coordinator.hasChosenInitialZoom = true
-            fitToWidthIfTall(scrollView)
-        }
-    }
-
-    /// Scrolled-canvas mode: a stitched page opens fitted to the width, at the top
-    /// (docs/03 §1.6).
-    ///
-    /// A scrolling capture is thousands of pixels tall and a few hundred wide, and opening
-    /// it at 100% shows a corner of it. Fitting the width is the only view of such a page
-    /// that means anything; ordinary captures are left alone, because shrinking a normal
-    /// screenshot to fit is worse than showing it as it is.
-    private func fitToWidthIfTall(_ scrollView: NSScrollView) {
-        let width = CGFloat(baseImage.width)
-        let height = CGFloat(baseImage.height)
-        guard width > 0, height > width * 2 else { return }
-
-        let magnification = min(1, scrollView.contentSize.width / width)
-        scrollView.magnification = magnification
-        // The canvas is flipped, so the top of the page is y = 0.
-        scrollView.documentView?.scroll(.zero)
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    @MainActor
-    final class Coordinator {
-        var canvas: AnnotationCanvasView?
-        /// The initial zoom is chosen once, from the first real layout; after that the
-        /// magnification belongs to the user.
-        var hasChosenInitialZoom = false
     }
 }
