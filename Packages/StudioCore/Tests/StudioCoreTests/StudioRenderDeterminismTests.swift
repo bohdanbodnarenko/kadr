@@ -72,10 +72,14 @@ struct StudioRenderDeterminismTests {
         #expect(!renders[0].isEmpty, "no frames were read back")
         for (index, pair) in zip(renders[0], renders[1]).enumerated() {
             let drift = Media.difference(pair.0, pair.1)
-            // Encoder noise is hundredths of a count. A frame composed from the wrong
-            // instant, a crop off by a pixel or a missing overlay moves this by whole
-            // counts, so the threshold separates the two by two orders of magnitude.
-            #expect(drift < 0.5, "frame \(index) is a different picture (mean byte difference \(drift))")
+            // Measured rather than guessed. On an idle machine two encodes of identical
+            // frames differ by 0.0–0.05; under a full parallel test run that rises to about
+            // 0.6, because VideoToolbox's rate control is multi-threaded and contended. A
+            // genuinely different picture — the same session at a different instant —
+            // measures 48.6. Five sits an order of magnitude clear of both, and a tighter
+            // threshold fails on a busy machine for no defect, which is how a test gets
+            // deleted rather than fixed.
+            #expect(drift < 5, "frame \(index) is a different picture (mean byte difference \(drift))")
         }
     }
 
@@ -98,7 +102,9 @@ struct StudioRenderDeterminismTests {
         let frames = try await Media.frameBytes(of: destination)
         let first = try #require(frames.first)
         let last = try #require(frames.last)
-        #expect(Media.difference(first, last) > 1, "the camera did not move over the render")
+        // The measured value for this fixture is about 48, so ten is a floor rather than a
+        // boundary — it asserts that the camera moved, not that it moved by some amount.
+        #expect(Media.difference(first, last) > 10, "the camera did not move over the render")
     }
 
     // MARK: - Progress

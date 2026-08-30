@@ -44,13 +44,17 @@ public struct StudioFrameComposer: Sendable {
     ) {
         self.plan = plan
         self.edit = edit
-        self.telemetry = telemetry
+        // Rebased once, here (docs/10 R0.2). The sidecar is written in source time and
+        // every method below is called with an edited-time playhead; converting at the
+        // boundary is what stops the two being confused anywhere past it, and is why the
+        // preview and the export agree by construction rather than by both remembering.
+        self.telemetry = telemetry.rebased(to: edit.clips)
         frameDuration = 1.0 / Double(max(frameRate, 1))
         reconstruction = CursorReconstruction(spring: spring)
-        cursorPath = reconstruction.path(for: telemetry, duration: plan.duration)
+        cursorPath = reconstruction.path(for: self.telemetry, duration: plan.duration)
         // Decoded once. A cursor PNG is a few hundred bytes and there are rarely more than
         // a dozen of them, but decoding one per frame is a decode per frame.
-        cursorImages = telemetry.cursors.map { CursorArtwork.decode($0.pngData) }
+        cursorImages = self.telemetry.cursors.map { CursorArtwork.decode($0.pngData) }
     }
 
     /// The output frame at `time`.

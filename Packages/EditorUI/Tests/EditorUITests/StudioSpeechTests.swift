@@ -21,13 +21,17 @@ struct StudioSpeechTests {
         return url
     }
 
-    private func model(in folder: URL, duration: TimeInterval = 10) throws -> StudioDocumentModel {
+    private func model(
+        in folder: URL,
+        duration: TimeInterval = 10,
+        telemetry: InputTelemetry = InputTelemetry()
+    ) throws -> StudioDocumentModel {
         let session = RecordingSession.create(in: folder, named: "session")
         try session.create()
         try Data(repeating: 0, count: 64).write(to: session.screenURL)
 
         let document = SessionDocument(session: session)
-        try document.write(InputTelemetry())
+        try document.write(telemetry)
         try document.write(CaptureManifest(
             pixelSize: CGSize(width: 1920, height: 1080),
             scale: 2,
@@ -142,5 +146,60 @@ struct StudioSpeechTests {
         studio.change { $0.showsKeystrokes = false }
         studio.commitOnClose()
         #expect(!studio.session.needsRecovery)
+    }
+
+    // MARK: - Time bases
+
+    /// `TranscriptCutPlanner.applying` rebuilds a timeline from scratch at natural speed,
+    /// so it can only be used on an untouched one. Applied over an existing edit it
+    /// silently threw away every cut and speed change the user had already made — record
+    /// sixty seconds, set 2×, press Tidy speech, and the speed was gone and the tail was
+    /// deleted (docs/10 R0.2).
+    @Test("Tidying refuses an edit it would otherwise silently discard")
+    func tidyingRefusesAnEditedTimeline() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+
+        studio.setSpeedAtPlayhead(2)
+        let before = studio.edit.clips
+        #expect(before.isEdited, "the fixture did not actually change the timeline")
+
+        studio.refuseTidyIfEditedForTesting()
+        #expect(studio.edit.clips == before, "the user's speed change was discarded")
+        #expect(studio.failure != nil, "the refusal said nothing")
+    }
+
+    @Test("An untouched timeline is not refused")
+    func untouchedTimelineIsAllowed() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        #expect(!studio.edit.clips.isEdited)
+        studio.refuseTidyIfEditedForTesting()
+        #expect(studio.failure == nil)
+    }
+
+    /// The other half of R0.2 in the editor: cues are planned from clicks on the *edited*
+    /// timeline, because `zooms` is documented as edited time and the sidecar's clicks are
+    /// not.
+    @Test("Smart zooms are planned from clicks on the edited timeline")
+    func smartZoomsUseEditedClicks() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        // Clicks clustered at 25 s of a 30-second recording.
+        var telemetry = InputTelemetry()
+        telemetry.clicks = (0 ..< 6).map {
+            ClickEvent(time: 25 + Double($0) * 0.2, position: CGPoint(x: 500, y: 500))
+        }
+        let studio = try model(in: folder, duration: 30, telemetry: telemetry)
+
+        // Cut the first ten seconds away, so 25 s of footage is 15 s of edit.
+        studio.change { $0.clips = ClipTimeline(clips: [Clip(sourceStart: 10, sourceDuration: 20)]) }
+        studio.planSmartZooms()
+
+        let cue = try #require(studio.edit.zooms.first)
+        #expect(abs(cue.start - 15) < 2, "the cue landed at \(cue.start)s rather than about 15s")
     }
 }

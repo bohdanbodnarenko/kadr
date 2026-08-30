@@ -186,7 +186,11 @@ public final class StudioDocumentModel {
     /// result as run once, and appending would stack cues on top of each other.
     public func planSmartZooms() {
         let planner = ZoomCuePlanner()
-        let planned = planner.cues(for: telemetry.clicks, in: manifest.pixelSize, duration: edit.duration)
+        // Planned from clicks already on the edited timeline (docs/10 R0.2). `zooms` is
+        // documented as edited time, and the sidecar's clicks are in source time — cues
+        // planned from the raw ones land wherever the cuts have since moved the footage.
+        let clicks = editedTelemetry.clicks
+        let planned = planner.cues(for: clicks, in: manifest.pixelSize, duration: edit.duration)
         guard !planned.isEmpty else {
             failure = "There were no click clusters to zoom to in this recording."
             return
@@ -210,9 +214,31 @@ public final class StudioDocumentModel {
     }
 
     /// Where the pointer was at an instant, in recorded pixels.
+    ///
+    /// Asked in edited time, because that is what the playhead is.
     private func pointerPosition(at time: TimeInterval) -> CGPoint? {
-        telemetry.pointer.last { $0.time <= time }?.position ?? telemetry.pointer.first?.position
+        let pointer = editedTelemetry.pointer
+        return pointer.last { $0.time <= time }?.position ?? pointer.first?.position
     }
+
+    /// The telemetry on the edited timeline (docs/10 R0.2).
+    ///
+    /// The sidecar is written in source time and everything in this model — the playhead,
+    /// the cues, the clips — is in edited time. `ClipTimeline` is the only bridge between
+    /// them, and this is the only place in the editor that crosses it.
+    ///
+    /// Cached against the clips it was built for. Rebasing walks every sample, and this is
+    /// read while somebody drags a playhead.
+    var editedTelemetry: InputTelemetry {
+        if let cached = cachedEditedTelemetry, cached.clips == edit.clips {
+            return cached.telemetry
+        }
+        let rebased = telemetry.rebased(to: edit.clips)
+        cachedEditedTelemetry = (edit.clips, rebased)
+        return rebased
+    }
+
+    @ObservationIgnored private var cachedEditedTelemetry: (clips: ClipTimeline, telemetry: InputTelemetry)?
 
     private var centreOfFrame: CGPoint {
         CGPoint(x: manifest.pixelSize.width / 2, y: manifest.pixelSize.height / 2)
@@ -352,12 +378,22 @@ public final class StudioDocumentModel {
         do {
             let transcript = try await AudioTranscriber().transcribe(audioAt: session.screenURL)
             let planner = TranscriptCutPlanner()
-            let cuts = planner.cuts(for: transcript, duration: edit.duration)
+            // The transcript is in source time — it came from the recording's audio, which
+            // knows nothing about the cuts — so the cuts are planned against the source's
+            // own length rather than the edited one (docs/10 R0.2).
+            let cuts = planner.cuts(for: transcript, duration: manifest.duration)
             guard !cuts.isEmpty else {
                 notice = "There were no filler words or long pauses to remove."
                 return
             }
-            change { $0.clips = planner.applying(cuts, to: $0.duration) }
+            // `applying` rebuilds a timeline from scratch at natural speed, so it can only
+            // be used on an untouched one. Applying it over an existing edit silently threw
+            // away every cut and speed change the user had already made.
+            guard !edit.clips.isEdited else {
+                failure = Self.tidyRefusal
+                return
+            }
+            change { $0.clips = planner.applying(cuts, to: manifest.duration) }
             playhead = min(playhead, edit.duration)
             notice = "Removed \(cuts.count) \(cuts.count == 1 ? "passage" : "passages")."
         } catch TranscriptionError.unavailableOnDevice {
@@ -384,6 +420,19 @@ public final class StudioDocumentModel {
             logger.error("Could not autosave the studio edit: \(error.localizedDescription, privacy: .public)")
         }
     }
+
+    /// The guard `tidySpeech` applies before it rebuilds the timeline.
+    ///
+    /// Its own method so a test can reach it: the rest of `tidySpeech` needs a microphone,
+    /// a permission grant and a speech model, and the refusal needs none of those — which
+    /// is exactly the split that let the bug through in the first place.
+    func refuseTidyIfEditedForTesting() {
+        guard edit.clips.isEdited else { return }
+        failure = Self.tidyRefusal
+    }
+
+    static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
+        + "Undo your clip edits first, or trim the pauses by hand."
 
     /// Records that the window closed on purpose (docs/09 U3.1).
     ///
