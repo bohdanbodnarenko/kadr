@@ -279,9 +279,14 @@ public struct StudioFrameComposer: Sendable {
 
     /// The keystroke caption showing at `time`, and where it goes.
     private func caption(at time: TimeInterval) -> (image: CGImage?, placement: CGRect)? {
-        let recent = telemetry.keystrokes.filter {
-            $0.time <= time && time - $0.time <= ClickRippleMetrics.captionDuration
-        }
+        // Binary-searched and walked back, rather than filtering every chord in the
+        // recording into a fresh array on every frame (docs/10 R1.2).
+        let recent = TimeSortedLookup.elements(
+            within: ClickRippleMetrics.captionDuration,
+            endingAt: time,
+            in: telemetry.keystrokes,
+            key: \.time
+        )
         guard let last = recent.last else { return nil }
         let opacity = ClickRippleMetrics.captionOpacity(elapsed: time - last.time)
         guard opacity > 0.001 else { return nil }

@@ -20,6 +20,8 @@ struct StudioPreviewView: View {
 
     @State private var frame: CGImage?
     @State private var renderer: StudioPreviewRenderer?
+    /// The plan and the composer, rebuilt only when the edit changes (docs/10 R1.1).
+    @State private var pipeline: StudioPreviewPipeline?
 
     var body: some View {
         GeometryReader { geometry in
@@ -40,7 +42,8 @@ struct StudioPreviewView: View {
             renderer = StudioPreviewRenderer(session: model.session, telemetry: model.telemetry)
             await refresh()
         }
-        // Redrawn on the two things that change the picture. Watching the whole model would
+        // Two triggers, because they cost different amounts. A scrub reuses the pipeline
+        // and costs one decode; an edit rebuilds it. Watching the whole model instead would
         // redraw on the selection changing, which costs a decode and changes nothing.
         .task(id: model.playhead) { await refresh() }
         .task(id: model.edit) { await refresh() }
@@ -48,13 +51,21 @@ struct StudioPreviewView: View {
 
     private func refresh() async {
         guard let renderer else { return }
-        let plan = StudioRenderPlan(edit: model.edit, sourceSize: model.manifest.pixelSize)
-        frame = await renderer.image(
-            at: model.playhead,
+        frame = await renderer.image(at: model.playhead, using: currentPipeline().composer)
+    }
+
+    /// The pipeline for the edit on screen, rebuilt only when that edit changes.
+    private func currentPipeline() -> StudioPreviewPipeline {
+        if let pipeline, pipeline.matches(model.edit) {
+            return pipeline
+        }
+        let built = StudioPreviewPipeline(
             edit: model.edit,
-            plan: plan,
-            frameRate: model.manifest.frameRate
+            manifest: model.manifest,
+            telemetry: model.telemetry
         )
+        pipeline = built
+        return built
     }
 }
 
@@ -87,13 +98,13 @@ actor StudioPreviewRenderer {
     }
 
     /// The composed frame at an edited-time instant.
-    func image(
-        at time: TimeInterval,
-        edit: StudioEdit,
-        plan: StudioRenderPlan,
-        frameRate: Int
-    ) async -> CGImage? {
+    ///
+    /// The composer is passed in rather than built here: it carries the spring integration
+    /// and the decoded cursor artwork, neither of which depends on the playhead, and
+    /// building one per scrub is what made a long timeline unusable (docs/10 R1.1).
+    func image(at time: TimeInterval, using composer: StudioFrameComposer) async -> CGImage? {
         guard generator != nil else { return nil }
+        let edit = composer.edit
         // Edited time is not source time once anything has been cut or sped up, and asking
         // the generator for the wrong one shows the frame from before the edit. A playhead
         // past the end has no source frame at all, which is a blank preview rather than a
@@ -104,12 +115,6 @@ actor StudioPreviewRenderer {
             return nil
         }
 
-        let composer = StudioFrameComposer(
-            plan: plan,
-            edit: edit,
-            telemetry: telemetry,
-            frameRate: frameRate
-        )
         var camera: CIImage?
         if edit.camera.isVisible {
             camera = await copyCamera(at: source).map(CIImage.init(cgImage:))

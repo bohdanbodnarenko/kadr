@@ -88,9 +88,14 @@ public struct CursorReconstruction: Sendable {
     }
 
     /// The press whose ripple is still running, if any.
+    ///
+    /// Found by binary search and then walked back over the handful of events inside the
+    /// ripple's lifetime, rather than scanning every click in the recording from the end
+    /// (docs/10 R1.2). A release is skipped: only a press draws a ripple.
     private func mostRecentPress(before time: TimeInterval, in telemetry: InputTelemetry) -> ClickEvent? {
-        telemetry.clicks
-            .last { $0.isDown && $0.time <= time && time - $0.time <= Self.clickDuration }
+        TimeSortedLookup
+            .elements(within: Self.clickDuration, endingAt: time, in: telemetry.clicks, key: \.time)
+            .last { $0.isDown }
     }
 
     /// Snaps the smoothed position back to where the press actually was, easing out.
@@ -124,7 +129,9 @@ public struct CursorReconstruction: Sendable {
     /// The last sample at or before now, because a cursor changes at an instant and stays
     /// changed — interpolating between two cursor *images* is not a thing.
     private func cursorIndex(at time: TimeInterval, in telemetry: InputTelemetry) -> Int? {
-        telemetry.pointer.last { $0.time <= time }?.cursorIndex
+        TimeSortedLookup
+            .lastIndex(atOrBefore: time, in: telemetry.pointer, key: \.time)
+            .flatMap { telemetry.pointer[$0].cursorIndex }
     }
 }
 
