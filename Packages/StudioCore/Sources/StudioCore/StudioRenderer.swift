@@ -72,7 +72,8 @@ public struct StudioRenderer: Sendable {
             camera: FileManager.default.fileExists(atPath: session.cameraURL.path) ? session.cameraURL : nil,
             telemetry: document.telemetry() ?? InputTelemetry(),
             edit: edit,
-            pixelSize: manifest?.pixelSize
+            pixelSize: manifest?.pixelSize,
+            cameraStartOffset: manifest?.cameraStartOffset ?? 0
         )
         return try await render(
             source,
@@ -98,19 +99,23 @@ public struct StudioRenderer: Sendable {
         public var edit: StudioEdit
         /// The recording's pixel size, from its manifest. Read off the track when absent.
         public var pixelSize: CGSize?
+        /// How far into the recording the camera's first frame landed (docs/10 R0.5).
+        public var cameraStartOffset: TimeInterval
 
         public init(
             screen: URL,
             camera: URL? = nil,
             telemetry: InputTelemetry = InputTelemetry(),
             edit: StudioEdit,
-            pixelSize: CGSize? = nil
+            pixelSize: CGSize? = nil,
+            cameraStartOffset: TimeInterval = 0
         ) {
             self.screen = screen
             self.camera = camera
             self.telemetry = telemetry
             self.edit = edit
             self.pixelSize = pixelSize
+            self.cameraStartOffset = cameraStartOffset
         }
     }
 
@@ -128,7 +133,8 @@ public struct StudioRenderer: Sendable {
             camera: source.camera,
             edit: edit,
             sourceSize: source.pixelSize,
-            options: options
+            options: options,
+            cameraStartOffset: source.cameraStartOffset
         ).resolve()
 
         let plan = StudioRenderPlan(edit: edit, sourceSize: state.sourceSize)
@@ -164,6 +170,7 @@ public struct StudioRenderer: Sendable {
         let edit: StudioEdit
         let sourceSize: CGSize?
         let options: Options
+        let cameraStartOffset: TimeInterval
 
         func resolve() async throws -> RenderState {
             let composition = try await build()
@@ -189,7 +196,8 @@ public struct StudioRenderer: Sendable {
                 return try await ClipCompositionBuilder().composition(
                     for: edit.clips,
                     screen: screen,
-                    camera: camera
+                    camera: camera,
+                    cameraStartOffset: cameraStartOffset
                 )
             } catch {
                 throw RenderError.noVideoTrack

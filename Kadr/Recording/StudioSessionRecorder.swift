@@ -23,7 +23,12 @@ final class StudioSessionRecorder {
     private let telemetry = PointerTelemetryRecorder()
     private let camera = CameraFileRecorder()
     private var session: RecordingSession?
-    private var startedAt: Date?
+    /// When the session began, on the same clock the camera reports its first frame on.
+    ///
+    /// `systemUptime` rather than `Date`: the camera's delegate reports uptime, and the two
+    /// have to be subtractable. A wall clock would also move under a time-zone change or an
+    /// NTP correction mid-recording, which a duration must not.
+    private var startedAtUptime: TimeInterval?
 
     /// The session being captured, if one is.
     var current: RecordingSession? {
@@ -56,7 +61,7 @@ final class StudioSessionRecorder {
         }
 
         self.session = session
-        startedAt = Date()
+        startedAtUptime = ProcessInfo.processInfo.systemUptime
         geometry.reset()
         telemetry.start(pointConverter: pointConverter)
         if recordsCamera {
@@ -101,7 +106,7 @@ final class StudioSessionRecorder {
         var captured = telemetry.stop()
         captured.windowGeometry = geometry.samples
         geometry.reset()
-        await camera.finish()
+        let cameraOutcome = await camera.finish()
 
         guard attach(result.fileURL, to: session) else {
             try? session.delete()
@@ -120,7 +125,8 @@ final class StudioSessionRecorder {
                 // cursor depends on whether one is already in the picture, and by the time
                 // anybody opens the editor there is no way left to tell.
                 hasBakedCursor: result.options.showsCursor,
-                hasCamera: FileManager.default.fileExists(atPath: session.cameraURL.path)
+                hasCamera: FileManager.default.fileExists(atPath: session.cameraURL.path),
+                cameraStartOffset: cameraOffset(firstFrameAt: cameraOutcome.startedAt)
             ))
         } catch {
             logger.error("Could not write the studio session: \(error.localizedDescription, privacy: .public)")
@@ -131,6 +137,18 @@ final class StudioSessionRecorder {
         await writePoster(for: session)
         logger.info("Studio session ready: \(session.directory.lastPathComponent, privacy: .public)")
         return session
+    }
+
+    /// How far into the recording the camera's first frame landed (docs/10 R0.5).
+    ///
+    /// Measured against the session's own start rather than the engine's first frame,
+    /// which are a few milliseconds apart — the session is created immediately before the
+    /// stream is asked to start. That is an approximation, and it is the right one to make:
+    /// the error it replaces is a third of a second on a built-in camera and well over a
+    /// second on some external ones, and it was previously assumed to be zero.
+    private func cameraOffset(firstFrameAt uptime: TimeInterval?) -> TimeInterval {
+        guard let uptime, let startedAtUptime else { return 0 }
+        return max(uptime - startedAtUptime, 0)
     }
 
     /// Writes a still from the recording into the session (docs/09 U3.1).
@@ -270,7 +288,7 @@ final class StudioSessionRecorder {
         let session = RecordingSession.create(in: root, named: Self.name())
         guard (try? session.create()) != nil else { return nil }
         self.session = session
-        startedAt = Date()
+        startedAtUptime = ProcessInfo.processInfo.systemUptime
         return session
     }
 

@@ -26,10 +26,15 @@ public struct ClipCompositionBuilder: Sendable {
     /// Audio is scaled alongside video in the same call, which is what keeps it in sync: a
     /// composition that speeds the picture and leaves the sound alone drifts by exactly the
     /// amount it was sped up, and the drift compounds with every clip.
+    /// - Parameter cameraStartOffset: how far into the recording the camera's first frame
+    ///   landed. Camera time zero is screen time `cameraStartOffset`, so every camera range
+    ///   is shifted back by it — without which the bubble is permanently ahead of the
+    ///   picture by however long the capture session took to wake up (docs/10 R0.5).
     public func composition(
         for timeline: ClipTimeline,
         screen: URL,
-        camera: URL? = nil
+        camera: URL? = nil,
+        cameraStartOffset: TimeInterval = 0
     ) async throws -> AVMutableComposition {
         let asset = AVURLAsset(url: screen)
         // `try?` rather than propagating: a file that is not a movie and a movie with no
@@ -88,7 +93,7 @@ public struct ClipCompositionBuilder: Sendable {
         // The camera is a separate track rather than a burnt-in overlay, which is what
         // lets the bubble be moved, resized or removed after the fact (docs/09 U3.4).
         if let camera, FileManager.default.fileExists(atPath: camera.path) {
-            try? await insertCamera(camera, into: composition, timeline: timeline)
+            try? await insertCamera(camera, into: composition, timeline: timeline, startOffset: cameraStartOffset)
         }
         return composition
     }
@@ -100,7 +105,8 @@ public struct ClipCompositionBuilder: Sendable {
     private func insertCamera(
         _ url: URL,
         into composition: AVMutableComposition,
-        timeline: ClipTimeline
+        timeline: ClipTimeline,
+        startOffset: TimeInterval
     ) async throws {
         let asset = AVURLAsset(url: url)
         guard let sourceVideo = try await asset.loadTracks(withMediaType: .video).first,
@@ -115,25 +121,35 @@ public struct ClipCompositionBuilder: Sendable {
 
         var elapsed: TimeInterval = 0
         for clip in timeline.clips where clip.sourceDuration > 0 {
-            // The camera may be shorter than the screen — it starts when the user turns it
-            // on. A clip past its end contributes nothing rather than failing the export.
-            guard clip.sourceStart < cameraDuration else { break }
-            let available = min(clip.sourceDuration, cameraDuration - clip.sourceStart)
-            let cursor = CMTime(seconds: elapsed, preferredTimescale: 600)
-            let range = CMTimeRange(
-                start: CMTime(seconds: clip.sourceStart, preferredTimescale: 600),
-                duration: CMTime(seconds: available, preferredTimescale: 600)
-            )
-            try? track.insertTimeRange(range, of: sourceVideo, at: cursor)
+            // Screen time `t` is camera time `t - startOffset`: the camera woke up late, so
+            // its file begins partway into the recording.
+            let cameraStart = clip.sourceStart - startOffset
+            let available = min(clip.sourceDuration, cameraDuration - max(cameraStart, 0))
 
-            if clip.speed != 1 {
-                let inserted = CMTimeRange(start: cursor, duration: range.duration)
-                let scaled = CMTime(seconds: available / clip.speed, preferredTimescale: 600)
-                track.scaleTimeRange(inserted, toDuration: scaled)
-                elapsed += available / clip.speed
-            } else {
-                elapsed += available
+            // The camera may be shorter than the screen, or may not have started until
+            // after this clip — it begins when the device hands over its first frame, and
+            // ends when the user stops. Either way the clip contributes no camera rather
+            // than failing the export.
+            if cameraStart < cameraDuration, available > 0 {
+                let cursor = CMTime(seconds: elapsed + max(-cameraStart, 0), preferredTimescale: 600)
+                let range = CMTimeRange(
+                    start: CMTime(seconds: max(cameraStart, 0), preferredTimescale: 600),
+                    duration: CMTime(seconds: available, preferredTimescale: 600)
+                )
+                try? track.insertTimeRange(range, of: sourceVideo, at: cursor)
+
+                if clip.speed != 1 {
+                    let inserted = CMTimeRange(start: cursor, duration: range.duration)
+                    let scaled = CMTime(seconds: available / clip.speed, preferredTimescale: 600)
+                    track.scaleTimeRange(inserted, toDuration: scaled)
+                }
             }
+
+            // Advanced by the clip's own edited length, never by how much camera happened
+            // to be available (docs/10 R0.5). Advancing by the truncated length pulled every
+            // later segment early by the shortfall, so one short camera file put the bubble
+            // progressively further ahead of the picture for the rest of the recording.
+            elapsed += clip.editedDuration
         }
     }
 }

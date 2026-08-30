@@ -58,16 +58,25 @@ final class CameraFileRecorder {
         self.machinery = machinery
     }
 
-    /// Stops and waits for the file to be finalised.
+    /// Stops, waits for the file to be finalised, and reports when the camera began.
     ///
     /// Awaited rather than fired and forgotten: `AVCaptureMovieFileOutput` finishes writing
     /// asynchronously, and a session package assembled before the camera file is closed
     /// contains a movie nobody can open.
+    ///
+    /// The start time is the other half of the answer (docs/10 R0.5).
+    ///
+    /// The offset is the point of the return value. A capture session takes a moment to
+    /// hand over its first frame — a third of a second built-in, well over a second on some
+    /// external cameras — while the screen has been recording since before it was asked.
+    /// Nothing downstream can discover that afterwards: both files start at zero and one of
+    /// them started late.
     @discardableResult
-    func finish() async -> Bool {
-        guard let machinery else { return false }
+    func finish() async -> (succeeded: Bool, startedAt: TimeInterval?) {
+        guard let machinery else { return (false, nil) }
         self.machinery = nil
-        return await machinery.finish()
+        let startedAt = machinery.startedAt
+        return await (machinery.finish(), startedAt)
     }
 
     func cancel() {
@@ -94,6 +103,17 @@ private final nonisolated class CameraMachinery: @unchecked Sendable {
     private let lock = NSLock()
     private var completion: (@Sendable (Bool) -> Void)?
     private var delegate: CameraRecordingDelegate?
+    /// When the first frame landed, as a mach uptime.
+    ///
+    /// Written on the capture queue and read from the main actor, so it goes through the
+    /// same lock as everything else here.
+    private var firstFrameUptime: TimeInterval?
+
+    var startedAt: TimeInterval? {
+        lock.lock()
+        defer { lock.unlock() }
+        return firstFrameUptime
+    }
 
     func start(writingTo url: URL) -> Bool {
         // 720p rather than the highest the camera offers: the bubble is a fraction of the
@@ -109,9 +129,10 @@ private final nonisolated class CameraMachinery: @unchecked Sendable {
         session.addInput(input)
         session.addOutput(output)
 
-        let delegate = CameraRecordingDelegate { [weak self] error in
-            self?.finished(with: error)
-        }
+        let delegate = CameraRecordingDelegate(
+            onStart: { [weak self] in self?.noteFirstFrame() },
+            onFinish: { [weak self] error in self?.finished(with: error) }
+        )
         self.delegate = delegate
 
         run { session, output in
@@ -150,6 +171,15 @@ private final nonisolated class CameraMachinery: @unchecked Sendable {
         complete(false)
     }
 
+    /// `didStartRecordingTo` fires when the file's first sample is written, which is the
+    /// moment the camera actually began — not the moment it was asked to.
+    private func noteFirstFrame() {
+        lock.lock()
+        defer { lock.unlock() }
+        guard firstFrameUptime == nil else { return }
+        firstFrameUptime = ProcessInfo.processInfo.systemUptime
+    }
+
     private func finished(with error: (any Error)?) {
         run { session, _ in session.stopRunning() }
         if let error {
@@ -182,13 +212,28 @@ private final nonisolated class CameraMachinery: @unchecked Sendable {
 
 private typealias RecordingDelegate = AVCaptureFileOutputRecordingDelegate
 
-/// Forwards the one delegate callback that matters, and nothing else.
+/// Forwards the two delegate callbacks that matter, and nothing else.
 private final nonisolated class CameraRecordingDelegate: NSObject, RecordingDelegate, @unchecked Sendable {
+    private let onStart: @Sendable () -> Void
     private let onFinish: @Sendable ((any Error)?) -> Void
 
-    init(onFinish: @escaping @Sendable ((any Error)?) -> Void) {
+    init(
+        onStart: @escaping @Sendable () -> Void,
+        onFinish: @escaping @Sendable ((any Error)?) -> Void
+    ) {
+        self.onStart = onStart
         self.onFinish = onFinish
         super.init()
+    }
+
+    /// Fired when the file's first sample is written — the moment the camera actually
+    /// began, which is what the lip-sync offset is measured from (docs/10 R0.5).
+    nonisolated func fileOutput(
+        _ output: AVCaptureFileOutput,
+        didStartRecordingTo fileURL: URL,
+        from connections: [AVCaptureConnection]
+    ) {
+        onStart()
     }
 
     nonisolated func fileOutput(

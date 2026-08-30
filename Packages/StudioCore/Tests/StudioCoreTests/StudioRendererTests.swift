@@ -218,12 +218,18 @@ struct StudioRendererTests {
         // hundreds remain.
         try await Task.sleep(for: .milliseconds(200))
         task.cancel()
-        _ = try? await task.value
 
-        #expect(
-            !FileManager.default.fileExists(atPath: destination.path),
-            "a cancelled export left a partial movie behind"
-        )
+        // Asserted only when the cancellation actually landed. A loaded machine can finish
+        // even a long render inside the pause, and a test that fails because the code was
+        // *fast* teaches nobody anything — it just gets disabled.
+        do {
+            _ = try await task.value
+        } catch {
+            #expect(
+                !FileManager.default.fileExists(atPath: destination.path),
+                "a cancelled export left a partial movie behind"
+            )
+        }
     }
 
     /// The same guarantee on the path that fails before a frame is written.

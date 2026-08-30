@@ -23,6 +23,14 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
     public var hasBakedCursor: Bool
     /// Whether a camera stream was recorded alongside.
     public var hasCamera: Bool
+    /// How far into the recording the camera's first frame landed (docs/10 R0.5).
+    ///
+    /// A capture session takes a moment to hand over its first frame — a third of a second
+    /// on a built-in camera, well over a second on some external ones — and the screen is
+    /// already recording. Without this the editor has no way to know, because the error is
+    /// not visible in either file: both start at zero and one of them starts late. Measured
+    /// at capture, when it is the only time it can be measured at all.
+    public var cameraStartOffset: TimeInterval
 
     public init(
         version: Int = CaptureManifest.currentVersion,
@@ -31,7 +39,8 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
         frameRate: Int = 60,
         duration: TimeInterval = 0,
         hasBakedCursor: Bool = false,
-        hasCamera: Bool = false
+        hasCamera: Bool = false,
+        cameraStartOffset: TimeInterval = 0
     ) {
         self.version = version
         self.pixelSize = pixelSize
@@ -40,10 +49,11 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
         self.duration = duration
         self.hasBakedCursor = hasBakedCursor
         self.hasCamera = hasCamera
+        self.cameraStartOffset = max(cameraStartOffset, 0)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, pixelSize, scale, frameRate, duration, hasBakedCursor, hasCamera
+        case version, pixelSize, scale, frameRate, duration, hasBakedCursor, hasCamera, cameraStartOffset
     }
 
     public init(from decoder: any Decoder) throws {
@@ -55,7 +65,11 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
             frameRate: container.decodeIfPresent(Int.self, forKey: .frameRate) ?? 60,
             duration: container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 0,
             hasBakedCursor: container.decodeIfPresent(Bool.self, forKey: .hasBakedCursor) ?? false,
-            hasCamera: container.decodeIfPresent(Bool.self, forKey: .hasCamera) ?? false
+            hasCamera: container.decodeIfPresent(Bool.self, forKey: .hasCamera) ?? false,
+            // Sessions recorded before the offset was measured decode as zero, which is
+            // the old behaviour exactly: aligned at the start and out by however long the
+            // camera took to wake up.
+            cameraStartOffset: container.decodeIfPresent(TimeInterval.self, forKey: .cameraStartOffset) ?? 0
         )
     }
 }
