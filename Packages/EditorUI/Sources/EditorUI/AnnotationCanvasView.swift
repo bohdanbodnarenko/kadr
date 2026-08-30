@@ -29,6 +29,13 @@ public final class AnnotationCanvasView: NSView {
         self?.renderExpensiveChrome()
     }
 
+    /// Which offscreen render is the current one (docs/10 R1.5).
+    ///
+    /// The render runs off the main actor, so two can be in flight — release one slider
+    /// and touch the next before the first finishes. Without this the older result arrives
+    /// second and leaves a stale picture on screen.
+    var chromeRenderGeneration: UInt64 = 0
+
     /// Edits a text annotation where it sits, laid out by the exporter's own metrics
     /// (docs/09 U1.8).
     private(set) lazy var textEditor: TextOverlayEditor = {
@@ -142,6 +149,12 @@ public final class AnnotationCanvasView: NSView {
         }
         updateSelectionHandles()
         rebuildReviewLayers()
+        // The layers just rebuilt live inside `contentHost`, which the offscreen path
+        // hides — so with a camera or a progressive blur active, a newly drawn annotation
+        // was invisible until something else happened to trigger a chrome pass (docs/10
+        // R1.5). Rebuilding the layers *is* a document change, so it is the right place to
+        // say the render is stale.
+        updateExpensiveChrome()
         onDocumentChanged?()
     }
 

@@ -256,3 +256,52 @@ struct EditorWatermarkTests {
         #expect(model.document.beautify == nil, "the whole chrome edit is one step")
     }
 }
+
+/// The offscreen chrome path, and what it hides (docs/10 R1.5).
+@MainActor
+@Suite("Expensive chrome")
+struct ExpensiveChromeTests {
+    private func canvas(withCamera: Bool) throws -> AnnotationCanvasView {
+        let model = EditorDocumentModel(document: AnnotationDocument(
+            baseImage: BaseImageReference(size: CGSize(width: 400, height: 300), scale: 2)
+        ))
+        if withCamera {
+            // A camera is one of the two things that force the offscreen render path.
+            model.applyCamera(AnnotationCameraSpec(tiltDegrees: 20, orbitDegrees: -10, rollDegrees: 0))
+        }
+        return try AnnotationCanvasView(model: model, baseImage: Self.image())
+    }
+
+    private static func image() throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil,
+            width: 400,
+            height: 300,
+            bitsPerComponent: 8,
+            bytesPerRow: 400 * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        return try #require(context.makeImage())
+    }
+
+    /// Without a camera or a blur there is no offscreen render, so the ordinary layer tree
+    /// stays visible and nothing is hidden.
+    @Test("A plain canvas shows its layers directly")
+    func plainCanvasShowsLayers() throws {
+        let view = try canvas(withCamera: false)
+        view.rebuildAnnotationLayers()
+        #expect(!view.contentHost.isHidden)
+    }
+
+    /// The bug: `contentHost` holds the annotation layers and the offscreen path hides it,
+    /// so a newly drawn annotation stayed invisible until something else triggered a
+    /// chrome pass. Rebuilding the layers now says the render is stale.
+    @Test("Rebuilding the layers marks the offscreen render stale")
+    func rebuildTouchesTheChrome() throws {
+        let view = try canvas(withCamera: true)
+        view.chromeSettle.cancel()
+        view.rebuildAnnotationLayers()
+        #expect(view.chromeSettle.isSettling, "a redraw left the offscreen render unrefreshed")
+    }
+}

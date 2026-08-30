@@ -234,39 +234,56 @@ public final class SelectionOverlayController {
         // Deliberately after the interval closes: finding the edges is a full pass over
         // every frozen bitmap, and the hotkey→overlay budget has no room for it (PRD §8).
         // The overlay is already usable; snapping switches on when the answer arrives.
-        detectEdges(in: freezes)
+        prepareSnapping(for: freezes)
     }
 
-    /// Finds the straight edges in each frozen display, off the main thread.
+    /// Remembers the frozen displays so their edges can be found when they are needed.
     ///
-    /// One display at a time and cancellable: on a three-display setup the display the
-    /// user is actually pointing at should not wait behind the other two, and a second
-    /// hotkey should abandon the work rather than finish it for an overlay that is gone.
-    private func detectEdges(in freezes: [FrozenDisplay]) {
+    /// Nothing is scanned here (docs/10 R1.6). Finding the edges of one 5K display costs
+    /// about 68ms and a transient 14MB buffer — measured, and dominated by the greyscale
+    /// conversion rather than the scan — and it used to happen for every display on every
+    /// overlay, whether or not the user ever dragged near an edge. On a three-display Mac
+    /// that is 200ms of CPU and 42MB churned for every screenshot somebody takes.
+    private func prepareSnapping(for freezes: [FrozenDisplay]) {
         snapTask?.cancel()
         snapping = [:]
+        scannedDisplays = []
+        pendingFreezes = [:]
         guard snapsToEdges else { return }
-
-        let tolerance = snapTolerance
-        snapTask = Task { [weak self] in
-            for frozen in freezes {
-                guard !Task.isCancelled else { return }
-                let image = frozen.image
-                let candidates = await Task.detached(priority: .userInitiated) {
-                    EdgeDetector.candidates(in: image)
-                }.value
-                guard !Task.isCancelled else { return }
-                self?.applySnapping(
-                    SelectionSnapping(
-                        candidates: candidates,
-                        scale: frozen.geometry.scale.factor,
-                        tolerance: tolerance
-                    ),
-                    to: frozen.geometry.displayID
-                )
-            }
+        for frozen in freezes {
+            pendingFreezes[frozen.geometry.displayID] = frozen
         }
     }
+
+    /// Finds the straight edges in one display, off the main thread, once.
+    ///
+    /// Called when the pointer first enters a display, which is necessarily before anything
+    /// can be dragged on it — so the work is done for the display being used and for no
+    /// other, and it overlaps the moment the user spends deciding where to start.
+    private func detectEdges(forDisplay displayID: CGDirectDisplayID) {
+        guard snapsToEdges, !scannedDisplays.contains(displayID) else { return }
+        guard let frozen = pendingFreezes[displayID] else { return }
+        scannedDisplays.insert(displayID)
+
+        let tolerance = snapTolerance
+        let image = frozen.image
+        let scale = frozen.geometry.scale.factor
+        // Cancellable, because a second hotkey should abandon the work rather than finish
+        // it for an overlay that is already gone.
+        snapTask = Task { [weak self] in
+            let candidates = await Task.detached(priority: .userInitiated) {
+                EdgeDetector.candidates(in: image)
+            }.value
+            guard !Task.isCancelled else { return }
+            self?.applySnapping(
+                SelectionSnapping(candidates: candidates, scale: scale, tolerance: tolerance),
+                to: displayID
+            )
+        }
+    }
+
+    private var pendingFreezes: [CGDirectDisplayID: FrozenDisplay] = [:]
+    private var scannedDisplays: Set<CGDirectDisplayID> = []
 
     private func applySnapping(_ value: SelectionSnapping, to displayID: CGDirectDisplayID) {
         snapping[displayID] = value
@@ -338,6 +355,9 @@ public final class SelectionOverlayController {
         }
         panel.view.onBecameActive = { [weak self] in
             self?.makeActive(displayID: descriptor.displayID)
+            // The pointer is on this display, so a drag on it is now possible and its
+            // edges are worth finding. No other display's are.
+            self?.detectEdges(forDisplay: descriptor.displayID)
         }
         panel.view.onCommit = { [weak self] localRect in
             guard let self else { return }
@@ -369,6 +389,12 @@ public final class SelectionOverlayController {
         windowSet.dismiss()
         self.windowSet = nil
         freezes.removeAll()
+        // The deferred edge detection keeps its own reference to the frozen displays, and
+        // a frozen 5K display is 14MB of bitmap. Leaving them here would make the overlay's
+        // whole memory cost outlive the overlay — which is what the lifecycle test caught
+        // the moment this cache was added.
+        pendingFreezes.removeAll()
+        snapTask?.cancel()
         pickableWindows.removeAll()
 
         // Hand focus back to whatever the user was in, so the overlay is invisible in

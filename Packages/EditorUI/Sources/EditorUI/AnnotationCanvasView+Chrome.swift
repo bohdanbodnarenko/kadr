@@ -53,12 +53,36 @@ extension AnnotationCanvasView {
     }
 
     /// The real thing: the whole canvas, rendered through the export path.
+    ///
+    /// Off the main actor (docs/10 R1.5). This is the full export renderer over the whole
+    /// canvas — a 100–300 ms CoreImage pass on a 5K capture — and it used to run inline on
+    /// every slider release, which is a stall exactly where somebody is judging the result.
+    ///
+    /// The stretched preview already on screen is the right thing to show meanwhile: it is
+    /// the previous render at the wrong scale, which is a far better guess than a blank
+    /// canvas and is what the settle pattern puts there anyway.
     func renderExpensiveChrome() {
         guard needsOffscreenRender else { return }
-        guard let rendered = try? AnnotationExportRenderer().render(
-            baseImage: baseImage,
-            document: model.document
-        ) else {
+
+        // A newer render wins. Two settles can overlap — release one slider and touch the
+        // next before the first finishes — and the older result arriving second would put
+        // a stale picture on screen and leave it there.
+        chromeRenderGeneration &+= 1
+        let generation = chromeRenderGeneration
+        let document = model.document
+        let image = baseImage
+
+        Task.detached(priority: .userInitiated) {
+            let rendered = try? AnnotationExportRenderer().render(baseImage: image, document: document)
+            await MainActor.run { [weak self] in
+                guard let self, generation == chromeRenderGeneration else { return }
+                applyRenderedChrome(rendered)
+            }
+        }
+    }
+
+    private func applyRenderedChrome(_ rendered: CGImage?) {
+        guard let rendered else {
             // A render we cannot do leaves the flat canvas visible, which is wrong but
             // legible — the alternative is a blank editor.
             cameraLayer.isHidden = true
