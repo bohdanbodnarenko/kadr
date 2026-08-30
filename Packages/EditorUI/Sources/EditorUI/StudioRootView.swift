@@ -119,9 +119,18 @@ public struct StudioRootView: View {
     @ViewBuilder
     private var exportControl: some View {
         if let progress = model.exportProgress {
-            ProgressView(value: progress)
-                .progressViewStyle(.linear)
-                .frame(width: 140)
+            // A ten-minute recording takes minutes to render, and without this the only way
+            // out was ⌘Q — which killed the process mid-write and left the partial file at
+            // the destination the user had chosen (docs/11 S0.4).
+            HStack(spacing: 8) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 140)
+                Button("Cancel") {
+                    Task { await model.cancelExport() }
+                }
+                .help("Stop the export and delete the partly-written file")
+            }
         } else {
             Button("Export…") { onExport(model) }
                 .keyboardShortcut("e")

@@ -33,6 +33,16 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
 
     var onClose: (() -> Void)?
 
+    /// Whether this window is in the middle of a render (docs/11 S0.4).
+    var isExporting: Bool {
+        model.isExporting
+    }
+
+    /// Stops a render and waits for its cleanup, so quitting cannot outrun it.
+    func cancelExport() async {
+        await model.cancelExport()
+    }
+
     init(session: RecordingSession) throws {
         guard let model = StudioDocumentModel(session: session) else {
             throw OpenError.notASession(session.directory)
@@ -104,11 +114,37 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Closing
 
-    /// Closing is safe without a prompt, which the annotation editor cannot say.
+    /// Closing is safe without a prompt *unless* a render is running (docs/11 S0.4).
     ///
-    /// Every edit here has already been written to the draft as it was made, and the
-    /// footage was never touched. There is nothing to lose by closing and nothing to ask
-    /// about — reopening the session lands exactly where this left off.
+    /// Every edit has already been written to the draft as it was made and the footage was
+    /// never touched, so there is normally nothing to lose by closing. An export is the
+    /// exception: it is the one thing here that takes minutes and cannot be resumed, and
+    /// closing the window used to kill it with no warning and leave a half-written movie at
+    /// the path the user chose. Finder would show a file that plays for seven minutes of a
+    /// ten-minute recording — worse than no file, because one of those is obviously missing
+    /// and the other is quietly wrong.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard model.isExporting else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Stop exporting “\(sender.title)”?"
+        alert.informativeText = "The export is not finished. Closing now discards it, "
+            + "and the partly-written file is deleted."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Stop Exporting")
+        alert.addButton(withTitle: "Keep Exporting")
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+
+        // Closed once the render has actually unwound, not once it has been told to. The
+        // renderer deletes the partial file on its way out, and a window that vanished
+        // first would let the process quit before that ran.
+        Task { @MainActor [weak self] in
+            await self?.model.cancelExport()
+            self?.window?.close()
+        }
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) {
         // Committing is what makes this a *clean* close rather than a disappearance. The
         // agent offers to recover sessions that have a draft and no commit, so a window

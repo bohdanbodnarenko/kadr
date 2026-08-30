@@ -108,6 +108,37 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
+    /// ⌘Q during an export asks first, and then waits for the render to unwind
+    /// (docs/11 S0.4).
+    ///
+    /// Without this the process died mid-write: the renderer's `defer` never ran, so the
+    /// half-finished movie survived at the path the user picked, looking for all the world
+    /// like a finished export. `.terminateLater` is the only reply that buys the time to
+    /// delete it — `false` would refuse the quit outright, and `true` would not wait.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let exporting = studioWindows.filter(\.isExporting)
+        guard !exporting.isEmpty else { return .terminateNow }
+
+        let alert = NSAlert()
+        alert.messageText = exporting.count == 1
+            ? "An export is still running."
+            : "\(exporting.count) exports are still running."
+        alert.informativeText = "Quitting now discards the export, and the partly-written "
+            + "file is deleted."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Quit Anyway")
+        alert.addButton(withTitle: "Keep Exporting")
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+
+        Task { @MainActor in
+            for window in exporting {
+                await window.cancelExport()
+            }
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     private func open(_ url: URL) {
         let state = signposter.beginInterval("openCapture")
         defer { signposter.endInterval("openCapture", state) }

@@ -160,18 +160,28 @@ struct TimeSortedLookupTests {
             _ = composer.frame(at: duration * Double(step) / 10, source: source, camera: nil)
         }
 
-        // Sampled across the whole recording, so the lookups cannot be helped by every
-        // query landing at the same place.
-        let frames = 60
-        let start = ContinuousClock.now
-        for step in 0 ..< frames {
-            _ = composer.frame(
-                at: duration * Double(step) / Double(frames),
-                source: source,
-                camera: nil
-            )
+        // Best of several runs, not one.
+        //
+        // A single run of 60 frames took about 1.2 ms, and at that scale the scheduler is
+        // louder than the thing being measured — the suite failed at 1.45× on a machine
+        // running other tests in parallel, which says nothing about whether the lookup is
+        // O(log n). Noise only ever *adds* time, so the fastest run is the one least
+        // contaminated by it; this is the standard shape for a microbenchmark, and it is
+        // what lets the ratio stay strict enough to mean something.
+        let frames = 200
+        var best = Double.greatestFiniteMagnitude
+        for _ in 0 ..< 5 {
+            let start = ContinuousClock.now
+            for step in 0 ..< frames {
+                _ = composer.frame(
+                    at: duration * Double(step) / Double(frames),
+                    source: source,
+                    camera: nil
+                )
+            }
+            let elapsed = ContinuousClock.now - start
+            best = min(best, Double(elapsed.components.attoseconds) / 1e18 / Double(frames))
         }
-        let elapsed = ContinuousClock.now - start
-        return Double(elapsed.components.attoseconds) / 1e18 / Double(frames)
+        return best
     }
 }

@@ -18,9 +18,9 @@ import StudioSession
 @MainActor
 @Observable
 public final class StudioDocumentModel {
-    @ObservationIgnored private let logger = KadrLog.logger(.app)
+    @ObservationIgnored let logger = KadrLog.logger(.app)
     @ObservationIgnored public let session: RecordingSession
-    @ObservationIgnored private let document: SessionDocument
+    @ObservationIgnored let document: SessionDocument
 
     /// What was captured alongside the footage.
     public let telemetry: InputTelemetry
@@ -47,7 +47,7 @@ public final class StudioDocumentModel {
     public var selectedZoom: ZoomCue.ID?
 
     /// Whether an export is running, and how far along.
-    public private(set) var exportProgress: Double?
+    public internal(set) var exportProgress: Double?
 
     /// Set when something went wrong that the user should see.
     public var failure: String?
@@ -69,6 +69,12 @@ public final class StudioDocumentModel {
 
     /// Whether a transcription is running.
     public private(set) var isTranscribing = false
+
+    /// Held so closing the window or quitting can stop it (docs/11 S0.4).
+    ///
+    /// Unstructured on purpose: an export outlives the save panel's completion handler, and
+    /// nothing on the way in owns a scope that lasts as long as the render does.
+    @ObservationIgnored var exportTask: Task<Void, Never>?
 
     @ObservationIgnored private var installTask: Task<Void, Never>?
     @ObservationIgnored private var progressObservation: NSKeyValueObservation?
@@ -458,43 +464,6 @@ public final class StudioDocumentModel {
             try document.commit(edit)
         } catch {
             logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    // MARK: - Exporting
-
-    /// Renders the edit to `destination`.
-    ///
-    /// The edit is committed first, so a finished export is also the point the draft is
-    /// measured against: reopening after exporting shows what was exported.
-    public func export(to destination: URL) async {
-        guard exportProgress == nil else { return }
-        exportProgress = 0
-        try? document.commit(edit)
-
-        do {
-            let output = try await StudioRenderer().render(
-                session: session,
-                edit: edit,
-                to: destination,
-                progress: { [weak self] value in
-                    Task { @MainActor in self?.exportProgress = value }
-                }
-            )
-            guard let digest = RenderStamp.digest(of: edit) else {
-                exportProgress = nil
-                return
-            }
-            try? document.write(RenderStamp(
-                editDigest: digest,
-                outputPath: output.fileURL.path,
-                pixelSize: output.pixelSize
-            ))
-            exportProgress = nil
-        } catch {
-            exportProgress = nil
-            failure = "The export failed: \(error.localizedDescription)"
-            logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

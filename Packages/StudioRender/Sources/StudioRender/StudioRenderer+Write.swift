@@ -90,9 +90,22 @@ extension StudioRenderer {
             progress?(min(seconds / total, 1))
         }
 
+        // Ask the reader *why* it stopped (docs/11 S0.4).
+        //
+        // `copyNextSampleBuffer` returns nil for two completely different things: the track
+        // ended, or the reader died. Without this the second one looked exactly like the
+        // first — a reader that failed at minute seven exited the loop cleanly, the writer
+        // finalised a well-formed seven-minute file, and `StudioDocumentModel.export` wrote
+        // a `RenderStamp` blessing it as the export of a ten-minute recording. Silent
+        // truncation, with a certificate of authenticity attached.
+        try check(reader.reader, expecting: state.duration)
+
         // Whatever audio outlasts the last video frame. A recording that ends mid-sentence
         // because the final frame arrived first is a real thing.
         try await drainAudio(upTo: CMTime.positiveInfinity, reader: reader, writer: writer)
+
+        // The audio drain reads too, so the reader gets asked a second time.
+        try check(reader.reader, expecting: state.duration)
 
         writer.video.markAsFinished()
         writer.audio?.markAsFinished()
@@ -114,6 +127,27 @@ extension StudioRenderer {
             duration: state.duration,
             frameCount: frameCount
         )
+    }
+
+    /// Fails the render if the reader stopped for any reason but reaching the end.
+    ///
+    /// `.completed` is the only status that means "there was nothing more to read".
+    /// `.failed` and `.cancelled` both surface as a `nil` sample buffer, indistinguishable
+    /// at the call site from a track that simply ended — which is how a truncated export
+    /// used to be written, finalised and stamped as authentic.
+    func check(_ reader: AVAssetReader, expecting duration: TimeInterval) throws {
+        switch reader.status {
+        case .completed, .reading:
+            return
+        case .failed:
+            throw RenderError.readingFailed(reader.error?.localizedDescription ?? "unknown")
+        case .cancelled:
+            throw RenderError.cancelled
+        default:
+            throw RenderError.readingFailed(
+                "the reader stopped after less than the \(Int(duration))s the edit asks for"
+            )
+        }
     }
 
     /// What a failed render has to shut down and delete.

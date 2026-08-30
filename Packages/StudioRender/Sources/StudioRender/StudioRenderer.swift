@@ -27,6 +27,13 @@ public struct StudioRenderer: Sendable {
         case couldNotCreateWriter(String)
         case couldNotCreateReader(String)
         case writingFailed(String)
+        /// The reader stopped before the end of the composition (docs/11 S0.4).
+        ///
+        /// Its own case rather than `writingFailed`, because it is the failure that used to
+        /// have no symptom: the writer was perfectly healthy and produced a well-formed file
+        /// of whatever arrived before the reader died. Naming it separately is what stops the
+        /// next person reading "writing failed" and looking at the writer.
+        case readingFailed(String)
         case cancelled
     }
 
