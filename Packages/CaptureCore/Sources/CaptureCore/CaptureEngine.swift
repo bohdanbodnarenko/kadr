@@ -72,6 +72,12 @@ public actor CaptureEngine {
         let state = signposter.beginInterval("freezeAllDisplays")
         defer { signposter.endInterval("freezeAllDisplays", state) }
 
+        // macOS 15.2+: capture the display rects directly. Asking for shareable
+        // content is what re-presents the screen-recording sheet on every freeze.
+        if prefersDirectRectCapture {
+            return try await freezeAllDisplaysDirectly(options: options)
+        }
+
         let content = try await content(onScreenWindowsOnly: true)
         let excluded = options.excludesOwnWindows
             ? Self.windows(matching: excludedWindowIDs, in: content)
@@ -113,6 +119,16 @@ public actor CaptureEngine {
         let state = signposter.beginInterval("captureDisplay")
         defer { signposter.endInterval("captureDisplay", state) }
 
+        if prefersDirectRectCapture {
+            let frontmost = await frontmostApplication.currentApplication()
+            return try await captureDisplayDirectly(
+                displayID,
+                includesCursor: includesCursor,
+                dynamicRange: dynamicRange,
+                frontmostApp: frontmost
+            )
+        }
+
         let content = try await content(onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayNotFound(displayID)
@@ -149,29 +165,46 @@ public actor CaptureEngine {
     /// Concurrent for the same reason the freeze is: the displays should show the same
     /// instant, and a serial loop makes the second monitor lag the first by a frame or
     /// more of real time.
+    ///
+    /// Shareable content is fetched once. Calling `SCShareableContent` per display
+    /// re-presents the macOS 15+ consent sheet on every monitor, even when Screen
+    /// Recording is already granted (docs/04 §4.1).
     public func captureAllDisplays(
         includesCursor: Bool = false,
         excludesOwnWindows: Bool = true
     ) async throws -> [Capture] {
+        if prefersDirectRectCapture {
+            let frontmost = await frontmostApplication.currentApplication()
+            return try await captureDisplaysDirectly(
+                includesCursor: includesCursor,
+                frontmostApp: frontmost
+            )
+        }
+
         let content = try await content(onScreenWindowsOnly: true)
-        let displayIDs = content.displays.map(\.displayID)
+        let excluded = excludesOwnWindows ? Self.windows(matching: excludedWindowIDs, in: content) : []
+        let cursor = includesCursor
+        let range = dynamicRange
+        let frontmost = await frontmostApplication.currentApplication()
 
         return try await withThrowingTaskGroup(of: Capture.self) { group in
-            for displayID in displayIDs {
+            for display in content.displays {
+                let boxed = UncheckedSendableBox((display: display, excluded: excluded))
                 group.addTask {
-                    try await self.captureDisplay(
-                        displayID,
-                        includesCursor: includesCursor,
-                        excludesOwnWindows: excludesOwnWindows
+                    try await self.capture(
+                        display: boxed.value.display,
+                        excluding: boxed.value.excluded,
+                        includesCursor: cursor,
+                        dynamicRange: range,
+                        frontmostApp: frontmost
                     )
                 }
             }
             var captures: [Capture] = []
-            captures.reserveCapacity(displayIDs.count)
+            captures.reserveCapacity(content.displays.count)
             for try await capture in group {
                 captures.append(capture)
             }
-            // Task groups finish out of order; keep displays in a stable order.
             return captures.sorted { ($0.metadata.displayID ?? 0) < ($1.metadata.displayID ?? 0) }
         }
     }
@@ -190,6 +223,16 @@ public actor CaptureEngine {
         defer { signposter.endInterval("captureRegion", state) }
 
         guard !region.isEmpty else { throw CaptureError.emptyRegion }
+
+        if prefersDirectRectCapture {
+            let frontmost = await frontmostApplication.currentApplication()
+            return try await captureRegionDirectly(
+                region,
+                on: displayID,
+                includesCursor: includesCursor,
+                frontmostApp: frontmost
+            )
+        }
 
         let content = try await content(onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
@@ -332,6 +375,38 @@ public actor CaptureEngine {
         return DisplayFreeze(geometry: geometry, image: image)
     }
 
+    /// One display, already resolved out of shareable content, so a multi-display
+    /// capture does not ask ScreenCaptureKit for the window list again.
+    private nonisolated func capture(
+        display: SCDisplay,
+        excluding windows: [SCWindow],
+        includesCursor: Bool,
+        dynamicRange: DynamicRange,
+        frontmostApp: AppIdentity?
+    ) async throws -> Capture {
+        let filter = Self.filter(for: display, excluding: windows)
+        let scale = DisplayScale(CGFloat(filter.pointPixelScale))
+        let configuration = SCStreamConfiguration()
+        configuration.showsCursor = includesCursor
+        apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
+        applyDynamicRange(dynamicRange, to: configuration)
+
+        let image = try await screenshot(ScreenshotRequest(filter: filter, configuration: configuration))
+        return Capture(
+            image: image,
+            metadata: metadata(
+                origin: CaptureOrigin(
+                    source: .display(display.displayID),
+                    displayID: display.displayID,
+                    scale: scale,
+                    pointRect: DisplayRect(cgRect: display.frame)
+                ),
+                image: image,
+                frontmostApp: frontmostApp
+            )
+        )
+    }
+
     /// The one call into ScreenCaptureKit that produces pixels.
     private nonisolated func screenshot(_ request: ScreenshotRequest) async throws -> CGImage {
         do {
@@ -378,7 +453,7 @@ public actor CaptureEngine {
         let pointRect: DisplayRect
     }
 
-    private nonisolated func metadata(
+    nonisolated func metadata(
         origin: CaptureOrigin,
         image: CGImage,
         frontmostApp: AppIdentity?,

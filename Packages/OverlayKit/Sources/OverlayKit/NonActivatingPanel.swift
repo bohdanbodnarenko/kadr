@@ -53,6 +53,10 @@ open class NonActivatingPanel: NSPanel {
         animationBehavior = .none
         // Full-screen overlays have nothing to do with the Window menu.
         isExcludedFromWindowsMenu = true
+        // Invisible to ScreenCaptureKit and to `screencapture`, so a freeze that
+        // captures a display rect (without an excludingWindows filter) does not
+        // photograph the overlay that is sitting on top of it (docs/10 R3.2).
+        sharingType = .none
     }
 
     /// Registers for capture exclusion the moment the overlay is on screen (docs/10 R3.2).

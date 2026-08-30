@@ -26,7 +26,6 @@ comparisonID
 # twelve of those made under one commit's momentum is how good API gets deleted.
 #
 # Listed, not hidden: this file is the backlog, and it should shrink.
-allowsCapture
 averageConfidence
 fade
 hasAutosave

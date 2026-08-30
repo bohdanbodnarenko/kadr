@@ -13,7 +13,7 @@ struct InfoPlistTests {
             .deletingLastPathComponent()
     }
 
-    @Test("The agent declares camera, microphone and speech usage")
+    @Test("The agent declares camera, microphone, screen capture and speech usage")
     func agentUsageDescriptions() throws {
         let pbx = try String(
             contentsOf: repoRoot.appendingPathComponent("Kadr.xcodeproj/project.pbxproj"),
@@ -22,6 +22,7 @@ struct InfoPlistTests {
         for key in [
             "INFOPLIST_KEY_NSCameraUsageDescription",
             "INFOPLIST_KEY_NSMicrophoneUsageDescription",
+            "INFOPLIST_KEY_NSScreenCaptureUsageDescription",
             "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription"
         ] {
             #expect(pbx.contains(key), "\(key) is missing from the agent target")
@@ -32,6 +33,7 @@ struct InfoPlistTests {
             for key in [
                 "NSCameraUsageDescription",
                 "NSMicrophoneUsageDescription",
+                "NSScreenCaptureUsageDescription",
                 "NSSpeechRecognitionUsageDescription"
             ] {
                 let value = info[key] as? String ?? ""

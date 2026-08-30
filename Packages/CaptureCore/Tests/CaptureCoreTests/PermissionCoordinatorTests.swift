@@ -164,6 +164,43 @@ struct PermissionCoordinatorTests {
         #expect(coordinator.state == .granted)
     }
 
+    @Test("A live grant skips the system prompt — calling request would re-ask")
+    func ensureAccessTrustsPreflight() {
+        let access = FakeAccess()
+        access.preflightResult = true
+        let coordinator = PermissionCoordinator(access: access)
+
+        #expect(coordinator.ensureAccess())
+        #expect(access.requestCount == 0)
+        #expect(coordinator.state == .granted)
+        #expect(coordinator.state.allowsCapture)
+        #expect(coordinator.needsRelaunchAfterGrant == false)
+    }
+
+    @Test("A missing grant prompts once, then stops calling ScreenCaptureKit")
+    func ensureAccessRequestsWhenDenied() {
+        let access = FakeAccess()
+        access.requestResult = true
+        let coordinator = PermissionCoordinator(access: access)
+        coordinator.refresh()
+
+        #expect(coordinator.ensureAccess())
+        #expect(access.requestCount == 1)
+        #expect(coordinator.state == .granted)
+        #expect(coordinator.needsRelaunchAfterGrant)
+    }
+
+    @Test("A refused request does not proceed into ScreenCaptureKit")
+    func ensureAccessStopsWhenRequestFails() {
+        let access = FakeAccess()
+        let coordinator = PermissionCoordinator(access: access)
+
+        #expect(coordinator.ensureAccess() == false)
+        #expect(access.requestCount == 1)
+        #expect(coordinator.state == .denied)
+        #expect(coordinator.state.allowsCapture == false)
+    }
+
     @Test("Probing never asks, so it cannot re-present the TCC sheet")
     func probingDoesNotRequest() async {
         let access = FakeAccess()

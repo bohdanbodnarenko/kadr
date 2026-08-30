@@ -32,6 +32,7 @@ final class RecordingCoordinator {
     /// The script somebody reads from while recording (docs/08).
     @ObservationIgnored lazy var teleprompter = TeleprompterController(settings: settings)
     @ObservationIgnored let logger = KadrLog.logger(.recording)
+    @ObservationIgnored let recovery = PermissionRecovery()
 
     /// What the status item shows.
     /// Setter is target-internal rather than file-private: the pause/stop/cancel half of
@@ -108,6 +109,7 @@ final class RecordingCoordinator {
     /// Picks a region with the selection overlay, then records it.
     func beginRegionRecording() {
         guard !isRecording else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -123,6 +125,7 @@ final class RecordingCoordinator {
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
+                presentPermissionRecoveryIfNeeded(error)
             }
         }
     }
@@ -134,6 +137,7 @@ final class RecordingCoordinator {
     }
 
     private func start(target: RecordingTarget) {
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
         // Claimed synchronously, before the first await (docs/10 R0.3).
         //
         // Setting up a capture is a few hundred milliseconds of asking ScreenCaptureKit
@@ -200,7 +204,20 @@ final class RecordingCoordinator {
                 }
                 logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
                 permissions.noteCaptureFailure(error)
+                presentPermissionRecoveryIfNeeded(error)
             }
+        }
+    }
+
+    /// The monthly Sequoia nag and a missing grant look the same to ScreenCaptureKit.
+    /// Surface them here so a recording that never started is not a silent no-op.
+    private func presentPermissionRecoveryIfNeeded(_ error: any Error) {
+        guard CaptureError.mapping(error).indicatesPermissionLoss else { return }
+        switch recovery.present(state: permissions.state, includePicker: false) {
+        case .openSettings:
+            recovery.openSystemSettings()
+        case .usePicker, .dismiss:
+            break
         }
     }
 

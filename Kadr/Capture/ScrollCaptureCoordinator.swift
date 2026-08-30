@@ -36,6 +36,7 @@ final class ScrollCaptureCoordinator {
     /// Internal, not private: the seam-review half lives in
     /// `ScrollCaptureCoordinator+Seams.swift`, and `private` is file-scoped.
     @ObservationIgnored let logger = KadrLog.logger(.capture)
+    @ObservationIgnored let recovery = PermissionRecovery()
 
     private(set) var state: State = .idle
     private(set) var frameCount = 0
@@ -102,6 +103,7 @@ final class ScrollCaptureCoordinator {
     /// Picks the region to scroll through, then starts grabbing frames.
     func begin() {
         guard state == .idle else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -122,6 +124,7 @@ final class ScrollCaptureCoordinator {
                 permissions.noteCaptureFailure(error)
                 logger
                     .error("Could not freeze for a scrolling capture: \(error.localizedDescription, privacy: .public)")
+                presentPermissionRecoveryIfNeeded(error)
                 report(.failed(error.localizedDescription))
             }
         }
@@ -159,8 +162,19 @@ final class ScrollCaptureCoordinator {
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Scrolling capture failed to start: \(error.localizedDescription, privacy: .public)")
+                presentPermissionRecoveryIfNeeded(error)
                 report(.failed(error.localizedDescription))
             }
+        }
+    }
+
+    private func presentPermissionRecoveryIfNeeded(_ error: any Error) {
+        guard CaptureError.mapping(error).indicatesPermissionLoss else { return }
+        switch recovery.present(state: permissions.state, includePicker: false) {
+        case .openSettings:
+            recovery.openSystemSettings()
+        case .usePicker, .dismiss:
+            break
         }
     }
 

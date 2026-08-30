@@ -124,7 +124,7 @@
         private func captureViaPicker() {
             let session = ContentSharingPickerSession()
             pickerSession = session
-            run("picker") {
+            run("picker", requiresPermission: false) {
                 defer { self.pickerSession = nil }
                 let capture = try await session.captureUserSelection()
                 try self.write(capture.image, named: "picker")
@@ -151,8 +151,16 @@
 
         // MARK: - Plumbing
 
-        private func run(_ label: String, _ work: @escaping @MainActor () async throws -> Void) {
+        private func run(
+            _ label: String,
+            requiresPermission: Bool = true,
+            _ work: @escaping @MainActor () async throws -> Void
+        ) {
             Task { @MainActor in
+                if requiresPermission, !permissions.ensureAccess() {
+                    logger.error("Screen recording permission is not granted")
+                    return
+                }
                 do {
                     try await work()
                 } catch is CancellationError {

@@ -124,6 +124,36 @@ public final class PermissionCoordinator {
         return granted
     }
 
+    /// Whether ScreenCaptureKit may be called, using Screendrop's TCC sequence.
+    ///
+    /// `SCShareableContent` on macOS 15+ presents the "record this computer's screen
+    /// and audio" sheet even when the Settings toggle is already on (docs/04 §4.1).
+    /// A capture that skips this gate therefore looks like a broken grant: Settings
+    /// says yes, the OS asks again. Preflight first; request only when that is no
+    /// (macOS prompts once per app, then no-ops); never touch ScreenCaptureKit until
+    /// one of those two succeeds.
+    @discardableResult
+    public func ensureAccess() -> Bool {
+        if access.preflight() {
+            if state != .granted {
+                // A grant that arrived while we were running still needs a relaunch.
+                transition(to: .granted, viaProbe: state != .unknown)
+            }
+            return state.allowsCapture
+        }
+
+        let granted = access.request()
+        if granted {
+            transition(to: .granted, viaProbe: true)
+            return state.allowsCapture
+        }
+
+        if state != .revoked {
+            transition(to: .denied, viaProbe: false)
+        }
+        return false
+    }
+
     /// Starts the onboarding-only probe loop.
     ///
     /// This is the single polling loop in the app and it exists because macOS gives no

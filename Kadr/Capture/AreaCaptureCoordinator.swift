@@ -128,6 +128,9 @@ final class AreaCaptureCoordinator {
 
     /// Captures every display with no overlay at all (docs/03 §1.3).
     func captureAllDisplays() {
+        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
+            self?.captureWithSystemPicker()
+        }) else { return }
         inFlight?.cancel()
         let seconds = timerSeconds
         timer.run(seconds: seconds) { [weak self] in
@@ -156,6 +159,9 @@ final class AreaCaptureCoordinator {
     }
 
     func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
+        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
+            self?.captureWithSystemPicker()
+        }) else { return }
         frontmostAtHotkey = Self.currentFrontmostApp()
         self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
@@ -230,6 +236,9 @@ final class AreaCaptureCoordinator {
     /// window's frame; it is flipped into CoreGraphics' display space and matched to the
     /// display it lands on here, so nothing downstream has to guess (CLAUDE.md rule 6).
     func captureRegion(_ screenRect: ScreenRect) {
+        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
+            self?.captureWithSystemPicker()
+        }) else { return }
         inFlight?.cancel()
         frontmostAtHotkey = Self.currentFrontmostApp()
         purpose = .capture
@@ -252,6 +261,9 @@ final class AreaCaptureCoordinator {
             logger.info("No previous area to capture yet")
             return
         }
+        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
+            self?.captureWithSystemPicker()
+        }) else { return }
 
         inFlight?.cancel()
         let region = lastRegion
