@@ -6,11 +6,12 @@
 #   A. Zero network. No networking imports or symbols anywhere except the Sparkle
 #      integration — this is what makes the PRD §4 "no upload surface exists"
 #      promise machine-verified rather than a README claim.
-#   B. The agent app target never links EditorUI or VisionServices. Those live in
-#      the editor app and the XPC helper so their RAM dies with those processes
-#      (docs/04 §1, §7.4).
+#   B. The agent app target never links EditorUI, VisionServices, StudioRender or
+#      AnnotationRender. Those live in the editor so their RAM dies with that
+#      process (docs/04 §1, §7.4, docs/10 R2.1).
 #   C. The built agent binary links no networking framework — docs/03 §9 asks for
 #      exactly this grep over the linked frameworks. Skipped when nothing is built.
+#      It also must not list Speech, CoreImage, VideoToolbox or Vision.
 #   D. No legacy CoreGraphics screen capture. ScreenCaptureKit is the only capture
 #      path (docs/04 §4.2, §12): the CGWindowList/CGDisplay family is deprecated and
 #      triggers extra TCC alerts on Sonoma and later.
@@ -67,27 +68,31 @@ fi
 
 # ---------------------------------------------------------------- B. agent linkage
 PBXPROJ=Kadr.xcodeproj/project.pbxproj
-FORBIDDEN_IN_AGENT="EditorUI VisionServices"
+FORBIDDEN_IN_AGENT="EditorUI VisionServices StudioRender AnnotationRender"
 
-# Products linked by the *agent* target specifically. Scoped rather than searched across
-# the whole project, because KadrEditor legitimately links EditorUI — the rule is about
-# what the resident process drags in, not about the workspace.
-linked=$(awk '
-    /^\t\t[A-F0-9]+ \/\* Kadr \*\/ = \{/ { inTarget = 1 }
-    inTarget && /packageProductDependencies = \(/ { inList = 1; next }
-    inList && /\);/ { inList = 0; inTarget = 0 }
-    inList { print }
-' "$PBXPROJ" | sed -n 's|.*/\* \([A-Za-z]*\) \*/,|\1|p' | sort -u)
+if [ ! -f "$PBXPROJ" ]; then
+    fail "Kadr.xcodeproj/project.pbxproj is missing — cannot verify agent linkage (docs/10 R2.7)"
+else
+    # Products linked by the *agent* target specifically. Scoped rather than searched across
+    # the whole project, because KadrEditor legitimately links EditorUI — the rule is about
+    # what the resident process drags in, not about the workspace.
+    linked=$(awk '
+        /^\t\t[A-F0-9]+ \/\* Kadr \*\/ = \{/ { inTarget = 1 }
+        inTarget && /packageProductDependencies = \(/ { inList = 1; next }
+        inList && /\);/ { inList = 0; inTarget = 0 }
+        inList { print }
+    ' "$PBXPROJ" | sed -n 's|.*/\* \([A-Za-z]*\) \*/,|\1|p' | sort -u)
 
-for module in $FORBIDDEN_IN_AGENT; do
-    if printf '%s\n' "$linked" | grep -qx "$module"; then
-        fail "$module is linked into the agent app target (docs/04 §1: it must not be)"
-    elif grep -rqE "^\s*(@testable )?import $module\b" Kadr KadrTests 2>/dev/null; then
-        fail "$module is imported by the agent app sources (docs/04 §1: it must not be)"
-    else
-        pass "agent app target does not link or import $module"
-    fi
-done
+    for module in $FORBIDDEN_IN_AGENT; do
+        if printf '%s\n' "$linked" | grep -qx "$module"; then
+            fail "$module is linked into the agent app target (docs/04 §1: it must not be)"
+        elif grep -rqE "^\s*(@testable )?import $module\b" Kadr KadrTests 2>/dev/null; then
+            fail "$module is imported by the agent app sources (docs/04 §1: it must not be)"
+        else
+            pass "agent app target does not link or import $module"
+        fi
+    done
+fi
 
 # ---------------------------------------------------------------- B2. legacy capture APIs
 LEGACY_CAPTURE='CGWindowListCreateImage|CGWindowListCreateImageFromArray|CGDisplayCreateImage|CGDisplayCreateImageForRect|CGWindowListCreateDescriptionFromArray'
@@ -124,24 +129,51 @@ done
 
 # ---------------------------------------------------------------- C. linked frameworks
 # The source grep above cannot see what a dependency drags in; this can.
+# Prefer the newest binary so a stale Release product cannot hide a Debug rebuild
+# (docs/10 R2.7: the denylist is only as honest as the file it greps).
 agent_binary=""
-for candidate in build/Build/Products/Release/Kadr.app/Contents/MacOS/Kadr \
-                 build/Build/Products/Debug/Kadr.app/Contents/MacOS/Kadr; do
-    [ -f "$candidate" ] && agent_binary="$candidate" && break
-done
+agent_mtime=0
+consider() {
+    local candidate="$1"
+    [ -f "$candidate" ] || return 0
+    local mtime
+    mtime=$(stat -f %m "$candidate" 2>/dev/null || stat -c %Y "$candidate")
+    if [ "$mtime" -ge "$agent_mtime" ]; then
+        agent_mtime=$mtime
+        agent_binary=$candidate
+    fi
+}
+consider "build/Build/Products/Debug/Kadr.app/Contents/MacOS/Kadr"
+consider "build/Build/Products/Release/Kadr.app/Contents/MacOS/Kadr"
 if [ -z "$agent_binary" ]; then
-    agent_binary=$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 6 -type f \
-        -path '*/Build/Products/*/Kadr.app/Contents/MacOS/Kadr' 2>/dev/null | head -1)
+    while IFS= read -r candidate; do
+        consider "$candidate"
+    done < <(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 6 -type f \
+        -path '*/Build/Products/*/Kadr.app/Contents/MacOS/Kadr' 2>/dev/null)
 fi
 
 if [ -n "$agent_binary" ] && [ -f "$agent_binary" ]; then
-    linked_network=$(otool -L "$agent_binary" | grep -iE '/(Network|CFNetwork|NetworkExtension)\.framework')
+    # Debug builds emit a stub `Kadr` that only links `Kadr.debug.dylib`. The frameworks
+    # live on the dylib; grepping the stub would pass this denylist without proving anything.
+    agent_image="$agent_binary"
+    debug_dylib="$(dirname "$agent_binary")/$(basename "$agent_binary").debug.dylib"
+    [ -f "$debug_dylib" ] && agent_image="$debug_dylib"
+
+    linked_network=$(otool -L "$agent_image" | grep -iE '/(Network|CFNetwork|NetworkExtension)\.framework')
     if [ -n "$linked_network" ]; then
         fail "the agent binary links a networking framework"
         printf '%s\n' "$linked_network" | sed 's/^/    /'
     else
         pass "agent binary links no networking framework"
-        note "checked $agent_binary"
+        note "checked $agent_image"
+    fi
+
+    denied=$(otool -L "$agent_image" | grep -iE '/(Speech|CoreImage|VideoToolbox|Vision)\.framework' || true)
+    if [ -n "$denied" ]; then
+        fail "agent binary links Speech, CoreImage, VideoToolbox or Vision (docs/10 R2.1)"
+        printf '%s\n' "$denied" | sed 's/^/    /'
+    else
+        pass "agent binary links no Speech/CoreImage/VideoToolbox/Vision"
     fi
 else
     note "no built agent binary found — linked-framework check skipped"
@@ -152,8 +184,8 @@ fi
 layer_of() {
     case "$1" in
         Shared) echo 0 ;;
-        CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit) echo 1 ;;
-        RecordingCore|SelectionUI|AnnotationRender|HistoryKit|StudioCore) echo 2 ;;
+        CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit|StudioSession) echo 1 ;;
+        RecordingCore|SelectionUI|AnnotationRender|HistoryKit|StudioRender) echo 2 ;;
         EditorUI) echo 3 ;;
         *) echo "" ;;
     esac

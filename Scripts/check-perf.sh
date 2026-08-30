@@ -22,11 +22,18 @@ cd "$(dirname "$0")/.." || exit 1
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
 [ -t 1 ] || { RED=""; GREEN=""; YELLOW=""; DIM=""; OFF=""; }
 
-# PRD §8.
+# PRD §8 and docs/10 R2.7.
+STATUS_ITEM_BUDGET_MS=150
 LAUNCH_BUDGET_MS=300
 IDLE_RSS_WARN_MB=30
 IDLE_RSS_FAIL_MB=40
 IDLE_SECONDS=60
+EDITOR_RSS_WARN_MB=120
+EDITOR_RSS_FAIL_MB=180
+STUDIO_RSS_WARN_MB=250
+STUDIO_RSS_FAIL_MB=350
+MEASURE_EDITOR=0
+MEASURE_STUDIO=0
 APP=""
 JSON_OUT=""
 REQUIRE_RUN=0
@@ -36,6 +43,8 @@ while [ $# -gt 0 ]; do
         --app) APP="$2"; shift 2 ;;
         --idle-seconds) IDLE_SECONDS="$2"; shift 2 ;;
         --json) JSON_OUT="$2"; shift 2 ;;
+        --editor) MEASURE_EDITOR=1; shift ;;
+        --studio) MEASURE_STUDIO=1; shift ;;
         # Without this, a machine that cannot run a GUI app reports "skipped" rather than
         # failing — which is what lets CI run the same script a developer runs.
         --require-run) REQUIRE_RUN=1; shift ;;
@@ -92,24 +101,43 @@ if [ -z "$PID" ]; then
     exit $?
 fi
 
-# The app logs its own launch-to-status-item interval; read it back rather than timing
+# The app logs its own launch intervals; read them back rather than timing
 # the launch from outside, which would include Finder and dyld.
-LAUNCH_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+STATUS_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
     --last 2m --info --style compact 2>/dev/null \
     | sed -n 's/.*Status item ready in \([0-9.]*\) ms.*/\1/p' | tail -1)
+LAUNCH_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+    --last 2m --info --style compact 2>/dev/null \
+    | sed -n 's/.*Hotkeys armed in \([0-9.]*\) ms.*/\1/p' | tail -1)
+
+judge_ms() {
+    local value="$1" budget="$2" label="$3"
+    if [ -z "$value" ]; then
+        warn "could not read $label from the log"
+        return
+    fi
+    local as_int=${value%.*}
+    if [ "$as_int" -gt "$budget" ]; then
+        fail "$label ${value} ms, over the ${budget} ms budget"
+    elif [ "$as_int" -gt $((budget * 80 / 100)) ]; then
+        warn "$label ${value} ms, within 80% of the ${budget} ms budget"
+    else
+        pass "$label ${value} ms (budget ${budget} ms)"
+    fi
+}
+
+if [ -z "$STATUS_MS" ]; then
+    warn "could not read the status-item signpost from the log"
+    STATUS_MS="null"
+else
+    judge_ms "$STATUS_MS" "$STATUS_ITEM_BUDGET_MS" "status item ready"
+fi
 
 if [ -z "$LAUNCH_MS" ]; then
-    warn "could not read the launch signpost from the log"
+    warn "could not read the hotkey-armed signpost from the log"
     LAUNCH_MS="null"
 else
-    LAUNCH_INT=${LAUNCH_MS%.*}
-    if [ "$LAUNCH_INT" -gt "$LAUNCH_BUDGET_MS" ]; then
-        fail "cold launch ${LAUNCH_MS} ms, over the ${LAUNCH_BUDGET_MS} ms budget"
-    elif [ "$LAUNCH_INT" -gt $((LAUNCH_BUDGET_MS * 80 / 100)) ]; then
-        warn "cold launch ${LAUNCH_MS} ms, within 80% of the ${LAUNCH_BUDGET_MS} ms budget"
-    else
-        pass "cold launch ${LAUNCH_MS} ms (budget ${LAUNCH_BUDGET_MS} ms)"
-    fi
+    judge_ms "$LAUNCH_MS" "$LAUNCH_BUDGET_MS" "hotkeys armed"
 fi
 
 # ---------------------------------------------------------------- idle memory
@@ -152,6 +180,56 @@ else
     pass "idle CPU ${DELTA}s over ${IDLE_SECONDS}s (budget: none)"
 fi
 
+# ---------------------------------------------------------------- idle wakeups
+#
+# CPU-delta is a proxy. `sample` shows whether our stacks contain a repeating timer,
+# which is the PRD §8 question (docs/10 R2.7). AppKit's own status-item machinery is
+# ignored; what fails the build is a timer in Kadr frames.
+note "sampling idle stacks for 8s…"
+SAMPLE_OUT=$(sample "$PID" 8 2>/dev/null || true)
+if [ -z "$SAMPLE_OUT" ]; then
+    warn "could not sample the process — idle wakeup check skipped"
+else
+    if printf '%s' "$SAMPLE_OUT" | grep -E 'Kadr.*(NSTimer|Timer\.scheduled|DispatchSourceTimer)' >/dev/null; then
+        fail "idle sample shows a timer in Kadr code"
+    else
+        pass "idle sample shows no Kadr timers"
+    fi
+fi
+
+# ---------------------------------------------------------------- editor / studio (optional)
+#
+# The memory risk has moved into the editor (docs/10 R2.7). These need a GUI session and
+# a capture to open, so they are opt-in and skip cleanly when they cannot run.
+if [ "$MEASURE_EDITOR" -eq 1 ]; then
+    EDITOR_APP="$APP/Contents/Applications/KadrEditor.app"
+    if [ ! -d "$EDITOR_APP" ]; then
+        warn "no KadrEditor.app inside the agent bundle — editor RSS skipped"
+    else
+        note "editor RSS needs a 5K capture to open; launch KadrEditor with a file to measure"
+        warn "editor idle RSS gate is wired but needs a fixture capture (budget < ${EDITOR_RSS_WARN_MB} MB / ${EDITOR_RSS_FAIL_MB} MB fail)"
+
+        # docs/10 R2.7: the editor process must be gone < 2 s after the last window.
+        # A real RSS measurement needs a 5K fixture; this only checks the exit contract.
+        pkill -x KadrEditor 2>/dev/null || true
+        open -a "$PWD/$EDITOR_APP" 2>/dev/null || open -a "$EDITOR_APP"
+        sleep 1
+        osascript -e 'quit app "Kadr Editor"' 2>/dev/null \
+            || osascript -e 'quit app "KadrEditor"' 2>/dev/null \
+            || pkill -x KadrEditor 2>/dev/null || true
+        sleep 2
+        if pgrep -x KadrEditor >/dev/null; then
+            fail "KadrEditor still running 2s after last window closed"
+            pkill -x KadrEditor 2>/dev/null || true
+        else
+            pass "KadrEditor exits after last window (< 2 s)"
+        fi
+    fi
+fi
+if [ "$MEASURE_STUDIO" -eq 1 ]; then
+    warn "studio RSS gate is wired but needs a 10-minute session fixture (budget < ${STUDIO_RSS_WARN_MB} MB / ${STUDIO_RSS_FAIL_MB} MB fail)"
+fi
+
 # ---------------------------------------------------------------- bundle size
 #
 # Delegated to Scripts/check-size.sh rather than measured here. The PRD §8 budget is on
@@ -173,15 +251,19 @@ if [ -n "$JSON_OUT" ]; then
     cat > "$JSON_OUT" <<JSON
 {
   "measuredAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "coldLaunchMilliseconds": ${LAUNCH_MS:-null},
+  "statusItemMilliseconds": ${STATUS_MS:-null},
+  "hotkeysArmedMilliseconds": ${LAUNCH_MS:-null},
   "idleFootprintMegabytes": ${RSS_MB:-null},
   "idleCpuSeconds": ${DELTA},
   "idleSampleSeconds": ${IDLE_SECONDS},
   "bundleMegabytes": ${SIZE_MB},
   "budgets": {
-    "coldLaunchMilliseconds": ${LAUNCH_BUDGET_MS},
+    "statusItemMilliseconds": ${STATUS_ITEM_BUDGET_MS},
+    "hotkeysArmedMilliseconds": ${LAUNCH_BUDGET_MS},
     "idleFootprintMegabytes": ${IDLE_RSS_WARN_MB},
     "idleFootprintHardMegabytes": ${IDLE_RSS_FAIL_MB},
+    "editorIdleFootprintMegabytes": ${EDITOR_RSS_WARN_MB},
+    "studioIdleFootprintMegabytes": ${STUDIO_RSS_WARN_MB},
     "bundleMegabytes": 15
   },
   "failures": ${failures},
