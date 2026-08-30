@@ -160,7 +160,11 @@ struct StudioInspector: View {
             LabeledContent("Left") {
                 Slider(value: cropX, in: 0 ... 0.9)
             }
-            LabeledContent("Bottom") {
+            // "Top", not "Bottom" (docs/11 S2). `cropRect` is normalised source space and
+            // the renderer treats it as top-left throughout — `pixelCrop` hands the plan a
+            // rect it offsets by `crop.minY` and the composer flips once at the very end.
+            // So raising this slider moves the crop *down*, and the label said the opposite.
+            LabeledContent("Top") {
                 Slider(value: cropY, in: 0 ... 0.9)
             }
             LabeledContent("Width") {

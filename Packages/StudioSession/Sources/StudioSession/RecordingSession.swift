@@ -134,7 +134,14 @@ public struct RecordingSession: Sendable, Hashable {
 
     /// Every file a session may contain, for sweeps and size reporting.
     public var allURLs: [URL] {
-        [screenURL, cameraURL, inputURL, inputJournalURL, captureURL, editURL, draftEditURL, renderStampURL, posterURL]
+        [
+            screenURL, cameraURL, inputURL, inputJournalURL, captureURL,
+            editURL, draftEditURL, renderStampURL, posterURL,
+            // Was missing (docs/11 S2). Every caller of this treats it as "everything this
+            // session owns" — deleting a session, measuring what it costs — so a file left
+            // out is a file left behind on disk and a size that under-reports.
+            copyMarkerURL
+        ]
     }
 
     // MARK: - Lifecycle

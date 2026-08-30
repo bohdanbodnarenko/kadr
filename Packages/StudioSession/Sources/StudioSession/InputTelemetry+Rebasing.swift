@@ -47,11 +47,6 @@ public extension InputTelemetry {
                 KeystrokeEvent(time: time, caption: keystroke.caption)
             }
         }
-        rebased.windowGeometry = windowGeometry.compactMap { sample in
-            clips.editedTime(forSource: sample.time).map { time in
-                WindowGeometrySample(time: time, frame: sample.frame)
-            }
-        }
         return rebased
     }
 }
@@ -67,8 +62,7 @@ public extension InputTelemetry {
         max(
             pointer.last?.time ?? 0,
             clicks.last?.time ?? 0,
-            keystrokes.last?.time ?? 0,
-            windowGeometry.last?.time ?? 0
+            keystrokes.last?.time ?? 0
         )
     }
 }

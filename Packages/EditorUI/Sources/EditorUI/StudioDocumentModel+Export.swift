@@ -44,7 +44,46 @@ public extension StudioDocumentModel {
         await exportTask.value
     }
 
+    /// Copies a previous render of this exact edit, if there is one and it is still there.
+    private func reuseRenderedFile(at destination: URL) -> Bool {
+        guard let stamp = document.renderStamp(),
+              let digest = RenderStamp.digest(of: edit),
+              stamp.matches(editDigest: digest, pixelSize: StudioRenderPlan(
+                  edit: edit,
+                  sourceSize: manifest.pixelSize
+              ).outputSize)
+        else {
+            return false
+        }
+        let source = URL(fileURLWithPath: stamp.outputPath)
+        guard source.standardizedFileURL != destination.standardizedFileURL else { return true }
+        do {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.copyItem(at: source, to: destination)
+            return true
+        } catch {
+            // A copy that fails is not a reason to refuse the export — render it again.
+            logger.error("Could not reuse a finished render: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     private func performExport(to destination: URL) async {
+        // The stamp is finally read (docs/11 S2).
+        //
+        // `renderStamp()` and `matches(editDigest:pixelSize:)` were written, tested and had
+        // zero production callers, so "do not re-render an unchanged edit" was a feature
+        // that existed only in the type system. Pressing Export twice on a ten-minute
+        // recording re-rendered the whole thing.
+        //
+        // Copying rather than handing over the old path: the user picked *this*
+        // destination, and telling them the export succeeded while pointing at a file
+        // somewhere else is not the same thing as exporting.
+        if reuseRenderedFile(at: destination) {
+            notice = "That edit was already exported, so Kadr copied the finished file."
+            return
+        }
+
         exportProgress = 0
         // Any debounced draft write lands before the commit, so the two cannot disagree
         // about what was exported.

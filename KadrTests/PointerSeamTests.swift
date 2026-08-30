@@ -205,4 +205,52 @@ struct PointerSeamTests {
         #expect(round.x == display.x)
         #expect(round.y == display.y)
     }
+
+    // MARK: - Dropping a rung (docs/11 S0.2)
+
+    /// macOS disables a tap whose callback runs long, and says so by delivering one of two
+    /// event types through the callback it has just switched off. That notice used to be
+    /// ignored: the tap went quiet, the ladder stayed on its top rung, and the sidecar
+    /// simply stopped — which is the failure mode `TelemetryPolicy.tapSilenceTimeout` was
+    /// written to describe and never used to check.
+    @Test(
+        "A tap macOS disables drops the recorder to the next rung",
+        arguments: [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput]
+    )
+    func disabledTapDropsARung(reason: CGEventType) {
+        let recorder = recorder()
+        recorder.sourceForTesting = .eventTap
+        recorder.tapWentDead(reason: reason)
+
+        #expect(recorder.sourceForTesting != .eventTap, "the ladder stayed on a rung that is gone")
+        _ = recorder.stop()
+    }
+
+    /// And it only drops once: a second notice for a tap already torn down must not tear
+    /// down the monitors that replaced it.
+    @Test("A second disable notice does not drop a second rung")
+    func disablingTwiceDropsOnce() {
+        let recorder = recorder()
+        recorder.sourceForTesting = .eventTap
+        recorder.tapWentDead(reason: .tapDisabledByTimeout)
+        let after = recorder.sourceForTesting
+        recorder.tapWentDead(reason: .tapDisabledByTimeout)
+
+        #expect(recorder.sourceForTesting == after)
+        _ = recorder.stop()
+    }
+
+    /// Silence alone proves nothing — the user may simply not be touching the mouse — so
+    /// the probe must not drop a rung just because the clock advanced past the timeout.
+    @Test("A quiet tap over a still pointer is left alone")
+    func silenceWithoutMovementIsNotADeadTap() {
+        let recorder = recorder()
+        recorder.sourceForTesting = .eventTap
+        // Two probes, both finding the pointer where it was.
+        recorder.advance(to: TelemetryPolicy.tapSilenceTimeout + 1)
+        recorder.advance(to: TelemetryPolicy.tapSilenceTimeout * 2 + 2)
+
+        #expect(recorder.sourceForTesting == .eventTap, "a still pointer was mistaken for a dead tap")
+        _ = recorder.stop()
+    }
 }

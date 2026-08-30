@@ -29,6 +29,19 @@ extension PointerTelemetryRecorder {
         let callback: CGEventTapCallBack = { _, type, event, context in
             guard let context else { return Unmanaged.passUnretained(event) }
             let recorder = Unmanaged<PointerTelemetryRecorder>.fromOpaque(context).takeUnretainedValue()
+
+            // macOS says so itself when it turns a tap off (docs/11 S0.2).
+            //
+            // A tap whose callback runs long gets disabled, and the only notice is one of
+            // these two event types arriving through the callback that just got switched
+            // off. Ignoring them is why "watch for a tap macOS disabled and drop a rung"
+            // was a documented behaviour with no implementation: the tap went quiet, the
+            // ladder stayed on its top rung, and the sidecar simply stopped.
+            if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                MainActor.assumeIsolated { recorder.tapWentDead(reason: type) }
+                return Unmanaged.passUnretained(event)
+            }
+
             let location = event.location
             // Straight back out: macOS disables a tap whose callback runs long, and the
             // work belongs on the main actor anyway.
@@ -63,6 +76,7 @@ extension PointerTelemetryRecorder {
     /// A `CGEvent`'s location is CoreGraphics' global *display* space — origin top-left —
     /// which is the mirror of the screen space everything downstream expects (docs/11 C1).
     func handleTapEvent(type: CGEventType, at location: CGPoint) {
+        lastTapEventTime = recordingTime
         let point = DisplayPoint(x: location.x, y: location.y).inScreenSpace(space)
         switch type {
         case .mouseMoved, .leftMouseDragged, .rightMouseDragged:
@@ -210,5 +224,64 @@ extension PointerTelemetryRecorder {
             modifiers.insert(.function)
         }
         return modifiers
+    }
+
+    // MARK: - Dropping a rung (docs/11 S0.2)
+
+    /// Tears the tap down and falls to the next source that works.
+    ///
+    /// Re-enabling is deliberately not attempted. A tap disabled for running long will be
+    /// disabled again the moment it is busy, and a recording that flickers between working
+    /// and not is worse than one that quietly moves to a source that always works — the
+    /// monitors miss movement over other apps' windows, which is a known and documented
+    /// degradation rather than an intermittent one.
+    func tapWentDead(reason: CGEventType) {
+        guard isRecording, source == .eventTap else { return }
+        logger.error("macOS disabled the event tap (\(reason.rawValue, privacy: .public)); dropping a rung")
+        stopEventTap()
+
+        let hasMonitors = startMonitors()
+        source = TelemetryPolicy.source(for: TelemetryPolicy.Availability(
+            hasEventTap: false,
+            hasAppKitMonitors: hasMonitors
+        ))
+        if source == .sampler {
+            startSampler()
+        }
+    }
+
+    /// Notices a tap that has gone silent without saying so.
+    ///
+    /// The disable notification is the reliable signal and this is the belt to its braces:
+    /// a tap can also simply stop delivering. Silence alone proves nothing — the user may
+    /// not be touching the mouse — so this only fires when the pointer has demonstrably
+    /// moved while the tap said nothing, which is the condition
+    /// `TelemetryPolicy.tapSilenceTimeout` was written to describe and never used to check.
+    ///
+    /// Probed at most once per timeout rather than per frame: reading the pointer is a
+    /// round trip, and doing it sixty times a second in the agent is exactly the sort of
+    /// idle cost the whole process is budgeted against.
+    func checkTapIsAlive() {
+        guard isRecording, source == .eventTap else { return }
+        guard recordingTime - lastTapEventTime >= TelemetryPolicy.tapSilenceTimeout else { return }
+
+        let now = NSEvent.mouseLocation
+        let previous = lastSilenceProbe
+        lastSilenceProbe = now
+        lastTapEventTime = recordingTime
+        guard let previous, previous != now else { return }
+        tapWentDead(reason: .tapDisabledByTimeout)
+    }
+
+    /// Removes the tap and its run-loop source, leaving the rest of the recording alone.
+    func stopEventTap() {
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+        }
+        runLoopSource = nil
+        eventTap = nil
     }
 }

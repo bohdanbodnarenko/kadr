@@ -109,25 +109,20 @@ struct TelemetryRebasingTests {
 
     // MARK: - Everything moves together
 
-    /// All four streams are stamped in the same clock, so all four have to be converted —
-    /// a rebase that moved the clicks and left the pointer behind would put the cursor and
+    /// Every stream is stamped in the same clock, so every one has to be converted — a
+    /// rebase that moved the clicks and left the pointer behind would put the cursor and
     /// its ripple in different places.
-    @Test("Pointer samples, clicks, chords and geometry all move")
+    @Test("Pointer samples, clicks and chords all move")
     func everyStreamIsRebased() {
         let clips = ClipTimeline(clips: [
             Clip(sourceStart: 0, sourceDuration: 10),
             Clip(sourceStart: 20, sourceDuration: 10)
         ])
-        var original = telemetry(clickTimes: [5, 25])
-        original.windowGeometry = [
-            WindowGeometrySample(time: 5, frame: CGRect(x: 0, y: 0, width: 100, height: 100)),
-            WindowGeometrySample(time: 25, frame: CGRect(x: 50, y: 0, width: 100, height: 100))
-        ]
-        let rebased = original.rebased(to: clips)
+        let rebased = telemetry(clickTimes: [5, 25]).rebased(to: clips)
 
         #expect(abs((rebased.pointer.last?.time ?? -1) - 15) < 0.001)
         #expect(abs((rebased.keystrokes.last?.time ?? -1) - 15) < 0.001)
-        #expect(abs((rebased.windowGeometry.last?.time ?? -1) - 15) < 0.001)
+        #expect(abs((rebased.clicks.last?.time ?? -1) - 15) < 0.001)
     }
 
     @Test("The cursor artwork is carried across unchanged")

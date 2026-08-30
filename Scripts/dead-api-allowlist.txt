@@ -8,3 +8,36 @@ currentVersion
 comparisonID
 # RenderStamp.digest is called from StudioDocumentModel; keep listed if the
 # scanner cannot see across the optional unwrap. Leave empty of that name.
+
+# ---------------------------------------------------------------------------
+# Surfaced 2026-08-30, when this check was repaired (docs/11 S2).
+#
+# The scanner had been extracting its symbol list with `sed -E 's/.*\b(func|var|
+# let)…'`, and BSD sed does not implement `\b` — so on macOS the list came out
+# empty and the check passed over *zero* symbols for its whole life. Fixing the
+# extraction surfaced these at once.
+#
+# Two of the batch were resolved rather than listed: `Reframe.replanning` was a
+# second implementation of `StudioEdit.renderableZooms` that nothing called, and
+# `PixelColor.prefersDarkText` chose a text colour for a readout that sits on a
+# fixed 75%-black strip and is therefore always white. The rest are listed here
+# rather than deleted in the same pass, because each is a product decision — is
+# this vocabulary the package should offer, or is it speculative API? — and
+# twelve of those made under one commit's momentum is how good API gets deleted.
+#
+# Listed, not hidden: this file is the backlog, and it should shrink.
+allowsCapture
+averageConfidence
+fade
+hasAutosave
+# Documented as deliberately un-polled: "The canvas drives beginGesture/
+# endGesture; it does not poll this."
+isGestureOpen
+isUniform
+luminance
+needsTransparency
+rebuild
+# Named constants in `Shared`'s vocabulary, alongside `.oneToOne`.
+retina
+settleNow
+tiled

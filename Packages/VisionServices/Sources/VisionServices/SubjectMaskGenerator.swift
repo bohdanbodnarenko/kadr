@@ -75,6 +75,15 @@ public struct SubjectMaskGenerator: Sendable {
         return SubjectMaskResponse(maskPath: destination.path, subjectCount: result.subjectCount)
     }
 
+    /// One CoreImage context for the process, not one per mask (docs/11 S2, R2.6).
+    ///
+    /// Building a `CIContext` compiles the kernel cache and sets up a Metal command queue;
+    /// doing it per call charges that to every mask. Not shared with the editor's or the
+    /// studio's context, and it cannot be: this runs in the self-terminating XPC helper, so
+    /// the "one context" they each keep is one *per process* by construction — and
+    /// `VisionServices` sits a layer below both of theirs regardless.
+    private static let context = CIContext(options: [.useSoftwareRenderer: false])
+
     /// Vision hands back a one-component float buffer; ImageIO wants a `CGImage`.
     private static func grayscaleImage(from buffer: CVPixelBuffer, size: CGSize) -> CGImage? {
         let ciImage = CIImage(cvPixelBuffer: buffer)
@@ -84,8 +93,7 @@ public struct SubjectMaskGenerator: Sendable {
             scaleX: size.width / max(1, ciImage.extent.width),
             y: size.height / max(1, ciImage.extent.height)
         )
-        let context = CIContext(options: [.useSoftwareRenderer: false])
-        return context.createCGImage(
+        return Self.context.createCGImage(
             ciImage.transformed(by: scale),
             from: CGRect(origin: .zero, size: size),
             format: .L8,

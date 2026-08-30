@@ -3,34 +3,6 @@ import Foundation
 import Shared
 import StudioSession
 
-/// Where the recorded content is on screen, as it changes (docs/09 U3.1).
-///
-/// Samples are written so a crash mid-recording still has a history, but conversion
-/// happens live: `MovingWindowConverter` normalises each click as it arrives, using the
-/// geometry in force, so the sidecar stores already-correct pixels (docs/10 R3.1).
-///
-/// Kept as a running latest-plus-history rather than a sample per frame. The rect is
-/// reported only when it changes, so a window dragged twice produces two samples and a
-/// window left alone produces one.
-@MainActor
-struct WindowGeometryTracker {
-    private(set) var samples: [WindowGeometrySample] = []
-
-    /// The most recent frame, for converting a click that is happening now.
-    private(set) var current: CGRect?
-
-    /// Notes a new position.
-    mutating func record(_ frame: CGRect, at time: TimeInterval) {
-        current = frame
-        samples.append(WindowGeometrySample(time: max(time, 0), frame: frame))
-    }
-
-    mutating func reset() {
-        samples = []
-        current = nil
-    }
-}
-
 /// Turns a screen point into a recorded frame's pixels while the frame moves.
 ///
 /// A `@Sendable` closure is what the telemetry recorder wants, and the answer depends on

@@ -331,6 +331,8 @@ public actor RecordingEngine {
 /// hop to an actor — would block SCK's queue and drop frames.
 final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     let queue = DispatchQueue(label: "app.kadr.recording.samples", qos: .userInitiated)
+    /// Last rect the geometry probe logged, so it reports moves rather than frames.
+    private var lastProbedRect: CGRect?
     private let continuation: AsyncStream<SampleBufferBox>.Continuation
     let buffers: AsyncStream<SampleBufferBox>
     let logger = KadrLog.logger(.recording)
@@ -391,11 +393,55 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     func contentRect(_ buffer: CMSampleBuffer) -> CGRect? {
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
             as? [[SCStreamFrameInfo: Any]],
-            let raw = attachments.first?[.contentRect] as? [String: Any]
+            let first = attachments.first,
+            let raw = first[.contentRect] as? [String: Any]
         else {
             return nil
         }
-        return CGRect(dictionaryRepresentation: raw as CFDictionary)
+        guard let rect = CGRect(dictionaryRepresentation: raw as CFDictionary) else { return nil }
+        logGeometryAttachments(first, contentRect: rect)
+        return rect
+    }
+
+    /// Logs `.contentRect` beside `.screenRect`, to settle what the first one means
+    /// (docs/11 S2).
+    ///
+    /// Apple documents `contentRect` as the content's rect *within the frame* — surface
+    /// space — while `RecordingEngine+Geometry` and `MovingWindowConverter` both treat it
+    /// as a rect on screen, and `MovingWindowConverter` does `contentRect.contains(point)`
+    /// with a screen point. If Apple's semantics hold, a window recording's clicks are
+    /// dropped by that `contains` and any survivors map to the wrong pixel.
+    ///
+    /// This cannot be settled by reading: `WindowSpaceTests` asserts the semantics the code
+    /// intends rather than the ones ScreenCaptureKit has, so it agrees with the code
+    /// whichever is right. It needs one recording of a window being dragged across the
+    /// screen, on a real Mac, which no reviewer in this thread can run.
+    ///
+    /// **To settle it:** run a window recording, drag the window from one side of the
+    /// display to the other, and read the log —
+    /// `log stream --predicate 'subsystem == "app.kadr"' --info | grep geometry-probe`.
+    /// If `content` stays near the origin while `screen` moves, `contentRect` is surface
+    /// space: switch the two consumers to `.screenRect` (with a 14.0 fallback to
+    /// `contentRect`) and rebuild the `WindowSpaceTests` fixtures around the real answer.
+    /// If both move together, the current reading is right and this probe can go.
+    ///
+    /// Debug-only, and rate-limited to a move, so it cannot cost a shipping recording
+    /// anything.
+    private func logGeometryAttachments(_ attachments: [SCStreamFrameInfo: Any], contentRect: CGRect) {
+        #if DEBUG
+            guard RecordingEngine.hasMoved(from: lastProbedRect, to: contentRect) else { return }
+            lastProbedRect = contentRect
+            let screen = (attachments[.screenRect] as? [String: Any])
+                .flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) }
+            let scale = (attachments[.scaleFactor] as? CGFloat) ?? 0
+            logger.info(
+                """
+                geometry-probe content=\(String(describing: contentRect), privacy: .public) \
+                screen=\(String(describing: screen), privacy: .public) \
+                scale=\(scale, privacy: .public)
+                """
+            )
+        #endif
     }
 
     /// Reads SCK's per-frame status out of the buffer's attachments.

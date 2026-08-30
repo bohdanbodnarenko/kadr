@@ -293,25 +293,60 @@ final class RecordingCoordinator {
     /// recorder's clock never moves: every click and chord is stamped zero, and the
     /// sample-rate gate — which asks whether enough time has passed since the last sample —
     /// compares zero against zero and refuses every pointer sample after the first.
+    /// One long-lived consumer, not a `Task` per frame (docs/11 S2).
+    ///
+    /// This used to be `Task { @MainActor in studio.advance(to: time) }` inside the
+    /// observer, which is sixty unstructured Tasks a second for the length of a recording —
+    /// in the process with a 30 MB, 0%-CPU budget, on the same actor the event tap runs on.
+    /// Worse than the cost: ordering between separately-created Tasks is not guaranteed, so
+    /// the clock could go backwards, and the telemetry recorder's sample gate — which asks
+    /// whether enough time has passed since the last sample — would then refuse everything
+    /// until the clock caught up again.
+    ///
+    /// `.bufferingNewest(1)` is what makes this coalescing: if the main actor is busy, the
+    /// frames that arrive meanwhile collapse to the most recent one, which is the only one
+    /// whose answer is still true. Deliberately *not* throttled to a fixed rate — the clock
+    /// is what stamps clicks and keystrokes, so quantising it to 10 Hz would put a ripple up
+    /// to a tenth of a second away from the click that caused it, which is exactly the
+    /// defect this sprint spent its first commit fixing.
     private func observeClock() {
+        let (times, continuation) = AsyncStream<TimeInterval>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        clockContinuation = continuation
+        clockTask = Task { @MainActor [weak self] in
+            for await time in times {
+                self?.studio.advance(to: time)
+            }
+        }
         Task { [weak self] in
-            await self?.engine.setClockObserver { [weak self] time in
-                Task { @MainActor [weak self] in self?.studio.advance(to: time) }
+            await self?.engine.setClockObserver { time in
+                continuation.yield(time)
             }
         }
     }
 
     private func stopClockObserver() {
+        clockContinuation?.finish()
+        clockContinuation = nil
+        clockTask?.cancel()
+        clockTask = nil
         Task { [weak self] in await self?.engine.setClockObserver(nil) }
     }
+
+    @ObservationIgnored private var clockTask: Task<Void, Never>?
+    @ObservationIgnored private var clockContinuation: AsyncStream<TimeInterval>.Continuation?
 
     /// Feeds the engine's content-rect changes to the sidecar and the converter.
     private func observeGeometry() {
         Task { [weak self] in
-            await self?.engine.setGeometryObserver { [weak self] rect, scale, time in
+            // Only the live converter now (docs/11 S2). The same rect used to be
+            // appended to a history in the sidecar as well — collected, copied, rebased on
+            // every edit and persisted, and read by nothing. R3.1 replaced that pipeline
+            // with normalise-at-capture and kept it running beside its replacement.
+            await self?.engine.setGeometryObserver { [weak self] rect, scale, _ in
                 Task { @MainActor [weak self] in
                     self?.windowConverter?.update(rect, scale: scale)
-                    self?.studio.noteGeometry(rect, at: time)
                 }
             }
         }

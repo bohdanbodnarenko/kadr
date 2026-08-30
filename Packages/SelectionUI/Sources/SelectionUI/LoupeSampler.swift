@@ -103,12 +103,4 @@ public struct PixelColor: Hashable, Sendable {
     public var rgb: SampledColor {
         SampledColor(red8: red, green8: green, blue8: blue)
     }
-
-    /// Whether to draw the loupe's readout in black or white over this colour.
-    ///
-    /// Rec. 601 luma, which is the cheap standard choice for a legibility decision.
-    public var prefersDarkText: Bool {
-        let luma = 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
-        return luma > 140
-    }
 }

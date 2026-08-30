@@ -68,7 +68,6 @@ final class StudioSessionRecorder {
         self.pointPixelScale = pointPixelScale
         startedAtUptime = ProcessInfo.processInfo.systemUptime
         firstFrameUptime = nil
-        geometry.reset()
         telemetry.start(pointConverter: pointConverter, journalURL: session.inputJournalURL)
         if recordsCamera {
             camera.start(writingTo: session.cameraURL)
@@ -98,26 +97,12 @@ final class StudioSessionRecorder {
 
     // MARK: - Where the window is
 
-    /// Where the recorded content sits on screen right now, and how it has moved.
-    ///
-    /// Kept here rather than inside the telemetry recorder because it belongs to the
-    /// *capture*, not to the pointer: the same answer places a click, and is written to the
-    /// sidecar so the studio can anchor a zoom to a button rather than to a screen position
-    /// the button has since left.
-    @ObservationIgnored private var geometry = WindowGeometryTracker()
-
     /// Pixels per point on the display being recorded.
     @ObservationIgnored private var pointPixelScale: CGFloat = 2
 
     /// Uptime at the recording's first composited frame — the zero everything else is
     /// measured from (docs/11 S0.5).
     @ObservationIgnored private var firstFrameUptime: TimeInterval?
-
-    /// Notes that the recorded content has moved.
-    func noteGeometry(_ frame: CGRect, at time: TimeInterval) {
-        guard session != nil else { return }
-        geometry.record(frame, at: time)
-    }
 
     /// Finishes the session around a completed recording, and returns it.
     ///
@@ -127,9 +112,7 @@ final class StudioSessionRecorder {
     func finish(with result: RecordingResult) async -> RecordingSession? {
         guard let session else { return nil }
         self.session = nil
-        var captured = telemetry.stop()
-        captured.windowGeometry = geometry.samples
-        geometry.reset()
+        let captured = telemetry.stop()
         let cameraOutcome = await camera.finish()
 
         guard attach(result.fileURL, to: session) else {

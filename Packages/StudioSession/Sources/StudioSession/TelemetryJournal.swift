@@ -54,22 +54,63 @@ public struct TelemetryJournal: Sendable {
         }
     }
 
+    /// How much of the journal is read at a time.
+    ///
+    /// A flushed minute of 60 Hz pointer samples is roughly 150 KB, so a quarter-megabyte
+    /// block holds one comfortably and rarely needs a second pass to complete a line.
+    private static let readBlock = 256 * 1024
+
+    /// Hands each flushed chunk to `body`, in order, without holding the file (docs/11 S2).
+    ///
+    /// The whole journal is never resident. `load()` used to read the entire file into one
+    /// `Data`, split it, decode every line and concatenate the lot — so finalising an hour's
+    /// recording had the raw JSON, the decoded arrays, the concatenation *and* the
+    /// re-encoded sidecar all alive at the same moment. That is roughly 8.6 MB apiece: a
+    /// 30-odd megabyte spike in the agent, at the exact instant the user presses Stop, in
+    /// the process whose whole budget is 30 MB.
+    ///
+    /// A corrupt line is skipped rather than failing the load. A recording is worth more
+    /// than the minute of pointer samples a bad write cost, and the alternative — refusing
+    /// the whole sidecar — throws away fifty-nine good minutes to be strict about one.
+    public func forEachChunk(_ body: (Chunk) -> Void) {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return }
+        defer { try? handle.close() }
+
+        let decoder = JSONDecoder()
+        var buffer = Data()
+        var corrupt = 0
+
+        func consume(_ line: Data) {
+            guard !line.isEmpty else { return }
+            do {
+                try body(decoder.decode(Chunk.self, from: line))
+            } catch {
+                corrupt += 1
+            }
+        }
+
+        while let block = try? handle.read(upToCount: Self.readBlock), !block.isEmpty {
+            buffer.append(block)
+            while let newline = buffer.firstIndex(of: 0x0A) {
+                consume(Data(buffer[buffer.startIndex ..< newline]))
+                buffer.removeSubrange(buffer.startIndex ... newline)
+            }
+        }
+        // A final line the process never got to terminate — a crash mid-flush.
+        consume(buffer)
+
+        if corrupt > 0 {
+            logger.error("Ignored \(corrupt, privacy: .public) corrupt telemetry chunk(s)")
+        }
+    }
+
     /// Every flushed chunk, in order. Missing file means nothing has been flushed yet.
     public func load() -> Chunk {
-        guard let data = try? Data(contentsOf: url), !data.isEmpty else {
-            return Chunk()
-        }
         var combined = Chunk()
-        let decoder = JSONDecoder()
-        for line in data.split(separator: 0x0A, omittingEmptySubsequences: true) {
-            do {
-                let chunk = try decoder.decode(Chunk.self, from: Data(line))
-                combined.pointer.append(contentsOf: chunk.pointer)
-                combined.clicks.append(contentsOf: chunk.clicks)
-                combined.keystrokes.append(contentsOf: chunk.keystrokes)
-            } catch {
-                logger.error("Ignoring a corrupt telemetry chunk: \(error.localizedDescription, privacy: .public)")
-            }
+        forEachChunk { chunk in
+            combined.pointer.append(contentsOf: chunk.pointer)
+            combined.clicks.append(contentsOf: chunk.clicks)
+            combined.keystrokes.append(contentsOf: chunk.keystrokes)
         }
         return combined
     }

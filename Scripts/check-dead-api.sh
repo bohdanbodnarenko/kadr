@@ -36,6 +36,12 @@ DELETED_PATTERNS=(
     'public var isPointerTool'
     'public func legacyAction'
     'var insertedImages'
+    # docs/11 S2: the window-geometry history. R3.1 replaced it with normalise-at-capture
+    # and left the old pipeline running beside its replacement — collected, copied into the
+    # sidecar, rebased on every edit change and persisted, and read by nothing.
+    'public var windowGeometry'
+    'struct WindowGeometrySample'
+    'struct WindowGeometryTracker'
 )
 
 prod_sources=$(find Packages/*/Sources Kadr KadrEditor HelperTools KadrCLI -name '*.swift' 2>/dev/null | sort)
@@ -67,9 +73,16 @@ trap 'rm -rf "$scratch"' EXIT
 
 # One blob each, so each name is two greps against concatenated text instead of
 # a walk of the tree.
+#
+# Comments are stripped from the production blob (docs/11 S2). They were not, so a symbol
+# mentioned in its own doc comment counted as its own caller — which is exactly how
+# `renderStamp` stayed green with zero production callers, and it is a hole that widens as
+# the codebase gets better commented. This deliberately also cuts a `//` inside a string
+# literal, which can only *lower* a count and so can only make this stricter: a false
+# alarm somebody sees and answers, rather than a silence nobody can.
 : > "$scratch/prod"
 while IFS= read -r file; do
-    [ -f "$file" ] && cat "$file" >> "$scratch/prod"
+    [ -f "$file" ] && sed -E 's@//.*$@@' "$file" >> "$scratch/prod"
 done <<< "$prod_sources"
 : > "$scratch/tests"
 find Packages/*/Tests KadrTests -name '*.swift' 2>/dev/null | while IFS= read -r file; do
@@ -79,19 +92,33 @@ done
 : > "$scratch/names"
 find Packages/*/Sources -name '*.swift' -not -name '*Module.swift' 2>/dev/null \
     | while IFS= read -r file; do
-        grep -E '^    public (static )?(mutating )?(func|var|let) ' "$file" \
+        # Any indentation, not exactly four spaces (docs/11 S2). A member of a nested type
+        # is indented eight and was simply never scanned.
+        # The `sed` is anchored at the declaration rather than searching for the keyword
+        # with `\b` (docs/11 S2). BSD `sed -E` does not implement `\b`, so on macOS the old
+        # pattern matched nothing at all and the name list came out *empty* — this whole
+        # check has been passing vacuously over zero symbols. Anchoring needs no word
+        # boundary and behaves the same on both seds.
+        grep -E '^[[:space:]]+public (static )?(mutating )?(func|var|let) ' "$file" \
             | grep -vE ' public (static )?(mutating )?func init' \
-            | sed -E 's/.*\b(func|var|let) +([A-Za-z_][A-Za-z0-9_]*).*/\2/'
-    done | sort -u > "$scratch/names"
+            | sed -E 's/^[[:space:]]+public (static )?(mutating )?(func|var|let) +([A-Za-z_][A-Za-z0-9_]*).*/\4/'
+    done \
+    | grep -E '^[A-Za-z_][A-Za-z0-9_]*$' \
+    | sort -u > "$scratch/names"
 
 tested_only=""
 while IFS= read -r name; do
     [ -z "$name" ] && continue
     allowed "$name" && continue
-    [ ${#name} -lt 8 ] && continue
-    grep -qF "$name" "$scratch/tests" || continue
-    # Count occurrences in production. One is the definition; two means a caller.
-    count=$(grep -oF "$name" "$scratch/prod" | wc -l | tr -d ' ')
+    # Four, not eight (docs/11 S2). The old floor silently exempted every short name, and
+    # short names are not less likely to be dead. Below four is `id`, `url` and friends,
+    # where the noise genuinely does outweigh the signal.
+    [ ${#name} -lt 4 ] && continue
+    grep -qwF "$name" "$scratch/tests" || continue
+    # Whole identifiers, not substrings (docs/11 S2). This is what hid `renderStamp`: the
+    # session also has a `renderStampURL`, so a substring count found "two callers" for a
+    # symbol with none. One occurrence is the definition; two means a real caller.
+    count=$(grep -owF "$name" "$scratch/prod" | wc -l | tr -d ' ')
     if [ "${count:-0}" -le 1 ]; then
         tested_only="${tested_only}  ${name}"$'\n'
     fi

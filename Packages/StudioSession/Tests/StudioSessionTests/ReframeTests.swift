@@ -75,6 +75,20 @@ struct ReframeTests {
 
     // MARK: - Re-planning the camera
 
+    /// Through the path the renderer actually takes (docs/11 S2).
+    ///
+    /// These used to call `Reframe.replanning`, which was a second implementation of the
+    /// same rules that nothing in production called — `StudioRenderPlan` goes through
+    /// `StudioEdit.renderableZooms`. Two implementations of one behaviour, with the tests
+    /// pointed at the one that never runs, is a worse position than having no tests: it
+    /// reads as covered.
+    private func replanned(_ cues: [ZoomCue], reframe: Reframe) -> [ZoomCue] {
+        var edit = StudioEdit.untouched(duration: 10)
+        edit.reframe = reframe
+        edit.zooms = cues
+        return edit.renderableZooms(in: landscape)
+    }
+
     /// Leaving an anchor outside the crop would zoom to somewhere off screen, showing the
     /// viewer a corner of the frame and nothing else.
     @Test("An anchor outside the crop is pulled inside it")
@@ -84,7 +98,7 @@ struct ReframeTests {
         // Far left, which a 9:16 crop of a 16:9 recording certainly loses.
         let cue = ZoomCue(start: 0, duration: 1, anchor: .fixed(CGPoint(x: 20, y: 540)))
 
-        let replanned = try #require(reframe.replanning([cue], in: landscape).first)
+        let replanned = try #require(replanned([cue], reframe: reframe).first)
         let anchor = replanned.anchor.point(in: landscape)
         #expect(anchor.x >= crop.minX - 0.001)
         #expect(anchor.x <= crop.maxX + 0.001)
@@ -96,7 +110,7 @@ struct ReframeTests {
         let centre = CGPoint(x: 960, y: 540)
         let cue = ZoomCue(start: 0, duration: 1, anchor: .fixed(centre))
 
-        let replanned = try #require(reframe.replanning([cue], in: landscape).first)
+        let replanned = try #require(replanned([cue], reframe: reframe).first)
         #expect(replanned.anchor.point(in: landscape) == centre)
     }
 
@@ -107,7 +121,7 @@ struct ReframeTests {
         let reframe = Reframe(aspect: .nineSixteen)
         let cue = ZoomCue(start: 0, duration: 1, magnification: 3, anchor: .centre)
 
-        let replanned = try #require(reframe.replanning([cue], in: landscape).first)
+        let replanned = try #require(replanned([cue], reframe: reframe).first)
         #expect(replanned.magnification < 3)
     }
 
@@ -117,20 +131,20 @@ struct ReframeTests {
         let reframe = Reframe(aspect: .nineSixteen)
         let cue = ZoomCue(start: 0, duration: 1, magnification: 1.1, anchor: .centre)
 
-        let replanned = try #require(reframe.replanning([cue], in: landscape).first)
+        let replanned = try #require(replanned([cue], reframe: reframe).first)
         #expect(replanned.magnification >= 1)
     }
 
     @Test("Without a reframe the cues are untouched")
     func identityLeavesCuesAlone() {
         let cues = [ZoomCue(start: 0, duration: 1, magnification: 2, anchor: .fixed(CGPoint(x: 20, y: 20)))]
-        #expect(Reframe.original.replanning(cues, in: landscape) == cues)
+        #expect(replanned(cues, reframe: .original) == cues)
     }
 
     @Test("Showing everything needs no re-planning, because nothing was cropped")
     func fitNeedsNoReplanning() {
         let cues = [ZoomCue(start: 0, duration: 1, magnification: 2, anchor: .fixed(CGPoint(x: 20, y: 20)))]
-        #expect(Reframe(aspect: .nineSixteen, fill: .fit).replanning(cues, in: landscape) == cues)
+        #expect(replanned(cues, reframe: Reframe(aspect: .nineSixteen, fill: .fit)) == cues)
     }
 
     @Test("A reframe round-trips")

@@ -38,11 +38,15 @@ final class PointerTelemetryRecorder {
     /// each cursor rather than one per sample.
     private var cursorIndices: [Data: Int] = [:]
 
-    private var source: TelemetrySource = .sampler
+    var source: TelemetrySource = .sampler
     var isRecording = false
     private var journal: TelemetryJournal?
     /// Last recording-time a chunk was flushed. Zero until the first sample.
     private var lastFlushTime: TimeInterval = 0
+    /// Last recording-time the tap delivered anything (docs/11 S0.2).
+    var lastTapEventTime: TimeInterval = 0
+    /// Where the pointer was at the last silence probe, or nil before the first.
+    var lastSilenceProbe: CGPoint?
 
     var eventTap: CFMachPort?
     var runLoopSource: CFRunLoopSource?
@@ -52,7 +56,7 @@ final class PointerTelemetryRecorder {
     /// Where the recording is now, in its own time. Set by the engine as it composites, so
     /// the sidecar and the footage share one clock — the fix docs/07 M2 made for the live
     /// overlay, applied from the start here.
-    private var recordingTime: TimeInterval = 0
+    private(set) var recordingTime: TimeInterval = 0
     /// Maps a screen point into the recorded area's pixels.
     /// Screen space in, recorded pixels out (docs/11 S0.1).
     ///
@@ -65,6 +69,14 @@ final class PointerTelemetryRecorder {
     var isActive: Bool {
         isRecording
     }
+
+    #if DEBUG
+        /// Which rung the ladder is on, for a test that drives the downgrade.
+        var sourceForTesting: TelemetrySource {
+            get { source }
+            set { source = newValue }
+        }
+    #endif
 
     // MARK: - Lifecycle
 
@@ -98,6 +110,8 @@ final class PointerTelemetryRecorder {
         lastCursorCheck = -.infinity
         recordingTime = 0
         lastFlushTime = 0
+        lastTapEventTime = 0
+        lastSilenceProbe = nil
         isRecording = true
         // One minute of 60 Hz samples, plus headroom so the first flush does not reallocate.
         pointer.reserveCapacity(Int(TelemetryPolicy.sampleRate * Self.flushInterval) + 16)
@@ -148,13 +162,23 @@ final class PointerTelemetryRecorder {
         samplerTask = nil
 
         flush(force: true)
-        let flushed = journal?.load() ?? TelemetryJournal.Chunk()
+        // Appended in place rather than with `+` (docs/11 S2). Each `+` builds a third
+        // array the size of the two it joins, and this runs at the moment the agent is
+        // already holding the whole recording's telemetry twice over — once decoded from
+        // the journal and once about to be encoded into the sidecar.
+        var combined = journal?.load() ?? TelemetryJournal.Chunk()
         journal = nil
+        combined.pointer.append(contentsOf: pointer)
+        combined.clicks.append(contentsOf: clicks)
+        combined.keystrokes.append(contentsOf: keystrokes)
+        pointer.removeAll(keepingCapacity: false)
+        clicks.removeAll(keepingCapacity: false)
+        keystrokes.removeAll(keepingCapacity: false)
 
         return InputTelemetry(
-            pointer: flushed.pointer + pointer,
-            clicks: flushed.clicks + clicks,
-            keystrokes: flushed.keystrokes + keystrokes,
+            pointer: combined.pointer,
+            clicks: combined.clicks,
+            keystrokes: combined.keystrokes,
             cursors: cursors,
             source: source
         )
@@ -163,7 +187,15 @@ final class PointerTelemetryRecorder {
     /// Tells the recorder where the recording is, so events are stamped in the same clock
     /// the frames are.
     func advance(to time: TimeInterval) {
-        recordingTime = time
+        // Monotonic (docs/11 S2). A recording's clock only ever goes forwards, and letting
+        // it go backwards is worse than losing a tick: the sample gate asks whether enough
+        // time has passed since the last sample, so a clock that jumped back would refuse
+        // every pointer sample until it caught up again — silently, and for however long the
+        // jump was. Belt and braces now that the clock arrives through an ordered stream,
+        // but this is the invariant the rest of the file is written against and it belongs
+        // where it can be seen.
+        recordingTime = max(recordingTime, time)
+        checkTapIsAlive()
         flush(force: false)
     }
 

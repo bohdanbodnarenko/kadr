@@ -116,40 +116,6 @@ public struct Reframe: Sendable, Hashable, Codable {
         aspect == .original
     }
 
-    // MARK: - Re-planning the camera
-
-    /// The cues, adjusted for the new shape.
-    ///
-    /// Two corrections, and both are needed:
-    ///
-    /// * An anchor outside the crop is pulled to the nearest point inside it. Leaving it
-    ///   would zoom to somewhere off screen, which shows the viewer a corner of the frame
-    ///   and nothing else.
-    /// * Magnification is reduced by however much the reframe already zoomed in. A 16:9
-    ///   recording cropped to 9:16 is *already* about three times closer; applying the
-    ///   original 2× on top of that shows four pixels.
-    public func replanning(_ cues: [ZoomCue], in size: CGSize) -> [ZoomCue] {
-        guard !isIdentity, fill == .fill else { return cues }
-        let crop = sourceRect(for: size)
-        guard crop.width > 0, crop.height > 0 else { return cues }
-
-        // How much closer the crop already is than the whole frame.
-        let inherentZoom = size.width / crop.width
-
-        return cues.map { cue in
-            var replanned = cue
-            let anchor = cue.anchor.point(in: size)
-            let pulled = CGPoint(
-                x: min(max(anchor.x, crop.minX), crop.maxX),
-                y: min(max(anchor.y, crop.minY), crop.maxY)
-            )
-            replanned.anchor = .fixed(pulled)
-            // Never below 1: a cue that would zoom *out* is a cue that does nothing.
-            replanned.magnification = max(cue.magnification / inherentZoom, 1)
-            return replanned
-        }
-    }
-
     private enum CodingKeys: String, CodingKey {
         case aspect, fill, horizontalBias, verticalBias
     }

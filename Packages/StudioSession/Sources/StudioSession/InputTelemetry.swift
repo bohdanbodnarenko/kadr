@@ -78,21 +78,6 @@ public struct CursorImage: Codable, Sendable, Hashable {
     }
 }
 
-/// Where the recorded window was, at one instant.
-///
-/// A window that moves during a recording moves everything drawn relative to it. Sampling
-/// its geometry per frame is what lets the studio keep a zoom anchored to a button rather
-/// than to a screen position the button has since left.
-public struct WindowGeometrySample: Codable, Sendable, Hashable {
-    public var time: TimeInterval
-    public var frame: CGRect
-
-    public init(time: TimeInterval, frame: CGRect) {
-        self.time = time
-        self.frame = frame
-    }
-}
-
 /// Everything captured alongside the footage (docs/09 U3.1).
 ///
 /// Written once when the recording stops rather than streamed: the samples are small, the
@@ -106,8 +91,8 @@ public struct InputTelemetry: Codable, Sendable, Hashable {
     public var pointer: [PointerSample]
     public var clicks: [ClickEvent]
     public var keystrokes: [KeystrokeEvent]
+    /// The cursor artwork the recording used, referenced by index from the pointer samples.
     public var cursors: [CursorImage]
-    public var windowGeometry: [WindowGeometrySample]
     /// How the samples were gathered, so a reconstruction can say why it is coarse.
     public var source: TelemetrySource
 
@@ -117,7 +102,6 @@ public struct InputTelemetry: Codable, Sendable, Hashable {
         clicks: [ClickEvent] = [],
         keystrokes: [KeystrokeEvent] = [],
         cursors: [CursorImage] = [],
-        windowGeometry: [WindowGeometrySample] = [],
         source: TelemetrySource = .eventTap
     ) {
         self.version = version
@@ -125,7 +109,6 @@ public struct InputTelemetry: Codable, Sendable, Hashable {
         self.clicks = clicks
         self.keystrokes = keystrokes
         self.cursors = cursors
-        self.windowGeometry = windowGeometry
         self.source = source
     }
 
@@ -140,7 +123,7 @@ public struct InputTelemetry: Codable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, pointer, clicks, keystrokes, cursors, windowGeometry, source
+        case version, pointer, clicks, keystrokes, cursors, source
     }
 
     /// Every field defaults, so a sidecar written by a later Kadr still opens — it simply
@@ -153,10 +136,6 @@ public struct InputTelemetry: Codable, Sendable, Hashable {
             clicks: container.decodeIfPresent([ClickEvent].self, forKey: .clicks) ?? [],
             keystrokes: container.decodeIfPresent([KeystrokeEvent].self, forKey: .keystrokes) ?? [],
             cursors: container.decodeIfPresent([CursorImage].self, forKey: .cursors) ?? [],
-            windowGeometry: container.decodeIfPresent(
-                [WindowGeometrySample].self,
-                forKey: .windowGeometry
-            ) ?? [],
             source: container.decodeIfPresent(TelemetrySource.self, forKey: .source) ?? .eventTap
         )
     }

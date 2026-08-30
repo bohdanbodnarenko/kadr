@@ -1,4 +1,5 @@
 import Foundation
+import StudioRender
 import StudioSession
 import Testing
 @testable import EditorUI
@@ -395,15 +396,5 @@ struct StudioDocumentModelTests {
 
         #expect(studio.edit.clips == clips)
         #expect(studio.edit.zooms == zooms)
-    }
-
-    // MARK: - Export state
-
-    @Test("An edit that has never been exported has no render stamp")
-    func exportStateStartsStale() throws {
-        let folder = scratch()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let studio = try model(in: folder)
-        #expect(SessionDocument(session: studio.session).renderStamp() == nil)
     }
 }
