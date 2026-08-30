@@ -26,7 +26,8 @@ struct StudioPreviewPipeline {
             plan: plan,
             edit: edit,
             telemetry: telemetry,
-            frameRate: manifest.frameRate
+            frameRate: manifest.frameRate,
+            pointPixelScale: manifest.scale
         )
     }
 

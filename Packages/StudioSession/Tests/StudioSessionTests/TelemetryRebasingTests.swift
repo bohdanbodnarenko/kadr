@@ -31,9 +31,16 @@ struct TelemetryRebasingTests {
 
     @Test("A whole timeline is not considered edited")
     func wholeTimelineIsNotEdited() {
-        #expect(!ClipTimeline.whole(duration: 10).isEdited)
-        #expect(ClipTimeline(clips: [Clip(sourceStart: 2, sourceDuration: 8)]).isEdited)
-        #expect(ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 8, speed: 2)]).isEdited)
+        #expect(!ClipTimeline.whole(duration: 10).isEdited(ofRecordingLasting: 10))
+        #expect(ClipTimeline(clips: [Clip(sourceStart: 2, sourceDuration: 8)]).isEdited(ofRecordingLasting: 10))
+        #expect(ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 8, speed: 2)])
+            .isEdited(ofRecordingLasting: 10))
+        // Trimmed at the end and nowhere else: one clip, starting at zero, natural speed,
+        // just shorter. This reported itself unedited, so telemetry took the fast path and
+        // kept every click from the part the user had cut off (docs/11 S2).
+        #expect(ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 8)]).isEdited(ofRecordingLasting: 10))
+        // And a rounding wobble is not an edit.
+        #expect(!ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 9.999)]).isEdited(ofRecordingLasting: 10))
     }
 
     // MARK: - Cutting
@@ -159,5 +166,37 @@ struct TelemetryRebasingTests {
         let rebased = telemetry(clickTimes: [1, 3, 7, 21, 25, 29]).rebased(to: clips)
         let times = rebased.clicks.map(\.time)
         #expect(times == times.sorted())
+    }
+
+    /// The defect the parameter exists for, through `rebased(to:)` rather than through the
+    /// predicate: a recording trimmed at the end must not keep the telemetry from the part
+    /// that was cut off (docs/11 S2).
+    @Test("Trimming the end drops the telemetry past the trim")
+    func trimmingTheEndDropsLateEvents() {
+        var telemetry = InputTelemetry()
+        telemetry.clicks = [
+            ClickEvent(time: 1, position: CGPoint(x: 10, y: 10)),
+            ClickEvent(time: 9, position: CGPoint(x: 20, y: 20))
+        ]
+        telemetry.keystrokes = [
+            KeystrokeEvent(time: 2, caption: "A"),
+            KeystrokeEvent(time: 8.5, caption: "B")
+        ]
+
+        // One clip, starting at zero, natural speed — just shorter than the recording.
+        let trimmed = ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 5)])
+        let rebased = telemetry.rebased(to: trimmed)
+
+        #expect(rebased.clicks.map(\.time) == [1], "a click from the trimmed-off tail survived")
+        #expect(rebased.keystrokes.map(\.caption) == ["A"])
+    }
+
+    /// And the fast path still exists, because it is most recordings most of the time.
+    @Test("An untrimmed recording is returned unchanged")
+    func untrimmedIsUntouched() {
+        var telemetry = InputTelemetry()
+        telemetry.clicks = [ClickEvent(time: 9, position: CGPoint(x: 20, y: 20))]
+        let rebased = telemetry.rebased(to: ClipTimeline.whole(duration: 10))
+        #expect(rebased.clicks.map(\.time) == [9])
     }
 }

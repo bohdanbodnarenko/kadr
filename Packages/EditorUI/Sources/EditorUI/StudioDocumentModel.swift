@@ -62,13 +62,13 @@ public final class StudioDocumentModel {
     /// Nil until asked, and asked only when the studio shows the speech controls. Checking
     /// at launch would consult the asset catalogue for every recording somebody opens,
     /// including the ones they never intend to transcribe.
-    public private(set) var speechStatus: SpeechModelInstaller.Status?
+    public internal(set) var speechStatus: SpeechModelInstaller.Status?
 
     /// Progress of a model download the user started, or nil if none is running.
-    public private(set) var installProgress: Double?
+    public internal(set) var installProgress: Double?
 
     /// Whether a transcription is running.
-    public private(set) var isTranscribing = false
+    public internal(set) var isTranscribing = false
 
     /// Held so closing the window or quitting can stop it (docs/11 S0.4).
     ///
@@ -76,8 +76,8 @@ public final class StudioDocumentModel {
     /// nothing on the way in owns a scope that lasts as long as the render does.
     @ObservationIgnored var exportTask: Task<Void, Never>?
 
-    @ObservationIgnored private var installTask: Task<Void, Never>?
-    @ObservationIgnored private var progressObservation: NSKeyValueObservation?
+    @ObservationIgnored var installTask: Task<Void, Never>?
+    @ObservationIgnored var progressObservation: NSKeyValueObservation?
 
     @ObservationIgnored private var undoStack: [StudioEdit] = []
     @ObservationIgnored private var redoStack: [StudioEdit] = []
@@ -112,18 +112,38 @@ public final class StudioDocumentModel {
     ///
     /// One funnel for every mutation. A model where some edits go through here and some
     /// assign directly is a model where undo works until it does not.
-    public func change(_ mutate: (inout StudioEdit) -> Void) {
+    /// - Parameter gesture: names a continuous interaction — one drag of one slider — so
+    ///   its ticks collapse into a single undo step (docs/11 S2).
+    ///
+    ///   Without it every tick pushed its own snapshot, and a `Slider` sends one per pixel
+    ///   of travel: a single drag of the Size slider consumed the whole fifty-deep undo
+    ///   stack, so Undo afterwards nudged the bubble by a hair and the state before the drag
+    ///   was gone. This is docs/07 C2 repeating in the studio — the annotation editor
+    ///   learned the same lesson in U0.2, where it coalesces by keeping a spec's identity
+    ///   across inspector edits.
+    ///
+    ///   Any change with a different gesture — or none — starts a new step, which is what
+    ///   makes releasing one slider and dragging another two undo steps rather than one.
+    public func change(coalescingAs gesture: String? = nil, _ mutate: (inout StudioEdit) -> Void) {
         var updated = edit
         mutate(&updated)
         guard updated != edit else { return }
-        undoStack.append(edit)
-        if undoStack.count > Self.undoDepth {
-            undoStack.removeFirst()
+
+        let continues = gesture != nil && gesture == activeGesture && !undoStack.isEmpty
+        if !continues {
+            undoStack.append(edit)
+            if undoStack.count > Self.undoDepth {
+                undoStack.removeFirst()
+            }
         }
+        activeGesture = gesture
         redoStack.removeAll()
         edit = updated
         saveDraft()
     }
+
+    /// The interaction currently being coalesced, if one is.
+    @ObservationIgnored private var activeGesture: String?
 
     public var canUndo: Bool {
         !undoStack.isEmpty
@@ -134,6 +154,9 @@ public final class StudioDocumentModel {
     }
 
     public func undo() {
+        // Whatever gesture was in flight is over: the next slider tick must start its own
+        // step rather than merging into the one just undone.
+        activeGesture = nil
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(edit)
         edit = previous
@@ -142,6 +165,7 @@ public final class StudioDocumentModel {
     }
 
     public func redo() {
+        activeGesture = nil
         guard let next = redoStack.popLast() else { return }
         undoStack.append(edit)
         edit = next
@@ -309,117 +333,6 @@ public final class StudioDocumentModel {
         change { $0 = preset.applied(to: $0) }
     }
 
-    // MARK: - Speech
-
-    /// Finds out whether this language can be transcribed.
-    ///
-    /// Cheap, and safe to call repeatedly: it reads the system's catalogue and never
-    /// downloads. Called when the speech controls appear so a model installed in System
-    /// Settings since the window opened is noticed.
-    public func refreshSpeechStatus() async {
-        speechStatus = await SpeechModelInstaller().status()
-    }
-
-    /// Downloads the language model, because the user pressed the button that says so.
-    ///
-    /// The only thing in the studio that touches the network, and it is entirely optional:
-    /// everything else in this window works with the machine unplugged, and a failed or
-    /// cancelled download leaves the studio exactly as it was.
-    public func installSpeechModel() {
-        guard installTask == nil else { return }
-        installProgress = 0
-
-        // `@MainActor` on the task rather than hopping inside it: the model is main-actor
-        // isolated, so every line below already belongs here, and the alternative is
-        // sending `self` across an isolation boundary it never actually crosses.
-        installTask = Task { @MainActor [self] in
-            defer {
-                installTask = nil
-                installProgress = nil
-                progressObservation = nil
-            }
-            do {
-                try await SpeechModelInstaller().install { progress in
-                    Task { @MainActor [weak self] in self?.observe(progress) }
-                }
-                await refreshSpeechStatus()
-                notice = "The language model is installed. Speech is ready to use."
-            } catch is CancellationError {
-                // Silent: the user cancelled it, so they already know.
-            } catch {
-                failure = "The language model could not be downloaded: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    /// Stops a download in progress.
-    public func cancelSpeechModelInstall() {
-        installTask?.cancel()
-        installTask = nil
-        installProgress = nil
-        progressObservation = nil
-    }
-
-    /// Follows the system's `Progress` so the bar moves.
-    private func observe(_ progress: Progress) {
-        progressObservation = progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
-            let fraction = progress.fractionCompleted
-            Task { @MainActor [weak self] in self?.installProgress = fraction }
-        }
-    }
-
-    /// Transcribes the recording and cuts the filler words and long pauses out.
-    ///
-    /// The cuts land as clip boundaries like every other edit, so they are undoable in one
-    /// step and the footage is untouched. Nothing here downloads anything: if the model is
-    /// not installed this reports that and stops, which is why the button that offers to
-    /// install one is a separate button.
-    public func tidySpeech() async {
-        guard !isTranscribing else { return }
-        guard await AudioTranscriber.requestAuthorization() else {
-            failure = "Kadr needs permission to use speech recognition. Grant it in System Settings ▸ "
-                + "Privacy & Security ▸ Speech Recognition."
-            return
-        }
-        isTranscribing = true
-        defer { isTranscribing = false }
-
-        do {
-            let transcript = try await AudioTranscriber().transcribe(audioAt: session.screenURL)
-            let planner = TranscriptCutPlanner()
-            // The transcript is in source time — it came from the recording's audio, which
-            // knows nothing about the cuts — so the cuts are planned against the source's
-            // own length rather than the edited one (docs/10 R0.2).
-            let cuts = planner.cuts(for: transcript, duration: manifest.duration)
-            guard !cuts.isEmpty else {
-                notice = "There were no filler words or long pauses to remove."
-                return
-            }
-            // `applying` rebuilds a timeline from scratch at natural speed, so it can only
-            // be used on an untouched one. Applying it over an existing edit silently threw
-            // away every cut and speed change the user had already made.
-            guard !edit.clips.isEdited else {
-                failure = Self.tidyRefusal
-                return
-            }
-            let timeline = planner.applying(cuts, to: manifest.duration)
-            guard !timeline.clips.isEmpty, timeline.editedDuration > 0 else {
-                notice = "Tidying would leave nothing to play. The recording was left as it is."
-                return
-            }
-            change { $0.clips = timeline }
-            playhead = min(playhead, edit.duration)
-            notice = "Removed \(cuts.count) \(cuts.count == 1 ? "passage" : "passages")."
-        } catch TranscriptionError.unavailableOnDevice {
-            await refreshSpeechStatus()
-            failure = "There is no speech model on this Mac for your language yet."
-        } catch TranscriptionError.noAudioTrack {
-            failure = "This recording has no sound in it."
-        } catch {
-            failure = "The recording could not be transcribed: \(error.localizedDescription)"
-        }
-    }
-
     // MARK: - Saving
 
     /// Writes the draft. Failures are logged rather than surfaced.
@@ -428,6 +341,50 @@ public final class StudioDocumentModel {
     /// the middle of something, the work is still on screen, and the next keystroke tries
     /// again. What must not happen silently is losing an *export*, and that reports.
     private func saveDraft() {
+        // Throttled, not debounced (docs/11 S2).
+        //
+        // A slider drag calls `change` per pixel of travel, and each call used to write the
+        // whole draft atomically on the MainActor — a temporary file, a rename and an fsync
+        // per tick, while the preview was trying to redraw on the same actor.
+        //
+        // A plain debounce would have been wrong, and the existing tests said so: with one,
+        // a session that had just been edited had no draft on disk yet, so it did not look
+        // unfinished to the recovery prompt and reopening it found nothing to restore. The
+        // first change in a burst therefore still writes immediately, and only the ones
+        // treading on its heels are collapsed into a single trailing write. Durability is
+        // unchanged; what goes away is writing the same file forty times a second.
+        let now = ContinuousClock.now
+        if let last = lastDraftWrite, now - last < Self.draftInterval {
+            draftSave?.cancel()
+            draftSave = Task { [weak self] in
+                try? await Task.sleep(for: Self.draftInterval)
+                guard !Task.isCancelled else { return }
+                self?.writeDraftNow()
+            }
+            return
+        }
+        writeDraftNow()
+    }
+
+    /// How close together two writes have to be before the second one waits.
+    static let draftInterval: Duration = .milliseconds(400)
+
+    @ObservationIgnored private var draftSave: Task<Void, Never>?
+    @ObservationIgnored private var lastDraftWrite: ContinuousClock.Instant?
+
+    /// Writes the draft immediately, cancelling any debounced write.
+    ///
+    /// Called wherever the model is about to be committed or let go, because a debounce is
+    /// only safe if something reliably flushes it.
+    func flushDraft() {
+        guard draftSave != nil else { return }
+        draftSave?.cancel()
+        draftSave = nil
+        writeDraftNow()
+    }
+
+    private func writeDraftNow() {
+        lastDraftWrite = ContinuousClock.now
         do {
             try document.writeDraft(edit)
         } catch {
@@ -441,7 +398,7 @@ public final class StudioDocumentModel {
     /// a permission grant and a speech model, and the refusal needs none of those — which
     /// is exactly the split that let the bug through in the first place.
     func refuseTidyIfEditedForTesting() {
-        guard edit.clips.isEdited else { return }
+        guard edit.clips.isEdited(ofRecordingLasting: manifest.duration) else { return }
         failure = Self.tidyRefusal
     }
 
@@ -460,6 +417,7 @@ public final class StudioDocumentModel {
     /// agree — so keeping it costs nothing and losing it would throw away the position the
     /// user left off at.
     public func commitOnClose() {
+        flushDraft()
         do {
             try document.commit(edit)
         } catch {

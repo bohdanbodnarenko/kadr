@@ -19,6 +19,28 @@ struct SettlePreviewTests {
         var renders = 0
     }
 
+    /// Waits for something to become true, rather than sleeping for a guess.
+    ///
+    /// The settle window is tens of milliseconds and these suites run in parallel with a
+    /// dozen others, so a fixed `sleep` of four times the window is not the safety margin
+    /// it looks like — this suite failed on exactly that, asserting a 30 ms timer had fired
+    /// after 120 ms on a machine that had not got round to it. Polling turns "long enough,
+    /// probably" into "as long as it takes, up to a second", which is both faster in the
+    /// ordinary case and not a coin toss in the bad one.
+    private func waitUntil(
+        _ condition: () -> Bool,
+        within timeout: Duration = .seconds(1)
+    ) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return condition()
+    }
+
     @Test("A burst of changes costs exactly one render")
     func burstCollapses() async {
         let counter = Counter()
@@ -29,7 +51,7 @@ struct SettlePreviewTests {
         }
         #expect(counter.renders == 0, "nothing should render while the value is moving")
 
-        try? await Task.sleep(for: .milliseconds(120))
+        #expect(await waitUntil { counter.renders == 1 })
         #expect(counter.renders == 1)
     }
 
@@ -41,8 +63,7 @@ struct SettlePreviewTests {
         preview.touch()
         #expect(preview.isSettling)
 
-        try? await Task.sleep(for: .milliseconds(120))
-        #expect(!preview.isSettling)
+        #expect(await waitUntil { !preview.isSettling })
     }
 
     /// A change during the settle window restarts the countdown — otherwise a slow drag
@@ -50,16 +71,20 @@ struct SettlePreviewTests {
     @Test("A change during the wait restarts the countdown")
     func changeRestartsTheCountdown() async {
         let counter = Counter()
-        let preview = SettlePreview(settleMilliseconds: 60) { counter.renders += 1 }
+        // A wide window on purpose. This is a *negative* assertion — nothing has rendered
+        // yet — so unlike the others it cannot be waited for, and its only protection is
+        // that the pauses are short relative to the window. At 60 ms with 30 ms pauses a
+        // single scheduling hiccup fires the render and fails the test; at 400 with 100 it
+        // would take a 300 ms stall.
+        let preview = SettlePreview(settleMilliseconds: 400) { counter.renders += 1 }
 
         preview.touch()
-        try? await Task.sleep(for: .milliseconds(30))
+        try? await Task.sleep(for: .milliseconds(100))
         preview.touch()
-        try? await Task.sleep(for: .milliseconds(30))
+        try? await Task.sleep(for: .milliseconds(100))
         #expect(counter.renders == 0, "the second change should have pushed the render back")
 
-        try? await Task.sleep(for: .milliseconds(120))
-        #expect(counter.renders == 1)
+        #expect(await waitUntil { counter.renders == 1 })
     }
 
     @Test("Settling now skips the wait, for a caller that knows the drag ended")
@@ -92,10 +117,9 @@ struct SettlePreviewTests {
         let preview = SettlePreview(settleMilliseconds: 30) { counter.renders += 1 }
 
         preview.touch()
-        try? await Task.sleep(for: .milliseconds(120))
+        #expect(await waitUntil { counter.renders == 1 })
         preview.touch()
-        try? await Task.sleep(for: .milliseconds(120))
-        #expect(counter.renders == 2)
+        #expect(await waitUntil { counter.renders == 2 })
     }
 
     /// A preview that goes away mid-gesture must not fire its callback afterwards, and

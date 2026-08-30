@@ -150,7 +150,7 @@ There is deliberately **no sharing infrastructure**: no hosting, no upload targe
 - **Drag-and-drop is the primary path** — from the Quick Access Overlay card, the editor's title-bar proxy icon, a pinned window, and any history item. Drags are `NSFilePromiseProvider` file promises, so the receiving app (Slack, Mail, Figma, browsers, Finder) materializes a properly named file even when the capture only exists in staging.
 - **Clipboard is the second path** — configurable default action "copy on capture"; ⌘C anywhere copies the flattened image.
 - **Native share sheet** (`NSSharingServicePicker`) from overlay/editor/history — AirDrop, Messages, Mail, and whatever share extensions the user has installed. The OS handles delivery; the app never talks to a server.
-- Consequence worth advertising: the app contains **zero networking code except the Sparkle update check** — enforced by module layering and a CI check. Nothing to configure, nothing to trust.
+- Consequence worth advertising: **nothing you capture ever leaves the Mac.** The app contains zero networking code, and reaches the network in exactly two places, both enforced by CI: Sparkle's update check, and — only if you ask for it — asking macOS to install a speech model so the studio can offer to cut filler words. The studio works without that model, transcription is on-device either way, and no recording is ever uploaded. Nothing to configure, nothing to trust.
 
 ---
 

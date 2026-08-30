@@ -46,6 +46,9 @@ public extension StudioDocumentModel {
 
     private func performExport(to destination: URL) async {
         exportProgress = 0
+        // Any debounced draft write lands before the commit, so the two cannot disagree
+        // about what was exported.
+        flushDraft()
         try? document.commit(edit)
 
         do {

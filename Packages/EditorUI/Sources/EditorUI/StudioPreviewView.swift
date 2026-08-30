@@ -40,7 +40,10 @@ struct StudioPreviewView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .task {
-            renderer = StudioPreviewRenderer(session: model.session, telemetry: model.telemetry)
+            renderer = StudioPreviewRenderer(
+                session: model.session,
+                cameraStartOffset: model.manifest.cameraStartOffset
+            )
             await refresh()
         }
         // Two triggers, because they cost different amounts. A scrub reuses the pipeline
@@ -78,10 +81,20 @@ struct StudioPreviewView: View {
 actor StudioPreviewRenderer {
     private let generator: AVAssetImageGenerator?
     private let cameraGenerator: AVAssetImageGenerator?
-    private let telemetry: InputTelemetry
 
-    init(session: RecordingSession, telemetry: InputTelemetry) {
-        self.telemetry = telemetry
+    /// How far into the recording the camera's first frame landed (docs/11 S0.5).
+    ///
+    /// Camera time zero is screen time `cameraStartOffset`, and the export has shifted by it
+    /// since R0.5 — but the preview seeked the raw `camera.mov` at the screen's own source
+    /// time, so the bubble ran ahead of the picture by however long the capture session took
+    /// to wake up: a third of a second on a built-in camera, over a second on some external
+    /// ones. Somebody lining the bubble up against the preview was lining it up against
+    /// something the export does not produce, which makes a liar of the three separate doc
+    /// comments in this file asserting that the preview *is* the export.
+    private let cameraStartOffset: TimeInterval
+
+    init(session: RecordingSession, cameraStartOffset: TimeInterval) {
+        self.cameraStartOffset = cameraStartOffset
         generator = Self.makeGenerator(for: session.screenURL)
         cameraGenerator = Self.makeGenerator(for: session.cameraURL)
     }
@@ -118,7 +131,7 @@ actor StudioPreviewRenderer {
 
         var camera: CIImage?
         if edit.camera.isVisible {
-            camera = await copyCamera(at: source).map(CIImage.init(cgImage:))
+            camera = await copyCamera(at: source - cameraStartOffset).map(CIImage.init(cgImage:))
         }
         let composed = composer.frame(at: time, source: CIImage(cgImage: screen), camera: camera)
         return StudioRenderContext.shared.createCGImage(composed, from: composed.extent)
@@ -137,6 +150,11 @@ actor StudioPreviewRenderer {
 
     private func copyCamera(at seconds: TimeInterval) async -> CGImage? {
         guard let cameraGenerator else { return nil }
+        // Before the camera woke up there is no frame to show, and clamping to zero would
+        // hold its first frame over the opening of the recording — which is exactly the
+        // still, staring bubble the offset exists to avoid. The export leaves this stretch
+        // empty; so does this.
+        guard seconds >= 0 else { return nil }
         return await Self.copy(from: Generator(cameraGenerator), at: seconds)
     }
 

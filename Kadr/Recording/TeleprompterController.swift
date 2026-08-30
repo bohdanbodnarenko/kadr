@@ -184,14 +184,28 @@ final class TeleprompterController {
 
     private func arm(_ observation: SettingsObservation) {
         withObservationTracking {
-            _ = settings.teleprompterWordsPerMinute
-            _ = settings.teleprompterFontSize
-            _ = settings.teleprompterMirrored
-        } onChange: {
-            Task { @MainActor [weak self] in
-                guard let self, let observation = settingsObservation, !observation.isCancelled else { return }
-                syncFromSettings()
-                arm(observation)
+            // The whole values the panel is built from, not the three fields they happen to
+            // be made of today (docs/11 S2). Reading the fields individually means the day
+            // somebody adds a fourth to `TeleprompterAppearance`, the panel silently stops
+            // following it — the observation still fires for the old three and nothing
+            // anywhere says the new one was forgotten.
+            _ = style
+            _ = TeleprompterPacing(wordsPerMinute: settings.teleprompterWordsPerMinute)
+        } onChange: { [weak self] in
+            // Re-armed *here*, synchronously, before the `Task` (docs/11 S2).
+            //
+            // `withObservationTracking` fires exactly once and then it is gone. Re-arming
+            // from inside an asynchronous hop leaves a window with no observation
+            // installed at all, and a slider drag sends dozens of changes through that
+            // window: the panel updated once and then went dead for the rest of the drag.
+            //
+            // `assumeIsolated` is sound rather than convenient: `AppSettings` is
+            // `@MainActor`, so the write that triggered this callback was already on the
+            // main actor and so is the callback.
+            MainActor.assumeIsolated {
+                guard let self, let observation = self.settingsObservation, !observation.isCancelled else { return }
+                self.arm(observation)
+                self.syncFromSettings()
             }
         }
     }

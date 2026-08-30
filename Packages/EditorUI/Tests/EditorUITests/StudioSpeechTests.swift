@@ -164,7 +164,7 @@ struct StudioSpeechTests {
 
         studio.setSpeedAtPlayhead(2)
         let before = studio.edit.clips
-        #expect(before.isEdited, "the fixture did not actually change the timeline")
+        #expect(before.isEdited(ofRecordingLasting: 10), "the fixture did not actually change the timeline")
 
         studio.refuseTidyIfEditedForTesting()
         #expect(studio.edit.clips == before, "the user's speed change was discarded")
@@ -176,7 +176,7 @@ struct StudioSpeechTests {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder)
-        #expect(!studio.edit.clips.isEdited)
+        #expect(!studio.edit.clips.isEdited(ofRecordingLasting: 10))
         studio.refuseTidyIfEditedForTesting()
         #expect(studio.failure == nil)
     }

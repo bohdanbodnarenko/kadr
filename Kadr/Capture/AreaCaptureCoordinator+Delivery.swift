@@ -45,8 +45,13 @@ extension AreaCaptureCoordinator {
             switch automation.overrides.action {
             case .annotate: quickAccess.annotateFile(at: fileURL)
             case .pin: quickAccess.pinFile(at: fileURL)
+            // Exhaustive rather than `default: break` (docs/11 S2). `copy`, `save` and
+            // `overlay` are decided by the export policy before the bytes are written, so
+            // by the time the file exists there is genuinely nothing left to do — but that
+            // is a fact worth stating, because `default` would have swallowed the *next*
+            // case just as quietly and it would have appeared enabled and done nothing.
+            case .copy, .save, .overlay: break
             case .none: applyAfterCaptureActions(to: fileURL)
-            default: break
             }
         }
         let outcome = result.fileURL.map(CaptureOutcome.file)

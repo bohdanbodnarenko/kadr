@@ -52,4 +52,30 @@ extension RecordingCoordinator {
             return { _ in nil }
         }
     }
+
+    /// How many pixels the recorded display puts in a point (docs/11 S0.5).
+    ///
+    /// Everything the sidecar records is already in the recording's own pixels — the
+    /// pointer path, the click positions — with one exception: the cursor artwork, because
+    /// `NSCursor` measures its size and its hotspot in points. This is the number that
+    /// reconciles them, and it has to be captured now: by the time anybody opens the editor
+    /// the display that was recorded may not even be attached.
+    static func pointPixelScale(for target: RecordingTarget) -> CGFloat {
+        let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
+        let displayID: CGDirectDisplayID? = switch target {
+        case let .display(id): id
+        case let .region(_, id): id
+        // A window recording is captured at the scale of whatever display it is on, and
+        // SCK reports that per frame; the main display is the best answer available here
+        // and is the right one whenever the window has not been dragged to a second screen
+        // with a different density.
+        case .window: CGMainDisplayID()
+        }
+        guard let displayID,
+              let screen = screens.first(where: { $0.displayID == displayID })
+        else {
+            return NSScreen.main?.backingScaleFactor ?? 2
+        }
+        return screen.backingScaleFactor
+    }
 }

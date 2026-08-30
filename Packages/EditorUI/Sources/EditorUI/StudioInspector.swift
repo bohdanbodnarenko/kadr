@@ -179,22 +179,25 @@ struct StudioInspector: View {
     }
 
     private var cropX: Binding<Double> {
-        cropEdge(get: { $0.origin.x }, set: { $0.origin.x = $1 })
+        cropEdge(gesture: "crop.x", get: { $0.origin.x }, set: { $0.origin.x = $1 })
     }
 
     private var cropY: Binding<Double> {
-        cropEdge(get: { $0.origin.y }, set: { $0.origin.y = $1 })
+        cropEdge(gesture: "crop.y", get: { $0.origin.y }, set: { $0.origin.y = $1 })
     }
 
     private var cropWidth: Binding<Double> {
-        cropEdge(get: { $0.width }, set: { $0.size.width = $1 })
+        cropEdge(gesture: "crop.width", get: { $0.width }, set: { $0.size.width = $1 })
     }
 
     private var cropHeight: Binding<Double> {
-        cropEdge(get: { $0.height }, set: { $0.size.height = $1 })
+        cropEdge(gesture: "crop.height", get: { $0.height }, set: { $0.size.height = $1 })
     }
 
+    /// - Parameter gesture: names this slider, so one drag of it is one undo step and
+    ///   dragging a different edge afterwards starts another (docs/11 S2).
     private func cropEdge(
+        gesture: String,
         get: @escaping (CGRect) -> CGFloat,
         set: @escaping (inout CGRect, Double) -> Void
     ) -> Binding<Double> {
@@ -208,7 +211,7 @@ struct StudioInspector: View {
                 let width = min(max(rect.width, 0.05), 1 - x)
                 let height = min(max(rect.height, 0.05), 1 - y)
                 let next = CGRect(x: x, y: y, width: width, height: height)
-                model.change {
+                model.change(coalescingAs: gesture) {
                     $0.cropRect = next == CGRect(x: 0, y: 0, width: 1, height: 1) ? nil : next
                 }
             }
@@ -238,13 +241,13 @@ struct StudioInspector: View {
             LabeledContent("Size") {
                 Slider(value: Binding(
                     get: { model.edit.camera.sizeFraction },
-                    set: { value in model.change { $0.camera.sizeFraction = value } }
+                    set: { value in model.change(coalescingAs: "camera.size") { $0.camera.sizeFraction = value } }
                 ), in: 0.08 ... 0.6)
             }
             LabeledContent("Roundness") {
                 Slider(value: Binding(
                     get: { model.edit.camera.roundness },
-                    set: { value in model.change { $0.camera.roundness = value } }
+                    set: { value in model.change(coalescingAs: "camera.roundness") { $0.camera.roundness = value } }
                 ), in: 0 ... 1)
             }
         }

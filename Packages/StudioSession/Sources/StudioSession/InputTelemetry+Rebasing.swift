@@ -26,7 +26,10 @@ public extension InputTelemetry {
     /// is the one moment the eye is already watching.
     func rebased(to clips: ClipTimeline) -> InputTelemetry {
         // An untouched recording maps one-to-one, and the common case should cost nothing.
-        guard clips.isEdited else { return self }
+        // Measured against the telemetry's own extent, which is the only length available
+        // here — and the right one: what matters is whether anything recorded falls outside
+        // what the timeline keeps.
+        guard clips.isEdited(ofRecordingLasting: latestEventTime) else { return self }
 
         var rebased = self
         rebased.pointer = pointer.compactMap { sample in
@@ -53,14 +56,48 @@ public extension InputTelemetry {
     }
 }
 
-public extension ClipTimeline {
-    /// Whether this timeline changes the footage at all.
+public extension InputTelemetry {
+    /// The last instant anything was recorded at.
     ///
-    /// One clip at natural speed covering the recording from the start is a timeline that
-    /// converts source time to itself, so everything that would rebase against it can skip
-    /// the work — which is most recordings, most of the time.
-    var isEdited: Bool {
+    /// Stands in for the recording's length where the manifest is not to hand. It is a lower
+    /// bound rather than the exact duration, which is the safe direction: it can only make
+    /// `rebased(to:)` take the slow path when the fast one would have done, never the other
+    /// way round.
+    var latestEventTime: TimeInterval {
+        max(
+            pointer.last?.time ?? 0,
+            clicks.last?.time ?? 0,
+            keystrokes.last?.time ?? 0,
+            windowGeometry.last?.time ?? 0
+        )
+    }
+}
+
+public extension ClipTimeline {
+    /// Where the last surviving frame sits in the recording.
+    var sourceEnd: TimeInterval {
+        clips.reduce(0) { max($0, $1.sourceStart + $1.sourceDuration) }
+    }
+
+    /// Whether this timeline changes a recording of `duration` at all.
+    ///
+    /// One clip at natural speed, starting at zero and running to the end, converts source
+    /// time to itself — so everything that would rebase against it can skip the work, which
+    /// is most recordings most of the time.
+    ///
+    /// The length is a parameter because a timeline cannot answer without it, and the
+    /// version that tried to was wrong (docs/11 S2). It asked only whether the clip started
+    /// late or ran at a different speed, so a recording trimmed at the *end* — one clip,
+    /// starting at zero, natural speed, just shorter — reported itself unedited. Telemetry
+    /// then took the fast path and kept every click and keystroke from the part the user had
+    /// cut off, which the export duly drew over footage that no longer exists. Trimming the
+    /// end is not an exotic edit; it is the most common one there is.
+    func isEdited(ofRecordingLasting duration: TimeInterval) -> Bool {
         guard clips.count == 1, let only = clips.first else { return true }
-        return only.sourceStart != 0 || only.speed != 1
+        guard only.sourceStart == 0, only.speed == 1 else { return true }
+        // A frame's worth of slack at 60 fps: a timeline built from a duration that went
+        // through a `CMTime` and back is not bit-identical to the one it started as, and
+        // rebasing a whole recording because of a rounding error is a real cost.
+        return only.sourceDuration < duration - 0.017
     }
 }

@@ -16,6 +16,37 @@ import Shared
 struct FrameCompositor: Sendable {
     private let logger = KadrLog.logger(.recording)
 
+    /// How to describe one of ScreenCaptureKit's buffers to CoreGraphics (docs/11 S0.5).
+    ///
+    /// The bits per component were hard-coded to 8 while the engine switches the stream to
+    /// `ARGB2101010LEPacked` for an HDR recording — and because both formats are four bytes
+    /// per pixel, `CGContext` accepted the wrong description and quietly reinterpreted
+    /// 10-bit data as 8888. HDR and click halos are two independent switches in the same
+    /// settings pane, so the corruption needed nothing unusual to reach: turn both on.
+    struct BitmapLayout {
+        let bitsPerComponent: Int
+        let bitmapInfo: UInt32
+
+        /// Nil for a format this does not know how to draw into, which is a refusal rather
+        /// than a guess.
+        init?(pixelFormat: OSType) {
+            switch pixelFormat {
+            case kCVPixelFormatType_32BGRA:
+                bitsPerComponent = 8
+                bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                    | CGBitmapInfo.byteOrder32Little.rawValue
+            case kCVPixelFormatType_ARGB2101010LEPacked:
+                // Ten bits per component in the same four bytes, with the two spare bits
+                // where the alpha would be — so there is no alpha to premultiply into.
+                bitsPerComponent = 10
+                bitmapInfo = CGImageAlphaInfo.noneSkipFirst.rawValue
+                    | CGBitmapInfo.byteOrder32Little.rawValue
+            default:
+                return nil
+            }
+        }
+    }
+
     /// Draws an overlay into a frame, in place.
     ///
     /// In place because the alternative is allocating a second full-resolution buffer per
@@ -29,18 +60,28 @@ struct FrameCompositor: Sendable {
 
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
+        let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        guard let layout = BitmapLayout(pixelFormat: format) else {
+            // Loudly, and without drawing (docs/11 S0.5). Guessing at an unknown layout is
+            // how the HDR bug happened: a wrong-but-plausible description of the memory
+            // succeeds and corrupts every pixel it touches.
+            logger.error("Refusing to draw overlays into pixel format \(format, privacy: .public)")
+            return
+        }
         guard let base = CVPixelBufferGetBaseAddress(pixelBuffer),
               let context = CGContext(
                   data: base,
                   width: width,
                   height: height,
-                  bitsPerComponent: 8,
+                  bitsPerComponent: layout.bitsPerComponent,
                   bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
                   space: CGColorSpaceCreateDeviceRGB(),
-                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
-                      | CGBitmapInfo.byteOrder32Little.rawValue
+                  bitmapInfo: layout.bitmapInfo
               )
-        else { return }
+        else {
+            logger.error("Could not describe a \(format, privacy: .public) frame to CoreGraphics")
+            return
+        }
 
         // CoreVideo buffers are top-left origin; CGContext is bottom-left. Flipping once
         // here lets every overlay position be expressed the way the rest of the app thinks

@@ -40,9 +40,13 @@ final class StudioSessionRecorder {
     /// - Parameter pointConverter: maps a screen point into the recorded frame's pixels,
     ///   which is the same conversion the live click overlay uses. A `nil` return means
     ///   the point is outside the recorded area and is simply not recorded.
+    /// - Parameter pointPixelScale: the recorded display's pixels per point (docs/11 S0.5).
+    ///   Written into the manifest so the export can draw the cursor at the size it was on
+    ///   screen — `NSCursor` measures itself in points and the footage is in pixels.
     func start(
         recordsCamera: Bool,
-        pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?
+        pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?,
+        pointPixelScale: CGFloat
     ) {
         guard session == nil else { return }
         guard let root = Self.root() else {
@@ -61,7 +65,9 @@ final class StudioSessionRecorder {
         }
 
         self.session = session
+        self.pointPixelScale = pointPixelScale
         startedAtUptime = ProcessInfo.processInfo.systemUptime
+        firstFrameUptime = nil
         geometry.reset()
         telemetry.start(pointConverter: pointConverter, journalURL: session.inputJournalURL)
         if recordsCamera {
@@ -76,6 +82,17 @@ final class StudioSessionRecorder {
     /// either: a pointer track that keeps running through a pause puts the cursor somewhere
     /// the footage never showed it.
     func advance(to elapsed: TimeInterval) {
+        // The first tick is the recording's real zero (docs/11 S0.5).
+        //
+        // `startedAtUptime` is stamped when the *session* is created, which is before
+        // `engine.start` and so before ScreenCaptureKit has spent its 200–500 ms getting a
+        // stream up. Measuring the camera's arrival from there over-counts by exactly that
+        // setup, which is how R0.5 replaced a +0.3–1.5 s lip-sync error with a −0.2–0.5 s
+        // one. This is the moment the first frame was actually composited, which is the
+        // instant camera time and screen time are supposed to share.
+        if firstFrameUptime == nil, session != nil {
+            firstFrameUptime = ProcessInfo.processInfo.systemUptime
+        }
         telemetry.advance(to: elapsed)
     }
 
@@ -88,6 +105,13 @@ final class StudioSessionRecorder {
     /// sidecar so the studio can anchor a zoom to a button rather than to a screen position
     /// the button has since left.
     @ObservationIgnored private var geometry = WindowGeometryTracker()
+
+    /// Pixels per point on the display being recorded.
+    @ObservationIgnored private var pointPixelScale: CGFloat = 2
+
+    /// Uptime at the recording's first composited frame — the zero everything else is
+    /// measured from (docs/11 S0.5).
+    @ObservationIgnored private var firstFrameUptime: TimeInterval?
 
     /// Notes that the recorded content has moved.
     func noteGeometry(_ frame: CGRect, at time: TimeInterval) {
@@ -119,7 +143,9 @@ final class StudioSessionRecorder {
             try? FileManager.default.removeItem(at: session.inputJournalURL)
             try document.write(CaptureManifest(
                 pixelSize: CGSize(width: result.pixelSize.width, height: result.pixelSize.height),
-                scale: 1,
+                // The real thing, not a placeholder. It was hard-coded to 1 and read by
+                // nothing, so every Retina export drew a half-size cursor (docs/11 S0.5).
+                scale: pointPixelScale,
                 frameRate: result.options.frameRate.rawValue,
                 duration: result.duration,
                 // Recorded rather than inferred later: whether the studio should draw a
@@ -142,14 +168,18 @@ final class StudioSessionRecorder {
 
     /// How far into the recording the camera's first frame landed (docs/10 R0.5).
     ///
-    /// Measured against the session's own start rather than the engine's first frame,
-    /// which are a few milliseconds apart — the session is created immediately before the
-    /// stream is asked to start. That is an approximation, and it is the right one to make:
-    /// the error it replaces is a third of a second on a built-in camera and well over a
-    /// second on some external ones, and it was previously assumed to be zero.
+    /// Measured from the first composited frame, which is where the footage actually
+    /// begins (docs/11 S0.5).
+    ///
+    /// It used to be measured from the session's creation, which happens before
+    /// `engine.start` and therefore before ScreenCaptureKit has spent its 200–500 ms
+    /// bringing a stream up — so the answer was too large by exactly that setup, and the
+    /// bubble ran that much behind the picture. The session start is kept as a fallback for
+    /// the case where no frame was ever composited, where it is the only answer available
+    /// and the recording has no footage to be out of sync with anyway.
     private func cameraOffset(firstFrameAt uptime: TimeInterval?) -> TimeInterval {
-        guard let uptime, let startedAtUptime else { return 0 }
-        return max(uptime - startedAtUptime, 0)
+        guard let uptime, let zero = firstFrameUptime ?? startedAtUptime else { return 0 }
+        return max(uptime - zero, 0)
     }
 
     /// Writes a still from the recording into the session (docs/09 U3.1).
@@ -289,12 +319,14 @@ final class StudioSessionRecorder {
     /// a test has. What a test can check is everything after: that the footage is attached,
     /// that the manifest remembers what cannot be re-derived, and that a failure leaves
     /// nothing behind.
-    func startForTesting(in root: URL) -> RecordingSession? {
+    func startForTesting(in root: URL, pointPixelScale: CGFloat = 2) -> RecordingSession? {
         guard session == nil else { return nil }
         let session = RecordingSession.create(in: root, named: Self.name())
         guard (try? session.create()) != nil else { return nil }
         self.session = session
+        self.pointPixelScale = pointPixelScale
         startedAtUptime = ProcessInfo.processInfo.systemUptime
+        firstFrameUptime = nil
         return session
     }
 

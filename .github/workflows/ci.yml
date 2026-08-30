@@ -51,8 +51,10 @@ jobs:
         run: make build
       - name: Test the agent app
         run: make test-app
+      # The archive, not the build product: `xcodebuild build` plus a strip is not what
+      # ships, and measuring it reported 16 MB for a release that downloads at 12.9 MB.
       - name: App bundle size budget (PRD §8)
-        run: Scripts/check-size.sh --require-build
+        run: make size-gate
       - name: Linked frameworks contain no networking (docs/03 §9)
         run: make check-layering
       - name: Performance budgets (PRD §8)

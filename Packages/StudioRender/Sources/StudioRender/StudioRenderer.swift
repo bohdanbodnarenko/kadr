@@ -81,7 +81,8 @@ public struct StudioRenderer: Sendable {
             telemetry: document.telemetry() ?? InputTelemetry(),
             edit: edit,
             pixelSize: manifest?.pixelSize,
-            cameraStartOffset: manifest?.cameraStartOffset ?? 0
+            cameraStartOffset: manifest?.cameraStartOffset ?? 0,
+            pointPixelScale: manifest?.scale ?? 2
         )
         return try await render(
             source,
@@ -109,6 +110,9 @@ public struct StudioRenderer: Sendable {
         public var pixelSize: CGSize?
         /// How far into the recording the camera's first frame landed (docs/10 R0.5).
         public var cameraStartOffset: TimeInterval
+        /// Recorded pixels per point, for drawing the cursor at its real size
+        /// (docs/11 S0.5).
+        public var pointPixelScale: CGFloat
 
         public init(
             screen: URL,
@@ -116,7 +120,8 @@ public struct StudioRenderer: Sendable {
             telemetry: InputTelemetry = InputTelemetry(),
             edit: StudioEdit,
             pixelSize: CGSize? = nil,
-            cameraStartOffset: TimeInterval = 0
+            cameraStartOffset: TimeInterval = 0,
+            pointPixelScale: CGFloat = 2
         ) {
             self.screen = screen
             self.camera = camera
@@ -124,6 +129,7 @@ public struct StudioRenderer: Sendable {
             self.edit = edit
             self.pixelSize = pixelSize
             self.cameraStartOffset = cameraStartOffset
+            self.pointPixelScale = pointPixelScale
         }
     }
 
@@ -150,7 +156,8 @@ public struct StudioRenderer: Sendable {
             plan: plan,
             edit: edit,
             telemetry: source.telemetry,
-            frameRate: options.frameRate
+            frameRate: options.frameRate,
+            pointPixelScale: source.pointPixelScale
         )
 
         let interval = Self.signposter.beginInterval("studio.render")

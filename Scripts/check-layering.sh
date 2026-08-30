@@ -43,7 +43,6 @@ swift_sources() {
 }
 
 # The one place networking code is allowed to live (docs/04 §10, PRD §9).
-# Nothing lives here yet; it is created in M11 when Sparkle is integrated.
 SPARKLE_PATHS='^Kadr/Updates/'
 
 # ---------------------------------------------------------------- A. zero network
@@ -64,6 +63,40 @@ if [ -n "$net_hits" ]; then
     printf '%s' "$net_hits" | sed 's/^/    /'
 else
     pass "zero network: no networking imports or symbols outside the Sparkle integration"
+fi
+
+# ------------------------------------------------- A2. fetches that are not URLSession
+#
+# The symbol grep above passes over `SpeechModelInstaller` and always would: it asks
+# Apple's Speech framework to fetch a model, so the download happens inside macOS and
+# there is no socket, no `URLSession` and no `import Network` anywhere in Kadr. The rule
+# is about what the app *causes*, not about which symbols it spells, and a check that
+# only sees symbols would let the next such API in without a word (docs/11 S3.2).
+#
+# Kadr has exactly two things that reach the network, and both are named here.
+# The two that *fetch*. `AssetInventory.status` only asks what is already installed and
+# is used freely — a check that conflated the two would push callers into pretending not
+# to know whether a model is there, which is worse than the thing it prevents.
+ASSET_SYMBOLS='assetInstallationRequest|downloadAndInstall'
+SPEECH_PATHS='^Packages/StudioRender/Sources/StudioRender/SpeechModelInstaller\.swift$'
+
+asset_hits=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    printf '%s' "$file" | grep -qE "$SPEECH_PATHS" && continue
+    # Tests do not ship, and one of them asserts on these very strings.
+    case "$file" in
+        */Tests/*) continue ;;
+    esac
+    hit=$(grep -nE "$ASSET_SYMBOLS" "$file" 2>/dev/null)
+    [ -n "$hit" ] && asset_hits="${asset_hits}${file}: ${hit}"$'\n'
+done <<< "$(swift_sources)"
+
+if [ -n "$asset_hits" ]; then
+    fail "an OS-mediated download outside the one allowed file ($SPEECH_PATHS)"
+    printf '%s' "$asset_hits" | sed 's/^/    /'
+else
+    pass "the only OS-mediated download is the speech model, in the file that owns it"
 fi
 
 # ---------------------------------------------------------------- B. agent linkage

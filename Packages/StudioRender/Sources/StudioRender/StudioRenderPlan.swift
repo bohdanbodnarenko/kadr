@@ -22,6 +22,15 @@ public struct StudioRenderPlan: Sendable {
     public let viewports: ViewportTimeline
     /// The edited length, which is what the timeline and the cursor are indexed by.
     public let duration: TimeInterval
+    /// Whether the output frame is filled or fitted (docs/09 U3.5).
+    ///
+    /// Kept because it decides which way the last fraction of a pixel goes, and the two
+    /// answers are visibly different: `.fill` promises no bars, so it covers the frame and
+    /// lets the overflow be cropped; `.fit` promises nothing is lost, so it fits inside and
+    /// accepts bars. Rounding the output to even pixels leaves a pixel or two of slack even
+    /// when the shapes match, and fitting `.fill` put a thin black line along the top and
+    /// bottom of an export that had asked for none.
+    public let fill: ReframeFill
 
     /// - Parameters:
     ///   - edit: the edit being rendered.
@@ -34,6 +43,7 @@ public struct StudioRenderPlan: Sendable {
         self.crop = crop
         outputSize = Self.evenSize(edit.outputSize(for: sourceSize))
         duration = edit.duration
+        fill = edit.reframe.fill
 
         // Cues are replanned for the crop and *then* moved into its coordinates. Both
         // steps are needed and neither implies the other: replanning pulls an anchor
@@ -59,15 +69,69 @@ public struct StudioRenderPlan: Sendable {
         return local.offsetBy(dx: crop.minX, dy: crop.minY)
     }
 
+    /// How the visible part of the recording sits inside the output frame at `time`.
+    ///
+    /// One answer to three questions that have to agree — how the frame itself is scaled,
+    /// how big an overlay is, and where a recorded point lands. They were answered
+    /// separately, each by `outputSize.width / rect.width`, and "Show everything" is the
+    /// case where that is wrong: `.fit` hands back the *whole* recording and leaves the
+    /// letterboxing to the renderer, which had no letterbox logic at all. Scaling by width
+    /// alone put a 1920×1080 recording flush against the bottom of a 9:16 frame under a
+    /// 739-pixel black bar — and in the other direction it scaled past the frame and
+    /// cropped, which is the one thing "Show everything" promises not to do.
+    ///
+    /// Fitting by the tighter axis and centring is all it takes; `.fill` and Original hand
+    /// back a rect that already matches the output's shape, so for them both axes give the
+    /// same scale and the offset is zero. Only `.fit` moves.
+    public struct Presentation: Sendable, Hashable {
+        /// Output pixels per source pixel — the same in both axes, so nothing is stretched.
+        public let scale: CGFloat
+        /// Where the scaled content's top-left corner sits in the output frame.
+        public let origin: CGPoint
+
+        public init(scale: CGFloat, origin: CGPoint) {
+            self.scale = scale
+            self.origin = origin
+        }
+    }
+
+    public func presentation(at time: TimeInterval) -> Presentation {
+        presentation(for: sourceRect(at: time))
+    }
+
+    /// The same, for a rect the caller has already looked up.
+    ///
+    /// Worth the second entry point: `sourceRect(at:)` walks the integrated viewport table,
+    /// and asking for the rect and then asking for the presentation *of that time* walks it
+    /// twice. Doing that in `sample`, `scale(at:)` and `outputPoint` tripled the per-frame
+    /// lookups and the flat-cost budget in `TimeSortedLookupTests` caught it immediately,
+    /// which is the entire reason that test is a gate rather than a comment.
+    public func presentation(for rect: CGRect) -> Presentation {
+        guard rect.width > 0, rect.height > 0 else {
+            return Presentation(scale: 1, origin: .zero)
+        }
+        let scale = switch fill {
+        case .fit: min(outputSize.width / rect.width, outputSize.height / rect.height)
+        // Covers rather than fits, so the frame is full and the surplus is cropped by the
+        // composer's final crop — which is what "Fill the frame" says on the control.
+        case .fill: max(outputSize.width / rect.width, outputSize.height / rect.height)
+        }
+        return Presentation(
+            scale: scale,
+            origin: CGPoint(
+                x: (outputSize.width - rect.width * scale) / 2,
+                y: (outputSize.height - rect.height * scale) / 2
+            )
+        )
+    }
+
     /// How much the source is being magnified onto the output at `time`.
     ///
     /// Not the cue's magnification: that is relative to the crop, and the crop is itself
     /// scaled to the output. Overlays drawn at cue magnification would be the wrong size
     /// on every reframe that is not Original.
     public func scale(at time: TimeInterval) -> CGFloat {
-        let rect = sourceRect(at: time)
-        guard rect.width > 0 else { return 1 }
-        return outputSize.width / rect.width
+        presentation(at: time).scale
     }
 
     /// Maps a point in the recording's pixels — top-left origin, as the telemetry records
@@ -77,11 +141,20 @@ public struct StudioRenderPlan: Sendable {
     /// still has to be drawn, because half of it is visible; clipping is the renderer's job
     /// and it does it with pixels rather than by dropping the draw.
     public func outputPoint(_ point: CGPoint, at time: TimeInterval) -> CGPoint {
-        let rect = sourceRect(at: time)
+        outputPoint(point, in: sourceRect(at: time))
+    }
+
+    /// The same, for a rect the caller already has.
+    ///
+    /// Through the same presentation the frame itself goes through. Mapping each axis onto
+    /// the full output independently would stretch a letterboxed `.fit` frame and put the
+    /// cursor somewhere the picture underneath it is not.
+    public func outputPoint(_ point: CGPoint, in rect: CGRect) -> CGPoint {
         guard rect.width > 0, rect.height > 0 else { return point }
+        let presentation = presentation(for: rect)
         return CGPoint(
-            x: (point.x - rect.minX) / rect.width * outputSize.width,
-            y: (point.y - rect.minY) / rect.height * outputSize.height
+            x: presentation.origin.x + (point.x - rect.minX) * presentation.scale,
+            y: presentation.origin.y + (point.y - rect.minY) * presentation.scale
         )
     }
 

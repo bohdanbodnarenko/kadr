@@ -6,9 +6,18 @@ app. The specs in docs/ are authoritative: 02=PRD, 03=feature specs (behavior
 When a task references a doc section, read it before writing code.
 
 ## Non-negotiable rules
-1. ZERO NETWORK: no import Network, no URLSession, no sockets anywhere except
-   the Sparkle update integration. There are no upload/share/URL features —
-   sharing is drag-and-drop + NSSharingServicePicker only. CI enforces this.
+1. ZERO NETWORK, with exactly two named exceptions. No import Network, no
+   URLSession, no sockets. There are no upload/share/URL features — sharing is
+   drag-and-drop + NSSharingServicePicker only. Nothing the user captures ever
+   leaves the Mac. CI enforces this two ways: a symbol grep, and a second check
+   for OS-mediated fetches, which carry no networking symbols at all.
+   The exceptions, both path-allow-listed in Scripts/check-layering.sh:
+   - `Kadr/Updates/` — Sparkle's appcast check.
+   - `Packages/StudioRender/.../SpeechModelInstaller.swift` — asks macOS to
+     install a speech model for filler-word removal. User-initiated, optional
+     and non-blocking: the studio works without it, and transcription itself
+     sets `requiresOnDeviceRecognition`, so a recording is never uploaded.
+   Adding a third needs the same treatment: a path in the grep and a line here.
 2. RAM budget: agent idles <30 MB, zero timers, 0.0% CPU. The agent never
    links EditorUI, VisionServices, StudioRender or AnnotationRender. Vision/encoders
    run in HelperTools (self-terminating XPC); the editor is a separate app that

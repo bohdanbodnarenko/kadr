@@ -125,14 +125,25 @@ public struct ClipCompositionBuilder: Sendable {
             // Screen time `t` is camera time `t - startOffset`: the camera woke up late, so
             // its file begins partway into the recording.
             let cameraStart = clip.sourceStart - startOffset
-            let available = min(clip.sourceDuration, cameraDuration - max(cameraStart, 0))
+            // How much of this clip's head has no camera behind it at all, because the
+            // device had not handed over a frame yet.
+            let headShift = max(-cameraStart, 0)
+            // The clip's own remaining length is a limit too (docs/11 S0.5). It was not one,
+            // so a clip that starts before the camera did inserted `startOffset` more
+            // camera than it holds — and `insertTimeRange` *inserts*, so the surplus pushed
+            // every later segment further out, which is the same drift R0.5 fixed on the
+            // `elapsed` accumulator arriving by another door.
+            let available = min(
+                clip.sourceDuration - headShift,
+                cameraDuration - max(cameraStart, 0)
+            )
 
             // The camera may be shorter than the screen, or may not have started until
             // after this clip — it begins when the device hands over its first frame, and
             // ends when the user stops. Either way the clip contributes no camera rather
             // than failing the export.
             if cameraStart < cameraDuration, available > 0 {
-                let cursor = CMTime(seconds: elapsed + max(-cameraStart, 0), preferredTimescale: 600)
+                let cursor = CMTime(seconds: elapsed + headShift, preferredTimescale: 600)
                 let range = CMTimeRange(
                     start: CMTime(seconds: max(cameraStart, 0), preferredTimescale: 600),
                     duration: CMTime(seconds: available, preferredTimescale: 600)

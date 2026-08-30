@@ -23,10 +23,23 @@ public struct StudioFrameComposer: Sendable {
     public let edit: StudioEdit
     public let telemetry: InputTelemetry
 
+    /// Recorded pixels per point (docs/11 S0.5).
+    ///
+    /// The cursor artwork is the only thing in the sidecar measured in points, because
+    /// `NSCursor` is; everything else — the pointer path, the click positions, the frame —
+    /// is already in the recording's own pixels.
+    private let pointPixelScale: CGFloat
+
     private let reconstruction: CursorReconstruction
     private let cursorPath: [CGPoint]
     private let cursorImages: [CGImage?]
     private let frameDuration: TimeInterval
+
+    /// Opaque black the size of the output, to put letterbox bars on.
+    private var backdrop: CIImage {
+        CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1))
+            .cropped(to: CGRect(origin: .zero, size: plan.outputSize))
+    }
 
     /// The most the camera may enlarge an overlay.
     ///
@@ -41,10 +54,16 @@ public struct StudioFrameComposer: Sendable {
         edit: StudioEdit,
         telemetry: InputTelemetry,
         frameRate: Int = 60,
+        // Two, not one: a Mac with no Retina display is now the unusual case, and a
+        // session written before the manifest carried a real scale is far more likely to
+        // have come from a Retina machine than not. `CaptureManifest` decodes the same
+        // default for the same reason.
+        pointPixelScale: CGFloat = 2,
         spring: MotionSpring = MotionSpring()
     ) {
         self.plan = plan
         self.edit = edit
+        self.pointPixelScale = max(pointPixelScale, 0.0001)
         // Rebased once, here (docs/10 R0.2). The sidecar is written in source time and
         // every method below is called with an edited-time playhead; converting at the
         // boundary is what stops the two being confused anywhere past it, and is why the
@@ -69,6 +88,10 @@ public struct StudioFrameComposer: Sendable {
         if let camera, edit.camera.isVisible {
             image = bubble(camera, over: image)
         }
+        // Over opaque black, so a letterboxed `.fit` frame has bars rather than holes. The
+        // uncovered region is transparent, and transparent is not a colour a video file can
+        // carry — it becomes whatever the encoder's buffer happened to hold.
+        image = image.composited(over: backdrop)
         // Cropped last and always: a composite whose extent has grown past the frame — a
         // ripple at the edge, a bubble flush to the corner — writes a pixel buffer with a
         // silently shifted origin, and the whole video comes out offset.
@@ -122,10 +145,17 @@ public struct StudioFrameComposer: Sendable {
             height: rect.height
         )
         let cropped = source.cropped(to: flipped.offsetBy(dx: source.extent.minX, dy: source.extent.minY))
-        let scale = plan.outputSize.width / rect.width
+        // Fitted and centred rather than scaled by width (docs/11 S0.5). The vertical
+        // offset is the same number in either origin convention because the letterbox is
+        // symmetric, which is the only reason this can use `origin` directly.
+        let presentation = plan.presentation(for: rect)
         return cropped
             .transformed(by: CGAffineTransform(translationX: -cropped.extent.minX, y: -cropped.extent.minY))
-            .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+            .transformed(by: CGAffineTransform(scaleX: presentation.scale, y: presentation.scale))
+            .transformed(by: CGAffineTransform(
+                translationX: presentation.origin.x,
+                y: presentation.origin.y
+            ))
     }
 
     // MARK: - Overlays
@@ -150,21 +180,24 @@ public struct StudioFrameComposer: Sendable {
     private func overlays(at time: TimeInterval, over base: CIImage) -> CIImage {
         var image = base
         let cursor = reconstruction.cursor(at: time, path: cursorPath, telemetry: telemetry)
-        let scale = min(plan.scale(at: time), Self.maximumOverlayScale)
+        // Looked up once for the whole frame. Every overlay needs the same answer, and
+        // `sourceRect(at:)` walks the integrated viewport table to produce it.
+        let viewport = plan.sourceRect(at: time)
+        let scale = min(plan.presentation(for: viewport).scale, Self.maximumOverlayScale)
 
         if edit.showsClicks, let press = cursor.flatMap(Press.init) {
             image = compositing(
                 ripple(progress: press.progress, scale: scale),
                 at: press.origin,
-                time: time,
+                in: viewport,
                 over: image
             )
         }
         if edit.showsCursor, let cursor {
-            image = compositingCursor(cursor, scale: scale, time: time, over: image)
+            image = compositingCursor(cursor, scale: scale, in: viewport, over: image)
         }
         if edit.showsKeystrokes, let caption = caption(at: time) {
-            image = compositing(caption.image, at: nil, time: time, over: image, placement: caption.placement)
+            image = compositing(caption.image, at: nil, in: viewport, over: image, placement: caption.placement)
         }
         return image
     }
@@ -173,7 +206,7 @@ public struct StudioFrameComposer: Sendable {
     private func compositingCursor(
         _ cursor: ReconstructedCursor,
         scale: CGFloat,
-        time: TimeInterval,
+        in viewport: CGRect,
         over base: CIImage
     ) -> CIImage {
         guard let index = cursor.cursorIndex,
@@ -183,20 +216,26 @@ public struct StudioFrameComposer: Sendable {
             return base
         }
         let recorded = telemetry.cursors[index]
-        let size = CGSize(width: recorded.size.width * scale, height: recorded.size.height * scale)
+
+        // Points into recorded pixels, then into output pixels (docs/11 S0.5).
+        //
+        // `NSCursor` measures both its size and its hotspot in points; the footage is in
+        // pixels, and on every Retina display there are two of those per point. The
+        // conversion was missing entirely — `CaptureManifest.scale` is documented as
+        // "pixels per point, so the reconstruction draws a cursor the right size", was
+        // written as a hard-coded 1, and was read by nothing — so every Retina export drew
+        // a cursor at half size.
+        //
+        // The hotspot needed the opposite correction: it was being divided by the artwork's
+        // own pixels-per-point on the belief that it arrived in pixels, which moved an
+        // I-beam's tip up and to the left of the text it was pointing at. Size and hotspot
+        // share a unit, so the only conversion either needs is the one applied to both.
+        let drawn = pointPixelScale * scale
+        let size = CGSize(width: recorded.size.width * drawn, height: recorded.size.height * drawn)
         guard size.width > 0, size.height > 0 else { return base }
 
-        // The hotspot is in the image's own pixels; the drawn image is in points scaled by
-        // the camera. Converting through the recorded point size is what keeps an I-beam's
-        // tip on the text rather than up and to the left of it.
-        let pixelsPerPoint = recorded.size.width > 0
-            ? CGFloat(artwork.width) / recorded.size.width
-            : 1
-        let hotspot = CGPoint(
-            x: recorded.hotspot.x / max(pixelsPerPoint, 0.0001) * scale,
-            y: recorded.hotspot.y / max(pixelsPerPoint, 0.0001) * scale
-        )
-        let topLeft = plan.outputPoint(cursor.position, at: time)
+        let hotspot = CGPoint(x: recorded.hotspot.x * drawn, y: recorded.hotspot.y * drawn)
+        let topLeft = plan.outputPoint(cursor.position, in: viewport)
         let rect = CGRect(
             x: topLeft.x - hotspot.x,
             y: topLeft.y - hotspot.y,
@@ -210,7 +249,7 @@ public struct StudioFrameComposer: Sendable {
     private func compositing(
         _ overlay: CGImage?,
         at sourcePoint: CGPoint?,
-        time: TimeInterval,
+        in viewport: CGRect,
         over base: CIImage,
         placement: CGRect? = nil
     ) -> CIImage {
@@ -219,7 +258,7 @@ public struct StudioFrameComposer: Sendable {
         if let placement {
             rect = placement
         } else if let sourcePoint {
-            let centre = plan.outputPoint(sourcePoint, at: time)
+            let centre = plan.outputPoint(sourcePoint, in: viewport)
             rect = CGRect(
                 x: centre.x - CGFloat(overlay.width) / 2,
                 y: centre.y - CGFloat(overlay.height) / 2,
@@ -248,66 +287,6 @@ public struct StudioFrameComposer: Sendable {
         return placed.applyingFilter("CISourceOverCompositing", parameters: [
             kCIInputBackgroundImageKey: base
         ])
-    }
-
-    // MARK: - Drawing the overlays
-
-    /// The click ripple at one instant, drawn at the size the shared metrics ask for.
-    ///
-    /// The metrics are fractions of the *recorded* area's shortest edge, so the ripple is
-    /// the same size relative to the content whatever the recording's resolution — then
-    /// scaled by the camera, because a ripple belongs to the scene and zooms with it.
-    private func ripple(progress: Double, scale: CGFloat) -> CGImage? {
-        let reference = min(plan.sourceSize.width, plan.sourceSize.height) * scale
-        let radius = reference * ClickRippleMetrics.radiusFraction(at: progress)
-        let stroke = reference * ClickRippleMetrics.strokeFraction(at: progress)
-        let opacity = ClickRippleMetrics.opacity(at: progress)
-        guard radius > 0.5, opacity > 0.001 else { return nil }
-
-        let side = Int((radius * 2 + stroke * 2).rounded(.up))
-        return BitmapCanvas.image(width: side, height: side) { context in
-            let centre = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
-            context.setStrokeColor(red: 1, green: 1, blue: 1, alpha: opacity)
-            context.setLineWidth(stroke)
-            context.strokeEllipse(in: CGRect(
-                x: centre.x - radius,
-                y: centre.y - radius,
-                width: radius * 2,
-                height: radius * 2
-            ))
-        }
-    }
-
-    /// The keystroke caption showing at `time`, and where it goes.
-    private func caption(at time: TimeInterval) -> (image: CGImage?, placement: CGRect)? {
-        // Binary-searched and walked back, rather than filtering every chord in the
-        // recording into a fresh array on every frame (docs/10 R1.2).
-        let recent = TimeSortedLookup.elements(
-            within: ClickRippleMetrics.captionDuration,
-            endingAt: time,
-            in: telemetry.keystrokes,
-            key: \.time
-        )
-        guard let last = recent.last else { return nil }
-        let opacity = ClickRippleMetrics.captionOpacity(elapsed: time - last.time)
-        guard opacity > 0.001 else { return nil }
-
-        // The last few chords rather than only the newest: somebody demonstrating ⌘⇧4 hits
-        // three keys in half a second, and a caption that replaces itself each time shows
-        // the last one and implies the others never happened.
-        let text = recent.suffix(3).map(\.caption).joined(separator: "  ")
-        let fontSize = max(plan.outputSize.height * 0.035, 12)
-        guard let image = CaptionCanvas.image(text: text, fontSize: fontSize, opacity: opacity) else {
-            return nil
-        }
-        let margin = plan.outputSize.height * 0.06
-        let placement = CGRect(
-            x: (plan.outputSize.width - CGFloat(image.width)) / 2,
-            y: plan.outputSize.height - CGFloat(image.height) - margin,
-            width: CGFloat(image.width),
-            height: CGFloat(image.height)
-        )
-        return (image, placement)
     }
 
     // MARK: - The camera bubble

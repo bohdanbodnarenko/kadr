@@ -17,28 +17,31 @@ import StudioSession
 @MainActor
 @Observable
 final class RecordingCoordinator {
-    @ObservationIgnored private let engine = RecordingEngine()
+    @ObservationIgnored let engine = RecordingEngine()
     @ObservationIgnored private let captureEngine: CaptureEngine
     @ObservationIgnored private let permissions: PermissionCoordinator
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let overlay: SelectionOverlayController
-    @ObservationIgnored private let hygiene: DesktopHygieneController?
-    @ObservationIgnored private let focus = FocusMode()
+    @ObservationIgnored let hygiene: DesktopHygieneController?
+    @ObservationIgnored let focus = FocusMode()
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
     @ObservationIgnored private let overlaySource = RecordingOverlaySource()
     /// The sidecar that makes a recording editable in the studio afterwards (docs/09 U3.1).
-    @ObservationIgnored private let studio = StudioSessionRecorder()
+    @ObservationIgnored let studio = StudioSessionRecorder()
     /// The script somebody reads from while recording (docs/08).
-    @ObservationIgnored private lazy var teleprompter = TeleprompterController(settings: settings)
-    @ObservationIgnored private let logger = KadrLog.logger(.recording)
+    @ObservationIgnored lazy var teleprompter = TeleprompterController(settings: settings)
+    @ObservationIgnored let logger = KadrLog.logger(.recording)
 
     /// What the status item shows.
-    private(set) var state: RecordingState = .idle {
+    /// Setter is target-internal rather than file-private: the pause/stop/cancel half of
+    /// this state machine lives in `RecordingCoordinator+Control.swift`, and this is the app
+    /// target — nothing outside it can reach the coordinator at all.
+    var state: RecordingState = .idle {
         didSet { onStateChanged?() }
     }
 
-    private(set) var elapsed: TimeInterval = 0 {
+    var elapsed: TimeInterval = 0 {
         didSet { onStateChanged?() }
     }
 
@@ -56,7 +59,7 @@ final class RecordingCoordinator {
     @ObservationIgnored var tickTask: Task<Void, Never>?
     @ObservationIgnored var startedAt: Date?
     @ObservationIgnored var pausedDuration: TimeInterval = 0
-    @ObservationIgnored private var pausedAt: Date?
+    @ObservationIgnored var pausedAt: Date?
 
     init(
         captureEngine: CaptureEngine,
@@ -94,8 +97,8 @@ final class RecordingCoordinator {
     ///
     /// Cleared when the recording ends, so `kadr record-screen --fps 30` cannot leave the
     /// user's Recording settings quietly changed (docs/03 §8.4).
-    @ObservationIgnored private var overrides = RecordingOverrides.none
-    @ObservationIgnored private var automationCompletion: ((CaptureOutcome) -> Void)?
+    @ObservationIgnored var overrides = RecordingOverrides.none
+    @ObservationIgnored var automationCompletion: ((CaptureOutcome) -> Void)?
 
     /// Arms the next recording with automation's overrides (docs/03 §8.4).
     func arm(_ overrides: RecordingOverrides) {
@@ -212,6 +215,26 @@ final class RecordingCoordinator {
         let wantsAny = settings.recordingShowsClicks
             || settings.recordingShowsKeystrokes
             || bakesWebcam
+        // Nothing is baked into an HDR recording (docs/11 S0.5).
+        //
+        // HDR moves the stream to `ARGB2101010LEPacked`, and `CGBitmapContext` has no
+        // representation for it — not a missing branch, an absent capability: no
+        // combination of bits-per-component, alpha and byte order CoreGraphics accepts
+        // describes that layout. It used to be described as 8-bit BGRA instead, which
+        // *succeeded*, because both are four bytes per pixel, and then reinterpreted
+        // 10-bit data as 8888 over every pixel the overlay touched. Two independent
+        // switches in the same settings pane.
+        //
+        // Skipped rather than worked around, because the studio already draws all of this
+        // at export time from the telemetry — and does it better, since an overlay that was
+        // never baked can still be turned off, moved or restyled afterwards. The user loses
+        // nothing but the preview-in-the-file, and gains a recording whose pixels are the
+        // ones the display sent.
+        guard !currentOptions.recordsHDR else {
+            logger.info("HDR recording: overlays are left to the studio rather than baked in")
+            Task { await engine.setOverlayProvider(nil) }
+            return
+        }
         guard wantsAny else {
             Task { await engine.setOverlayProvider(nil) }
             return
@@ -236,7 +259,7 @@ final class RecordingCoordinator {
 
     @ObservationIgnored private var isWindowRecording = false
     /// Follows a recorded window so a click can be placed against where it was at the time.
-    @ObservationIgnored private var windowConverter: MovingWindowConverter?
+    @ObservationIgnored var windowConverter: MovingWindowConverter?
 
     /// Starts the studio sidecar, if this recording is keeping one.
     ///
@@ -255,7 +278,11 @@ final class RecordingCoordinator {
             converter = moving.converter()
         }
 
-        studio.start(recordsCamera: settings.recordingShowsWebcam, pointConverter: converter)
+        studio.start(
+            recordsCamera: settings.recordingShowsWebcam,
+            pointConverter: converter,
+            pointPixelScale: Self.pointPixelScale(for: target)
+        )
         observeClock()
         observeGeometry()
     }
@@ -292,14 +319,14 @@ final class RecordingCoordinator {
 
     /// Stops watching where the window is. The observer holds this coordinator, so leaving
     /// it attached after a recording keeps the engine pointed at a recording that is over.
-    private func stopGeometryObserver() {
+    func stopGeometryObserver() {
         windowConverter = nil
         Task { [weak self] in await self?.engine.setGeometryObserver(nil) }
         stopClockObserver()
     }
 
     /// Tears every overlay monitor down. Called on stop, cancel and a failed start.
-    private func stopOverlays() {
+    func stopOverlays() {
         overlaySource.stop()
         overlaySource.resetClock()
         Task { await engine.setOverlayProvider(nil) }
@@ -332,132 +359,6 @@ final class RecordingCoordinator {
         return false
     }
 
-    // MARK: - Controlling
-
-    func pause() {
-        guard state == .recording else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await engine.pause()
-            } catch {
-                logger.error("Could not pause: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-            // The script holds where it is: a prompter that keeps scrolling through a
-            // pause is one the reader has to scroll back on when they resume.
-            teleprompter.pause()
-            state = .paused
-            pausedAt = Date()
-            stopTicking()
-        }
-    }
-
-    func resume() {
-        guard state == .paused else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await engine.resume()
-            } catch {
-                logger.error("Could not resume: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-            if let pausedAt {
-                // Paused time is time the user chose not to record, so the clock skips it
-                // exactly as the file does.
-                pausedDuration += Date().timeIntervalSince(pausedAt)
-            }
-            pausedAt = nil
-            state = .recording
-            teleprompter.resume()
-            // The sidecar's clock needs no nudge here. It comes from the engine, which
-            // counts composited frames and so has already left the pause out — deriving a
-            // second answer from the wall clock would only give the two something to
-            // disagree about.
-            startTicking()
-        }
-    }
-
-    /// Stops and finalises. `completion` is how `kadr stop-recording` learns the path.
-    func stop(reportingTo completion: ((CaptureOutcome) -> Void)? = nil) {
-        guard isRecording else {
-            completion?(.failed("Nothing is recording."))
-            return
-        }
-        // Stopped before the stream came up. There is no footage to finalise, so this is a
-        // cancellation — finalising would ask the engine to stop something it never started
-        // and report "recording failed to finish" for a recording that never began.
-        guard state != .starting else {
-            cancel()
-            completion?(.cancelled)
-            return
-        }
-        automationCompletion = completion
-        state = .finishing
-        stopTicking()
-        focus.disable()
-        stopOverlays()
-        stopGeometryObserver()
-        teleprompter.stop()
-        hygiene?.endRecording()
-
-        let destination = destinationURL()
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await engine.stop(savingTo: destination)
-                state = .idle
-                elapsed = 0
-                overrides = .none
-                logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
-
-                // The card goes up before the session is assembled. Linking the footage and
-                // writing the sidecar takes a moment, and making the user wait for it would
-                // put a delay between stopping and seeing the recording that the recording
-                // itself does not have.
-                report(.file(result.fileURL))
-                onFinished?(result)
-                if let session = await studio.finish(with: result) {
-                    onStudioSessionReady?(session, result)
-                }
-            } catch {
-                state = .idle
-                elapsed = 0
-                overrides = .none
-                studio.cancel()
-                logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
-                report(.failed(error.localizedDescription))
-            }
-        }
-    }
-
-    func cancel() {
-        guard isRecording else { return }
-        state = .idle
-        stopTicking()
-        focus.disable()
-        stopOverlays()
-        hygiene?.endRecording()
-        studio.cancel()
-        stopGeometryObserver()
-        teleprompter.stop()
-        Task { [weak self] in
-            await self?.engine.cancel()
-            self?.state = .idle
-            self?.elapsed = 0
-            self?.overrides = .none
-            self?.report(.cancelled)
-        }
-    }
-
-    /// Reports to whoever asked for this recording, once.
-    private func report(_ outcome: CaptureOutcome) {
-        guard let automationCompletion else { return }
-        self.automationCompletion = nil
-        automationCompletion(outcome)
-    }
-
     // MARK: - The clock the menu bar reads
 
     /// Ticks the elapsed time while recording.
@@ -465,7 +366,7 @@ final class RecordingCoordinator {
     /// Kept beside the state rather than in the plumbing extension because it writes
     /// `elapsed`, whose setter is private to this file — and an extension that cannot
     /// reach the thing it exists to update is worse than no extension.
-    private func startTicking() {
+    func startTicking() {
         stopTicking()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -476,7 +377,7 @@ final class RecordingCoordinator {
         }
     }
 
-    private func stopTicking() {
+    func stopTicking() {
         tickTask?.cancel()
         tickTask = nil
     }
