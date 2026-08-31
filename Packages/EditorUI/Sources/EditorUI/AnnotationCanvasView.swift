@@ -70,6 +70,10 @@ public final class AnnotationCanvasView: NSView {
     /// The lift the base layer currently shows, so the composite is not redone per edit.
     private var liftedFrom: SubjectLiftSpec?
     private var marqueeLayer = CAShapeLayer()
+    /// Space-drag pans the canvas the way a hand tool does in every other image editor.
+    var spaceIsDown = false
+    var spacePanAnchor: CGPoint?
+    var spacePanClipOrigin: CGPoint?
 
     /// Called whenever the document changes, so the window can update its title bar.
     public var onDocumentChanged: (() -> Void)?
@@ -275,14 +279,16 @@ public final class AnnotationCanvasView: NSView {
     // MARK: - Mouse
 
     override public func mouseDown(with event: NSEvent) {
-        // Any click outside the field commits what is in it, which is what clicking away
-        // from a text field means everywhere else on the system.
         if textEditor.isEditing {
             textEditor.finish()
         }
 
-        // A double-click on a text annotation edits it where it sits (docs/09 U1.8).
         if event.clickCount == 2, beginEditingText(at: imagePoint(from: event)) {
+            return
+        }
+
+        if spaceIsDown {
+            beginSpacePan(with: event)
             return
         }
 
@@ -290,6 +296,28 @@ public final class AnnotationCanvasView: NSView {
         prepareEdgesIfMeasuring()
         model.pointerDown(at: imagePoint(from: event), modifiers: modifiers(from: event))
         refreshAfterEdit()
+    }
+
+    override public func mouseDragged(with event: NSEvent) {
+        if continueSpacePan(with: event) {
+            return
+        }
+        model.pointerDragged(to: imagePoint(from: event), modifiers: modifiers(from: event))
+        // The hot path: only the draft and the handles move.
+        updateDraftLayer()
+        if model.tool == .select {
+            rebuildAnnotationLayersDuringMove()
+        }
+        updateSelectionHandles()
+    }
+
+    override public func mouseUp(with event: NSEvent) {
+        if endSpacePan() {
+            return
+        }
+        model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
+        updateDraftLayer()
+        rebuildAnnotationLayers()
     }
 
     /// Opens the in-place editor over the text annotation under `point`, if there is one.
@@ -307,22 +335,6 @@ public final class AnnotationCanvasView: NSView {
         // underneath as well would double every glyph.
         layers[spec.id]?.isHidden = true
         return true
-    }
-
-    override public func mouseDragged(with event: NSEvent) {
-        model.pointerDragged(to: imagePoint(from: event), modifiers: modifiers(from: event))
-        // The hot path: only the draft and the handles move.
-        updateDraftLayer()
-        if model.tool == .select {
-            rebuildAnnotationLayersDuringMove()
-        }
-        updateSelectionHandles()
-    }
-
-    override public func mouseUp(with event: NSEvent) {
-        model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
-        updateDraftLayer()
-        rebuildAnnotationLayers()
     }
 
     /// Reads the base image's edges the first time the measure tool is used.
@@ -369,6 +381,21 @@ public final class AnnotationCanvasView: NSView {
     // MARK: - Keyboard
 
     override public func keyDown(with event: NSEvent) {
+        if event.isARepeat, event.keyCode == 49 {
+            return
+        }
+        if event.keyCode == 49, !event.modifierFlags.contains(.command) {
+            spaceIsDown = true
+            window?.invalidateCursorRects(for: self)
+            return
+        }
+
+        let command = event.modifierFlags.contains(.command)
+        if command {
+            super.keyDown(with: event)
+            return
+        }
+
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         switch event.keyCode {
         case 51, 117: // Delete, forward delete
@@ -377,7 +404,12 @@ public final class AnnotationCanvasView: NSView {
         case 124: model.nudgeSelection(dx: step, dy: 0)
         case 125: model.nudgeSelection(dx: 0, dy: step)
         case 126: model.nudgeSelection(dx: 0, dy: -step)
-        case 53: model.selection = []
+        case 53: // Escape
+            if model.tool != .select {
+                model.tool = .select
+            } else {
+                model.selection = []
+            }
         default:
             // A bare letter picks a tool (docs/03 §3).
             guard !event.modifierFlags.contains(.command),
@@ -388,9 +420,20 @@ public final class AnnotationCanvasView: NSView {
                 return
             }
             model.tool = tool
+            window?.invalidateCursorRects(for: self)
             return
         }
         refreshAfterEdit()
+    }
+
+    override public func keyUp(with event: NSEvent) {
+        if event.keyCode == 49 {
+            spaceIsDown = false
+            endSpacePan()
+            window?.invalidateCursorRects(for: self)
+            return
+        }
+        super.keyUp(with: event)
     }
 
     private func refreshAfterEdit() {
@@ -416,9 +459,26 @@ public final class AnnotationCanvasView: NSView {
         layoutCanvasChrome()
         refreshBaseImage()
         rebuildAnnotationLayers()
+        window?.invalidateCursorRects(for: self)
     }
 
     override public func resetCursorRects() {
-        addCursorRect(bounds, cursor: model.tool == .select ? .arrow : .crosshair)
+        addCursorRect(bounds, cursor: canvasCursor)
+    }
+
+    private var canvasCursor: NSCursor {
+        if spaceIsDown {
+            return spacePanAnchor == nil ? NSCursor.openHand : NSCursor.closedHand
+        }
+        switch model.tool {
+        case .select:
+            return NSCursor.arrow
+        case .text:
+            return NSCursor.iBeam
+        case .crop:
+            return NSCursor.crosshair
+        default:
+            return NSCursor.crosshair
+        }
     }
 }

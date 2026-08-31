@@ -17,6 +17,7 @@ public struct EditorRootView: View {
 
     @State private var canvasSession = EditorCanvasSession()
     @State private var isInspectorPresented = true
+    @State private var showsCopiedToast = false
 
     /// What the toolbar's export controls ask for.
     public enum ExportAction: Sendable {
@@ -46,7 +47,7 @@ public struct EditorRootView: View {
             EditorToolbar(
                 model: model,
                 isInspectorPresented: $isInspectorPresented,
-                onExport: onExport,
+                onExport: handleExport,
                 onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } },
                 onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } }
             )
@@ -69,6 +70,13 @@ public struct EditorRootView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: isInspectorPresented)
         }
+        .overlay {
+            if showsCopiedToast {
+                EditorCopiedToast()
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: showsCopiedToast)
         .frame(minWidth: 720, minHeight: 480)
         .background(zoomKeyCommands)
     }
@@ -122,10 +130,24 @@ public struct EditorRootView: View {
                 .keyboardShortcut("1", modifiers: .command)
             Button("Actual Size") { canvasSession.setPercent(100) }
                 .keyboardShortcut("0", modifiers: .command)
+            Button("Select All") { model.selectAll() }
+                .keyboardShortcut("a", modifiers: .command)
+            Button("Duplicate") { model.duplicateSelection() }
+                .keyboardShortcut("d", modifiers: .command)
         }
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
+    }
+
+    private func handleExport(_ action: ExportAction) {
+        onExport(action)
+        guard action == .copy || action == .copyWithoutAnnotations else { return }
+        showsCopiedToast = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1400))
+            showsCopiedToast = false
+        }
     }
 
     private func runAutoRedact() async {

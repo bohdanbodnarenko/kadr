@@ -9,15 +9,27 @@ struct EditorInspector: View {
     @Bindable var model: EditorDocumentModel
 
     private var tool: AnnotationTool {
-        model.tool.annotation ?? .arrow
+        if let id = model.selection.first,
+           let command = model.document.command(id),
+           command.isSelectable
+        {
+            return command.tool
+        }
+        return model.tool.annotation ?? .arrow
     }
 
     var body: some View {
         Form {
-            Section(model.tool.title) {
+            Section(tool.title) {
                 if tool != .crop, tool != .counter {
-                    colorPicker
-                    widthPicker
+                    EditorSwatchStrip(
+                        selected: model.styleMemory.stroke(for: tool).color,
+                        onSelect: { model.applyColor($0) }
+                    )
+                    EditorStrokeWidthStrip(
+                        selected: model.styleMemory.stroke(for: tool).width,
+                        onSelect: { model.applyStrokeWidth($0) }
+                    )
                 }
                 switch tool {
                 case .arrow: arrowOptions
@@ -39,6 +51,7 @@ struct EditorInspector: View {
 
             if !model.selection.isEmpty {
                 Section("Selection") {
+                    Button("Duplicate") { model.duplicateSelection() }
                     Button("Bring to Front") { model.bringSelectionToFront() }
                     Button("Bring Forward") { model.bringSelectionForward() }
                         .keyboardShortcut("]", modifiers: .command)
@@ -49,7 +62,10 @@ struct EditorInspector: View {
                 }
             }
 
-            EditorCropInspector(model: model)
+            if model.tool == .crop {
+                EditorCropInspector(model: model)
+            }
+
             EditorStylePresetInspector(model: model)
             EditorBeautifyInspector(model: model)
             EditorCameraInspector(model: model)
@@ -142,46 +158,34 @@ struct EditorInspector: View {
         }
     }
 
-    private var colorPicker: some View {
-        ColorPicker("Colour", selection: Binding(
-            get: { Color(model.styleMemory.stroke(for: tool).color) },
-            set: { newValue in
-                var stroke = model.styleMemory.stroke(for: tool)
-                stroke.color = AnnotationColor(newValue)
-                model.styleMemory.remember(stroke, for: tool)
-            }
-        ))
-    }
-
-    private var widthPicker: some View {
-        Picker("Width", selection: Binding(
-            get: { model.styleMemory.stroke(for: tool).width },
-            set: { newValue in
-                var stroke = model.styleMemory.stroke(for: tool)
-                stroke.width = newValue
-                model.styleMemory.remember(stroke, for: tool)
-            }
-        )) {
-            ForEach(StrokeStyle.widthPresets, id: \.self) { width in
-                Text("\(Int(width)) pt").tag(width)
-            }
-        }
-    }
-
     private var arrowOptions: some View {
-        Picker("Head", selection: $model.styleMemory.lastArrowHead) {
+        Picker("Head", selection: Binding(
+            get: { model.styleMemory.lastArrowHead },
+            set: { model.applyArrowHead($0) }
+        )) {
             ForEach(ArrowHead.allCases, id: \.self) { head in
                 Text(head.title).tag(head)
             }
         }
     }
 
+    @ViewBuilder
     private var shapeOptions: some View {
+        Picker("Shape", selection: Binding(
+            get: { ShapeKind.Family(model.styleMemory.lastShapeKind) },
+            set: { model.applyShapeKind($0.kind) }
+        )) {
+            ForEach(ShapeKind.Family.allCases) { family in
+                Text(family.title).tag(family)
+            }
+        }
+        .pickerStyle(.segmented)
+
         Toggle("Filled", isOn: Binding(
             get: { model.styleMemory.fill(for: .shape).color != nil },
             set: { isFilled in
                 let colour = model.styleMemory.stroke(for: .shape).color.withAlpha(0.25)
-                model.styleMemory.remember(FillStyle(color: isFilled ? colour : nil), for: .shape)
+                model.applyShapeFill(isFilled ? colour : nil)
             }
         ))
     }

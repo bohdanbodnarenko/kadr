@@ -11,29 +11,68 @@ struct EditorToolbar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            tools
-            Divider().frame(height: 18)
-            historyControls
+            if model.tool == .crop {
+                historyControls
+                Divider().frame(height: 18)
+                cropControls
+            } else {
+                tools
+                Divider().frame(height: 18)
+                historyControls
+            }
             Spacer(minLength: 8)
-            if onAutoRedact != nil {
-                autoRedact
+            if model.tool != .crop {
+                if onAutoRedact != nil {
+                    autoRedact
+                }
+                if onRemoveBackground != nil {
+                    removeBackground
+                }
+                exportControls
             }
-            if onRemoveBackground != nil {
-                removeBackground
-            }
-            exportControls
             Button {
                 isInspectorPresented.toggle()
             } label: {
                 Image(systemName: "sidebar.right")
             }
             .buttonStyle(.borderless)
-            .help(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+            .keyboardShortcut("i", modifiers: .command)
+            .help(isInspectorPresented ? "Hide Inspector (⌘I)" : "Show Inspector (⌘I)")
             .accessibilityLabel(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(.bar)
+    }
+
+    private var cropControls: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "crop")
+                .foregroundStyle(.secondary)
+            Picker("Ratio", selection: Binding(
+                get: { model.cropAspect },
+                set: { model.applyCropAspect($0) }
+            )) {
+                ForEach(CropAspectPreset.allCases, id: \.self) { preset in
+                    Text(preset.title).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 120)
+            .help("Aspect ratio")
+
+            if model.document.crop != nil {
+                Button("Reset") { model.clearCrop() }
+                    .controlSize(.small)
+            }
+
+            Button("Done") {
+                model.tool = .select
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .help("Finish cropping (Escape)")
+        }
     }
 
     private var autoRedact: some View {

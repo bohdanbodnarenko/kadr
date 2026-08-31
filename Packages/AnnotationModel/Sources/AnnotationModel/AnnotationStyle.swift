@@ -33,6 +33,19 @@ public struct AnnotationColor: Codable, Hashable, Sendable {
     public static let white = AnnotationColor(red: 1, green: 1, blue: 1)
     public static let black = AnnotationColor(red: 0, green: 0, blue: 0)
 
+    /// The strip the inspector offers, so a colour is one click rather than a picker hunt.
+    public static let annotationSwatches: [AnnotationColor] = [
+        .annotationRed,
+        AnnotationColor(red: 1, green: 0.55, blue: 0.14),
+        AnnotationColor(red: 1, green: 0.84, blue: 0.04),
+        AnnotationColor(red: 0.22, green: 0.78, blue: 0.35),
+        AnnotationColor(red: 0.13, green: 0.59, blue: 0.95),
+        AnnotationColor(red: 0.45, green: 0.37, blue: 0.95),
+        AnnotationColor(red: 0.93, green: 0.32, blue: 0.62),
+        .white,
+        .black
+    ]
+
     public func withAlpha(_ alpha: Double) -> AnnotationColor {
         AnnotationColor(red: red, green: green, blue: blue, alpha: alpha)
     }
@@ -96,6 +109,50 @@ public enum ShapeKind: Codable, Hashable, Sendable {
     case rectangle
     case roundedRectangle(cornerRadius: CGFloat)
     case ellipse
+
+    /// The three choices the inspector shows. Rounded keeps a default radius so picking
+    /// the family does not also ask for a corner size.
+    public enum Family: String, CaseIterable, Identifiable, Sendable {
+        case rectangle
+        case rounded
+        case ellipse
+
+        public var id: String {
+            rawValue
+        }
+
+        public var title: String {
+            switch self {
+            case .rectangle: "Rectangle"
+            case .rounded: "Rounded"
+            case .ellipse: "Ellipse"
+            }
+        }
+
+        public var symbolName: String {
+            switch self {
+            case .rectangle: "rectangle"
+            case .rounded: "rounded.rectangle"
+            case .ellipse: "oval"
+            }
+        }
+
+        public var kind: ShapeKind {
+            switch self {
+            case .rectangle: .rectangle
+            case .rounded: .roundedRectangle(cornerRadius: 12)
+            case .ellipse: .ellipse
+            }
+        }
+
+        public init(_ kind: ShapeKind) {
+            switch kind {
+            case .rectangle: self = .rectangle
+            case .roundedRectangle: self = .rounded
+            case .ellipse: self = .ellipse
+            }
+        }
+    }
 }
 
 /// How a region is obscured (docs/03 §3).
