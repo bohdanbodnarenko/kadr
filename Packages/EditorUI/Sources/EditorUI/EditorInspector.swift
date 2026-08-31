@@ -9,13 +9,7 @@ struct EditorInspector: View {
     @Bindable var model: EditorDocumentModel
 
     private var tool: AnnotationTool {
-        if let id = model.selection.first,
-           let command = model.document.command(id),
-           command.isSelectable
-        {
-            return command.tool
-        }
-        return model.tool.annotation ?? .arrow
+        model.inspectedTool ?? .arrow
     }
 
     var body: some View {

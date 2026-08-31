@@ -6,7 +6,7 @@ public extension EditorDocumentModel {
     /// Paints the current tool's memory *and* whatever is selected, which is what changing
     /// a colour in an editor means (docs/03 §3).
     func applyColor(_ color: AnnotationColor) {
-        if let annotation = tool.annotation {
+        if let annotation = inspectedTool {
             var stroke = styleMemory.stroke(for: annotation)
             stroke.color = color
             styleMemory.remember(stroke, for: annotation)
@@ -20,7 +20,7 @@ public extension EditorDocumentModel {
     }
 
     func applyStrokeWidth(_ width: CGFloat) {
-        if let annotation = tool.annotation {
+        if let annotation = inspectedTool {
             var stroke = styleMemory.stroke(for: annotation)
             stroke.width = width
             styleMemory.remember(stroke, for: annotation)

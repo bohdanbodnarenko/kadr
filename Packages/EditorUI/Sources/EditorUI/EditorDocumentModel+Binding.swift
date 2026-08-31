@@ -54,12 +54,16 @@ extension EditorDocumentModel {
     /// Closes the gesture the editing opened, and drops an annotation left empty.
     func commitTextEdit(_ id: AnnotationID) {
         document.endGesture()
-        guard case let .text(spec)? = document.command(id),
-              spec.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return
+        if case let .text(spec)? = document.command(id) {
+            if spec.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                document.remove([id])
+            }
         }
-        document.remove([id])
+        // Typing was the rest of the text tool's gesture, so the pointer returns to
+        // Select the way finishing an arrow does (docs/03 §3).
+        if tool == .text {
+            tool = .select
+        }
     }
 
     // MARK: - Crop (docs/09 U1.8)

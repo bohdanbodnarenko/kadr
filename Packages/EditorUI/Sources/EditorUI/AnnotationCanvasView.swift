@@ -48,6 +48,7 @@ public final class AnnotationCanvasView: NSView {
             model.commitTextEdit(id)
             layers[id]?.isHidden = false
             rebuildAnnotationLayers()
+            window?.invalidateCursorRects(for: self)
         }
         return editor
     }()
@@ -61,7 +62,7 @@ public final class AnnotationCanvasView: NSView {
     private let logger = KadrLog.logger(.overlay)
 
     /// Layers by annotation, so an update finds its own layer without a search.
-    private var layers: [AnnotationID: CALayer] = [:]
+    var layers: [AnnotationID: CALayer] = [:]
     private var draftShapeLayer: CALayer?
     /// Kept so the measure tool can read the image's straight edges the first time it is
     /// used — never at open, because most sessions never measure anything (docs/06 M21).
@@ -287,6 +288,12 @@ public final class AnnotationCanvasView: NSView {
             return
         }
 
+        // A click with the text tool on existing text edits it, rather than stacking
+        // another box on top — the same as Screendrop.
+        if model.tool == .text, beginEditingText(at: imagePoint(from: event)) {
+            return
+        }
+
         if spaceIsDown {
             beginSpacePan(with: event)
             return
@@ -318,23 +325,10 @@ public final class AnnotationCanvasView: NSView {
         model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
         updateDraftLayer()
         rebuildAnnotationLayers()
-    }
-
-    /// Opens the in-place editor over the text annotation under `point`, if there is one.
-    private func beginEditingText(at point: CGPoint) -> Bool {
-        let candidates = model.document.commands.filter { $0.tool == .text }
-        guard let hit = AnnotationHitTesting.topmost(in: candidates, at: point),
-              case let .text(spec) = hit
-        else {
-            return false
+        if let id = model.consumePendingTextEdit() {
+            beginEditingText(id)
         }
-
-        model.document.selection = [spec.id]
-        textEditor.begin(editing: spec, in: self)
-        // The annotation is drawn by the field while it is being edited; drawing it
-        // underneath as well would double every glyph.
-        layers[spec.id]?.isHidden = true
-        return true
+        window?.invalidateCursorRects(for: self)
     }
 
     /// Reads the base image's edges the first time the measure tool is used.
@@ -406,7 +400,7 @@ public final class AnnotationCanvasView: NSView {
         case 126: model.nudgeSelection(dx: 0, dy: -step)
         case 53: // Escape
             if model.tool != .select {
-                model.tool = .select
+                model.selectTool(.select)
             } else {
                 model.selection = []
             }
@@ -419,7 +413,7 @@ public final class AnnotationCanvasView: NSView {
                 super.keyDown(with: event)
                 return
             }
-            model.tool = tool
+            model.selectTool(tool)
             window?.invalidateCursorRects(for: self)
             return
         }

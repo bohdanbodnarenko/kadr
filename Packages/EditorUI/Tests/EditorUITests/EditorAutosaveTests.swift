@@ -98,6 +98,7 @@ struct EditorAutosaveTests {
         #expect(!model.hasUnsavedChanges)
 
         // …and editing after a save makes it dirty again.
+        model.tool = .shape
         model.pointerDown(at: CGPoint(x: 80, y: 10))
         model.pointerDragged(to: CGPoint(x: 120, y: 40))
         model.pointerUp(at: CGPoint(x: 120, y: 40))

@@ -35,6 +35,12 @@ public final class EditorDocumentModel {
     public var tool: EditorTool = .select
     public var styleMemory = StyleMemory()
 
+    /// A text annotation that was just placed and should open the in-place editor.
+    ///
+    /// The canvas consumes this on mouse-up. Placing the box is not the end of the
+    /// gesture — typing is — so the text tool stays armed until that editor commits.
+    public internal(set) var pendingTextEditID: AnnotationID?
+
     /// Auto-redaction review. These sit outside the document until the user accepts
     /// (docs/03 §3, docs/06 M18) — detecting a secret must not blur it on its own.
     public internal(set) var redactionCandidates: [RedactionCandidate] = []
@@ -201,6 +207,7 @@ public final class EditorDocumentModel {
         document.add(bindingArrowEnds(of: draft))
         document.selection = [draft.id]
         rememberStyle(of: draft)
+        finishAppliedTool(placed: draft.id)
     }
 
     // MARK: - Selection
@@ -278,6 +285,11 @@ public final class EditorDocumentModel {
 
     public func selectAll() {
         document.selection = Set(document.commands.filter(\.isSelectable).map(\.id))
+        // ⌘A is a selection gesture, so the pointer has to be in Select — otherwise
+        // the next click would draw rather than move what was just selected.
+        if tool != .select {
+            tool = .select
+        }
     }
 
     // MARK: - Z-order
@@ -336,17 +348,6 @@ public final class EditorDocumentModel {
         case .counter, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
             return nil
         }
-    }
-
-    /// Counters are placed with a click, and auto-increment (docs/03 §3).
-    private func place(_ annotationTool: AnnotationTool, at point: CGPoint) {
-        guard annotationTool == .counter else { return }
-        let command = AnnotationCommand.counter(CounterSpec(
-            number: document.nextCounterNumber,
-            center: point
-        ))
-        document.add(command)
-        document.selection = [command.id]
     }
 
     private func update(

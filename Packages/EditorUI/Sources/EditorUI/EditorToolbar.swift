@@ -67,7 +67,7 @@ struct EditorToolbar: View {
             }
 
             Button("Done") {
-                model.tool = .select
+                model.selectTool(.select)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
@@ -113,7 +113,7 @@ struct EditorToolbar: View {
         HStack(spacing: 1) {
             ForEach(tools, id: \.self) { tool in
                 Button {
-                    model.tool = tool
+                    model.selectTool(tool)
                 } label: {
                     Image(systemName: tool.symbolName)
                         .font(.system(size: 13, weight: .medium))

@@ -129,6 +129,75 @@ struct EditorDraftingTests {
             return nil
         }
         #expect(numbers == [1, 2])
+        #expect(model.tool == .counter, "counters stay armed so 1, 2, 3… can be placed in sequence")
+    }
+
+    @Test("A one-shot tool returns to Select after it lands", arguments: [
+        EditorTool.arrow, .shape, .line, .redaction
+    ])
+    func oneShotToolReturnsToSelect(tool: EditorTool) {
+        let model = makeModel()
+        model.tool = tool
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+
+        #expect(model.tool == .select)
+        #expect(model.selection.count == 1, "the new annotation stays selected so it can be moved")
+    }
+
+    @Test("A discarded click does not switch tools")
+    func discardedClickKeepsTheTool() {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerUp(at: CGPoint(x: 10, y: 10))
+
+        #expect(model.document.commands.isEmpty)
+        #expect(model.tool == .shape)
+    }
+
+    @Test("A repeatable stroke tool stays armed", arguments: [
+        EditorTool.freehand, .highlighter, .crop, .measure
+    ])
+    func repeatableToolStaysArmed(tool: EditorTool) {
+        let model = makeModel()
+        model.tool = tool
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+
+        #expect(model.tool == tool)
+    }
+
+    @Test("Placing text keeps the tool armed until the editor commits")
+    func textReturnsToSelectAfterCommit() throws {
+        let model = makeModel()
+        model.tool = .text
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 40))
+        model.pointerUp(at: CGPoint(x: 80, y: 40))
+
+        let id = try #require(model.consumePendingTextEdit())
+        #expect(model.tool == .text, "typing is the rest of the gesture")
+
+        model.commitTextEdit(id)
+        #expect(model.tool == .select)
+    }
+
+    @Test("Picking a drawing tool clears the leftover selection")
+    func selectToolClearsSelection() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.selection = [target.id]
+
+        model.selectTool(.arrow)
+        #expect(model.selection.isEmpty)
+        #expect(model.tool == .arrow)
+
+        model.selection = [target.id]
+        model.selectTool(.select)
+        #expect(model.selection == [target.id], "returning to Select keeps what was selected")
     }
 
     @Test("Every drawing tool produces its own kind of annotation", arguments: [
@@ -293,10 +362,12 @@ struct EditorSelectionTests {
         let target = shape(CGRect(x: 0, y: 0, width: 10, height: 10))
         let crop = AnnotationCommand.crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100)))
         let model = makeModel([target, crop])
+        model.tool = .arrow
 
         model.selectAll()
 
         #expect(model.selection == [target.id])
+        #expect(model.tool == .select)
     }
 
     @Test("Undo reaches back through a drag")
@@ -350,5 +421,13 @@ struct EditorToolTests {
             .beautify, .subjectLift, .image, .camera, .progressiveBlur, .watermark
         ]
         #expect(reachable == Set(AnnotationTool.allCases).subtracting(chrome))
+    }
+
+    @Test("One-shot tools return to Select; repeatable tools stay armed")
+    func returnsToSelectAfterUse() {
+        let oneShot: Set<EditorTool> = [.arrow, .shape, .line, .text, .redaction]
+        for tool in EditorTool.allCases {
+            #expect(tool.returnsToSelectAfterUse == oneShot.contains(tool), "\(tool)")
+        }
     }
 }
