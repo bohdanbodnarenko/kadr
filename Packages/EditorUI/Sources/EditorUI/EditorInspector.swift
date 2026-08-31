@@ -77,37 +77,37 @@ struct EditorInspector: View {
     private var imageSection: some View {
         if let image = model.selectedImage {
             Section("Image") {
-                LabeledContent("Size") {
-                    Slider(
-                        value: Binding(
-                            get: { Double(image.scaleFactor) },
-                            set: { factor in
-                                model.updateSelectedImage { $0.scale(to: CGFloat(factor)) }
-                            }
-                        ),
-                        in: 0.1 ... 4
-                    )
-                }
-                LabeledContent("Opacity") {
-                    Slider(
-                        value: Binding(
-                            get: { image.opacity },
-                            set: { value in model.updateSelectedImage { $0.opacity = value } }
-                        ),
-                        in: 0.1 ... 1
-                    )
-                }
-                LabeledContent("Corners") {
-                    Slider(
-                        value: Binding(
-                            get: { Double(image.cornerRadius) },
-                            set: { value in
-                                model.updateSelectedImage { $0.cornerRadius = CGFloat(value) }
-                            }
-                        ),
-                        in: 0 ... 40
-                    )
-                }
+                InspectorSlider(
+                    title: "Size",
+                    value: Binding(
+                        get: { Double(image.scaleFactor) },
+                        set: { factor in
+                            model.updateSelectedImage { $0.scale(to: CGFloat(factor)) }
+                        }
+                    ),
+                    range: 0.1 ... 4,
+                    format: .multiplier
+                )
+                InspectorSlider(
+                    title: "Opacity",
+                    value: Binding(
+                        get: { image.opacity },
+                        set: { value in model.updateSelectedImage { $0.opacity = value } }
+                    ),
+                    range: 0.1 ... 1,
+                    format: .percent
+                )
+                InspectorSlider(
+                    title: "Corners",
+                    value: Binding(
+                        get: { Double(image.cornerRadius) },
+                        set: { value in
+                            model.updateSelectedImage { $0.cornerRadius = CGFloat(value) }
+                        }
+                    ),
+                    range: 0 ... 40,
+                    format: .points
+                )
                 Toggle("Shadow", isOn: Binding(
                     get: { image.hasShadow },
                     set: { value in model.updateSelectedImage { $0.hasShadow = value } }

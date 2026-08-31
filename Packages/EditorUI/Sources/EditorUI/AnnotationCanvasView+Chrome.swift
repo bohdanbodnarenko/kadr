@@ -30,6 +30,7 @@ extension AnnotationCanvasView {
             cameraLayer.isHidden = true
             cameraLayer.contents = nil
             contentHost.isHidden = false
+            setDrawingLayersHidden(false)
             backdropLayer.opacity = 1
             return
         }
@@ -87,6 +88,7 @@ extension AnnotationCanvasView {
             // legible — the alternative is a blank editor.
             cameraLayer.isHidden = true
             contentHost.isHidden = false
+            setDrawingLayersHidden(false)
             backdropLayer.opacity = 1
             return
         }
@@ -97,11 +99,21 @@ extension AnnotationCanvasView {
     /// Puts the offscreen render on screen and hides everything it already contains.
     private func showOffscreenLayer() {
         contentHost.isHidden = true
+        setDrawingLayersHidden(true)
         shadowLayer.isHidden = true
         backdropLayer.opacity = 0
         cameraLayer.isHidden = false
         cameraLayer.frame = CGRect(origin: .zero, size: model.document.canvasRect.size)
         cameraLayer.contentsGravity = .resize
+    }
+
+    /// Annotation chrome lives on the canvas, not inside the card — hide it when the
+    /// flattened offscreen render is covering that same drawing.
+    private func setDrawingLayersHidden(_ hidden: Bool) {
+        annotationLayer.isHidden = hidden
+        reviewLayer.isHidden = hidden
+        draftLayer.isHidden = hidden
+        selectionLayer.isHidden = hidden
     }
 
     func layoutCanvasChrome() {
@@ -121,7 +133,7 @@ extension AnnotationCanvasView {
             contentHost.masksToBounds = false
             contentHost.borderWidth = 1
             contentHost.borderColor = NSColor.separatorColor.cgColor
-            let drawing = CGRect(origin: .zero, size: imageBounds.size)
+            let drawing = model.document.imageSpaceFrame
             baseLayer.frame = drawing
             annotationLayer.frame = drawing
             draftLayer.frame = drawing
@@ -155,13 +167,15 @@ extension AnnotationCanvasView {
         cardMask.path = cardPath
         contentHost.mask = cardMask
 
-        let drawing = CGRect(
+        // The screenshot stays inside the card (and its rounded clip). Annotations live
+        // on the canvas, so an arrow can start on the padding.
+        baseLayer.frame = CGRect(
             x: -content.minX,
             y: -content.minY,
             width: imageBounds.width,
             height: imageBounds.height
         )
-        baseLayer.frame = drawing
+        let drawing = model.document.imageSpaceFrame
         annotationLayer.frame = drawing
         draftLayer.frame = drawing
         selectionLayer.frame = drawing

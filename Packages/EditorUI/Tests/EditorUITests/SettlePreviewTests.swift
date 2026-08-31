@@ -318,6 +318,21 @@ struct ExpensiveChromeTests {
         #expect(!view.contentHost.isHidden)
     }
 
+    @Test("Drawing layers sit on the canvas, not inside the card")
+    func annotationsAreNotClippedToTheCard() throws {
+        let model = EditorDocumentModel(document: AnnotationDocument(
+            baseImage: BaseImageReference(size: CGSize(width: 400, height: 300), scale: 2)
+        ))
+        model.applyBeautify(BeautifySpec(padding: .points(40), shadow: .none, aspect: .original))
+        let view = try AnnotationCanvasView(model: model, baseImage: Self.image())
+        view.layoutCanvasChrome()
+
+        #expect(view.annotationLayer.superlayer !== view.contentHost)
+        #expect(abs(view.annotationLayer.frame.minX - 40) < 0.5)
+        #expect(abs(view.annotationLayer.frame.minY - 40) < 0.5)
+        #expect(!view.annotationLayer.masksToBounds)
+    }
+
     /// The bug: `contentHost` holds the annotation layers and the offscreen path hides it,
     /// so a newly drawn annotation stayed invisible until something else triggered a
     /// chrome pass. Rebuilding the layers now says the render is stale.

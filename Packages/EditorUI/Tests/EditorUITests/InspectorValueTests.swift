@@ -66,7 +66,7 @@ struct InspectorValueTests {
         #expect(try #require(InspectorValueFormat.degrees.value(from: text)) == 30)
     }
 
-    @Test("Point spellings too", arguments: ["12px", "12 pt", "12 pixels", "12"])
+    @Test("Point spellings too", arguments: ["12px", "12 pt", "12 pts", "12 pixels", "12"])
     func pointSpellings(text: String) throws {
         #expect(try #require(InspectorValueFormat.points.value(from: text)) == 12)
     }
@@ -114,5 +114,30 @@ struct InspectorValueTests {
         #expect(abs(InspectorValueFormat.percent.stepped(0.45, by: 1) - 0.46) < 0.0001)
         #expect(InspectorValueFormat.degrees.stepped(30, by: -1) == 29)
         #expect(InspectorValueFormat.points.stepped(12, by: 5) == 17)
+        #expect(abs(InspectorValueFormat.multiplier.stepped(1.5, by: 1) - 1.51) < 0.0001)
+        #expect(abs(InspectorValueFormat.seconds.stepped(1.5, by: -1) - 1.4) < 0.0001)
+    }
+
+    @Test("A signed range writes a leading plus so the field matches the detent")
+    func signedPlus() {
+        #expect(InspectorValueFormat.degrees(signed: true).string(for: 30) == "+30°")
+        #expect(InspectorValueFormat.degrees(signed: true).string(for: -30) == "-30°")
+        #expect(InspectorValueFormat.degrees(signed: true).string(for: 0) == "0°")
+        #expect(InspectorValueFormat.percent(signed: true).string(for: 0.45) == "+45%")
+    }
+
+    @Test("The focused field shows the number without the suffix")
+    func editingOmitsSuffix() {
+        #expect(InspectorValueFormat.percent.editingString(for: 0.45) == "45")
+        #expect(InspectorValueFormat.points.editingString(for: 12) == "12")
+        #expect(InspectorValueFormat.multiplier.editingString(for: 1.5) == "1.50")
+        #expect(InspectorValueFormat.seconds.editingString(for: 1.5) == "1.5")
+    }
+
+    @Test("Seconds are written with a unit and read back")
+    func secondsRoundTrip() throws {
+        #expect(InspectorValueFormat.seconds.string(for: 1.5) == "1.5 s")
+        #expect(try #require(InspectorValueFormat.seconds.value(from: "1.5 s")) == 1.5)
+        #expect(try #require(InspectorValueFormat.seconds.value(from: "2sec")) == 2)
     }
 }

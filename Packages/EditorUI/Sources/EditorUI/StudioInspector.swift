@@ -194,33 +194,33 @@ struct StudioInspector: View {
     private var selectedZoomSection: some View {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
             Section("Zoom") {
-                LabeledContent("Magnification") {
-                    Slider(
-                        value: Binding(
-                            get: { cue.magnification },
-                            set: { value in model.updateZoom(id) { $0.magnification = value } }
-                        ),
-                        in: 1 ... ZoomCue.maximumMagnification
-                    )
-                }
-                LabeledContent("Hold") {
-                    Slider(
-                        value: Binding(
-                            get: { cue.duration },
-                            set: { value in model.updateZoom(id) { $0.duration = value } }
-                        ),
-                        in: 0.2 ... max(model.edit.duration, 1)
-                    )
-                }
-                LabeledContent("Move") {
-                    Slider(
-                        value: Binding(
-                            get: { cue.transitionDuration },
-                            set: { value in model.updateZoom(id) { $0.transitionDuration = value } }
-                        ),
-                        in: 0.1 ... 2
-                    )
-                }
+                InspectorSlider(
+                    title: "Magnification",
+                    value: Binding(
+                        get: { cue.magnification },
+                        set: { value in model.updateZoom(id) { $0.magnification = value } }
+                    ),
+                    range: 1 ... ZoomCue.maximumMagnification,
+                    format: .multiplier
+                )
+                InspectorSlider(
+                    title: "Hold",
+                    value: Binding(
+                        get: { cue.duration },
+                        set: { value in model.updateZoom(id) { $0.duration = value } }
+                    ),
+                    range: 0.2 ... max(model.edit.duration, 1),
+                    format: .seconds
+                )
+                InspectorSlider(
+                    title: "Move",
+                    value: Binding(
+                        get: { cue.transitionDuration },
+                        set: { value in model.updateZoom(id) { $0.transitionDuration = value } }
+                    ),
+                    range: 0.1 ... 2,
+                    format: .seconds
+                )
                 Button("Remove zoom", role: .destructive) { model.removeSelectedZoom() }
             }
         }
@@ -252,22 +252,14 @@ struct StudioInspector: View {
     /// (docs/10 R3.5).
     private var cropSection: some View {
         Section("Crop") {
-            LabeledContent("Left") {
-                Slider(value: cropX, in: 0 ... 0.9)
-            }
+            InspectorSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
             // "Top", not "Bottom" (docs/11 S2). `cropRect` is normalised source space and
             // the renderer treats it as top-left throughout — `pixelCrop` hands the plan a
             // rect it offsets by `crop.minY` and the composer flips once at the very end.
             // So raising this slider moves the crop *down*, and the label said the opposite.
-            LabeledContent("Top") {
-                Slider(value: cropY, in: 0 ... 0.9)
-            }
-            LabeledContent("Width") {
-                Slider(value: cropWidth, in: 0.1 ... 1)
-            }
-            LabeledContent("Height") {
-                Slider(value: cropHeight, in: 0.1 ... 1)
-            }
+            InspectorSlider(title: "Top", value: cropY, range: 0 ... 0.9, format: .percent)
+            InspectorSlider(title: "Width", value: cropWidth, range: 0.1 ... 1, format: .percent)
+            InspectorSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
             Button("Reset crop") { model.change { $0.cropRect = nil } }
                 .disabled(model.edit.cropRect == nil)
         }
@@ -337,18 +329,28 @@ struct StudioInspector: View {
             )) {
                 ForEach(BubblePlacement.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            LabeledContent("Size") {
-                Slider(value: Binding(
+            InspectorSlider(
+                title: "Size",
+                value: Binding(
                     get: { model.edit.camera.sizeFraction },
-                    set: { value in model.change(coalescingAs: "camera.size") { $0.camera.sizeFraction = value } }
-                ), in: 0.08 ... 0.6)
-            }
-            LabeledContent("Roundness") {
-                Slider(value: Binding(
+                    set: { value in
+                        model.change(coalescingAs: "camera.size") { $0.camera.sizeFraction = value }
+                    }
+                ),
+                range: 0.08 ... 0.6,
+                format: .percent
+            )
+            InspectorSlider(
+                title: "Roundness",
+                value: Binding(
                     get: { model.edit.camera.roundness },
-                    set: { value in model.change(coalescingAs: "camera.roundness") { $0.camera.roundness = value } }
-                ), in: 0 ... 1)
-            }
+                    set: { value in
+                        model.change(coalescingAs: "camera.roundness") { $0.camera.roundness = value }
+                    }
+                ),
+                range: 0 ... 1,
+                format: .percent
+            )
         }
         .disabled(!model.manifest.hasCamera)
     }

@@ -46,7 +46,12 @@ struct EditorWatermarkInspector: View {
 
                 InspectorSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
                 InspectorSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
-                InspectorSlider(title: "Angle", value: rotationBinding, range: -90 ... 90, format: .degrees)
+                InspectorSlider(
+                    title: "Angle",
+                    value: rotationBinding,
+                    range: -90 ... 90,
+                    format: .degrees(signed: true)
+                )
                 ColorPicker("Colour", selection: colourBinding)
             }
         }

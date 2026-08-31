@@ -26,15 +26,20 @@ struct EditorCameraInspector: View {
                     title: "Tilt",
                     value: tiltBinding,
                     range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
-                    format: .degrees
+                    format: .degrees(signed: true)
                 )
                 InspectorSlider(
                     title: "Orbit",
                     value: orbitBinding,
                     range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
-                    format: .degrees
+                    format: .degrees(signed: true)
                 )
-                InspectorSlider(title: "Roll", value: rollBinding, range: -180 ... 180, format: .degrees)
+                InspectorSlider(
+                    title: "Roll",
+                    value: rollBinding,
+                    range: -180 ... 180,
+                    format: .degrees(signed: true)
+                )
                 InspectorSlider(
                     title: "Lens",
                     value: fieldOfViewBinding,
@@ -49,8 +54,18 @@ struct EditorCameraInspector: View {
                     range: AnnotationCameraSpec.minimumZoom ... AnnotationCameraSpec.maximumZoom,
                     format: .multiplier
                 )
-                InspectorSlider(title: "Pan X", value: panXBinding, range: -0.5 ... 0.5, format: .percent)
-                InspectorSlider(title: "Pan Y", value: panYBinding, range: -0.5 ... 0.5, format: .percent)
+                InspectorSlider(
+                    title: "Pan X",
+                    value: panXBinding,
+                    range: -0.5 ... 0.5,
+                    format: .percent(signed: true)
+                )
+                InspectorSlider(
+                    title: "Pan Y",
+                    value: panYBinding,
+                    range: -0.5 ... 0.5,
+                    format: .percent(signed: true)
+                )
                 Button("Reset") { model.applyCamera(.identity) }
             }
         }

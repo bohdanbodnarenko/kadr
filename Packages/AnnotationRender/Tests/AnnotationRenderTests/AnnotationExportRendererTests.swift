@@ -273,6 +273,33 @@ struct BeautifyExportTests {
         #expect(bare.width == 240)
         #expect(bare.height == 240)
     }
+
+    @Test("A shape on the padding is in the export, not clipped to the screenshot")
+    func annotationsDrawOnThePadding() throws {
+        let blue = AnnotationColor(red: 0, green: 0, blue: 1)
+        let red = AnnotationColor(red: 1, green: 0, blue: 0)
+        let document = makeDocument(commands: [
+            .shape(ShapeSpec(
+                rect: CGRect(x: -30, y: 90, width: 20, height: 20),
+                fill: FillStyle(color: red)
+            )),
+            .beautify(BeautifySpec(
+                padding: .points(40),
+                cornerRadius: .zero,
+                backdrop: .solid(blue),
+                shadow: .none,
+                aspect: .original
+            ))
+        ])
+        let image = try renderer.render(baseImage: makeStripedImage(), document: document)
+        // Image origin is at (40, 40); the rect sits on the left padding at mid-height
+        // so the sample is the same whether the bitmap is read top-down or bottom-up.
+        let mark = pixels(of: image, in: CGRect(x: 12, y: 136, width: 4, height: 8))
+        #expect(mark[0] > 240, "the padding mark should be red, got \(mark[0])")
+        #expect(mark[2] < 20)
+        let padding = pixels(of: image, in: CGRect(x: 2, y: 136, width: 4, height: 8))
+        #expect(padding[2] > 240, "untouched padding should stay the blue backdrop")
+    }
 }
 
 /// Doc 03 §3: "irreversible at export … not an overlay that can be removed from the PNG".

@@ -60,8 +60,11 @@ enum BeautifyCompositor {
         context.saveGState()
         context.addPath(imagePath(layout))
         context.clip()
-        drawCard(contents, imageOrigin: layout.imageRect.origin, in: context)
+        drawCapture(contents, imageOrigin: layout.imageRect.origin, in: context)
         context.restoreGState()
+        // Annotations are not clipped to the screenshot: an arrow can sit on the padding
+        // the way it does in the editor (docs/03 §3).
+        drawAnnotations(contents, imageOrigin: layout.imageRect.origin, in: context)
     }
 
     /// The ring around the capture (docs/09 U1.4).
@@ -90,9 +93,9 @@ enum BeautifyCompositor {
         RoundedCornerPath.path(in: layout.imageRect, corners: layout.imageCorners)
     }
 
-    /// Draws the capture and everything on it, positioned so `document.contentRect` lands
-    /// at `imageOrigin`. The caller has already clipped to whatever shape it wants.
-    static func drawCard(_ contents: CardContents, imageOrigin: CGPoint, in context: CGContext) {
+    /// Draws the capture, positioned so `document.contentRect` lands at `imageOrigin`.
+    /// The caller has already clipped to whatever shape it wants.
+    static func drawCapture(_ contents: CardContents, imageOrigin: CGPoint, in context: CGContext) {
         let document = contents.document
         let content = document.contentRect
         context.saveGState()
@@ -102,12 +105,28 @@ enum BeautifyCompositor {
             context.fill(content)
         }
         context.draw(contents.source, in: document.baseImage.bounds)
-        if contents.includeAnnotations {
-            for command in document.resolvedCommands {
-                contents.drawCommand(command, context)
-            }
+        context.restoreGState()
+    }
+
+    /// Draws every annotation in image space, translated so the capture sits at `imageOrigin`.
+    /// Not clipped: drawing tools apply to the beautify padding as well as the screenshot.
+    static func drawAnnotations(_ contents: CardContents, imageOrigin: CGPoint, in context: CGContext) {
+        guard contents.includeAnnotations else { return }
+        let document = contents.document
+        let content = document.contentRect
+        context.saveGState()
+        context.translateBy(x: imageOrigin.x - content.minX, y: imageOrigin.y - content.minY)
+        for command in document.resolvedCommands {
+            contents.drawCommand(command, context)
         }
         context.restoreGState()
+    }
+
+    /// Draws the capture and everything on it, positioned so `document.contentRect` lands
+    /// at `imageOrigin`. The caller has already clipped to whatever shape it wants.
+    static func drawCard(_ contents: CardContents, imageOrigin: CGPoint, in context: CGContext) {
+        drawCapture(contents, imageOrigin: imageOrigin, in: context)
+        drawAnnotations(contents, imageOrigin: imageOrigin, in: context)
     }
 
     /// Renders the card flat, blurs and projects it, and draws the result.

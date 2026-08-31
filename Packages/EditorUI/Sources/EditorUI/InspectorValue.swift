@@ -20,6 +20,8 @@ public struct InspectorValueFormat: Equatable, Sendable {
         case degrees
         /// Shown as-is, with a multiplication sign.
         case multiplier
+        /// Shown as-is, with a seconds suffix.
+        case seconds
         /// A bare number.
         case plain
 
@@ -29,6 +31,7 @@ public struct InspectorValueFormat: Equatable, Sendable {
             case .points: " px"
             case .degrees: "°"
             case .multiplier: "×"
+            case .seconds: " s"
             case .plain: ""
             }
         }
@@ -42,9 +45,10 @@ public struct InspectorValueFormat: Equatable, Sendable {
         var acceptedSuffixes: [String] {
             switch self {
             case .percent: ["%", "percent", "pct"]
-            case .points: ["px", "pt", "points", "pixels"]
+            case .points: ["pixels", "points", "pts", "px", "pt"]
             case .degrees: ["°", "deg", "degrees"]
             case .multiplier: ["×", "x", "*"]
+            case .seconds: ["seconds", "second", "secs", "sec", "s"]
             case .plain: []
             }
         }
@@ -52,21 +56,46 @@ public struct InspectorValueFormat: Equatable, Sendable {
 
     public var unit: Unit
     public var decimals: Int
+    /// When true, positive values are written with a leading plus — signed ranges
+    /// (tilt, pan, roll) so the field matches the detent at zero.
+    public var showsPositiveSign: Bool
 
-    public init(unit: Unit, decimals: Int = 0) {
+    public init(unit: Unit, decimals: Int = 0, showsPositiveSign: Bool = false) {
         self.unit = unit
         self.decimals = max(decimals, 0)
+        self.showsPositiveSign = showsPositiveSign
     }
 
     public static let percent = InspectorValueFormat(unit: .percent)
     public static let points = InspectorValueFormat(unit: .points)
     public static let degrees = InspectorValueFormat(unit: .degrees)
     public static let multiplier = InspectorValueFormat(unit: .multiplier, decimals: 2)
+    public static let seconds = InspectorValueFormat(unit: .seconds, decimals: 1)
 
-    /// The stored value, written the way the field shows it.
+    public static func percent(signed: Bool, decimals: Int = 0) -> InspectorValueFormat {
+        InspectorValueFormat(unit: .percent, decimals: decimals, showsPositiveSign: signed)
+    }
+
+    public static func degrees(signed: Bool) -> InspectorValueFormat {
+        InspectorValueFormat(unit: .degrees, showsPositiveSign: signed)
+    }
+
+    /// One arrow-key press, in stored units: one of whatever the field shows.
+    public var step: Double {
+        pow(10, Double(-decimals)) / unit.displayScale
+    }
+
+    /// The stored value, written the way the field shows it (including the suffix).
     public func string(for value: Double) -> String {
         let shown = value * unit.displayScale
-        return String(format: "%.\(decimals)f", shown) + unit.suffix
+        let number = String(format: "%.\(decimals)f", shown)
+        let sign = showsPositiveSign && shown > 0 ? "+" : ""
+        return sign + number + unit.suffix
+    }
+
+    /// The number alone, for the focused value field — the suffix is already implied.
+    public func editingString(for value: Double) -> String {
+        String(format: "%.\(decimals)f", value * unit.displayScale)
     }
 
     /// A typed string as a stored value, or nil if it is not a number.
@@ -76,7 +105,9 @@ public struct InspectorValueFormat: Equatable, Sendable {
     /// comma as the decimal separator — which is what a keyboard in most of the world
     /// produces.
     public func value(from text: String) -> Double? {
-        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "−", with: "-")
+            .lowercased()
         guard !trimmed.isEmpty else { return nil }
 
         // Longest first, so "percent" is not left as "ercent" after stripping "p".
@@ -93,15 +124,15 @@ public struct InspectorValueFormat: Equatable, Sendable {
     /// The value stepped by one arrow-key press.
     ///
     /// One unit of whatever the field shows, so a per-cent field steps by a whole per cent
-    /// rather than by a hundredth of one.
+    /// rather than by a hundredth of one. Multipliers with two decimals step by 0.01×.
     public func stepped(_ value: Double, by steps: Int) -> Double {
-        value + Double(steps) / unit.displayScale
+        value + Double(steps) * step
     }
 }
 
 extension InspectorValueFormat.Unit {
     /// Every suffix of every unit, for stripping.
     static var allSuffixes: [String] {
-        [percent, points, degrees, multiplier].flatMap(\.acceptedSuffixes)
+        [percent, points, degrees, multiplier, seconds].flatMap(\.acceptedSuffixes)
     }
 }

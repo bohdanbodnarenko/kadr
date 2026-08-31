@@ -20,7 +20,9 @@ extension AnnotationCanvasView {
         }
 
         model.document.selection = [spec.id]
-        textEditor.begin(editing: spec, in: self)
+        var placed = spec
+        placed.rect.origin = model.document.canvasPoint(fromImage: spec.rect.origin)
+        textEditor.begin(editing: placed, in: self)
         // The annotation is drawn by the field while it is being edited; drawing it
         // underneath as well would double every glyph.
         layers[spec.id]?.isHidden = true

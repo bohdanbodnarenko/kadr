@@ -70,20 +70,19 @@ struct BeautifyBackdropPicker: View {
                     onChoose(.gradient(next))
                 }
             ))
-            Slider(
+            InspectorSlider(
+                title: "Angle",
                 value: Binding(
-                    get: { ramp.angleDegrees },
+                    get: { Double(ramp.angleDegrees) },
                     set: { newValue in
                         var next = ramp
-                        next.angleDegrees = newValue
+                        next.angleDegrees = CGFloat(newValue)
                         onChoose(.gradient(next))
                     }
                 ),
-                in: 0 ... 360,
-                step: 15
-            ) {
-                Text("Angle \(Int(ramp.angleDegrees))°")
-            }
+                range: 0 ... 360,
+                format: .degrees
+            )
         case let .image(path):
             HStack {
                 Button("Choose Image…") { pickImage() }

@@ -100,10 +100,13 @@ public final class AnnotationCanvasView: NSView {
         baseLayer.contents = baseImage
         baseLayer.magnificationFilter = .trilinear
         contentHost.addSublayer(baseLayer)
-        for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer] {
-            contentHost.addSublayer(layer)
-        }
         root.addSublayer(contentHost)
+        // Drawn on the canvas, not inside the card: arrows and shapes belong on the
+        // beautify padding as well as on the screenshot (docs/03 §3).
+        for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer] {
+            layer.masksToBounds = false
+            root.addSublayer(layer)
+        }
         cameraLayer.isHidden = true
         root.addSublayer(cameraLayer)
 
@@ -164,11 +167,11 @@ public final class AnnotationCanvasView: NSView {
         }
         updateSelectionHandles()
         rebuildReviewLayers()
-        // The layers just rebuilt live inside `contentHost`, which the offscreen path
-        // hides — so with a camera or a progressive blur active, a newly drawn annotation
-        // was invisible until something else happened to trigger a chrome pass (docs/10
-        // R1.5). Rebuilding the layers *is* a document change, so it is the right place to
-        // say the render is stale.
+        // The layers just rebuilt sit on the canvas, but the offscreen path covers them
+        // with a flattened render — so with a camera or a progressive blur active, a newly
+        // drawn annotation was invisible until something else happened to trigger a chrome
+        // pass (docs/10 R1.5). Rebuilding the layers *is* a document change, so it is the
+        // right place to say the render is stale.
         updateExpensiveChrome()
         onDocumentChanged?()
     }
@@ -211,14 +214,7 @@ public final class AnnotationCanvasView: NSView {
             viewPoint = unprojected
         }
 
-        guard model.document.beautify != nil, let layout = model.document.beautifyLayout else {
-            return viewPoint
-        }
-        let content = model.document.contentRect
-        return CGPoint(
-            x: viewPoint.x - layout.imageRect.minX + content.minX,
-            y: viewPoint.y - layout.imageRect.minY + content.minY
-        )
+        return model.document.imagePoint(fromCanvas: viewPoint)
     }
 
     /// Refreshes the live drag preview: one layer, replaced only when the kind changes.
@@ -392,65 +388,7 @@ public final class AnnotationCanvasView: NSView {
         return modifiers
     }
 
-    // MARK: - Keyboard
-
-    override public func keyDown(with event: NSEvent) {
-        if event.isARepeat, event.keyCode == 49 {
-            return
-        }
-        if event.keyCode == 49, !event.modifierFlags.contains(.command) {
-            spaceIsDown = true
-            window?.invalidateCursorRects(for: self)
-            return
-        }
-
-        let command = event.modifierFlags.contains(.command)
-        if command {
-            super.keyDown(with: event)
-            return
-        }
-
-        let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
-        switch event.keyCode {
-        case 51, 117: // Delete, forward delete
-            model.deleteSelection()
-        case 123: model.nudgeSelection(dx: -step, dy: 0)
-        case 124: model.nudgeSelection(dx: step, dy: 0)
-        case 125: model.nudgeSelection(dx: 0, dy: step)
-        case 126: model.nudgeSelection(dx: 0, dy: -step)
-        case 53: // Escape
-            if model.tool != .select {
-                model.selectTool(.select)
-            } else {
-                model.selection = []
-            }
-        default:
-            // A bare letter picks a tool (docs/03 §3).
-            guard !event.modifierFlags.contains(.command),
-                  let character = event.charactersIgnoringModifiers?.lowercased().first,
-                  let tool = EditorTool.allCases.first(where: { $0.shortcut == character })
-            else {
-                super.keyDown(with: event)
-                return
-            }
-            model.selectTool(tool)
-            window?.invalidateCursorRects(for: self)
-            return
-        }
-        refreshAfterEdit()
-    }
-
-    override public func keyUp(with event: NSEvent) {
-        if event.keyCode == 49 {
-            spaceIsDown = false
-            endSpacePan()
-            window?.invalidateCursorRects(for: self)
-            return
-        }
-        super.keyUp(with: event)
-    }
-
-    private func refreshAfterEdit() {
+    func refreshAfterEdit() {
         refreshBaseImage()
         rebuildAnnotationLayers()
     }

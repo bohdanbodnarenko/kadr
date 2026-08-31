@@ -137,6 +137,18 @@ struct DocumentEditingTests {
         #expect(document.canvasRect.size == CGSize(width: 240, height: 140))
     }
 
+    @Test("A point on the padding is still a drawable image-space point")
+    func paddingMapsIntoImageSpace() {
+        var document = makeDocument()
+        document.setBeautify(BeautifySpec(padding: .points(40), shadow: .none, aspect: .original))
+
+        let onPadding = document.imagePoint(fromCanvas: CGPoint(x: 10, y: 10))
+        #expect(onPadding.x == -30)
+        #expect(onPadding.y == -30)
+        #expect(document.canvasPoint(fromImage: onPadding) == CGPoint(x: 10, y: 10))
+        #expect(document.imageSpaceFrame.origin == CGPoint(x: 40, y: 40))
+    }
+
     @Test("Replacing beautify coalesces onto one undo step")
     func beautifyCoalesces() {
         var document = makeDocument()

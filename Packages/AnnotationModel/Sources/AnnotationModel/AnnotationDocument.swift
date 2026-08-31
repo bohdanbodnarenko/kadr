@@ -108,6 +108,38 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         return BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify)
     }
 
+    /// Image-space point as a point on the canvas.
+    ///
+    /// Annotations are stored against the capture (so a crop still makes sense), but with
+    /// beautify they are *drawn* on the whole canvas — padding included. This is the hop
+    /// between those two spaces (docs/03 §3).
+    public func canvasPoint(fromImage point: CGPoint) -> CGPoint {
+        guard let layout = beautifyLayout else { return point }
+        let content = contentRect.origin
+        return CGPoint(
+            x: layout.imageRect.minX + (point.x - content.x),
+            y: layout.imageRect.minY + (point.y - content.y)
+        )
+    }
+
+    /// Canvas point as an image-space point — the inverse of `canvasPoint(fromImage:)`.
+    public func imagePoint(fromCanvas point: CGPoint) -> CGPoint {
+        guard let layout = beautifyLayout else { return point }
+        let content = contentRect.origin
+        return CGPoint(
+            x: point.x - layout.imageRect.minX + content.x,
+            y: point.y - layout.imageRect.minY + content.y
+        )
+    }
+
+    /// The frame, in canvas space, of a layer whose local coordinates are image space.
+    ///
+    /// Size is the capture, origin is where image (0, 0) lands. Sublayers may draw outside
+    /// it (arrows on the padding) because the layer does not mask to its bounds.
+    public var imageSpaceFrame: CGRect {
+        CGRect(origin: canvasPoint(fromImage: .zero), size: baseImage.size)
+    }
+
     /// Replaces the current beautify command, coalescing successive inspector edits into
     /// one undo step so dragging a slider does not flood the undo stack.
     public mutating func setBeautify(_ spec: BeautifySpec?) {
