@@ -62,7 +62,7 @@ struct SelectionResizerTests {
     @Test("A corner grab is recognised")
     func cornerHit() {
         let command = shape()
-        let box = SelectionResizer.frame(for: [command])
+        let box = SelectionResizer.unionBounds(of: [command])
         let hit = SelectionResizer.handle(at: CGPoint(x: box.maxX, y: box.maxY), in: [command], tolerance: 10)
         #expect(hit == .box(.bottomTrailing))
     }

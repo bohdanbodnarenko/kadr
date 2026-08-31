@@ -160,4 +160,38 @@ struct EditorResizeTests {
         #expect(abs(grown.width / grown.height - 2) < 0.01, "80×40 must stay 2:1")
         #expect(grown.origin == CGPoint(x: 100, y: 100))
     }
+
+    @Test("A corner click on an unselected shape resizes it, rather than only selecting")
+    func cornerClickSelectsAndResizes() throws {
+        let model = makeModel()
+        let id = addShape(model)
+        let command = try #require(model.document.command(id))
+        let start = try #require(SelectionResizer.anchors(for: [command]).first { $0.0 == .box(.bottomTrailing) }?.1)
+        model.document.selection = []
+
+        model.pointerDown(at: start)
+        model.pointerDragged(to: CGPoint(x: start.x + 40, y: start.y + 20))
+        model.pointerUp(at: CGPoint(x: start.x + 40, y: start.y + 20))
+
+        let grown = try #require(rect(model, id))
+        #expect(grown.origin == CGPoint(x: 100, y: 100), "a corner click must not move the shape")
+        #expect(grown.size == CGSize(width: 100, height: 60))
+    }
+
+    @Test("Clicking just inside a selected corner resizes, not moves")
+    func clickNearCornerResizes() throws {
+        let model = makeModel()
+        let id = addShape(model)
+        let corner = handlePoint(model, .box(.bottomTrailing))
+        let justInside = CGPoint(x: corner.x - 6, y: corner.y - 6)
+
+        model.pointerDown(at: justInside)
+        model.pointerDragged(to: CGPoint(x: justInside.x + 40, y: justInside.y + 20))
+        model.pointerUp(at: CGPoint(x: justInside.x + 40, y: justInside.y + 20))
+
+        let grown = try #require(rect(model, id))
+        #expect(grown.origin == CGPoint(x: 100, y: 100))
+        #expect(grown.width > 60)
+        #expect(grown.height > 40)
+    }
 }

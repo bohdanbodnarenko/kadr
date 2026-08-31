@@ -11,15 +11,31 @@ public extension EditorDocumentModel {
     func pointerDown(
         at point: CGPoint,
         modifiers: EditorModifiers = [],
+        grabbing: SelectionHandle? = nil,
         handleTolerance: CGFloat = SelectionResizer.hitRadius
     ) {
         dragOrigin = point
 
         guard let annotationTool = tool.annotation else {
-            if beginResizeIfHandle(at: point, modifiers: modifiers, tolerance: handleTolerance) {
+            if beginResizeIfHandle(
+                at: point,
+                grabbing: grabbing,
+                modifiers: modifiers,
+                tolerance: handleTolerance
+            ) {
                 return
             }
             beginSelectionDrag(at: point, modifiers: modifiers)
+            // A corner of what we just selected is a resize, not a move: otherwise the
+            // first click on a newly drawn shape's corner always drags the whole thing.
+            if beginResizeIfHandle(
+                at: point,
+                grabbing: nil,
+                modifiers: modifiers,
+                tolerance: handleTolerance
+            ) {
+                isMovingSelection = false
+            }
             return
         }
 

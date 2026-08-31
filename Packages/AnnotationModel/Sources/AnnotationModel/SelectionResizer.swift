@@ -44,9 +44,13 @@ public enum SelectionResizer {
     public static let cornerSize: CGFloat = 8
     /// Edge anchors are slightly smaller so corners stay the primary target.
     public static let edgeSize: CGFloat = 6
-    /// How close the pointer has to be, in view points, to grab a handle.
-    public static let hitRadius: CGFloat = 10
-    /// Padding around the union bounds, so handles sit just outside the stroke.
+    /// How close the pointer has to be, in **screen** points, to grab a handle.
+    ///
+    /// Screendrop uses 9. Twelve is the same idea with a slightly fatter target, because
+    /// a corner click that starts a move instead of a resize is the failure mode.
+    public static let hitRadius: CGFloat = 12
+    /// Padding around the union bounds for the dashed outline. Handles sit on the
+    /// bounds themselves — the corners the user actually aims at — the way Screendrop's do.
     public static let framePadding: CGFloat = 4
 
     /// The dashed frame the handles sit on.
@@ -80,7 +84,9 @@ public enum SelectionResizer {
         if usesPathHandles(commands), let command = commands.first {
             return pathAnchors(of: command)
         }
-        let box = frame(for: commands)
+        // On the geometry, not the padded outline: a click on a shape's visible corner
+        // has to grab a handle, not start a move (Screendrop's `selectionBounds.box`).
+        let box = unionBounds(of: commands)
         guard box.width > 0, box.height > 0 else { return [] }
         let corners: [CropHandle] = [.topLeading, .topTrailing, .bottomTrailing, .bottomLeading]
         let edges: [CropHandle] = [.top, .trailing, .bottom, .leading]

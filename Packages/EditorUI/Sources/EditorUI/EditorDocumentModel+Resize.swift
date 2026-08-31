@@ -12,17 +12,21 @@ extension EditorDocumentModel {
     ///
     /// Handles are tested before the body: a corner sits on the annotation, and grabbing
     /// it must resize, not move. ⌘-click skips this so adding to the selection still works.
-    func beginResizeIfHandle(at point: CGPoint, modifiers: EditorModifiers, tolerance: CGFloat) -> Bool {
+    func beginResizeIfHandle(
+        at point: CGPoint,
+        grabbing explicit: SelectionHandle? = nil,
+        modifiers: EditorModifiers,
+        tolerance: CGFloat
+    ) -> Bool {
         guard tool == .select, !modifiers.contains(.extendSelection) else { return false }
         let selected = selectedCommands
         guard !selected.isEmpty else { return false }
-        guard let handle = SelectionResizer.handle(at: point, in: selected, tolerance: tolerance) else {
-            return false
-        }
+        // Screen-space hits from the canvas win: they stay a constant size at every zoom,
+        // which is how Screendrop keeps corners grabable on a fitted 5K capture.
+        let handle = explicit ?? SelectionResizer.handle(at: point, in: selected, tolerance: tolerance)
+        guard let handle else { return false }
 
         resizeHandle = handle
-        // The padded frame is where the handles are drawn; the union is what we scale.
-        // Scaling from the frame would grow the 4pt padding and slide the opposite corner.
         resizeStartBounds = SelectionResizer.unionBounds(of: selected)
         dragStartCommands = Dictionary(uniqueKeysWithValues: selected.map { ($0.id, $0) })
         document.beginGesture()

@@ -138,6 +138,11 @@ public final class AnnotationCanvasView: NSView {
         true
     }
 
+    /// First click on an inactive editor must count, the same as the overlay cards.
+    override public func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     // MARK: - Layer tree
 
     /// Rebuilds every annotation layer. Used after undo, deletion or reordering — not
@@ -278,6 +283,7 @@ public final class AnnotationCanvasView: NSView {
         model.pointerDown(
             at: imagePoint(from: event),
             modifiers: modifiers(from: event),
+            grabbing: screenSpaceHandle(at: event),
             handleTolerance: SelectionResizer.hitRadius / handleViewScale
         )
         refreshAfterEdit()

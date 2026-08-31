@@ -4,9 +4,16 @@ import QuartzCore
 
 /// Selection chrome: a dashed frame, eight box anchors, or path terminals for arrows.
 extension AnnotationCanvasView {
-    /// Screen-constant size: layers live in image space, magnification scales the view.
+    /// Screen-constant size, derived from the window transform so it stays honest when
+    /// the scroll view's `magnification` is stale or missing (Screendrop's `pageToScreen`).
     var handleViewScale: CGFloat {
-        max(enclosingScrollView?.magnification ?? 1, 0.05)
+        let origin = convert(CGPoint.zero, to: nil)
+        let unit = convert(CGPoint(x: 1, y: 0), to: nil)
+        let scale = hypot(unit.x - origin.x, unit.y - origin.y)
+        if scale > 0.05 {
+            return scale
+        }
+        return max(enclosingScrollView?.magnification ?? 1, 0.05)
     }
 
     /// Handles around the selection, and the marquee while one is being dragged.
@@ -48,6 +55,21 @@ extension AnnotationCanvasView {
         }
     }
 
+    /// Which handle is under the event, tested in window space so the target stays ~12pt
+    /// at every zoom — the same contract as Screendrop's `handle(at: screenPoint)`.
+    func screenSpaceHandle(at event: NSEvent) -> SelectionHandle? {
+        let click = event.locationInWindow
+        let radius = SelectionResizer.hitRadius
+        for (handle, imagePoint) in SelectionResizer.anchors(for: model.selectedCommands) {
+            let canvas = model.document.canvasPoint(fromImage: imagePoint)
+            let window = convert(canvas, to: nil)
+            if hypot(click.x - window.x, click.y - window.y) <= radius {
+                return handle
+            }
+        }
+        return nil
+    }
+
     private func addBoxHandles(for commands: [AnnotationCommand]) {
         let box = SelectionResizer.frame(for: commands)
         let outline = CAShapeLayer()
@@ -78,8 +100,9 @@ extension AnnotationCanvasView {
         handle.frame = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
         handle.backgroundColor = NSColor.white.cgColor
         handle.borderColor = NSColor.controlAccentColor.cgColor
-        handle.borderWidth = 1 / handleViewScale
+        handle.borderWidth = max(1 / handleViewScale, 0.5)
         handle.cornerRadius = 1 / handleViewScale
+        handle.contentsScale = window?.backingScaleFactor ?? 2
         handle.shadowOpacity = 0.35
         handle.shadowRadius = 1 / handleViewScale
         handle.shadowOffset = .zero
