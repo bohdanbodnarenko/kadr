@@ -14,15 +14,23 @@ import Shared
 public enum AnnotationLayerFactory {
     /// Makes the layer for one annotation, or `nil` for commands that draw nothing at
     /// editing time.
-    /// - Parameter imageScale: the base image's pixels per point, which only the
-    ///   measurement readout needs (docs/06 M21).
+    /// - Parameter imageScale: the base image's pixels per point, which the
+    ///   measurement readout and the live redaction preview both need.
+    /// - Parameter baseImage: the capture's pixels, so a blur samples what is
+    ///   actually under the box rather than drawing a grey stand-in.
     public static func makeLayer(
         for command: AnnotationCommand,
         contentsScale: CGFloat,
-        imageScale: CGFloat = 1
+        imageScale: CGFloat = 1,
+        baseImage: CGImage? = nil
     ) -> CALayer? {
         let layer = strokeShapeLayer(for: command)
-            ?? contentLayer(for: command, contentsScale: contentsScale, imageScale: imageScale)
+            ?? contentLayer(
+                for: command,
+                contentsScale: contentsScale,
+                imageScale: imageScale,
+                baseImage: baseImage
+            )
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
         return layer
@@ -44,14 +52,13 @@ public enum AnnotationLayerFactory {
     private static func contentLayer(
         for command: AnnotationCommand,
         contentsScale: CGFloat,
-        imageScale: CGFloat
+        imageScale: CGFloat,
+        baseImage: CGImage?
     ) -> CALayer? {
         switch command {
         case let .text(spec): textLayer(spec, contentsScale: contentsScale)
         case let .counter(spec): counterLayer(spec, contentsScale: contentsScale)
-        // Shown live as a preview rather than a burned-in effect, so the user can move it
-        // freely; the export renderer is what makes it permanent.
-        case let .redaction(spec): redactionPreviewLayer(spec)
+        case let .redaction(spec): redactionPreviewLayer(spec, baseImage: baseImage, imageScale: imageScale)
         case let .measure(spec): measureLayer(spec, contentsScale: contentsScale, imageScale: imageScale)
         case let .image(spec): imageLayer(spec)
         // The crop and the beautify backdrop are chrome around the canvas, not objects
@@ -64,7 +71,12 @@ public enum AnnotationLayerFactory {
     ///
     /// The hot path during a drag: no allocation, no tree surgery, just new geometry on a
     /// layer that is already on screen.
-    public static func update(_ layer: CALayer, for command: AnnotationCommand, imageScale: CGFloat = 1) {
+    public static func update(
+        _ layer: CALayer,
+        for command: AnnotationCommand,
+        imageScale: CGFloat = 1,
+        baseImage: CGImage? = nil
+    ) {
         switch command {
         case let .arrow(spec):
             (layer as? CAShapeLayer)?.path = arrowPath(spec)
@@ -77,7 +89,7 @@ public enum AnnotationLayerFactory {
         case let .highlighter(spec):
             (layer as? CAShapeLayer)?.path = strokePath(spec.points)
         default:
-            updateContentLayer(layer, for: command, imageScale: imageScale)
+            updateContentLayer(layer, for: command, imageScale: imageScale, baseImage: baseImage)
         }
     }
 
@@ -85,7 +97,8 @@ public enum AnnotationLayerFactory {
     private static func updateContentLayer(
         _ layer: CALayer,
         for command: AnnotationCommand,
-        imageScale: CGFloat
+        imageScale: CGFloat,
+        baseImage: CGImage?
     ) {
         switch command {
         case let .text(spec):
@@ -94,7 +107,7 @@ public enum AnnotationLayerFactory {
         case let .counter(spec):
             layer.frame = counterFrame(spec)
         case let .redaction(spec):
-            layer.frame = spec.rect
+            applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
         case let .measure(spec):
             updateMeasureLayer(layer, spec: spec, imageScale: imageScale)
         case let .image(spec):
@@ -259,18 +272,35 @@ public enum AnnotationLayerFactory {
         return container
     }
 
-    /// A live stand-in while editing: a frosted rectangle rather than a real blur, because
-    /// re-running CoreImage on every drag frame would not hold 60 fps. The export renderer
-    /// does the real work.
-    private static func redactionPreviewLayer(_ spec: RedactionSpec) -> CALayer {
+    /// Samples the capture under the box so the editor shows a real blur, not a grey
+    /// stand-in (Screendrop's live redaction). Export still burns the effect in.
+    private static func redactionPreviewLayer(
+        _ spec: RedactionSpec,
+        baseImage: CGImage?,
+        imageScale: CGFloat
+    ) -> CALayer {
         let layer = CALayer()
-        layer.frame = spec.rect
-        layer.backgroundColor = CGColor(gray: 0.5, alpha: 0.85)
-        layer.borderColor = CGColor(gray: 0.3, alpha: 1)
-        layer.borderWidth = 1
-        if case .pixelate = spec.style {
-            layer.backgroundColor = CGColor(gray: 0.45, alpha: 0.9)
-        }
+        applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
         return layer
+    }
+
+    private static func applyRedactionPreview(
+        to layer: CALayer,
+        spec: RedactionSpec,
+        baseImage: CGImage?,
+        imageScale: CGFloat
+    ) {
+        layer.frame = spec.rect.standardized
+        layer.masksToBounds = true
+        layer.contentsGravity = .resize
+        layer.borderWidth = 0
+        if let baseImage, let preview = RedactionRasterizer().preview(spec, from: baseImage, scale: imageScale) {
+            layer.contents = preview
+            layer.backgroundColor = nil
+            return
+        }
+        // Tests and a failed sample still need a visible region.
+        layer.contents = nil
+        layer.backgroundColor = CGColor(gray: 0.45, alpha: 0.55)
     }
 }

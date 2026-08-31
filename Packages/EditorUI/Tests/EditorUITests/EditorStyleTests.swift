@@ -93,4 +93,23 @@ struct EditorStyleTests {
         guard case let .highlighter(spec) = try #require(model.document.commands.first) else { return }
         #expect(abs(spec.stroke.color.alpha - 0.4) < 0.001)
     }
+
+    @Test("Changing blur vs pixelate updates the selected redaction")
+    func applyRedactionStyleUpdatesSelection() throws {
+        let model = makeModel()
+        model.tool = .redaction
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+
+        model.applyRedactionStyle(.defaultPixelate)
+
+        guard case let .redaction(spec) = try #require(model.document.commands.first) else { return }
+        #expect(spec.style.isPixelate)
+        #expect(model.styleMemory.lastRedactionStyle.isPixelate)
+
+        model.applyRedactionStyle(spec.style.withDensity(0.8))
+        guard case let .redaction(stronger) = try #require(model.document.commands.first) else { return }
+        #expect(abs(stronger.style.density - 0.8) < 0.001)
+    }
 }

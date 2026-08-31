@@ -96,4 +96,77 @@ struct AnnotationLayerFactoryTests {
     func emptyStroke() {
         #expect(AnnotationLayerFactory.strokePath([]).isEmpty)
     }
+
+    @Test("A live blur preview destroys the detail under the box")
+    func previewBlurs() throws {
+        let image = stripedImage()
+        let spec = RedactionSpec(
+            rect: CGRect(x: 8, y: 8, width: 48, height: 48),
+            style: .blur(radius: 12)
+        )
+        let preview = try #require(RedactionRasterizer().preview(spec, from: image, scale: 1))
+        #expect(preview.width == 48)
+        #expect(preview.height == 48)
+    }
+
+    @Test("A redaction with the capture's pixels shows a real blur, not a grey box")
+    func redactionSamplesTheImage() throws {
+        let image = stripedImage()
+        let spec = RedactionSpec(
+            rect: CGRect(x: 10, y: 10, width: 40, height: 40),
+            style: .blur(radius: 12)
+        )
+        let layer = try #require(AnnotationLayerFactory.makeLayer(
+            for: .redaction(spec),
+            contentsScale: 1,
+            imageScale: 1,
+            baseImage: image
+        ))
+        #expect(layer.contents != nil, "the layer must show sampled pixels")
+        #expect(layer.backgroundColor == nil)
+        #expect(layer.frame == spec.rect)
+    }
+
+    @Test("Moving a redaction re-samples the pixels under the new box")
+    func redactionUpdateResamples() throws {
+        let image = stripedImage()
+        var spec = RedactionSpec(
+            rect: CGRect(x: 4, y: 4, width: 20, height: 20),
+            style: .pixelate(cellSize: 8)
+        )
+        let layer = try #require(AnnotationLayerFactory.makeLayer(
+            for: .redaction(spec),
+            contentsScale: 1,
+            imageScale: 1,
+            baseImage: image
+        ))
+
+        spec.rect = CGRect(x: 40, y: 40, width: 30, height: 30)
+        AnnotationLayerFactory.update(layer, for: .redaction(spec), imageScale: 1, baseImage: image)
+
+        #expect(layer.frame == spec.rect)
+        #expect(layer.contents != nil)
+    }
+}
+
+private func stripedImage(width: Int = 80, height: Int = 80) -> CGImage {
+    guard let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        fatalError("Could not create a test bitmap")
+    }
+    for x in stride(from: 0, to: width, by: 4) {
+        context.setFillColor(CGColor(gray: (x / 4).isMultiple(of: 2) ? 0 : 1, alpha: 1))
+        context.fill(CGRect(x: x, y: 0, width: 4, height: height))
+    }
+    guard let image = context.makeImage() else {
+        fatalError("Could not create a test image")
+    }
+    return image
 }

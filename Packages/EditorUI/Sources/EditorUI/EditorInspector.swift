@@ -15,7 +15,7 @@ struct EditorInspector: View {
     var body: some View {
         Form {
             Section(tool.title) {
-                if tool != .crop, tool != .counter {
+                if tool != .crop, tool != .counter, tool != .redaction {
                     EditorSwatchStrip(
                         selected: model.styleMemory.stroke(for: tool).color,
                         onSelect: { model.applyColor($0) }
@@ -184,20 +184,35 @@ struct EditorInspector: View {
         ))
     }
 
+    @ViewBuilder
     private var redactionOptions: some View {
+        let style = inspectedRedactionStyle
         Picker("Style", selection: Binding(
-            get: {
-                if case .pixelate = model.styleMemory.lastRedactionStyle {
-                    return 1
-                }
-                return 0
-            },
-            set: { model.styleMemory.lastRedactionStyle = $0 == 1 ? .defaultPixelate : .defaultBlur }
+            get: { style.isPixelate },
+            set: { model.applyRedactionStyle(style.togglingKind(pixelate: $0)) }
         )) {
-            Text("Blur").tag(0)
-            Text("Pixelate").tag(1)
+            Text("Blur").tag(false)
+            Text("Pixelate").tag(true)
         }
         .pickerStyle(.segmented)
+
+        InspectorSlider(
+            title: "Strength",
+            value: Binding(
+                get: { Double(style.density) },
+                set: { model.applyRedactionStyle(style.withDensity(CGFloat($0))) }
+            ),
+            range: 0.15 ... 1,
+            format: .percent
+        )
+    }
+
+    /// The redaction the inspector is editing: the selection's, or the armed tool's memory.
+    private var inspectedRedactionStyle: RedactionStyle {
+        if let id = model.selection.first, case let .redaction(spec)? = model.document.command(id) {
+            return spec.style
+        }
+        return model.styleMemory.lastRedactionStyle
     }
 
     /// The measure tool's one choice, plus what the tool actually does (docs/06 M21).

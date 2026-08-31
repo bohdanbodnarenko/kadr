@@ -47,6 +47,11 @@ public extension EditorDocumentModel {
         }
     }
 
+    func applyRedactionStyle(_ style: RedactionStyle) {
+        styleMemory.lastRedactionStyle = style
+        rewriteSelection { $0.applying(redactionStyle: style) }
+    }
+
     /// ⌘D: a copy offset so it is obvious there are now two (docs/03 §3).
     func duplicateSelection() {
         let selected = document.commands.filter { document.selection.contains($0.id) && $0.isSelectable }

@@ -20,6 +20,102 @@ public struct RedactionRasterizer: Sendable {
 
     public init() {}
 
+    /// A live crop of the screenshot, blurred or pixelated the way the canvas shows it.
+    ///
+    /// Editing has to look like the real effect — a grey rectangle is not a redaction.
+    /// Export still goes through `apply`, which burns the same region into the full image
+    /// with the security jitter on pixelate. This path is the preview: sample the
+    /// pixels under the box (Screendrop's `AnnoShapeDrawing.drawRedaction`).
+    public func preview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let crop = CGRect(
+            x: spec.rect.minX * scale,
+            y: spec.rect.minY * scale,
+            width: spec.rect.width * scale,
+            height: spec.rect.height * scale
+        ).integral.intersection(bounds)
+        guard crop.width >= 1, crop.height >= 1 else { return nil }
+
+        switch spec.style {
+        case let .blur(radius):
+            return previewBlur(image, crop: crop, radius: max(radius * scale, 1), bounds: bounds)
+        case let .pixelate(cellSize):
+            return previewPixelate(image, crop: crop, cellSize: max(cellSize * scale, 2))
+        }
+    }
+
+    /// Pads the crop so the Gaussian can sample neighbours, then cuts back to the box.
+    /// Without the pad, the blur darkens at the edges the way an unclamped CIBlur does.
+    private func previewBlur(
+        _ image: CGImage,
+        crop: CGRect,
+        radius: CGFloat,
+        bounds: CGRect
+    ) -> CGImage? {
+        let pad = ceil(radius * 2)
+        let padded = crop.insetBy(dx: -pad, dy: -pad).intersection(bounds).integral
+        guard padded.width >= 1, padded.height >= 1,
+              let sampled = image.cropping(to: padded)
+        else {
+            return nil
+        }
+
+        let input = CIImage(cgImage: sampled)
+        let blurred = input
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(radius))
+        // CGImage.cropping is top-left; CIImage is bottom-left of that bitmap.
+        let topOffset = crop.minY - padded.minY
+        let outputRect = CGRect(
+            x: crop.minX - padded.minX,
+            y: CGFloat(sampled.height) - topOffset - crop.height,
+            width: crop.width,
+            height: crop.height
+        )
+        return KadrRenderContext.shared.createCGImage(blurred, from: outputRect)
+    }
+
+    /// Fast mosaic for the canvas: downsample then nearest-neighbour up, the way Screendrop
+    /// previews pixelate. Export uses the jittered mosaic (`PixelateMosaic`) instead.
+    private func previewPixelate(_ image: CGImage, crop: CGRect, cellSize: CGFloat) -> CGImage? {
+        guard let sampled = image.cropping(to: crop) else { return nil }
+        let block = max(1, Int(cellSize.rounded()))
+        let smallWidth = max(1, sampled.width / block)
+        let smallHeight = max(1, sampled.height / block)
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+
+        guard let down = CGContext(
+            data: nil,
+            width: smallWidth,
+            height: smallHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else {
+            return nil
+        }
+        down.interpolationQuality = .medium
+        down.draw(sampled, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
+        guard let small = down.makeImage() else { return nil }
+
+        guard let up = CGContext(
+            data: nil,
+            width: sampled.width,
+            height: sampled.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else {
+            return nil
+        }
+        up.interpolationQuality = .none
+        up.draw(small, in: CGRect(x: 0, y: 0, width: sampled.width, height: sampled.height))
+        return up.makeImage()
+    }
+
     /// Applies every redaction in a document to a copy of the base image.
     ///
     /// - Parameters:

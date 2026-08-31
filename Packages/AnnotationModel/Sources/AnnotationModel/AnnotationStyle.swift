@@ -162,8 +162,49 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
     /// be attacked — an even mosaic over known glyph shapes is recoverable.
     case pixelate(cellSize: CGFloat)
 
-    public static let defaultBlur = RedactionStyle.blur(radius: 12)
-    public static let defaultPixelate = RedactionStyle.pixelate(cellSize: 12)
+    /// Screendrop's default strength (0.55): enough to hide text, not a wall of fog.
+    public static let defaultBlur = RedactionStyle.blur(density: 0.55)
+    public static let defaultPixelate = RedactionStyle.pixelate(density: 0.55)
+
+    public var isPixelate: Bool {
+        if case .pixelate = self {
+            return true
+        }
+        return false
+    }
+
+    /// Strength on Screendrop's 0...1 slider. Blur radius is `2 + density × 28`;
+    /// pixel block size is `4 + density × 36`.
+    public var density: CGFloat {
+        switch self {
+        case let .blur(radius):
+            min(max((radius - 2) / 28, 0), 1)
+        case let .pixelate(cellSize):
+            min(max((cellSize - 4) / 36, 0), 1)
+        }
+    }
+
+    public static func blur(density: CGFloat) -> RedactionStyle {
+        .blur(radius: 2 + clampedDensity(density) * 28)
+    }
+
+    public static func pixelate(density: CGFloat) -> RedactionStyle {
+        .pixelate(cellSize: 4 + clampedDensity(density) * 36)
+    }
+
+    /// Keeps the same strength while switching Blur ↔ Pixelate.
+    public func togglingKind(pixelate: Bool) -> RedactionStyle {
+        pixelate ? .pixelate(density: density) : .blur(density: density)
+    }
+
+    /// Keeps Blur vs Pixelate while the Strength slider moves.
+    public func withDensity(_ density: CGFloat) -> RedactionStyle {
+        isPixelate ? .pixelate(density: density) : .blur(density: density)
+    }
+
+    private static func clampedDensity(_ density: CGFloat) -> CGFloat {
+        min(max(density, 0), 1)
+    }
 }
 
 /// One of the five text presets from docs/03 §3, or a custom style.

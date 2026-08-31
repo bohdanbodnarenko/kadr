@@ -67,6 +67,9 @@ public final class AnnotationCanvasView: NSView {
     /// Kept so the measure tool can read the image's straight edges the first time it is
     /// used — never at open, because most sessions never measure anything (docs/06 M21).
     let baseImage: CGImage
+    /// What the canvas is showing: the capture, or the capture with the subject cut out.
+    /// Redaction samples this so a blur lands on the pixels the user sees.
+    private var displayedImage: CGImage
     private let subjectLift = SubjectLiftCompositor()
     /// The lift the base layer currently shows, so the composite is not redone per edit.
     private var liftedFrom: SubjectLiftSpec?
@@ -82,6 +85,7 @@ public final class AnnotationCanvasView: NSView {
     public init(model: EditorDocumentModel, baseImage: CGImage) {
         self.model = model
         self.baseImage = baseImage
+        displayedImage = baseImage
         super.init(frame: CGRect(origin: .zero, size: model.document.baseImage.size))
 
         wantsLayer = true
@@ -150,7 +154,8 @@ public final class AnnotationCanvasView: NSView {
             guard let layer = AnnotationLayerFactory.makeLayer(
                 for: command,
                 contentsScale: scale,
-                imageScale: imageScale
+                imageScale: imageScale,
+                baseImage: displayedImage
             ) else {
                 continue
             }
@@ -230,10 +235,20 @@ public final class AnnotationCanvasView: NSView {
 
         let scale = window?.backingScaleFactor ?? 2
         if let existing = draftShapeLayer, existing.name == draft.id.rawValue.uuidString {
-            AnnotationLayerFactory.update(existing, for: draft, imageScale: imageScale)
+            AnnotationLayerFactory.update(
+                existing,
+                for: draft,
+                imageScale: imageScale,
+                baseImage: displayedImage
+            )
         } else {
             draftShapeLayer?.removeFromSuperlayer()
-            draftShapeLayer = AnnotationLayerFactory.makeLayer(for: draft, contentsScale: scale, imageScale: imageScale)
+            draftShapeLayer = AnnotationLayerFactory.makeLayer(
+                for: draft,
+                contentsScale: scale,
+                imageScale: imageScale,
+                baseImage: displayedImage
+            )
             if let layer = draftShapeLayer {
                 draftLayer.addSublayer(layer)
             }
@@ -354,7 +369,12 @@ public final class AnnotationCanvasView: NSView {
 
         for command in model.document.resolvedCommands where model.selection.contains(command.id) {
             guard let layer = layers[command.id] else { continue }
-            AnnotationLayerFactory.update(layer, for: command, imageScale: imageScale)
+            AnnotationLayerFactory.update(
+                layer,
+                for: command,
+                imageScale: imageScale,
+                baseImage: displayedImage
+            )
         }
     }
 
@@ -445,7 +465,8 @@ public final class AnnotationCanvasView: NSView {
         let spec = model.document.subjectLift
         guard spec != liftedFrom else { return }
         liftedFrom = spec
-        baseLayer.contents = spec.map { subjectLift.apply($0, to: baseImage) } ?? baseImage
+        displayedImage = spec.map { subjectLift.apply($0, to: baseImage) } ?? baseImage
+        baseLayer.contents = displayedImage
     }
 
     /// Called after undo, redo or an inspector change.

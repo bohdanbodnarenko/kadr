@@ -78,6 +78,12 @@ public extension AnnotationCommand {
         return .arrow(spec)
     }
 
+    func applying(redactionStyle: RedactionStyle) -> AnnotationCommand {
+        guard case var .redaction(spec) = self else { return self }
+        spec.style = redactionStyle
+        return .redaction(spec)
+    }
+
     /// A copy that is a new annotation, not a second handle on this one.
     ///
     /// Bindings are dropped: they point at identities that would otherwise be shared with

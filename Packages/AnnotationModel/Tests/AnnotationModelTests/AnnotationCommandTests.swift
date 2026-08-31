@@ -106,4 +106,18 @@ struct AnnotationCommandTests {
         #expect(ArrowHead.allCases.count == 3)
         #expect(TextStyle.presets.count == 5)
     }
+
+    @Test("Redaction strength uses Screendrop's density mapping")
+    func redactionDensity() {
+        let blur = RedactionStyle.blur(density: 0.55)
+        let pixelate = RedactionStyle.pixelate(density: 0.55)
+        #expect(abs(blur.density - 0.55) < 0.001)
+        #expect(abs(pixelate.density - 0.55) < 0.001)
+        if case let .blur(radius) = blur {
+            #expect(abs(radius - 17.4) < 0.001)
+        }
+        #expect(blur.togglingKind(pixelate: true).isPixelate)
+        #expect(!pixelate.togglingKind(pixelate: false).isPixelate)
+        #expect(abs(blur.withDensity(1).density - 1) < 0.001)
+    }
 }
