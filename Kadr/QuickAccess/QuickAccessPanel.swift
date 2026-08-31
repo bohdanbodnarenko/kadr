@@ -5,7 +5,29 @@ import Shared
 import SwiftUI
 
 /// First click on a non-activating overlay must count (docs/04 §5).
-final class OverlayHostingView<Content: View>: NSHostingView<Content> {
+///
+/// Not generic: a `NSHostingView<Content>` subclass crashes Swift 6.3's Release inliner
+/// in the synthesized `deinit` (`EarlyPerfInliner` / `OverlayHostingViewCfD`). Erasing to
+/// `AnyView` keeps the first-click override without that specialization.
+final class OverlayHostingView: NSHostingView<AnyView> {
+    init(rootView: some View) {
+        super.init(rootView: AnyView(rootView))
+    }
+
+    @available(*, unavailable)
+    required init(rootView: AnyView) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("OverlayHostingView is created in code only")
+    }
+
+    func setRootView(_ view: some View) {
+        rootView = AnyView(view)
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
     }
@@ -19,7 +41,7 @@ final class OverlayHostingView<Content: View>: NSHostingView<Content> {
 /// showing the panel steals nothing, clicking it hands it the keyboard.
 @MainActor
 final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
-    private let hostingView: OverlayHostingView<QuickAccessCardView>
+    private let hostingView: OverlayHostingView
     private var cardActions: QuickAccessCardActions
     private let settings: AppSettings
 
@@ -114,12 +136,12 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
     /// savings badge needs a new root rather than a redraw.
     func refresh(item: QuickAccessItem, settings: AppSettings, actions: QuickAccessCardActions) {
         cardActions = actions
-        hostingView.rootView = QuickAccessCardView(
+        hostingView.setRootView(QuickAccessCardView(
             item: item,
             actions: actions,
             width: CGFloat(settings.overlayCardWidth),
             layout: settings.cardLayout
-        )
+        ))
     }
 
     /// Applies the stacking transform: cards behind the front one shrink and fade.

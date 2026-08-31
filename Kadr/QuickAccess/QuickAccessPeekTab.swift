@@ -18,7 +18,7 @@ enum OverlayPeekCopy {
 /// is still open; the × dismisses every card without deleting files.
 @MainActor
 final class QuickAccessPeekPanel: NonActivatingPanel, InteractivelyMasked {
-    private let hostingView: OverlayHostingView<QuickAccessPeekTabView>
+    private let hostingView: OverlayHostingView
     private var onExpand: () -> Void
     private var onDismissAll: () -> Void
 
@@ -71,12 +71,12 @@ final class QuickAccessPeekPanel: NonActivatingPanel, InteractivelyMasked {
     }
 
     func update(title: String, corner: OverlayCorner, size: CGSize) {
-        hostingView.rootView = QuickAccessPeekTabView(
+        hostingView.setRootView(QuickAccessPeekTabView(
             title: title,
             corner: corner,
             onExpand: onExpand,
             onDismissAll: onDismissAll
-        )
+        ))
         setFrame(
             CGRect(x: frame.minX, y: frame.minY, width: size.width, height: size.height),
             display: true
