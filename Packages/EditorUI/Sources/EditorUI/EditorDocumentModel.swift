@@ -65,18 +65,21 @@ public final class EditorDocumentModel {
 
     /// The annotation being drawn right now. It lives outside the document until the
     /// mouse comes up, so a half-drawn arrow never lands in the undo history.
-    public private(set) var draft: AnnotationCommand?
+    public internal(set) var draft: AnnotationCommand?
     /// The marquee being dragged in select mode.
-    public private(set) var marquee: CGRect?
+    public internal(set) var marquee: CGRect?
 
-    private var dragOrigin: CGPoint?
+    var dragOrigin: CGPoint?
     /// The selected annotations exactly as they were when the drag began.
     ///
     /// The move is recomputed from these on every event rather than accumulated onto the
     /// live ones: applying an origin-relative delta to already-moved commands compounds,
     /// and the selection accelerates away from the pointer (docs/07 C2).
-    private var dragStartCommands: [AnnotationID: AnnotationCommand] = [:]
-    private var isMovingSelection = false
+    var dragStartCommands: [AnnotationID: AnnotationCommand] = [:]
+    var isMovingSelection = false
+    /// The handle currently being dragged, if this gesture is a resize rather than a move.
+    var resizeHandle: SelectionHandle?
+    var resizeStartBounds: CGRect?
 
     /// The document's commands as they were when the work was last saved.
     ///
@@ -133,129 +136,7 @@ public final class EditorDocumentModel {
         document.redo()
     }
 
-    // MARK: - Pointer
-
-    public func pointerDown(at point: CGPoint, modifiers: EditorModifiers = []) {
-        dragOrigin = point
-
-        guard let annotationTool = tool.annotation else {
-            beginSelectionDrag(at: point, modifiers: modifiers)
-            return
-        }
-
-        if tool.isClickToPlace {
-            place(annotationTool, at: point)
-            return
-        }
-        draft = makeDraft(annotationTool, at: snappedIfMeasuring(point))
-    }
-
-    public func pointerDragged(to point: CGPoint, modifiers: EditorModifiers = []) {
-        guard let origin = dragOrigin else { return }
-
-        if tool == .select {
-            if isMovingSelection {
-                dragSelection(to: point, from: origin)
-            } else {
-                marquee = CGRect(
-                    x: min(origin.x, point.x),
-                    y: min(origin.y, point.y),
-                    width: abs(point.x - origin.x),
-                    height: abs(point.y - origin.y)
-                )
-            }
-            return
-        }
-
-        guard var draft else { return }
-        update(&draft, from: origin, to: snappedIfMeasuring(point), modifiers: modifiers)
-        self.draft = draft
-    }
-
-    public func pointerUp(at point: CGPoint, modifiers: EditorModifiers = []) {
-        defer {
-            // Closes the drag's single undo step. Safe unconditionally: with no gesture
-            // open it does nothing, so every exit from this method leaves history tidy.
-            document.endGesture()
-            dragOrigin = nil
-            dragStartCommands = [:]
-            isMovingSelection = false
-            marquee = nil
-            draft = nil
-        }
-
-        if tool == .select {
-            if let marquee {
-                let enclosed = AnnotationHitTesting.enclosed(in: document.commands, by: marquee)
-                let ids = Set(enclosed.map(\.id))
-                document.selection = modifiers.contains(.extendSelection)
-                    ? document.selection.union(ids)
-                    : ids
-            }
-            return
-        }
-
-        // A click with the measure tool and no drag means "measure the thing under the
-        // pointer" — the edge-snap payoff (docs/06 M21).
-        if let box = measurementForClick(on: draft) {
-            document.add(box)
-            document.selection = [box.id]
-            return
-        }
-
-        guard let draft, Self.isWorthKeeping(draft) else { return }
-        document.add(bindingArrowEnds(of: draft))
-        document.selection = [draft.id]
-        rememberStyle(of: draft)
-        finishAppliedTool(placed: draft.id)
-    }
-
     // MARK: - Selection
-
-    private func beginSelectionDrag(at point: CGPoint, modifiers: EditorModifiers) {
-        guard let hit = AnnotationHitTesting.topmost(in: document.commands, at: point) else {
-            // An empty click clears the selection and starts a marquee.
-            if !modifiers.contains(.extendSelection) {
-                document.selection = []
-            }
-            return
-        }
-
-        if modifiers.contains(.extendSelection) {
-            document.selection.formSymmetricDifference([hit.id])
-        } else if !document.selection.contains(hit.id) {
-            document.selection = [hit.id]
-        }
-
-        isMovingSelection = !document.selection.isEmpty
-        guard isMovingSelection else { return }
-
-        dragStartCommands = Dictionary(
-            uniqueKeysWithValues: document.commands
-                .filter { document.selection.contains($0.id) }
-                .map { ($0.id, $0) }
-        )
-        // One undo step for the whole drag, however many frames it takes (docs/09 U0.2).
-        document.beginGesture()
-    }
-
-    /// Positions the selection for the pointer's current location.
-    ///
-    /// Absolute, not incremental: every event re-derives each annotation from where it
-    /// was when the drag started, so a 100-point drag moves exactly 100 points no matter
-    /// how many mouse-moved events arrived on the way.
-    private func dragSelection(to point: CGPoint, from origin: CGPoint) {
-        let delta = CGSize(width: point.x - origin.x, height: point.y - origin.y)
-        let starts = dragStartCommands
-        guard !starts.isEmpty else { return }
-
-        document.updateGesture { commands in
-            for index in commands.indices {
-                guard let start = starts[commands[index].id] else { continue }
-                commands[index] = Self.translated(start, by: delta)
-            }
-        }
-    }
 
     /// Moves the selection by a delta from where the drag started.
     ///
@@ -308,7 +189,7 @@ public final class EditorDocumentModel {
 
     // MARK: - Drafting
 
-    private func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
+    func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
         let stroke = styleMemory.stroke(for: annotationTool)
         switch annotationTool {
         case .arrow:
@@ -350,7 +231,7 @@ public final class EditorDocumentModel {
         }
     }
 
-    private func update(
+    func update(
         _ draft: inout AnnotationCommand,
         from origin: CGPoint,
         to point: CGPoint,
@@ -389,7 +270,7 @@ public final class EditorDocumentModel {
         }
     }
 
-    private func rememberStyle(of command: AnnotationCommand) {
+    func rememberStyle(of command: AnnotationCommand) {
         switch command {
         case let .arrow(spec):
             styleMemory.remember(spec.stroke, for: .arrow)

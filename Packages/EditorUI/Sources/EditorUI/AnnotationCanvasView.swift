@@ -73,7 +73,7 @@ public final class AnnotationCanvasView: NSView {
     private let subjectLift = SubjectLiftCompositor()
     /// The lift the base layer currently shows, so the composite is not redone per edit.
     private var liftedFrom: SubjectLiftSpec?
-    private var marqueeLayer = CAShapeLayer()
+    var marqueeLayer = CAShapeLayer()
     /// Space-drag pans the canvas the way a hand tool does in every other image editor.
     var spaceIsDown = false
     var spacePanAnchor: CGPoint?
@@ -251,43 +251,6 @@ public final class AnnotationCanvasView: NSView {
         }
     }
 
-    /// Handles around the selection, and the marquee while one is being dragged.
-    private func updateSelectionHandles() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-
-        selectionLayer.sublayers?
-            .filter { $0 !== marqueeLayer }
-            .forEach { $0.removeFromSuperlayer() }
-
-        for command in model.document.resolvedCommands where model.selection.contains(command.id) {
-            let box = AnnotationHitTesting.boundingBox(of: command).insetBy(dx: -4, dy: -4)
-            let outline = CAShapeLayer()
-            outline.path = CGPath(rect: box, transform: nil)
-            outline.strokeColor = NSColor.controlAccentColor.cgColor
-            outline.fillColor = nil
-            outline.lineWidth = 1
-            outline.lineDashPattern = [3, 3]
-            selectionLayer.addSublayer(outline)
-
-            for corner in [
-                CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
-                CGPoint(x: box.minX, y: box.maxY), CGPoint(x: box.maxX, y: box.maxY)
-            ] {
-                let handle = CALayer()
-                handle.frame = CGRect(x: corner.x - 3, y: corner.y - 3, width: 6, height: 6)
-                handle.backgroundColor = NSColor.white.cgColor
-                handle.borderColor = NSColor.controlAccentColor.cgColor
-                handle.borderWidth = 1
-                handle.cornerRadius = 1
-                selectionLayer.addSublayer(handle)
-            }
-        }
-
-        marqueeLayer.path = model.marquee.map { CGPath(rect: $0, transform: nil) }
-    }
-
     // MARK: - Mouse
 
     override public func mouseDown(with event: NSEvent) {
@@ -312,7 +275,11 @@ public final class AnnotationCanvasView: NSView {
 
         window?.makeFirstResponder(self)
         prepareEdgesIfMeasuring()
-        model.pointerDown(at: imagePoint(from: event), modifiers: modifiers(from: event))
+        model.pointerDown(
+            at: imagePoint(from: event),
+            modifiers: modifiers(from: event),
+            handleTolerance: SelectionResizer.hitRadius / handleViewScale
+        )
         refreshAfterEdit()
     }
 
@@ -391,6 +358,7 @@ public final class AnnotationCanvasView: NSView {
     func refreshAfterEdit() {
         refreshBaseImage()
         rebuildAnnotationLayers()
+        window?.invalidateCursorRects(for: self)
     }
 
     /// Re-composites the base layer when background removal is applied or undone
@@ -415,11 +383,7 @@ public final class AnnotationCanvasView: NSView {
         window?.invalidateCursorRects(for: self)
     }
 
-    override public func resetCursorRects() {
-        addCursorRect(bounds, cursor: canvasCursor)
-    }
-
-    private var canvasCursor: NSCursor {
+    var canvasCursor: NSCursor {
         if spaceIsDown {
             return spacePanAnchor == nil ? NSCursor.openHand : NSCursor.closedHand
         }

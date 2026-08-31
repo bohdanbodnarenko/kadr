@@ -39,6 +39,9 @@ public enum CropHandle: String, Codable, CaseIterable, Sendable {
         oppositeCorner != nil
     }
 
+    /// The eight anchors around a selection or crop, excluding the body.
+    public static let resizeHandles: [CropHandle] = allCases.filter { $0 != .body }
+
     /// Where this handle sits on a rect.
     public func point(in rect: CGRect) -> CGPoint {
         CGPoint(
