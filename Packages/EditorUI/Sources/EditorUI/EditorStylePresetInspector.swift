@@ -38,6 +38,23 @@ struct EditorStylePresetInspector: View {
                 Button("Import…") { importPreset() }
             }
 
+            Button {
+                model.clearStylePreset()
+                appliedID = nil
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: matchedPreset == nil && !hasAnyChrome
+                        ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(matchedPreset == nil && !hasAnyChrome
+                            ? Color.accentColor : .secondary)
+                    Text("None")
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Remove the current look")
+
             ForEach(presets) { preset in
                 row(preset)
             }
@@ -55,8 +72,13 @@ struct EditorStylePresetInspector: View {
     private func row(_ preset: StylePreset) -> some View {
         HStack {
             Button {
-                model.applyStylePreset(preset)
-                appliedID = preset.id
+                if preset.id == matchedPreset?.id {
+                    model.clearStylePreset()
+                    appliedID = nil
+                } else {
+                    model.applyStylePreset(preset)
+                    appliedID = preset.id
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: preset.id == matchedPreset?.id ? "checkmark.circle.fill" : "circle")

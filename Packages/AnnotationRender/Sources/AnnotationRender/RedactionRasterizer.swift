@@ -28,51 +28,52 @@ public struct RedactionRasterizer: Sendable {
     /// pixels under the box (Screendrop's `AnnoShapeDrawing.drawRedaction`).
     public func preview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
         let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let crop = CGRect(
-            x: spec.rect.minX * scale,
-            y: spec.rect.minY * scale,
-            width: spec.rect.width * scale,
-            height: spec.rect.height * scale
-        ).integral.intersection(bounds)
-        guard crop.width >= 1, crop.height >= 1 else { return nil }
-
         switch spec.style {
         case let .blur(radius):
-            return previewBlur(image, crop: crop, radius: max(radius * scale, 1), bounds: bounds)
+            return previewBlur(image, rect: spec.rect, radius: max(radius, 1), scale: scale)
         case let .pixelate(cellSize):
+            let crop = CGRect(
+                x: spec.rect.minX * scale,
+                y: spec.rect.minY * scale,
+                width: spec.rect.width * scale,
+                height: spec.rect.height * scale
+            ).integral.intersection(bounds)
+            guard crop.width >= 1, crop.height >= 1 else { return nil }
             return previewPixelate(image, crop: crop, cellSize: max(cellSize * scale, 2))
         }
     }
 
-    /// Pads the crop so the Gaussian can sample neighbours, then cuts back to the box.
-    /// Without the pad, the blur darkens at the edges the way an unclamped CIBlur does.
-    private func previewBlur(
-        _ image: CGImage,
-        crop: CGRect,
-        radius: CGFloat,
-        bounds: CGRect
-    ) -> CGImage? {
-        let pad = ceil(radius * 2)
-        let padded = crop.insetBy(dx: -pad, dy: -pad).intersection(bounds).integral
-        guard padded.width >= 1, padded.height >= 1,
-              let sampled = image.cropping(to: padded)
-        else {
-            return nil
-        }
+    /// Pads the region so the Gaussian samples real neighbours, then cuts back to the box
+    /// (Screendrop's `makeBlurredImage`). Crop-then-clamp only repeats the box's own edge
+    /// and looks like a sharp, "pure" rectangle of slightly softened pixels.
+    private func previewBlur(_ image: CGImage, rect: CGRect, radius: CGFloat, scale: CGFloat) -> CGImage? {
+        let ci = CIImage(cgImage: image)
+        let pixels = pixelRect(rect, scale: scale, in: ci.extent)
+        guard pixels.width >= 1, pixels.height >= 1 else { return nil }
+        let blurred = gaussianBlur(ci, in: pixels, radius: radius * scale)
+        return KadrRenderContext.shared.createCGImage(blurred, from: pixels)
+    }
 
-        let input = CIImage(cgImage: sampled)
-        let blurred = input
+    /// Core Image space: pixels, origin at the bottom-left of the bitmap.
+    private func pixelRect(_ rect: CGRect, scale: CGFloat, in extent: CGRect) -> CGRect {
+        CGRect(
+            x: rect.minX * scale,
+            y: extent.height - rect.maxY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral.intersection(extent)
+    }
+
+    /// A Gaussian that samples past the box, then is clipped to it — Screendrop's
+    /// `CIFilter.gaussianBlur` path, with the same radius mapping.
+    private func gaussianBlur(_ image: CIImage, in rect: CGRect, radius: CGFloat) -> CIImage {
+        let sigma = max(radius, 1)
+        let pad = ceil(sigma * 2)
+        let padded = rect.insetBy(dx: -pad, dy: -pad).intersection(image.extent)
+        return image
+            .cropped(to: padded)
             .clampedToExtent()
-            .applyingGaussianBlur(sigma: Double(radius))
-        // CGImage.cropping is top-left; CIImage is bottom-left of that bitmap.
-        let topOffset = crop.minY - padded.minY
-        let outputRect = CGRect(
-            x: crop.minX - padded.minX,
-            y: CGFloat(sampled.height) - topOffset - crop.height,
-            width: crop.width,
-            height: crop.height
-        )
-        return KadrRenderContext.shared.createCGImage(blurred, from: outputRect)
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: sigma])
     }
 
     /// Fast mosaic for the canvas: downsample then nearest-neighbour up, the way Screendrop
@@ -149,7 +150,7 @@ public struct RedactionRasterizer: Sendable {
 
             let obscured = switch redaction.style {
             case let .blur(radius):
-                blurred(output, in: pixels, radius: radius * scale)
+                gaussianBlur(output, in: pixels, radius: max(radius * scale, 1))
             case let .pixelate(cellSize):
                 pixelated(
                     output,
@@ -167,16 +168,6 @@ public struct RedactionRasterizer: Sendable {
             return image
         }
         return result
-    }
-
-    /// A Gaussian blur that samples from a clamped image, so edges do not darken.
-    private func blurred(_ image: CIImage, in rect: CGRect, radius: CGFloat) -> CIImage {
-        image
-            .cropped(to: rect)
-            // Without clamping, the blur pulls in transparent pixels from beyond the edge
-            // and the region fades out at its borders.
-            .clampedToExtent()
-            .applyingGaussianBlur(sigma: Double(max(radius, 1)))
     }
 
     /// A mosaic whose every cell samples from its own displaced point.

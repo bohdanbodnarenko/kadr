@@ -59,6 +59,7 @@ public final class AnnotationCanvasView: NSView {
     let reviewLayer = CALayer()
     let draftLayer = CALayer()
     let selectionLayer = CALayer()
+    let cropLayer = CALayer()
     private let logger = KadrLog.logger(.overlay)
 
     /// Layers by annotation, so an update finds its own layer without a search.
@@ -105,7 +106,7 @@ public final class AnnotationCanvasView: NSView {
         root.addSublayer(contentHost)
         // Drawn on the canvas, not inside the card: arrows and shapes belong on the
         // beautify padding as well as on the screenshot (docs/03 §3).
-        for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer] {
+        for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer, cropLayer] {
             layer.masksToBounds = false
             root.addSublayer(layer)
         }
@@ -173,6 +174,7 @@ public final class AnnotationCanvasView: NSView {
             layers[command.id] = layer
         }
         updateSelectionHandles()
+        updateCropOverlay()
         rebuildReviewLayers()
         // The layers just rebuilt sit on the canvas, but the offscreen path covers them
         // with a flattened render — so with a camera or a progressive blur active, a newly
@@ -221,7 +223,20 @@ public final class AnnotationCanvasView: NSView {
             viewPoint = unprojected
         }
 
+        // Crop mode shows the full capture so the overlay can dim the exterior. Mapping
+        // through `contentRect` would jump the pointer into the already-cropped space.
+        if model.tool == .crop {
+            return viewPoint
+        }
         return model.document.imagePoint(fromCanvas: viewPoint)
+    }
+
+    /// Image-space point as a point in this view, honouring crop-mode's full-capture layout.
+    func viewPoint(fromImage point: CGPoint) -> CGPoint {
+        if model.tool == .crop {
+            return point
+        }
+        return model.document.canvasPoint(fromImage: point)
     }
 
     /// Refreshes the live drag preview: one layer, replaced only when the kind changes.
@@ -286,6 +301,7 @@ public final class AnnotationCanvasView: NSView {
             at: imagePoint(from: event),
             modifiers: modifiers(from: event),
             grabbing: screenSpaceHandle(at: event),
+            cropGrabbing: screenSpaceCropHandle(at: event),
             handleTolerance: SelectionResizer.hitRadius / handleViewScale
         )
         refreshAfterEdit()
@@ -300,6 +316,9 @@ public final class AnnotationCanvasView: NSView {
         updateDraftLayer()
         if model.tool == .select {
             rebuildAnnotationLayersDuringMove()
+        }
+        if model.tool == .crop {
+            updateCropOverlay()
         }
         updateSelectionHandles()
     }
@@ -410,12 +429,7 @@ public final class AnnotationCanvasView: NSView {
     /// Relays the card only when its geometry actually moved — a stroke-width tick
     /// must not re-lay wallpaper, shadows and the offscreen chrome.
     private func layoutCanvasChromeIfNeeded() {
-        let key = CanvasLayoutKey(
-            canvas: model.document.canvasRect.size,
-            content: model.document.contentRect,
-            imageSpace: model.document.imageSpaceFrame,
-            beautify: model.document.beautify
-        )
+        let key = canvasLayoutKey()
         guard lastLayoutKey != key else { return }
         lastLayoutKey = key
         layoutCanvasChrome()
@@ -444,6 +458,7 @@ public final class AnnotationCanvasView: NSView {
             )
         }
         updateSelectionHandles()
+        updateCropOverlay()
         rebuildReviewLayers()
         updateExpensiveChrome()
         onDocumentChanged?()
@@ -464,12 +479,4 @@ public final class AnnotationCanvasView: NSView {
             return NSCursor.crosshair
         }
     }
-}
-
-/// Geometry that forces a chrome re-lay. Style-only edits leave all of this alone.
-struct CanvasLayoutKey: Equatable {
-    var canvas: CGSize
-    var content: CGRect
-    var imageSpace: CGRect
-    var beautify: BeautifySpec?
 }

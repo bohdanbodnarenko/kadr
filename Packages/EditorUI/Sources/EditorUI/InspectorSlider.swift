@@ -32,14 +32,25 @@ struct InspectorSlider: View {
     }
 
     var body: some View {
-        HStack(spacing: 7) {
-            GeometryReader { proxy in
-                scrubTrack(width: proxy.size.width)
-            }
-            .frame(height: InspectorMetrics.sliderHeight)
+        // A VStack, not a bare HStack: macOS Form splits an HStack into a label column
+        // and a wrapping value column, which is what put "12 px" on two lines.
+        VStack(spacing: 0) {
+            HStack(spacing: 7) {
+                GeometryReader { proxy in
+                    scrubTrack(width: proxy.size.width)
+                }
+                .frame(height: InspectorMetrics.sliderHeight)
 
-            valueField
-                .frame(width: InspectorMetrics.sliderValueWidth)
+                valueField
+                    .frame(
+                        minWidth: InspectorMetrics.sliderValueWidth,
+                        idealWidth: InspectorMetrics.sliderValueWidth,
+                        maxWidth: InspectorMetrics.sliderValueWidth,
+                        minHeight: InspectorMetrics.sliderHeight,
+                        maxHeight: InspectorMetrics.sliderHeight
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
+            }
         }
         .frame(maxWidth: .infinity)
         .onAppear(perform: syncDraftText)
@@ -133,7 +144,11 @@ struct InspectorSlider: View {
             .font(.inspectorNumeric)
             .foregroundStyle(.primary.opacity(0.82))
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 8)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .truncationMode(.tail)
+            .monospacedDigit()
+            .padding(.horizontal, 4)
             .focused($focusedPart, equals: .value)
             .onSubmit {
                 commitDraftText()

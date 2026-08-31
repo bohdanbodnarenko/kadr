@@ -172,4 +172,14 @@ struct EditorStyleTests {
         guard case let .redaction(stronger) = try #require(model.document.commands.first) else { return }
         #expect(abs(stronger.style.density - 0.8) < 0.001)
     }
+
+    @Test("Select with nothing selected has no drawing-tool inspector")
+    func selectHasNoInspectedTool() {
+        let model = makeModel()
+        #expect(model.tool == .select)
+        #expect(model.inspectedTool == nil)
+
+        model.tool = .arrow
+        #expect(model.inspectedTool == .arrow)
+    }
 }

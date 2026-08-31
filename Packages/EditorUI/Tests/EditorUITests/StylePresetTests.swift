@@ -77,6 +77,16 @@ struct StylePresetTests {
         #expect(model.document.camera == nil)
     }
 
+    @Test("Clearing a look removes the chrome")
+    func clearStylePresetRemovesChrome() {
+        let model = makeModel()
+        model.applyStylePreset(StylePreset(name: "Full", beautify: .twitter, camera: .lean))
+        model.clearStylePreset()
+
+        #expect(model.document.beautify == nil)
+        #expect(model.document.camera == nil)
+    }
+
     @Test("Annotations are untouched by a look")
     func annotationsSurvive() {
         let model = makeModel()

@@ -8,37 +8,43 @@ import SwiftUI
 struct EditorInspector: View {
     @Bindable var model: EditorDocumentModel
 
-    private var tool: AnnotationTool {
-        model.inspectedTool ?? .arrow
+    /// The annotation the inspector is editing, if there is one.
+    ///
+    /// Select with nothing selected is not a drawing tool: showing arrow colour and width
+    /// there is a leftover of `inspectedTool` defaulting to arrow.
+    private var tool: AnnotationTool? {
+        model.inspectedTool
     }
 
     var body: some View {
         Form {
-            Section(tool.title) {
-                if tool != .crop, tool != .counter, tool != .redaction {
-                    EditorSwatchStrip(
-                        selected: model.styleMemory.stroke(for: tool).color,
-                        onSelect: { model.applyColor($0) }
-                    )
-                    InspectorSlider(
-                        title: "Width",
-                        value: Binding(
-                            get: { Double(model.styleMemory.stroke(for: tool).width) },
-                            set: { model.applyStrokeWidth(CGFloat($0)) }
-                        ),
-                        range: Double(StrokeStyle.widthRange.lowerBound)
-                            ... Double(StrokeStyle.widthRange.upperBound),
-                        format: .points,
-                        onEditingEnded: { model.endInspectorStyleEdit() }
-                    )
-                }
-                switch tool {
-                case .arrow: arrowOptions
-                case .shape: shapeOptions
-                case .redaction: redactionOptions
-                case .text: textOptions
-                case .measure: measureOptions
-                default: EmptyView()
+            if let tool, tool != .crop {
+                Section(tool.title) {
+                    if tool != .counter, tool != .redaction {
+                        EditorSwatchStrip(
+                            selected: model.styleMemory.stroke(for: tool).color,
+                            onSelect: { model.applyColor($0) }
+                        )
+                        InspectorSlider(
+                            title: "Width",
+                            value: Binding(
+                                get: { Double(model.styleMemory.stroke(for: tool).width) },
+                                set: { model.applyStrokeWidth(CGFloat($0)) }
+                            ),
+                            range: Double(StrokeStyle.widthRange.lowerBound)
+                                ... Double(StrokeStyle.widthRange.upperBound),
+                            format: .points,
+                            onEditingEnded: { model.endInspectorStyleEdit() }
+                        )
+                    }
+                    switch tool {
+                    case .arrow: arrowOptions
+                    case .shape: shapeOptions
+                    case .redaction: redactionOptions
+                    case .text: textOptions
+                    case .measure: measureOptions
+                    default: EmptyView()
+                    }
                 }
             }
 

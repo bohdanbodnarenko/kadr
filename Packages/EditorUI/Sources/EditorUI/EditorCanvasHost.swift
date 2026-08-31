@@ -10,7 +10,6 @@ struct EditorCanvasHost: NSViewRepresentable {
     let session: EditorCanvasSession
     var isCropping: Bool
     var zoomToFit: Bool
-    var magnification: CGFloat
 
     func makeNSView(context: Context) -> EditorCanvasScrollView {
         let canvas = AnnotationCanvasView(model: model, baseImage: baseImage)
@@ -46,9 +45,10 @@ struct EditorCanvasHost: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: EditorCanvasScrollView, context: Context) {
-        // `zoomToFit` and `magnification` are read so SwiftUI rebuilds the representable
-        // when the HUD changes them. The coordinator then copies them onto the scroll view.
-        _ = (zoomToFit, magnification)
+        // Fit is applied from the session and the viewport, not from a SwiftUI-bound
+        // magnification: pushing live fit values back through the representable re-laid
+        // the canvas on every window-resize tick and made the capture jump.
+        _ = zoomToFit
         context.coordinator.session = session
         context.coordinator.isCropping = isCropping
         context.coordinator.syncCanvasIfNeeded(model: model)
@@ -156,12 +156,17 @@ struct EditorCanvasHost: NSViewRepresentable {
             isApplying = true
             defer { isApplying = false }
 
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            defer { CATransaction.commit() }
+            NSAnimationContext.beginGrouping()
+            NSAnimationContext.current.duration = 0
+            defer { NSAnimationContext.endGrouping() }
+
             if abs(scrollView.magnification - target) > 0.002 {
-                let clip = scrollView.contentView
-                scrollView.setMagnification(
-                    target,
-                    centeredAt: CGPoint(x: clip.bounds.midX, y: clip.bounds.midY)
-                )
+                // Assign rather than `setMagnification(_:centeredAt:)`: the centered API
+                // animates and recenters, which is the jump during a live window resize.
+                scrollView.magnification = target
             }
             (scrollView.contentView as? CenteringClipView)?.recenterDocument()
 

@@ -89,9 +89,9 @@ public struct EditorRootView: View {
                 baseImage: baseImage,
                 session: canvasSession,
                 isCropping: model.tool == .crop,
-                zoomToFit: canvasSession.zoomToFit,
-                magnification: canvasSession.magnification
+                zoomToFit: canvasSession.zoomToFit
             )
+            .transaction { $0.animation = nil }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottomLeading) {
@@ -105,13 +105,13 @@ public struct EditorRootView: View {
                     .padding(.trailing, 16)
                     .padding(.bottom, 16)
                     .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.15), value: model.tool)
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: model.tool)
     }
 
     private var cropBadgeSize: CGSize {
-        let points = model.document.crop?.rect.size ?? model.document.canvasRect.size
+        let points = model.cropWorkingRect.size
         let scale = model.document.baseImage.scale
         return CGSize(width: points.width * scale, height: points.height * scale)
     }

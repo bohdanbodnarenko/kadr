@@ -125,6 +125,21 @@ struct AnnotationLayerFactoryTests {
         #expect(preview.height == 48)
     }
 
+    @Test("A blur samples neighbours past the box so the edge is not a hard rectangle")
+    func blurSamplesNeighbours() {
+        let image = splitToneImage()
+        let spec = RedactionSpec(
+            rect: CGRect(x: 0, y: 0, width: 16, height: 16),
+            style: .blur(radius: 8)
+        )
+        let result = RedactionRasterizer().apply([spec], to: image, scale: 1)
+        let sample = pixel(result, x: 15, y: 8)
+        #expect(
+            sample.red > 20,
+            "a crop-then-clamp blur stays black at the seam; sampling neighbours pulls in white"
+        )
+    }
+
     @Test("A redaction with the capture's pixels shows a real blur, not a grey box")
     func redactionSamplesTheImage() throws {
         let image = stripedImage()
@@ -185,4 +200,45 @@ private func stripedImage(width: Int = 80, height: Int = 80) -> CGImage {
         fatalError("Could not create a test image")
     }
     return image
+}
+
+private func splitToneImage(width: Int = 32, height: Int = 16) -> CGImage {
+    guard let context = CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        fatalError("Could not create a test bitmap")
+    }
+    context.setFillColor(CGColor(gray: 0, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width / 2, height: height))
+    context.setFillColor(CGColor(gray: 1, alpha: 1))
+    context.fill(CGRect(x: width / 2, y: 0, width: width - width / 2, height: height))
+    guard let image = context.makeImage() else {
+        fatalError("Could not create a test image")
+    }
+    return image
+}
+
+private func pixel(_ image: CGImage, x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) {
+    let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+    bytes.initialize(repeating: 0, count: 4)
+    defer { bytes.deallocate() }
+    guard let context = CGContext(
+        data: bytes,
+        width: 1,
+        height: 1,
+        bitsPerComponent: 8,
+        bytesPerRow: 4,
+        space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        fatalError("Could not create a sampling context")
+    }
+    context.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y), width: image.width, height: image.height))
+    return (bytes[0], bytes[1], bytes[2], bytes[3])
 }

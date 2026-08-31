@@ -6,7 +6,8 @@ import SwiftUI
 /// reads as a single control rather than a mixed bag of system widgets.
 enum InspectorMetrics {
     static let sliderHeight: CGFloat = 32
-    static let sliderValueWidth: CGFloat = 60
+    /// Wide enough for "32 px", "100%", and signed camera values like "+18°" on one line.
+    static let sliderValueWidth: CGFloat = 80
     static let sliderRadius: CGFloat = 8
 }
 

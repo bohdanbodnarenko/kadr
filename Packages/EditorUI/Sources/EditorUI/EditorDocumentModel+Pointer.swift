@@ -12,10 +12,16 @@ public extension EditorDocumentModel {
         at point: CGPoint,
         modifiers: EditorModifiers = [],
         grabbing: SelectionHandle? = nil,
+        cropGrabbing: CropHandle? = nil,
         handleTolerance: CGFloat = SelectionResizer.hitRadius
     ) {
         endInspectorStyleEdit()
         dragOrigin = point
+
+        if tool == .crop {
+            beginCropDrag(at: point, grabbing: cropGrabbing, handleTolerance: handleTolerance)
+            return
+        }
 
         guard let annotationTool = tool.annotation else {
             if beginResizeIfHandle(
@@ -59,10 +65,15 @@ public extension EditorDocumentModel {
                 marquee = CGRect(
                     x: min(origin.x, point.x),
                     y: min(origin.y, point.y),
-                    width: abs(point.x - origin.x),
-                    height: abs(point.y - origin.y)
+                    width: abs(origin.x - point.x),
+                    height: abs(origin.y - point.y)
                 )
             }
+            return
+        }
+
+        if tool == .crop {
+            dragCrop(to: point, from: origin, modifiers: modifiers)
             return
         }
 
@@ -82,6 +93,8 @@ public extension EditorDocumentModel {
             isMovingSelection = false
             resizeHandle = nil
             resizeStartBounds = nil
+            cropDragHandle = nil
+            cropDragStartRect = nil
             marquee = nil
             draft = nil
         }

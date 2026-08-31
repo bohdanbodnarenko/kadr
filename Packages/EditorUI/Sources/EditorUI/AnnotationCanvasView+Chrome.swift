@@ -114,53 +114,56 @@ extension AnnotationCanvasView {
         reviewLayer.isHidden = hidden
         draftLayer.isHidden = hidden
         selectionLayer.isHidden = hidden
+        cropLayer.isHidden = hidden || model.tool != .crop
     }
 
     func layoutCanvasChrome() {
-        lastLayoutKey = CanvasLayoutKey(
-            canvas: model.document.canvasRect.size,
-            content: model.document.contentRect,
-            imageSpace: model.document.imageSpaceFrame,
-            beautify: model.document.beautify
-        )
+        lastLayoutKey = canvasLayoutKey()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
         let imageBounds = model.document.baseImage.bounds
-        let content = model.document.contentRect
-
-        guard let spec = model.document.beautify, let layout = model.document.beautifyLayout else {
-            setFrameSize(imageBounds.size)
-            backdropLayer.isHidden = true
-            shadowLayer.isHidden = true
-            contentHost.frame = bounds
-            contentHost.cornerRadius = 0
-            contentHost.masksToBounds = false
-            contentHost.borderWidth = 1
-            contentHost.borderColor = NSColor.separatorColor.cgColor
-            let drawing = model.document.imageSpaceFrame
-            baseLayer.frame = drawing
-            annotationLayer.frame = drawing
-            draftLayer.frame = drawing
-            selectionLayer.frame = drawing
-            reviewLayer.frame = drawing
-            updateExpensiveChrome()
+        let showsFullCapture = model.tool == .crop
+        guard !showsFullCapture, let spec = model.document.beautify, let layout = model.document.beautifyLayout else {
+            layoutPlainCanvas(imageBounds: imageBounds, showsFullCapture: showsFullCapture)
             return
         }
+        layoutBeautifiedCanvas(spec: spec, layout: layout, imageBounds: imageBounds)
+    }
 
+    /// Crop mode and the un-beautified editor: the capture, optionally clipped to the crop.
+    private func layoutPlainCanvas(imageBounds: CGRect, showsFullCapture: Bool) {
+        setFrameSize(showsFullCapture ? imageBounds.size : model.document.canvasRect.size)
+        layer?.masksToBounds = !showsFullCapture
+        backdropLayer.isHidden = true
+        shadowLayer.isHidden = true
+        contentHost.mask = nil
+        contentHost.frame = bounds
+        contentHost.cornerRadius = 0
+        contentHost.masksToBounds = !showsFullCapture
+        contentHost.borderWidth = 1
+        contentHost.borderColor = NSColor.separatorColor.cgColor
+        let drawing = showsFullCapture
+            ? CGRect(origin: .zero, size: imageBounds.size)
+            : model.document.imageSpaceFrame
+        baseLayer.frame = drawing
+        applyDrawingFrames(drawing)
+        updateExpensiveChrome()
+    }
+
+    private func layoutBeautifiedCanvas(spec: BeautifySpec, layout: BeautifyLayout, imageBounds: CGRect) {
+        let content = model.document.contentRect
         setFrameSize(layout.canvasSize)
+        layer?.masksToBounds = false
         backdropLayer.isHidden = false
         backdropLayer.frame = bounds
         applyBackdrop(spec.backdrop)
 
-        // The same path the export renderer builds, so the live canvas and the file agree
-        // about where the corners are (docs/09 U1.1).
         let cardPath = RoundedCornerPath.path(
             in: CGRect(origin: .zero, size: layout.cardRect.size),
             corners: layout.corners
         )
-
         applyShadow(spec.shadow, layout: layout, cardPath: cardPath)
 
         contentHost.frame = layout.cardRect
@@ -173,20 +176,22 @@ extension AnnotationCanvasView {
         cardMask.path = cardPath
         contentHost.mask = cardMask
 
-        // The screenshot stays inside the card (and its rounded clip). Annotations live
-        // on the canvas, so an arrow can start on the padding.
         baseLayer.frame = CGRect(
             x: -content.minX,
             y: -content.minY,
             width: imageBounds.width,
             height: imageBounds.height
         )
-        let drawing = model.document.imageSpaceFrame
+        applyDrawingFrames(model.document.imageSpaceFrame)
+        updateExpensiveChrome()
+    }
+
+    private func applyDrawingFrames(_ drawing: CGRect) {
         annotationLayer.frame = drawing
         draftLayer.frame = drawing
         selectionLayer.frame = drawing
         reviewLayer.frame = drawing
-        updateExpensiveChrome()
+        cropLayer.frame = drawing
     }
 
     /// Draws the card's shadow without laying anything opaque behind the capture.
@@ -276,5 +281,38 @@ extension AnnotationCanvasView {
             )
             backdropLayer.contentsGravity = .resizeAspectFill
         }
+    }
+}
+
+/// Geometry that forces a chrome re-lay. Style-only edits leave all of this alone.
+/// Crop-mode pins the capture to its full size so dragging the overlay does not
+/// re-lay the canvas on every mouse-move (that was the jump).
+struct CanvasLayoutKey: Equatable {
+    var canvas: CGSize
+    var content: CGRect
+    var imageSpace: CGRect
+    var beautify: BeautifySpec?
+    var isCropping: Bool
+}
+
+extension AnnotationCanvasView {
+    func canvasLayoutKey() -> CanvasLayoutKey {
+        if model.tool == .crop {
+            let bounds = model.document.baseImage.bounds
+            return CanvasLayoutKey(
+                canvas: bounds.size,
+                content: bounds,
+                imageSpace: CGRect(origin: .zero, size: bounds.size),
+                beautify: nil,
+                isCropping: true
+            )
+        }
+        return CanvasLayoutKey(
+            canvas: model.document.canvasRect.size,
+            content: model.document.contentRect,
+            imageSpace: model.document.imageSpaceFrame,
+            beautify: model.document.beautify,
+            isCropping: false
+        )
     }
 }

@@ -355,6 +355,35 @@ struct EditorCropTests {
         #expect(model.document.crop == nil)
     }
 
+    @Test("Dragging inside the capture rubber-bands a crop")
+    func interiorDragCreatesACrop() throws {
+        let model = EditorDocumentModel(document: AnnotationDocument(
+            baseImage: BaseImageReference(size: CGSize(width: 800, height: 600), scale: 2)
+        ))
+        model.tool = .crop
+        model.pointerDown(at: CGPoint(x: 100, y: 80))
+        model.pointerDragged(to: CGPoint(x: 300, y: 280))
+        model.pointerUp(at: CGPoint(x: 300, y: 280))
+
+        let rect = try #require(model.document.crop?.rect)
+        #expect(abs(rect.minX - 100) < 1)
+        #expect(abs(rect.minY - 80) < 1)
+        #expect(abs(rect.width - 200) < 1)
+        #expect(abs(rect.height - 200) < 1)
+        #expect(model.tool == .crop)
+    }
+
+    @Test("A click without a drag does not plant a crop")
+    func clickDoesNotPlantACrop() {
+        let model = EditorDocumentModel(document: AnnotationDocument(
+            baseImage: BaseImageReference(size: CGSize(width: 800, height: 600), scale: 2)
+        ))
+        model.tool = .crop
+        model.pointerDown(at: CGPoint(x: 100, y: 80))
+        model.pointerUp(at: CGPoint(x: 100, y: 80))
+        #expect(model.document.crop == nil)
+    }
+
     /// Dragging a crop handle is many commits; the whole drag has to be one undo step.
     @Test("A run of crop edits collapses into one undo step")
     func cropEditsCoalesce() {

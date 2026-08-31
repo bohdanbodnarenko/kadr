@@ -104,6 +104,9 @@ struct DocumentEditingTests {
         let crop = CropSpec(rect: CGRect(x: 10, y: 10, width: 100, height: 80))
         document.add(.crop(crop))
         #expect(document.canvasRect == crop.rect)
+        #expect(document.canvasPoint(fromImage: crop.rect.origin) == .zero)
+        #expect(document.imagePoint(fromCanvas: .zero) == crop.rect.origin)
+        #expect(document.imageSpaceFrame.origin == CGPoint(x: -crop.rect.minX, y: -crop.rect.minY))
     }
 
     @Test("A second crop supersedes the first")

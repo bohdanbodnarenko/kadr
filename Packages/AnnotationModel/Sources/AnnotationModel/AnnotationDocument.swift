@@ -112,24 +112,29 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     ///
     /// Annotations are stored against the capture (so a crop still makes sense), but with
     /// beautify they are *drawn* on the whole canvas — padding included. This is the hop
-    /// between those two spaces (docs/03 §3).
+    /// between those two spaces (docs/03 §3). A crop without beautify is the same hop:
+    /// canvas (0, 0) is the crop's origin, matching export's `translateBy(-crop.origin)`.
     public func canvasPoint(fromImage point: CGPoint) -> CGPoint {
-        guard let layout = beautifyLayout else { return point }
         let content = contentRect.origin
-        return CGPoint(
-            x: layout.imageRect.minX + (point.x - content.x),
-            y: layout.imageRect.minY + (point.y - content.y)
-        )
+        if let layout = beautifyLayout {
+            return CGPoint(
+                x: layout.imageRect.minX + (point.x - content.x),
+                y: layout.imageRect.minY + (point.y - content.y)
+            )
+        }
+        return CGPoint(x: point.x - content.x, y: point.y - content.y)
     }
 
     /// Canvas point as an image-space point — the inverse of `canvasPoint(fromImage:)`.
     public func imagePoint(fromCanvas point: CGPoint) -> CGPoint {
-        guard let layout = beautifyLayout else { return point }
         let content = contentRect.origin
-        return CGPoint(
-            x: point.x - layout.imageRect.minX + content.x,
-            y: point.y - layout.imageRect.minY + content.y
-        )
+        if let layout = beautifyLayout {
+            return CGPoint(
+                x: point.x - layout.imageRect.minX + content.x,
+                y: point.y - layout.imageRect.minY + content.y
+            )
+        }
+        return CGPoint(x: point.x + content.x, y: point.y + content.y)
     }
 
     /// The frame, in canvas space, of a layer whose local coordinates are image space.

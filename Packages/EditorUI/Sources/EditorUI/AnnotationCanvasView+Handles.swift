@@ -44,10 +44,22 @@ extension AnnotationCanvasView {
             return
         }
         addCursorRect(bounds, cursor: canvasCursor)
+        if model.tool == .crop {
+            let hit = SelectionResizer.hitRadius / handleViewScale
+            let rect = model.cropWorkingRect
+            for handle in CropHandle.resizeHandles {
+                let canvas = viewPoint(fromImage: handle.point(in: rect))
+                addCursorRect(
+                    CGRect(x: canvas.x - hit, y: canvas.y - hit, width: hit * 2, height: hit * 2),
+                    cursor: cursor(for: handle)
+                )
+            }
+            return
+        }
         guard model.tool == .select else { return }
         let hit = SelectionResizer.hitRadius / handleViewScale
         for (handle, point) in SelectionResizer.anchors(for: model.selectedCommands) {
-            let canvas = model.document.canvasPoint(fromImage: point)
+            let canvas = viewPoint(fromImage: point)
             addCursorRect(
                 CGRect(x: canvas.x - hit, y: canvas.y - hit, width: hit * 2, height: hit * 2),
                 cursor: cursor(for: handle)
@@ -61,7 +73,7 @@ extension AnnotationCanvasView {
         let click = event.locationInWindow
         let radius = SelectionResizer.hitRadius
         for (handle, imagePoint) in SelectionResizer.anchors(for: model.selectedCommands) {
-            let canvas = model.document.canvasPoint(fromImage: imagePoint)
+            let canvas = viewPoint(fromImage: imagePoint)
             let window = convert(canvas, to: nil)
             if hypot(click.x - window.x, click.y - window.y) <= radius {
                 return handle
@@ -95,7 +107,7 @@ extension AnnotationCanvasView {
         }
     }
 
-    private func handleSquare(at point: CGPoint, size: CGFloat) -> CALayer {
+    func handleSquare(at point: CGPoint, size: CGFloat) -> CALayer {
         let handle = CALayer()
         handle.frame = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
         handle.backgroundColor = NSColor.white.cgColor
