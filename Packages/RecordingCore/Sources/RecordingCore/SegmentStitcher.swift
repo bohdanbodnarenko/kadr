@@ -33,6 +33,24 @@ public struct SegmentStitcher: SegmentStitching {
             return destination
         }
 
+        let composition = try await join(segments)
+        try await write(composition, to: destination)
+
+        for segment in segments {
+            try? FileManager.default.removeItem(at: segment)
+        }
+        let count = segments.count
+        logger.info("Stitched \(count, privacy: .public) segments")
+        return destination
+    }
+
+    /// Lays the segments end to end, with every audio track each one carries.
+    ///
+    /// Split out of `stitch` because it is the only part that is about *the recording* —
+    /// the rest is a fast path and an encoder — and because the loop below decides
+    /// something subtle enough to be worth reading on its own: how many audio tracks the
+    /// result needs is not known until the segment that has the most of them.
+    private func join(_ segments: [URL]) async throws -> AVMutableComposition {
         let composition = AVMutableComposition()
         guard let videoTrack = composition.addMutableTrack(
             withMediaType: .video,
@@ -68,7 +86,11 @@ public struct SegmentStitcher: SegmentStitching {
             // user chose not to record, so it must not appear in the result.
             cursor = CMTimeAdd(cursor, duration)
         }
+        return composition
+    }
 
+    /// Writes the joined composition out, without re-encoding it.
+    private func write(_ composition: AVMutableComposition, to destination: URL) async throws {
         guard let export = AVAssetExportSession(
             asset: composition,
             presetName: AVAssetExportPresetPassthrough
@@ -82,12 +104,5 @@ public struct SegmentStitcher: SegmentStitching {
         } catch {
             throw RecordingError.writingFailed(error.localizedDescription)
         }
-
-        for segment in segments {
-            try? FileManager.default.removeItem(at: segment)
-        }
-        let count = segments.count
-        logger.info("Stitched \(count, privacy: .public) segments")
-        return destination
     }
 }

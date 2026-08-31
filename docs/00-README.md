@@ -18,8 +18,9 @@
 | [`08-screendrop-analysis.md`](08-screendrop-analysis.md) | Source-level study of Screendrop (CC0): what it does better, what we keep, the license caution on its tldraw-derived `Engine/`, and the ranked steal list |
 | [`09-uplift-plan.md`](09-uplift-plan.md) | The post-M18 roadmap: Sprint U0 (fixes) → U1 (editor uplift) → U2 (UX) → U3 (recording studio), superseding docs/06 ordering for remaining work |
 | [`10-road-to-v1.md`](10-road-to-v1.md) | Post-U3 review and the road to v1.0: sprints R0 (correctness — the studio telemetry chain is inert) → R1 (performance) → R2 (memory + CI gates) → R3 (polish), plus the two governance decisions |
-| [`11-shipping-v1.md`](11-shipping-v1.md) | **Current plan.** Post-R review: the telemetry seam is mirrored and doubled; sprints S0 (ship-blockers) → S1 (make the gates real and green) → S2 (finish the partials) → S3 (real-device validation and launch) |
+| [`11-shipping-v1.md`](11-shipping-v1.md) | Post-R review: the telemetry seam is mirrored and doubled; sprints S0 (ship-blockers) → S1 (make the gates real and green) → S2 (finish the partials) → S3 (real-device validation and launch) |
 | [`12-release-checklist.md`](12-release-checklist.md) | What a human has to do before a release, because every finding in docs 07/10/11 is static analysis and none of it was made by running Kadr: the flagship end to end, the lifecycle races, the device matrix, the gates, and the one question only a real Mac can answer |
+| [`13-speech-and-transcription.md`](13-speech-and-transcription.md) | **Current plan.** Speech audit against VoiceInk (GPL-3.0 — study only, never copy): the transcriber is handed a video container, Tidy Speech can delete most of a recording with no review, "Follow my voice" is a toggle for a deleted feature; sprints T0 (stop the bleeding) → T1 (a real speech layer in the helper) → T2 (captions, transcript editing, two-track) → T3 (whisper.cpp, decide on evidence) |
 
 ## The five decisions that matter (summary)
 

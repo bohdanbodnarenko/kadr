@@ -20,7 +20,12 @@ struct StudioPreviewPipeline {
     private let edit: StudioEdit
     private let captioned: Bool
 
-    init(edit: StudioEdit, manifest: CaptureManifest, telemetry: InputTelemetry, transcript: Transcript = Transcript()) {
+    init(
+        edit: StudioEdit,
+        manifest: CaptureManifest,
+        telemetry: InputTelemetry,
+        transcript: Transcript = Transcript()
+    ) {
         self.edit = edit
         captioned = edit.showsCaptions && !transcript.isEmpty
         plan = StudioRenderPlan(edit: edit, sourceSize: manifest.pixelSize)

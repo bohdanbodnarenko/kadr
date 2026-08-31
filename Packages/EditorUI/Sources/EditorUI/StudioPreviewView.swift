@@ -12,9 +12,12 @@ import SwiftUI
 /// approximating what the export will do, it is doing it, one frame at a time and at
 /// whatever size the window happens to be.
 ///
-/// Scrubbing rather than playing. A studio edit is made by moving the playhead and watching
-/// one moment at a time, and a preview that insists on running at 60 fps spends the whole
-/// session decoding frames nobody is looking at.
+/// Scrubbed *and* played (docs/08 §2 item 10). Most of a studio edit is made one moment at a
+/// time, which is why this decodes on demand rather than running a player at 60 fps for a
+/// session spent mostly paused — but a zoom is a movement, a cut is a join and a speed change
+/// is a rhythm, and none of the three can be judged from a frozen frame. `.task(id:)` gives
+/// playback its frame-dropping for free: a playhead that moves before the last decode
+/// finished cancels it, so a slow machine plays a coarser preview rather than falling behind.
 @MainActor
 struct StudioPreviewView: View {
     let model: StudioDocumentModel
@@ -55,7 +58,11 @@ struct StudioPreviewView: View {
 
     private func refresh() async {
         guard let renderer else { return }
-        frame = await renderer.image(at: model.playhead, using: currentPipeline().composer)
+        frame = await renderer.image(
+            at: model.playhead,
+            using: currentPipeline().composer,
+            exact: !model.isPlaying
+        )
     }
 
     /// The pipeline for the edit on screen, rebuilt only when that edit changes.
@@ -117,8 +124,19 @@ actor StudioPreviewRenderer {
     /// The composer is passed in rather than built here: it carries the spring integration
     /// and the decoded cursor artwork, neither of which depends on the playhead, and
     /// building one per scrub is what made a long timeline unusable (docs/10 R1.1).
-    func image(at time: TimeInterval, using composer: StudioFrameComposer) async -> CGImage? {
+    /// - Parameter exact: false while playing, which lets the generator return the nearest
+    ///   frame within a tenth of a second instead of decoding to the precise one. A
+    ///   zero-tolerance seek costs a full decode from the previous keyframe, and thirty of
+    ///   those a second is not a rate any Mac sustains — so insisting on exactness during
+    ///   playback does not buy a truthful preview, it buys a slideshow. Paused, it is exact
+    ///   again, which is where "the preview is the export" is actually being relied on.
+    func image(
+        at time: TimeInterval,
+        using composer: StudioFrameComposer,
+        exact: Bool = true
+    ) async -> CGImage? {
         guard generator != nil else { return nil }
+        setTolerance(exact: exact)
         let edit = composer.edit
         // Edited time is not source time once anything has been cut or sped up, and asking
         // the generator for the wrong one shows the frame from before the edit. A playhead
@@ -136,6 +154,15 @@ actor StudioPreviewRenderer {
         }
         let composed = composer.frame(at: time, source: CIImage(cgImage: screen), camera: camera)
         return StudioRenderContext.shared.createCGImage(composed, from: composed.extent)
+    }
+
+    /// How close to the requested instant a returned frame has to be.
+    private func setTolerance(exact: Bool) {
+        let tolerance = exact ? CMTime.zero : CMTime(value: 1, timescale: 10)
+        for generator in [generator, cameraGenerator].compactMap(\.self) {
+            generator.requestedTimeToleranceBefore = tolerance
+            generator.requestedTimeToleranceAfter = tolerance
+        }
     }
 
     /// One frame of the screen recording.

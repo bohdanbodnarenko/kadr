@@ -13,7 +13,7 @@ import UniformTypeIdentifiers
 /// window holds decoded frames and a render context, so leaving one alive after it closes
 /// would keep tens of megabytes for a window nobody can see.
 @MainActor
-final class StudioWindowController: NSObject, NSWindowDelegate {
+final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation {
     enum OpenError: LocalizedError {
         case notASession(URL)
 
@@ -51,6 +51,11 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     func show() {
         if let window {
             window.makeKeyAndOrderFront(nil)
@@ -77,8 +82,38 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         self.window = window
 
+        // Into the responder chain (docs/08 §3: "command-stack undo vs …").
+        //
+        // The window was built by hand rather than by an `NSWindowController`, so nothing
+        // linked this object to the chain — and the Edit menu's `undo:` therefore walked
+        // from the hosting view to the window and off the end. ⌘Z did nothing in the studio
+        // while an Undo button sat beside the timeline doing something, which is a worse
+        // state than having neither.
+        nextResponder = window.nextResponder
+        window.nextResponder = self
+
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - The Edit menu
+
+    @objc func undo(_ sender: Any?) {
+        model.undo()
+    }
+
+    @objc func redo(_ sender: Any?) {
+        model.redo()
+    }
+
+    /// Greys the menu items out when there is nothing to undo, rather than letting them
+    /// look available and do nothing.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(undo(_:)): model.canUndo
+        case #selector(redo(_:)): model.canRedo
+        default: true
+        }
     }
 
     // MARK: - Exporting
@@ -159,6 +194,9 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // Stop decoding before anything else: a playback loop left running holds the frame
+        // generator and keeps composing for a window nobody can see.
+        model.pausePlayback()
         // Committing is what makes this a *clean* close rather than a disappearance. The
         // agent offers to recover sessions that have a draft and no commit, so a window
         // that closes without one leaves its recording looking interrupted forever.

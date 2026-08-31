@@ -81,7 +81,7 @@ public extension StudioDocumentModel {
         // somewhere else is not the same thing as exporting.
         if reuseRenderedFile(at: destination) {
             notice = "That edit was already exported, so Kadr copied the finished file."
-            if let transcript = transcript {
+            if let transcript {
                 writeCaptions(transcript, beside: destination)
             }
             return
@@ -111,7 +111,7 @@ public extension StudioDocumentModel {
                 outputPath: output.fileURL.path,
                 pixelSize: output.pixelSize
             ))
-            if let transcript = transcript {
+            if let transcript {
                 writeCaptions(transcript, beside: destination)
             }
             exportProgress = nil

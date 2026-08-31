@@ -74,7 +74,27 @@ Technical envelope: SCStream capture at native resolution, 60 fps default (confi
 
 **Webcam overlay (P2.5):** AVFoundation capture into a movable/resizable PiP circle/rounded-rect composited into the recording.
 
-**Accept:** 1080p60 HEVC < 15% CPU on M1; A/V drift < 1 frame over 10 min; pause/resume produces gapless file; recordings recoverable after crash (writer segments finalized incrementally).
+**Accept:** 1080p60 HEVC < 15% CPU on M1; A/V drift < 1 frame over 10 min; pause/resume produces gapless file (every audio track survives a stitch, not just the first); recordings recoverable after crash (writer segments finalized incrementally).
+
+### 1.9 Speech in the studio (docs/13)
+
+On-device only. Transcription runs in the XPC helper so Speech.framework never loads in the agent. The audio handed to the engine is extracted PCM (16 kHz mono), preferring the microphone track when the file has one.
+
+**Tidy Speech.** Inspector → "Remove filler words and long pauses". The edited-timeline guard runs *before* transcription. The result is a **review list** of labelled cuts ("um" at 0:14, "2.3 s pause" at 1:02) with per-cut toggles and a preview seek. Applying is a second step. A plan that would remove more than ~40% of the timeline requires explicit confirmation. Zero-timestamp transcripts are refused. Cuts become clip boundaries (undoable; footage untouched).
+
+**Transcript.** Persisted as `transcript.json` in the `.kadrrec` package, keyed on the audio's content hash. Reopening reuses it. A panel beside the timeline: click a word to seek, select a sentence to cut it, search by text. Two-track recordings are labelled "You said" / "The app said". Chapter marks from long pauses.
+
+**Captions.** Optional burned-in captions in the studio's existing caption style; SRT and VTT written beside an export when a transcript exists.
+
+**Language.** A picker; changing engine or model rewrites an unsupported choice rather than failing later. On macOS 14/15, if on-device dictation is missing, the inspector points at System Settings ▸ Keyboard ▸ Dictation instead of showing a Tidy button that can never work.
+
+**Model download.** Separate button from Tidy. Optional, cancellable, with a disk-space precheck. The studio works without it.
+
+**Progress and cancellation.** Transcription and model download both show progress, can be cancelled, and closing the window warns if either is running.
+
+**Teleprompter "Follow my voice".** Audio buffers from the agent → helper → word hypotheses. The prompter advances only on words that survive two consecutive hypotheses, and never scrolls backwards on a retraction. The Pace slider stays enabled as the fallback.
+
+**Accept:** Tidy on a 10-minute narrated recording with a mic track produces a review list and never silently removes 90% of the timeline; a transcript is produced from extracted PCM on macOS 14, 15 and 26; the mic track survives a pause; `tidySpeech` tests would fail if T-C1/T-C2/T-C3 were reintroduced; `otool -L` on the agent still shows no Speech.
 
 ---
 
@@ -85,8 +105,9 @@ Technical envelope: SCStream capture at native resolution, 60 fps default (confi
 Per-card interactions:
 - **Drag out** → real file promise drag (works into Slack/Mail/Finder/browsers). Dragging out removes the card (setting).
 - Single click → expand action row: **Copy · Save · Annotate · Pin · OCR · Share sheet · Delete**. Double-click → open editor directly.
-- Hover shows filename, dimensions, size; ⌫ deletes; swipe-away dismisses.
-- Auto-dismiss timer (default off/∞; options 5/10/30 s). **Dismiss ≠ delete**: files still land per save policy; "Restore recently closed" (menu + hotkey) brings the last N back.
+- Hover shows filename, dimensions, size, the card's corner actions, and a close (×) that **hides the card without deleting**. ⌫ deletes; Esc hides; swipe toward the docked edge dismisses; swipe toward the screen edge tucks the stack into a peek tab.
+- Auto-dismiss timer (default off/∞; options 5/10/30 s). Hovering or dragging **pauses** the timer and retries shortly after the pointer leaves; opening the editor, studio, or trim **keeps that card** until the user hides it. **Dismiss ≠ delete**: files still land per save policy; "Restore recently closed" (menu + hotkey) brings the last N back.
+- Opening the editor tucks the stack into a **peek tab** (count + ×) in the same corner. Click the tab to bring the cards back even while the editor is still open; × dismisses every card. A new capture expands the stack so the new card is seen.
 - Default action on capture is configurable: copy to clipboard, save to folder, both, or overlay-only (file goes to history staging and is finalized on first action — keeps Desktop clean).
 
 **Accept:** overlay never takes key focus from the frontmost app; drag-out delivers a correctly named file (no `Untitled` / tmp names); stacking never overlaps the Dock; VoiceOver can reach every action.
@@ -100,15 +121,18 @@ Opens in **its own process** (see doc 04) as a normal resizable window; multiple
 **Model:** the base image is immutable; every annotation is a vector object (type, geometry, style, z-order) in an ordered stack → unlimited undo/redo, select/move/edit any object later, lossless re-export. "Flatten" only happens at export.
 
 **Tools (P1):**
-- **Select/move** (click, marquee, ⌘-click multi-select; handles; arrow nudge).
+- **Select/move** (click, marquee, ⌘-click multi-select; eight resize handles on the selection box — corners and edges, sized in view points so they stay hittable when zoomed out; a lone arrow, line or length-measurement gets path handles at its terminals instead, plus a midpoint on arrows to bend the curve; ⇧ on a corner locks aspect, ⇧ on a path end snaps to 45°; arrow-key nudge).
 - **Arrow** — straight + curved (drag midpoint); 3 head styles; smart default color (auto red/contrasting).
-- **Shapes** — rect, rounded rect, ellipse, line; fill/stroke/none; stroke width presets.
+- **Shapes** — rect, rounded rect, ellipse, line; fill/stroke/none; stroke width via the inspector slider (presets 2/4/6/10/16 sit in the 1–32 pt range); fill opacity when filled.
 - **Freehand pencil** with smoothing; **Highlighter** (multiply-blend stroke).
-- **Text** — inline editing, 5 style presets + custom (font/size/weight/color/background pill).
+- **Text** — inline editing, 5 style presets + custom (font/size/weight/color/background pill). A click places a box and opens the editor; a click on existing text edits it.
 - **Blur / Pixelate** — rectangular region; pixelate uses randomized displacement (defeats de-pixelation of predictable grids); irreversible at export (actually re-rendered from blurred pixels, not an overlay that can be removed from the PNG — security-reviewed).
 - **Counter badges** — auto-incrementing numbered circles; drag to reorder renumbers.
 - **Crop** — non-destructive; aspect presets; expand-canvas allowed (for padding).
+- **Tool hand-off:** after a one-shot tool lands (arrow, shape, line, text once the in-place editor commits, blur/pixelate), the pointer returns to Select so the new annotation can be moved immediately. Pencil, highlighter, and counters stay armed — a numbered badge is one of a sequence. Crop is a mode until **Done**. Picking a drawing tool from the toolbar clears the current selection.
 - Style system: last-used style per tool remembered; per-tool color/size in a floating inspector; global theme colors.
+- **Canvas drawing:** annotation tools apply to the whole canvas, including beautify padding around the screenshot — not only the capture itself. Coordinates stay image-relative so a crop still makes sense; the padding is just more of that plane.
+- **Inspector sliders:** every numeric control is a scrub track with the label inside it and a typed value field to the right (suffixes: "45%", "12 px", "30°", "1.5×"). Clicking the track sets the value at that position; hover reveals ticks; signed ranges (tilt, pan, roll) detent on zero. Arrow keys step one displayed unit.
 
 **P2 additions:** Spotlight (dim outside a region), Smart Highlighter (Vision word-boxes snap), sticker/emoji, image insert (multi-image composition), background/beautify panel (padding, gradient/solid/image backdrop, corner radius, shadow, aspect presets, auto-balance), resize/downscale export panel, rotate/flip.
 

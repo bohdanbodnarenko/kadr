@@ -104,8 +104,8 @@ struct InspectorSlider: View {
         .inspectorColumnResizePointer(enabled: isEnabled)
         .focusable(isEnabled)
         .focused($focusedPart, equals: .track)
-        .onKeyPress(.leftArrow) { nudge(by: -format.step) }
-        .onKeyPress(.rightArrow) { nudge(by: format.step) }
+        .onKeyPress(.leftArrow) { nudge(steps: -1) }
+        .onKeyPress(.rightArrow) { nudge(steps: 1) }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: revealsMarkers)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -158,8 +158,8 @@ struct InspectorSlider: View {
                 draftText = editingBaselineText
                 focusedPart = nil
             }
-            .onKeyPress(.upArrow) { nudge(by: format.step) }
-            .onKeyPress(.downArrow) { nudge(by: -format.step) }
+            .onKeyPress(.upArrow) { nudge(steps: 1) }
+            .onKeyPress(.downArrow) { nudge(steps: -1) }
             .inspectorField(
                 height: InspectorMetrics.sliderHeight,
                 cornerRadius: InspectorMetrics.sliderRadius
@@ -213,12 +213,18 @@ struct InspectorSlider: View {
         ))
     }
 
-    private func nudge(by delta: Double) -> KeyPress.Result {
+    /// One arrow-key press, through the format's own arithmetic.
+    ///
+    /// `InspectorValueFormat.stepped` existed, was tested, and had no caller — the slider
+    /// added `format.step` itself instead. Two implementations of "what one press does",
+    /// with the tests pointed at the copy that never ran.
+    private func nudge(steps: Int) -> KeyPress.Result {
         guard isEnabled else { return .ignored }
         if focusedPart == .value {
             commitDraftText()
         }
-        adjustValue(by: delta)
+        setValue(format.stepped(value, by: steps))
+        onEditingEnded()
         return .handled
     }
 

@@ -224,7 +224,19 @@ private func splitToneImage(width: Int = 32, height: Int = 16) -> CGImage {
     return image
 }
 
-private func pixel(_ image: CGImage, x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8) {
+/// One pixel read back out of a rendered layer.
+///
+/// A named type rather than a four-member tuple: the assertions read `pixel.alpha` either
+/// way, but a tuple this wide is one reordering away from a test that compares green to blue
+/// and passes.
+struct SampledPixel: Equatable {
+    var red: UInt8
+    var green: UInt8
+    var blue: UInt8
+    var alpha: UInt8
+}
+
+private func pixel(_ image: CGImage, x: Int, y: Int) -> SampledPixel {
     let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
     bytes.initialize(repeating: 0, count: 4)
     defer { bytes.deallocate() }
@@ -240,5 +252,5 @@ private func pixel(_ image: CGImage, x: Int, y: Int) -> (red: UInt8, green: UInt
         fatalError("Could not create a sampling context")
     }
     context.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y), width: image.width, height: image.height))
-    return (bytes[0], bytes[1], bytes[2], bytes[3])
+    return SampledPixel(red: bytes[0], green: bytes[1], blue: bytes[2], alpha: bytes[3])
 }

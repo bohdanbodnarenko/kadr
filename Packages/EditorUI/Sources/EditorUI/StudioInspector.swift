@@ -12,7 +12,9 @@ import SwiftUI
 @MainActor
 struct StudioInspector: View {
     let model: StudioDocumentModel
-    @State private var largeRemovalArmed = false
+    /// Read by `StudioInspector+Speech.swift`: a large removal has to be confirmed twice,
+    /// and the confirmation lives in the speech half while the state belongs to the view.
+    @State var largeRemovalArmed = false
 
     var body: some View {
         Form {
@@ -31,163 +33,6 @@ struct StudioInspector: View {
         }
     }
 
-    // MARK: - Speech
-
-    /// Removing filler words and long pauses (docs/09 U3.6).
-    ///
-    /// The download is a separate control from the tidy-up, deliberately. Merging them
-    /// would mean pressing "tidy up" could start a several-hundred-megabyte fetch, which is
-    /// not what that button says it does — and on a machine with no network it would be a
-    /// button that hangs instead of one that explains.
-    private var speechSection: some View {
-        Section("Speech") {
-            if !model.supportedLocales.isEmpty {
-                Picker("Language", selection: Bindable(model).speechLocaleIdentifier) {
-                    ForEach(model.supportedLocales, id: \.self) { identifier in
-                        Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier)
-                            .tag(identifier)
-                    }
-                }
-                .onChange(of: model.speechLocaleIdentifier) {
-                    Task { await model.refreshSpeechStatus() }
-                }
-            }
-            switch model.speechStatus {
-            case .installed, .none:
-                tidyControl
-            case .notApplicable:
-                if model.dictationSettingsNeeded {
-                    Text("Removing filler words needs on-device dictation for this language. "
-                        + "Turn it on in System Settings ▸ Keyboard ▸ Dictation.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Open Dictation Settings") {
-                        if let url = SpeechDictationSettings.url {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                } else {
-                    tidyControl
-                }
-            case .available:
-                Text("Removing filler words needs the language model for your language, which "
-                    + "this Mac does not have yet. Everything else in the studio works without it.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                installControl
-            case .downloading:
-                installControl
-            case .unsupported:
-                Text("macOS has no speech model for your language, so filler words cannot be "
-                    + "found automatically.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            if !model.pendingCuts.isEmpty {
-                cutReview
-            }
-            if model.transcript != nil {
-                Toggle("Burn in captions", isOn: Binding(
-                    get: { model.edit.showsCaptions },
-                    set: { value in model.change { $0.showsCaptions = value } }
-                ))
-            }
-        }
-        .onChange(of: model.pendingCuts.map(\.id)) {
-            largeRemovalArmed = false
-        }
-    }
-
-    @ViewBuilder
-    private var tidyControl: some View {
-        if model.isTranscribing {
-            VStack(alignment: .leading, spacing: 6) {
-                if let progress = model.transcriptionProgress {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-                Text("Listening to the recording…")
-                    .foregroundStyle(.secondary)
-                Button("Cancel") { model.cancelTidySpeech() }
-                    .controlSize(.small)
-            }
-        } else {
-            Button("Remove filler words and long pauses") {
-                Task { await model.tidySpeech() }
-            }
-            Text("Cuts \u{201C}um\u{201D} and pauses over a second. They become clip boundaries, "
-                + "so one undo puts them all back and the recording is never altered.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var cutReview: some View {
-        Text("Proposed cuts")
-            .font(.callout.weight(.semibold))
-        ForEach(model.pendingCuts) { cut in
-            HStack {
-                Toggle(isOn: Binding(
-                    get: { model.selectedCutIDs.contains(cut.id) },
-                    set: { _ in model.toggleCut(cut.id) }
-                )) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(cut.label)
-                        Text(Self.clock(cut.start) + " · " + cut.reason.title)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Button("Preview") { model.seekToCut(cut) }
-                    .controlSize(.small)
-            }
-        }
-        HStack {
-            Button(largeRemovalArmed ? "Apply anyway" : "Apply selected") {
-                if model.requiresCutConfirmation, !largeRemovalArmed {
-                    largeRemovalArmed = true
-                    return
-                }
-                model.applyPendingCuts(confirmingLargeRemoval: largeRemovalArmed)
-                largeRemovalArmed = false
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {
-                largeRemovalArmed = false
-                model.discardPendingCuts()
-            }
-        }
-        if model.requiresCutConfirmation {
-            Text(largeRemovalArmed
-                ? "This would remove more than 40% of the recording. Press Apply anyway to confirm."
-                : "This would remove more than 40% of the recording. Press Apply again to confirm.")
-                .font(.callout)
-                .foregroundStyle(.orange)
-        }
-    }
-
-    @ViewBuilder
-    private var installControl: some View {
-        if let progress = model.installProgress {
-            VStack(alignment: .leading, spacing: 6) {
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                Button("Cancel download") { model.cancelSpeechModelInstall() }
-                    .controlSize(.small)
-            }
-        } else {
-            Button("Download the language model…") { model.installSpeechModel() }
-            Text("Downloads Apple's on-device model. It is the only thing in the studio that "
-                + "uses the network, it is optional, and your recording is never uploaded — "
-                + "the model comes here, the audio stays.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     // MARK: - The selected zoom
 
     @ViewBuilder
@@ -195,10 +40,23 @@ struct StudioInspector: View {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
             Section("Zoom") {
                 InspectorSlider(
+                    title: "Starts at",
+                    value: Binding(
+                        get: { cue.start },
+                        set: { value in model.moveZoom(id, to: value) }
+                    ),
+                    range: 0 ... max(model.edit.duration, 1),
+                    format: .seconds
+                )
+                Button("Move to playhead") { model.moveZoom(id, to: model.playhead) }
+                    .controlSize(.small)
+                InspectorSlider(
                     title: "Magnification",
                     value: Binding(
                         get: { cue.magnification },
-                        set: { value in model.updateZoom(id) { $0.magnification = value } }
+                        set: { value in
+                            model.updateZoom(id, coalescingAs: "zoom.magnification") { $0.magnification = value }
+                        }
                     ),
                     range: 1 ... ZoomCue.maximumMagnification,
                     format: .multiplier
@@ -207,16 +65,22 @@ struct StudioInspector: View {
                     title: "Hold",
                     value: Binding(
                         get: { cue.duration },
-                        set: { value in model.updateZoom(id) { $0.duration = value } }
+                        set: { value in model.updateZoom(id, coalescingAs: "zoom.hold") { $0.duration = value } }
                     ),
-                    range: 0.2 ... max(model.edit.duration, 1),
+                    // Thirty seconds, or the recording if it is shorter — not the whole
+                    // recording. A slider that spans ten minutes puts every useful hold in
+                    // its first two pixels, and a zoom nobody holds for nine minutes is not
+                    // worth making the other case unusable for.
+                    range: 0.2 ... min(max(model.edit.duration, 1), 30),
                     format: .seconds
                 )
                 InspectorSlider(
                     title: "Move",
                     value: Binding(
                         get: { cue.transitionDuration },
-                        set: { value in model.updateZoom(id) { $0.transitionDuration = value } }
+                        set: { value in
+                            model.updateZoom(id, coalescingAs: "zoom.move") { $0.transitionDuration = value }
+                        }
                     ),
                     range: 0.1 ... 2,
                     format: .seconds
@@ -394,7 +258,7 @@ struct StudioInspector: View {
         }
     }
 
-    private static func clock(_ seconds: TimeInterval) -> String {
+    static func clock(_ seconds: TimeInterval) -> String {
         let total = Int(seconds.rounded(.down))
         return String(format: "%d:%02d", total / 60, total % 60)
     }

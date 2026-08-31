@@ -21,13 +21,14 @@
 
 ## Licence hygiene
 
-Kadr is MIT. QuickRecorder and Capso are AGPL, and Screendrop's `Engine/` is derived from
-tldraw's non-permissive source. All three are read-only reference: their *behaviour* can
-be studied and reimplemented, their code cannot be copied, adapted, translated or
-machine-translated into this repository.
+Kadr is MIT. QuickRecorder and Capso are AGPL, Screendrop's `Engine/` is derived from
+tldraw's non-permissive source, and VoiceInk is GPL-3.0. All four are read-only
+reference: their *behaviour* can be studied and reimplemented, their code cannot be
+copied, adapted, translated or machine-translated into this repository.
 
 - [ ] This PR contains no code derived from Screendrop's `Engine/` or other
       non-permissive sources.
+- [ ] This PR contains no code derived from VoiceInk.
 - [ ] Any new dependency is justified against docs/04 §12 and its licence is compatible
       with MIT.
 

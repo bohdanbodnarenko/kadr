@@ -99,6 +99,13 @@ public final class StudioDocumentModel {
     ///
     /// Unstructured on purpose: an export outlives the save panel's completion handler, and
     /// nothing on the way in owns a scope that lasts as long as the render does.
+    /// The playback loop, or nil when paused (docs/08 §2 item 10).
+    ///
+    /// Its own presence *is* `isPlaying`: two pieces of state that have to agree about one
+    /// thing is a way for them to disagree, and the one that would have gone wrong here is a
+    /// play button stuck on after a cancelled task.
+    @ObservationIgnored var playbackTask: Task<Void, Never>?
+
     @ObservationIgnored var exportTask: Task<Void, Never>?
 
     @ObservationIgnored var installTask: Task<Void, Never>?
@@ -276,11 +283,34 @@ public final class StudioDocumentModel {
     }
 
     /// Updates one cue in place.
-    public func updateZoom(_ id: ZoomCue.ID, _ mutate: (inout ZoomCue) -> Void) {
-        change { edit in
+    ///
+    /// - Parameter gesture: names a continuous interaction, so dragging a cue along the
+    ///   timeline is one undo step rather than one per pixel of travel (docs/11 S2).
+    public func updateZoom(
+        _ id: ZoomCue.ID,
+        coalescingAs gesture: String? = nil,
+        _ mutate: (inout ZoomCue) -> Void
+    ) {
+        change(coalescingAs: gesture) { edit in
             guard let index = edit.zooms.firstIndex(where: { $0.id == id }) else { return }
             mutate(&edit.zooms[index])
         }
+    }
+
+    /// Moves a cue to a new start, keeping it inside the recording.
+    ///
+    /// A cue's start could not be changed at all: `addZoom` dropped it at the playhead and
+    /// the inspector offered magnification, hold and move but not *when*. Putting a zoom
+    /// half a second earlier meant deleting it and adding another, which throws away
+    /// everything else the user had set on it.
+    ///
+    /// Clamped so the whole cue — its hold *and* both of its moves — still fits. A cue that
+    /// runs off the end never finishes playing, and the recording ends mid-zoom.
+    public func moveZoom(_ id: ZoomCue.ID, to start: TimeInterval) {
+        guard let cue = edit.zooms.first(where: { $0.id == id }) else { return }
+        let footprint = cue.duration + cue.transitionDuration * 2
+        let latest = max(edit.duration - footprint, 0)
+        updateZoom(id, coalescingAs: "zoom.start.\(id)") { $0.start = min(max(start, 0), latest) }
     }
 
     /// Where the pointer was at an instant, in recorded pixels.

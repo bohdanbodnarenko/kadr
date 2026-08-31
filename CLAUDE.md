@@ -13,7 +13,7 @@ When a task references a doc section, read it before writing code.
    for OS-mediated fetches, which carry no networking symbols at all.
    The exceptions, both path-allow-listed in Scripts/check-layering.sh:
    - `Kadr/Updates/` — Sparkle's appcast check.
-   - `Packages/StudioRender/.../SpeechModelInstaller.swift` — asks macOS to
+   - `Packages/VisionServices/.../SpeechModelInstaller.swift` — asks macOS to
      install a speech model for filler-word removal. User-initiated, optional
      and non-blocking: the studio works without it, and transcription itself
      sets `requiresOnDeviceRecognition`, so a recording is never uploaded.

@@ -30,10 +30,16 @@ struct InfoPlistTests {
 
         let info = Bundle.main.infoDictionary ?? [:]
         if info["CFBundleIdentifier"] as? String == "app.kadr.Kadr" {
+            // Screen capture is not in this list, and cannot be. macOS has no
+            // app-supplied usage string for Screen Recording — the system writes its own
+            // prompt and sends the user to System Settings — so Xcode does not recognise
+            // `INFOPLIST_KEY_NSScreenCaptureUsageDescription` and silently drops it rather
+            // than synthesising a key. The build setting is still asserted above, because
+            // its presence is what a reader checks for, but asserting a *runtime* value
+            // macOS never populates failed every run for a permission that works fine.
             for key in [
                 "NSCameraUsageDescription",
                 "NSMicrophoneUsageDescription",
-                "NSScreenCaptureUsageDescription",
                 "NSSpeechRecognitionUsageDescription"
             ] {
                 let value = info[key] as? String ?? ""

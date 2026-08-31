@@ -35,8 +35,12 @@ public struct StudioRootView: View {
             .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
         }
         .frame(minWidth: 820, minHeight: 520)
+        .animation(.easeOut(duration: 0.18), value: model.notice)
+        .overlay(alignment: .top) { banner }
+        // A failure still stops the user, because it means the thing they asked for did not
+        // happen. Everything else is a banner (docs/08 §2 item 13).
         .alert(
-            "Studio",
+            "The studio could not do that",
             isPresented: Binding(
                 get: { model.failure != nil },
                 set: {
@@ -50,23 +54,45 @@ public struct StudioRootView: View {
         } message: {
             Text(model.failure ?? "")
         }
-        // A second alert rather than one that carries a severity: some of what the studio
-        // reports is good news — "removed four passages" — and putting it through the
-        // failure path would make every success look like a problem.
-        .alert(
-            "Studio",
-            isPresented: Binding(
-                get: { model.notice != nil },
-                set: {
-                    if !$0 {
-                        model.notice = nil
-                    }
+    }
+
+    /// Good news, and news that changes nothing the user has to decide.
+    ///
+    /// Both used to be modal alerts titled "Studio" with an OK button — so finishing a tidy
+    /// pass stopped the app dead to announce "Removed 4 passages", and the user dismissed a
+    /// dialog to get back to the work they could already see had happened. A banner says the
+    /// same thing without taking the keyboard away, and leaves on its own.
+    @ViewBuilder
+    private var banner: some View {
+        if let notice = model.notice {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.tint)
+                Text(notice)
+                    .font(.callout)
+                Button {
+                    model.notice = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
                 }
-            )
-        ) {
-            Button("OK") { model.notice = nil }
-        } message: {
-            Text(model.notice ?? "")
+                .buttonStyle(.borderless)
+                .help("Dismiss")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+            .shadow(radius: 6, y: 2)
+            .padding(.top, 10)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .task(id: notice) {
+                // Long enough to read a sentence, and it does not block anything meanwhile.
+                try? await Task.sleep(for: .seconds(4))
+                if model.notice == notice {
+                    model.notice = nil
+                }
+            }
         }
     }
 
@@ -76,6 +102,7 @@ public struct StudioRootView: View {
         VStack(spacing: 8) {
             StudioTimelineView(model: model)
             HStack(spacing: 12) {
+                transport
                 timeLabel
                 Divider().frame(height: 16)
                 clipButtons
@@ -88,6 +115,41 @@ public struct StudioRootView: View {
         .padding(12)
     }
 
+    /// Play, and step a frame either way (docs/08 §2 item 10).
+    ///
+    /// Visible buttons rather than key handling alone, and every one of them carries the
+    /// shortcut on its own label: a studio whose only transport is a keystroke nobody
+    /// mentioned is a studio people scrub frame by frame forever.
+    private var transport: some View {
+        HStack(spacing: 4) {
+            Button {
+                model.step(frames: -1)
+            } label: {
+                Image(systemName: "backward.frame")
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            .help("Back one frame (←)")
+
+            Button {
+                model.togglePlayback()
+            } label: {
+                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    .frame(width: 14)
+            }
+            .keyboardShortcut(.space, modifiers: [])
+            .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
+
+            Button {
+                model.step(frames: 1)
+            } label: {
+                Image(systemName: "forward.frame")
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            .help("Forward one frame (→)")
+        }
+        .disabled(model.edit.duration <= 0)
+    }
+
     private var timeLabel: some View {
         Text("\(format(model.playhead)) / \(format(model.edit.duration))")
             .font(.callout.monospacedDigit())
@@ -97,7 +159,8 @@ public struct StudioRootView: View {
     private var clipButtons: some View {
         HStack(spacing: 8) {
             Button("Split") { model.splitAtPlayhead() }
-                .help("Cut the clip at the playhead")
+                .keyboardShortcut("k", modifiers: .command)
+                .help("Cut the clip at the playhead (⌘K)")
             Button("Delete clip") { model.removeClipAtPlayhead() }
                 .disabled(model.edit.clips.clips.count < 2)
             Menu("Speed") {
@@ -116,9 +179,15 @@ public struct StudioRootView: View {
             Button("Add zoom") { model.addZoom() }
             Button("Smart zooms") { model.planSmartZooms() }
                 .help("Plan zooms from where the recording was clicked")
+            // The shortcuts live here as well as on the menu. The menu's `undo:` reaches
+            // this model through `StudioWindowController`, which had to be put into the
+            // responder chain for it to arrive at all — before that, ⌘Z did nothing in the
+            // studio while an Undo button sat next to it doing something.
             Button("Undo") { model.undo() }
+                .keyboardShortcut("z", modifiers: .command)
                 .disabled(!model.canUndo)
             Button("Redo") { model.redo() }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!model.canRedo)
         }
     }

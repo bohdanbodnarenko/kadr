@@ -17,7 +17,7 @@ Screenshots are a dozens-of-times-a-day workflow for developers, designers, supp
 1. **The overlay is the product; drag-and-drop is the sharing model.** Capture → floating thumbnail → drag into any app (Slack, Mail, Figma, Finder, browser). Every feature routes through this flow; nothing forces a save dialog, a library visit — or a URL. There is no upload feature, period.
 2. **The editor is a pillar, not a bonus.** A CleanShot-grade, non-destructive annotation editor (arrows, blur/pixelate, counters, text, crop, beautify backgrounds, redaction) is a headline reason to install, and everything edited flows back out via drag-and-drop.
 3. **Performance is a feature with a budget.** Idle RSS, capture latency, and app size are tracked in CI with hard limits (§8). Regressions are release blockers, same as crashes.
-4. **Local-only, zero network.** No account, no analytics, no hosting, no cloud — the only network call the app can ever make is the Sparkle update check, and the agent binary links no other networking code (CI-enforced). This is stronger than "local-first": there is nothing to opt out of.
+4. **Local-only, zero network.** No account, no analytics, no hosting, no cloud — the only network calls the app can ever make are the Sparkle update check and, if the user presses the button that says so, asking macOS to install an on-device speech model. The agent binary links no other networking code (CI-enforced). This is stronger than "local-first": there is nothing to opt out of.
 5. **Native or nothing.** AppKit window management, SwiftUI content, ScreenCaptureKit, Vision. If a feature can't be done natively and well, it waits.
 6. **Scriptable by default.** URL scheme + CLI from v1, because power users are the distribution channel for OSS tools.
 
@@ -82,7 +82,7 @@ Explicitly **not** in MVP: recording, scrolling capture, backgrounds, history.
 ## 6. Non-goals
 
 - **No sharing infrastructure of any kind** — no hosted cloud, no BYO-bucket uploads, no share-by-URL, no accounts, no teams/SSO. Sharing is drag-and-drop from the overlay/editor/history, plus the native macOS share sheet (AirDrop, Messages, Mail — all handled by the OS, not by us). If someone wants URL sharing they can drag into whatever service they already use.
-- No telemetry/analytics of any kind, ever, including "anonymous" statistics. No network code in the app beyond the Sparkle update check.
+- No telemetry/analytics of any kind, ever, including "anonymous" statistics. No network code in the app beyond the Sparkle update check and the user-initiated on-device speech-model install.
 - No Mac App Store build initially (sandbox blocks scrolling-capture auto-scroll, custom save flows; MAS forbids Sparkle). Revisit later with a reduced MAS variant if demand exists.
 - No Windows/Linux port in the Swift codebase; the cross-platform path is a Rust core extraction, decided per doc 05, not before Phase 3.
 - No AI cloud features; on-device only (Vision, and only where it adds obvious value).
@@ -115,7 +115,7 @@ Engineering strategy to meet these (details in doc 04): AppKit-first shell with 
 
 - TCC Screen Recording permission requested through a dedicated onboarding screen that explains the macOS 15 monthly re-approval nag honestly; `SCContentSharingPicker` offered as a no-permission alternative path for window/screen capture.
 - Signed with Developer ID + notarized (requires the $99/yr Apple developer membership — funded via GitHub Sponsors / OpenCollective); Sparkle 2 with EdDSA-signed appcast on GitHub Releases; Homebrew cask.
-- Security posture: **Sparkle is the only networking code in the entire app** — no upload/share modules exist at all, so there is no credential storage and no exfiltration surface to audit; reproducible release builds as a stretch goal.
+- Security posture: **Sparkle and the optional speech-model install are the only networking in the entire app** — no upload/share modules exist at all, so there is no credential storage and no exfiltration surface to audit; reproducible release builds as a stretch goal.
 - License: **MIT** (max adoption/contribution). Third-party: KeyboardShortcuts (MIT), Sparkle (MIT), gifski (AGPL — use CLI-subprocess or MIT alternative; decide in implementation), reference-only for AGPL/BUSL projects.
 
 ## 10. Key risks & mitigations

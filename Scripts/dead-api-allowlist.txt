@@ -40,3 +40,12 @@ rebuild
 retina
 settleNow
 tiled
+
+# Surfaced 2026-08-31. Both are alternate vocabulary for a capability that *is* wired
+# through a different control, so neither is a missing feature:
+#   `RedactionStyle.defaultPixelate` — the inspector's pixelate toggle derives the style
+#     from the current one rather than reaching for the named default.
+#   `StrokeStyle.widthPresets` — the inspector offers a width slider over `widthRange`
+#     instead of a preset picker. Worth revisiting as a control, not as dead code.
+defaultPixelate
+widthPresets

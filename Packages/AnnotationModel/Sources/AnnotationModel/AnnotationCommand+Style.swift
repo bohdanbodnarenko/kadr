@@ -90,11 +90,22 @@ public extension AnnotationCommand {
         return .redaction(spec)
     }
 
+    // swiftlint:disable cyclomatic_complexity
+    // Exempt around the declaration rather than on the line above it: a `//` between a doc
+    // comment and what it documents orphans the doc comment, which is a different lint rule
+    // and a worse outcome than the one being silenced.
+
     /// A copy that is a new annotation, not a second handle on this one.
     ///
     /// Bindings are dropped: they point at identities that would otherwise be shared with
     /// the original, and a duplicated arrow that still follows the source's target is a
     /// surprise.
+    ///
+    /// One branch per case of an eleven-case enum, and the compiler's exhaustiveness check
+    /// is the whole value of writing it this way: the day somebody adds a twelfth
+    /// annotation, this fails to compile rather than silently duplicating it without a new
+    /// identity. Splitting it to satisfy a branch count would trade that for two
+    /// half-switches nothing checks against each other.
     func withNewIdentity() -> AnnotationCommand {
         let newID = AnnotationID()
         switch self {
@@ -134,4 +145,6 @@ public extension AnnotationCommand {
             return self
         }
     }
+
+    // swiftlint:enable cyclomatic_complexity
 }
