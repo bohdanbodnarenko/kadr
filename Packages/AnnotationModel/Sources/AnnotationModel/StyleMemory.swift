@@ -17,6 +17,9 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     /// would fail to decode. Optional storage makes adding a remembered choice a
     /// non-breaking change.
     private var measuresBox: Bool?
+    /// Last fill opacity, kept even when fill is off so toggling Filled back on restores
+    /// the alpha the user picked rather than snapping to the default wash.
+    private var fillOpacity: Double?
 
     public init() {
         strokes = [:]
@@ -41,6 +44,16 @@ public struct StyleMemory: Codable, Hashable, Sendable {
 
     public mutating func remember(_ fill: FillStyle, for tool: AnnotationTool) {
         fills[tool] = fill
+        if let alpha = fill.color?.alpha {
+            fillOpacity = alpha
+        }
+    }
+
+    /// Fill alpha for the next filled shape. Survives turning Filled off, so the slider
+    /// the user just dragged is still there when they turn it back on.
+    public var lastFillOpacity: Double {
+        get { fillOpacity ?? FillStyle.defaultAlpha }
+        set { fillOpacity = min(max(newValue, 0), 1) }
     }
 
     public var lastArrowHead: ArrowHead {

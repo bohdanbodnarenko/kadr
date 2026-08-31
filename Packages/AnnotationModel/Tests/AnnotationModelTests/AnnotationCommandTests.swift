@@ -105,6 +105,7 @@ struct AnnotationCommandTests {
     func specCounts() {
         #expect(ArrowHead.allCases.count == 3)
         #expect(TextStyle.presets.count == 5)
+        #expect(StrokeStyle.widthPresets.allSatisfy { StrokeStyle.widthRange.contains($0) })
     }
 
     @Test("Redaction strength uses Screendrop's density mapping")
@@ -119,5 +120,33 @@ struct AnnotationCommandTests {
         #expect(blur.togglingKind(pixelate: true).isPixelate)
         #expect(!pixelate.togglingKind(pixelate: false).isPixelate)
         #expect(abs(blur.withDensity(1).density - 1) < 0.001)
+    }
+
+    @Test("Recolouring a filled shape keeps the fill's opacity")
+    func recolorPreservesFillAlpha() {
+        let filled = AnnotationCommand.shape(ShapeSpec(
+            rect: CGRect(x: 0, y: 0, width: 20, height: 20),
+            fill: FillStyle(color: .annotationRed.withAlpha(0.6))
+        ))
+        guard case let .shape(spec) = filled.applying(color: .black) else {
+            Issue.record("expected a shape")
+            return
+        }
+        #expect(spec.stroke.color == .black)
+        #expect(abs((spec.fill.color?.alpha ?? 0) - 0.6) < 0.001)
+    }
+
+    @Test("Fill opacity rewrites only the fill alpha")
+    func applyingFillOpacity() {
+        let filled = AnnotationCommand.shape(ShapeSpec(
+            rect: CGRect(x: 0, y: 0, width: 20, height: 20),
+            fill: FillStyle(color: .annotationRed.withAlpha(0.25))
+        ))
+        guard case let .shape(spec) = filled.applying(fillOpacity: 0.8) else {
+            Issue.record("expected a shape")
+            return
+        }
+        #expect(abs((spec.fill.color?.alpha ?? 0) - 0.8) < 0.001)
+        #expect(spec.fill.color?.red == AnnotationColor.annotationRed.red)
     }
 }

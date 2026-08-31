@@ -205,4 +205,17 @@ struct StyleMemoryTests {
         #expect(restored.stroke(for: .shape).width == 8)
         #expect(restored.lastArrowHead == .concave)
     }
+
+    @Test("Turning fill off keeps the last opacity for the next fill")
+    func fillOpacitySurvivesToggleOff() {
+        var memory = StyleMemory()
+        #expect(abs(memory.lastFillOpacity - FillStyle.defaultAlpha) < 0.001)
+
+        memory.remember(FillStyle(color: .annotationRed.withAlpha(0.7)), for: .shape)
+        #expect(abs(memory.lastFillOpacity - 0.7) < 0.001)
+
+        memory.remember(.none, for: .shape)
+        #expect(memory.fill(for: .shape).color == nil)
+        #expect(abs(memory.lastFillOpacity - 0.7) < 0.001)
+    }
 }

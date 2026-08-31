@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import Shared
 import SwiftUI
 
 /// Hosts the CALayer canvas inside SwiftUI, fitted and centered in the remaining space.
@@ -50,7 +51,7 @@ struct EditorCanvasHost: NSViewRepresentable {
         _ = (zoomToFit, magnification)
         context.coordinator.session = session
         context.coordinator.isCropping = isCropping
-        context.coordinator.canvas?.documentChangedExternally()
+        context.coordinator.syncCanvasIfNeeded(model: model)
         context.coordinator.apply()
     }
 
@@ -70,6 +71,9 @@ struct EditorCanvasHost: NSViewRepresentable {
         weak var scrollView: EditorCanvasScrollView?
         weak var session: EditorCanvasSession?
         var isCropping = false
+        /// Last document the canvas was told about, so a SwiftUI body refresh that only
+        /// touched inspector memory does not tear down every annotation layer.
+        private var syncKey: CanvasSyncKey?
 
         /// Avoid echoing a magnification we just wrote back through the pinch callback.
         private var isApplying = false
@@ -108,6 +112,18 @@ struct EditorCanvasHost: NSViewRepresentable {
             }
             frameObserver = nil
             magnifyEndObserver = nil
+        }
+
+        func syncCanvasIfNeeded(model: EditorDocumentModel) {
+            let key = CanvasSyncKey(
+                commands: model.document.commands,
+                selection: model.document.selection,
+                candidates: model.redactionCandidates,
+                tool: model.tool
+            )
+            guard syncKey != key else { return }
+            syncKey = key
+            canvas?.documentChangedExternally()
         }
 
         func apply() {
@@ -227,4 +243,13 @@ final class EditorCanvasScrollView: NSScrollView {
         let step = min(max(1 + delta * 0.004, 0.85), 1.15)
         onCommandScrollZoom?(step)
     }
+}
+
+/// What the canvas actually draws. Inspector style memory is not in here, so picking a
+/// colour for the *next* stroke does not rebuild every layer already on screen.
+private struct CanvasSyncKey: Equatable {
+    var commands: [AnnotationCommand]
+    var selection: Set<AnnotationID>
+    var candidates: [RedactionCandidate]
+    var tool: EditorTool
 }

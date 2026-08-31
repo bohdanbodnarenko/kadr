@@ -94,6 +94,66 @@ struct EditorStyleTests {
         #expect(abs(spec.stroke.color.alpha - 0.4) < 0.001)
     }
 
+    @Test("A filled shape keeps its fill opacity when recolored")
+    func recolorPreservesFillOpacity() throws {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 40, y: 30))
+        model.pointerUp(at: CGPoint(x: 40, y: 30))
+
+        model.applyShapeFill(.annotationRed.withAlpha(0.6))
+        model.applyColor(.black)
+
+        guard case let .shape(spec) = try #require(model.document.commands.first) else { return }
+        #expect(spec.stroke.color == .black)
+        #expect(abs((spec.fill.color?.alpha ?? 0) - 0.6) < 0.001)
+        #expect(spec.fill.color?.red == 0)
+    }
+
+    @Test("Fill opacity updates the selected shape and is remembered")
+    func applyFillOpacityUpdatesSelection() throws {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 40, y: 30))
+        model.pointerUp(at: CGPoint(x: 40, y: 30))
+
+        model.applyShapeFill(.annotationRed.withAlpha(0.25))
+        model.applyFillOpacity(0.8)
+        model.endInspectorStyleEdit()
+
+        guard case let .shape(spec) = try #require(model.document.commands.first) else { return }
+        #expect(abs((spec.fill.color?.alpha ?? 0) - 0.8) < 0.001)
+        #expect(abs(model.styleMemory.lastFillOpacity - 0.8) < 0.001)
+    }
+
+    @Test("Dragging stroke width coalesces into one undo step")
+    func strokeWidthSliderCoalescesUndo() throws {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 40, y: 30))
+        model.pointerUp(at: CGPoint(x: 40, y: 30))
+
+        guard case let .shape(original) = try #require(model.document.commands.first) else { return }
+        let originalWidth = original.stroke.width
+
+        model.applyStrokeWidth(6)
+        model.applyStrokeWidth(10)
+        model.applyStrokeWidth(16)
+        model.endInspectorStyleEdit()
+
+        guard case let .shape(thick) = try #require(model.document.commands.first) else { return }
+        #expect(thick.stroke.width == 16)
+
+        #expect(model.canUndo)
+        model.undo()
+        guard case let .shape(restored) = try #require(model.document.commands.first) else { return }
+        #expect(restored.stroke.width == originalWidth)
+        #expect(!model.document.isGestureOpen)
+    }
+
     @Test("Changing blur vs pixelate updates the selected redaction")
     func applyRedactionStyleUpdatesSelection() throws {
         let model = makeModel()

@@ -1,7 +1,7 @@
 import AnnotationModel
 import SwiftUI
 
-/// One-click colour and width, the way CleanShot and Screendrop lay out style.
+/// One-click colour, the way CleanShot and Screendrop lay out style.
 struct EditorSwatchStrip: View {
     let selected: AnnotationColor
     let onSelect: (AnnotationColor) -> Void
@@ -50,39 +50,6 @@ struct EditorSwatchStrip: View {
         abs(colour.red - selected.red) < 0.02
             && abs(colour.green - selected.green) < 0.02
             && abs(colour.blue - selected.blue) < 0.02
-    }
-}
-
-/// Stroke width as a row of weights, not a list of "4 pt".
-struct EditorStrokeWidthStrip: View {
-    let selected: CGFloat
-    let onSelect: (CGFloat) -> Void
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(StrokeStyle.widthPresets, id: \.self) { width in
-                Button {
-                    onSelect(width)
-                } label: {
-                    Capsule()
-                        .fill(abs(width - selected) < 0.5 ? Color.accentColor : Color.primary)
-                        .frame(width: 22, height: max(2, width * 0.45))
-                        .frame(width: 28, height: 22)
-                        .background {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(
-                                    abs(width - selected) < 0.5
-                                        ? Color.accentColor.opacity(0.16)
-                                        : Color.clear
-                                )
-                        }
-                }
-                .buttonStyle(.plain)
-                .help("\(Int(width)) pt")
-                .accessibilityLabel("\(Int(width)) point stroke")
-                .accessibilityAddTraits(abs(width - selected) < 0.5 ? .isSelected : [])
-            }
-        }
     }
 }
 

@@ -77,6 +77,8 @@ public final class AnnotationCanvasView: NSView {
     /// Space-drag pans the canvas the way a hand tool does in every other image editor.
     var spaceIsDown = false
     var spacePanAnchor: CGPoint?
+    /// Last chrome layout, so a style-only inspector tick does not re-lay the whole card.
+    var lastLayoutKey: CanvasLayoutKey?
     var spacePanClipOrigin: CGPoint?
 
     /// Called whenever the document changes, so the window can update its title bar.
@@ -347,6 +349,22 @@ public final class AnnotationCanvasView: NSView {
         }
     }
 
+    /// Existing layers, in the order they sit on `annotationLayer`.
+    private var orderedLayerIDs: [AnnotationID] {
+        (annotationLayer.sublayers ?? []).compactMap { layer in
+            guard let name = layer.name, let uuid = UUID(uuidString: name) else { return nil }
+            return AnnotationID(uuid)
+        }
+    }
+
+    /// Same IDs in the same order as the document's drawable commands, each with a layer.
+    private func canUpdateLayersInPlace(for commands: [AnnotationCommand]) -> Bool {
+        let drawableIDs = commands.filter { !$0.tool.isCanvasChrome }.map(\.id)
+        guard drawableIDs.allSatisfy({ layers[$0] != nil }) else { return false }
+        guard layers.count == drawableIDs.count else { return false }
+        return drawableIDs == orderedLayerIDs
+    }
+
     private func modifiers(from event: NSEvent) -> EditorModifiers {
         var modifiers: EditorModifiers = []
         if event.modifierFlags.contains(.shift) {
@@ -383,10 +401,52 @@ public final class AnnotationCanvasView: NSView {
 
     /// Called after undo, redo or an inspector change.
     public func documentChangedExternally() {
-        layoutCanvasChrome()
+        layoutCanvasChromeIfNeeded()
         refreshBaseImage()
-        rebuildAnnotationLayers()
+        syncAnnotationLayers()
         window?.invalidateCursorRects(for: self)
+    }
+
+    /// Relays the card only when its geometry actually moved — a stroke-width tick
+    /// must not re-lay wallpaper, shadows and the offscreen chrome.
+    private func layoutCanvasChromeIfNeeded() {
+        let key = CanvasLayoutKey(
+            canvas: model.document.canvasRect.size,
+            content: model.document.contentRect,
+            imageSpace: model.document.imageSpaceFrame,
+            beautify: model.document.beautify
+        )
+        guard lastLayoutKey != key else { return }
+        lastLayoutKey = key
+        layoutCanvasChrome()
+    }
+
+    /// Style and geometry edits update the layers that are already on screen. Adding,
+    /// deleting or reordering still rebuilds the tree.
+    private func syncAnnotationLayers() {
+        let commands = model.document.resolvedCommands
+        guard canUpdateLayersInPlace(for: commands) else {
+            rebuildAnnotationLayers()
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        for command in commands {
+            guard let layer = layers[command.id] else { continue }
+            AnnotationLayerFactory.update(
+                layer,
+                for: command,
+                imageScale: imageScale,
+                baseImage: displayedImage
+            )
+        }
+        updateSelectionHandles()
+        rebuildReviewLayers()
+        updateExpensiveChrome()
+        onDocumentChanged?()
     }
 
     var canvasCursor: NSCursor {
@@ -404,4 +464,12 @@ public final class AnnotationCanvasView: NSView {
             return NSCursor.crosshair
         }
     }
+}
+
+/// Geometry that forces a chrome re-lay. Style-only edits leave all of this alone.
+struct CanvasLayoutKey: Equatable {
+    var canvas: CGSize
+    var content: CGRect
+    var imageSpace: CGRect
+    var beautify: BeautifySpec?
 }

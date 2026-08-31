@@ -117,6 +117,12 @@ extension AnnotationCanvasView {
     }
 
     func layoutCanvasChrome() {
+        lastLayoutKey = CanvasLayoutKey(
+            canvas: model.document.canvasRect.size,
+            content: model.document.contentRect,
+            imageSpace: model.document.imageSpaceFrame,
+            beautify: model.document.beautify
+        )
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }

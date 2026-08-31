@@ -80,6 +80,9 @@ public final class EditorDocumentModel {
     /// The handle currently being dragged, if this gesture is a resize rather than a move.
     var resizeHandle: SelectionHandle?
     var resizeStartBounds: CGRect?
+    /// True while an inspector slider owns the open document gesture, so releasing the
+    /// slider (or clicking the canvas) closes that undo step without colliding with a drag.
+    @ObservationIgnored var inspectorStyleGesture = false
 
     /// The document's commands as they were when the work was last saved.
     ///

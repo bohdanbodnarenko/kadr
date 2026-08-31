@@ -69,8 +69,8 @@ public enum AnnotationLayerFactory {
 
     /// Updates an existing layer in place.
     ///
-    /// The hot path during a drag: no allocation, no tree surgery, just new geometry on a
-    /// layer that is already on screen.
+    /// The hot path during a drag *and* during inspector style edits: no allocation, no
+    /// tree surgery — path, stroke and fill all land on a layer that is already on screen.
     public static func update(
         _ layer: CALayer,
         for command: AnnotationCommand,
@@ -79,15 +79,15 @@ public enum AnnotationLayerFactory {
     ) {
         switch command {
         case let .arrow(spec):
-            (layer as? CAShapeLayer)?.path = arrowPath(spec)
+            applyArrow(spec, to: layer)
         case let .shape(spec):
-            (layer as? CAShapeLayer)?.path = shapePath(spec)
+            applyShape(spec, to: layer)
         case let .line(spec):
-            (layer as? CAShapeLayer)?.path = linePath(spec)
+            applyLine(spec, to: layer)
         case let .freehand(spec):
-            (layer as? CAShapeLayer)?.path = strokePath(spec.points)
+            applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
         case let .highlighter(spec):
-            (layer as? CAShapeLayer)?.path = strokePath(spec.points)
+            applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
         default:
             updateContentLayer(layer, for: command, imageScale: imageScale, baseImage: baseImage)
         }
@@ -185,15 +185,44 @@ public enum AnnotationLayerFactory {
     private static func styled(_ path: CGPath, stroke: StrokeStyle, fill: FillStyle = .none) -> CAShapeLayer {
         let layer = CAShapeLayer()
         layer.path = path
+        apply(stroke: stroke, fill: fill, to: layer)
+        return layer
+    }
+
+    private static func apply(stroke: StrokeStyle, fill: FillStyle = .none, to layer: CAShapeLayer) {
         layer.strokeColor = stroke.color.cgColor
         layer.lineWidth = stroke.width
         layer.lineCap = .round
         layer.lineJoin = .round
         layer.fillColor = fill.color?.cgColor
-        if !stroke.dashPattern.isEmpty {
-            layer.lineDashPattern = stroke.dashPattern.map { NSNumber(value: Double($0)) }
-        }
-        return layer
+        layer.lineDashPattern = stroke.dashPattern.isEmpty
+            ? nil
+            : stroke.dashPattern.map { NSNumber(value: Double($0)) }
+    }
+
+    private static func applyArrow(_ spec: ArrowSpec, to layer: CALayer) {
+        guard let shape = layer as? CAShapeLayer else { return }
+        shape.path = arrowPath(spec)
+        apply(stroke: spec.stroke, to: shape)
+        shape.fillColor = spec.head == .open ? nil : spec.stroke.color.cgColor
+    }
+
+    private static func applyShape(_ spec: ShapeSpec, to layer: CALayer) {
+        guard let shape = layer as? CAShapeLayer else { return }
+        shape.path = shapePath(spec)
+        apply(stroke: spec.stroke, fill: spec.fill, to: shape)
+    }
+
+    private static func applyLine(_ spec: LineSpec, to layer: CALayer) {
+        guard let shape = layer as? CAShapeLayer else { return }
+        shape.path = linePath(spec)
+        apply(stroke: spec.stroke, to: shape)
+    }
+
+    private static func applyStrokePath(_ points: [CGPoint], stroke: StrokeStyle, to layer: CALayer) {
+        guard let shape = layer as? CAShapeLayer else { return }
+        shape.path = strokePath(points)
+        apply(stroke: stroke, to: shape)
     }
 
     private static func arrowLayer(_ spec: ArrowSpec) -> CAShapeLayer {

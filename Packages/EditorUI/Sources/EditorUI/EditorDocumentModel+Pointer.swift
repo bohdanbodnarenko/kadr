@@ -14,6 +14,7 @@ public extension EditorDocumentModel {
         grabbing: SelectionHandle? = nil,
         handleTolerance: CGFloat = SelectionResizer.hitRadius
     ) {
+        endInspectorStyleEdit()
         dragOrigin = point
 
         guard let annotationTool = tool.annotation else {

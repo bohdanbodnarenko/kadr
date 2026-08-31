@@ -20,9 +20,16 @@ struct EditorInspector: View {
                         selected: model.styleMemory.stroke(for: tool).color,
                         onSelect: { model.applyColor($0) }
                     )
-                    EditorStrokeWidthStrip(
-                        selected: model.styleMemory.stroke(for: tool).width,
-                        onSelect: { model.applyStrokeWidth($0) }
+                    InspectorSlider(
+                        title: "Width",
+                        value: Binding(
+                            get: { Double(model.styleMemory.stroke(for: tool).width) },
+                            set: { model.applyStrokeWidth(CGFloat($0)) }
+                        ),
+                        range: Double(StrokeStyle.widthRange.lowerBound)
+                            ... Double(StrokeStyle.widthRange.upperBound),
+                        format: .points,
+                        onEditingEnded: { model.endInspectorStyleEdit() }
                     )
                 }
                 switch tool {
@@ -178,10 +185,23 @@ struct EditorInspector: View {
         Toggle("Filled", isOn: Binding(
             get: { model.styleMemory.fill(for: .shape).color != nil },
             set: { isFilled in
-                let colour = model.styleMemory.stroke(for: .shape).color.withAlpha(0.25)
+                let colour = model.styleMemory.stroke(for: .shape).color
+                    .withAlpha(model.styleMemory.lastFillOpacity)
                 model.applyShapeFill(isFilled ? colour : nil)
             }
         ))
+        if model.styleMemory.fill(for: .shape).color != nil {
+            InspectorSlider(
+                title: "Fill opacity",
+                value: Binding(
+                    get: { model.styleMemory.lastFillOpacity },
+                    set: { model.applyFillOpacity($0) }
+                ),
+                range: 0 ... 1,
+                format: .percent,
+                onEditingEnded: { model.endInspectorStyleEdit() }
+            )
+        }
     }
 
     @ViewBuilder

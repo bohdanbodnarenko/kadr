@@ -14,8 +14,8 @@ public extension AnnotationCommand {
             return .arrow(spec)
         case var .shape(spec):
             spec.stroke.color = color
-            if spec.fill.color != nil {
-                spec.fill.color = color.withAlpha(0.25)
+            if let fill = spec.fill.color {
+                spec.fill.color = color.withAlpha(fill.alpha)
             }
             return .shape(spec)
         case var .line(spec):
@@ -64,6 +64,12 @@ public extension AnnotationCommand {
         default:
             return self
         }
+    }
+
+    func applying(fillOpacity: Double) -> AnnotationCommand {
+        guard case var .shape(spec) = self, let fill = spec.fill.color else { return self }
+        spec.fill.color = fill.withAlpha(fillOpacity)
+        return .shape(spec)
     }
 
     func applying(shapeKind: ShapeKind) -> AnnotationCommand {

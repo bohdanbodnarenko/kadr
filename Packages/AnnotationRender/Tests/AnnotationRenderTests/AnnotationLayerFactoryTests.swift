@@ -49,6 +49,22 @@ struct AnnotationLayerFactoryTests {
         #expect(layer.path?.boundingBox == CGRect(x: 50, y: 50, width: 80, height: 80))
     }
 
+    @Test("Updating a shape in place also applies a new stroke width and fill")
+    func updateAppliesStrokeAndFill() throws {
+        var spec = ShapeSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))
+        let layer = try #require(
+            AnnotationLayerFactory.makeLayer(for: .shape(spec), contentsScale: 2) as? CAShapeLayer
+        )
+        #expect(layer.lineWidth == spec.stroke.width)
+
+        spec.stroke.width = 16
+        spec.fill.color = .black.withAlpha(0.4)
+        AnnotationLayerFactory.update(layer, for: .shape(spec))
+
+        #expect(layer.lineWidth == 16)
+        #expect(layer.fillColor != nil)
+    }
+
     @Test("A highlighter multiplies, so text under it stays readable")
     func highlighterMultiplies() throws {
         let command = AnnotationCommand.highlighter(HighlighterSpec(points: [.zero, CGPoint(x: 50, y: 0)]))

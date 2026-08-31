@@ -71,6 +71,10 @@ public struct StrokeStyle: Codable, Hashable, Sendable {
 
     /// The stroke width presets from docs/03 §3.
     public static let widthPresets: [CGFloat] = [2, 4, 6, 10, 16]
+
+    /// The inspector slider's range. Presets sit inside it; the highlighter's default
+    /// (20 pt) has to as well, or the first use of that tool would clamp.
+    public static let widthRange: ClosedRange<CGFloat> = 1 ... 32
 }
 
 /// How an annotation's interior is filled.
@@ -83,6 +87,9 @@ public struct FillStyle: Codable, Hashable, Sendable {
     }
 
     public static let none = FillStyle()
+
+    /// The fill alpha used when Filled is first turned on, before the user picks one.
+    public static let defaultAlpha: Double = 0.25
 }
 
 /// Arrow head shapes (docs/03 §3: three head styles).
