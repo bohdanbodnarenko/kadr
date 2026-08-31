@@ -32,7 +32,9 @@ extension QuickAccessManager {
         actions.recognizeText = { [weak self] in self?.recognizeText(item) }
         actions.textAvailable = !item.isVideo
         actions.trim = { [weak self] in self?.trim(item) }
-        actions.engage = { [weak self] in self?.noteEngagement(with: item) }
+        actions.setHovered = { [weak self] hovering in self?.setHovered(item, hovering: hovering) }
+        actions.beginDrag = { [weak self] in self?.beginDrag(for: item) }
+        actions.peek = { [weak self] in self?.setPeeking(true) }
         actions.compress = { [weak self] in self?.compress(item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
         actions.studio = { [weak self] in self?.openStudio(item) }
@@ -138,14 +140,18 @@ extension QuickAccessManager {
         openInEditor(url)
     }
 
-    /// Opens the editor and gets the cards out of its way (docs/09 U2.1).
+    /// Opens the editor and tucks the cards into the peek tab (docs/03 §2).
     ///
-    /// The cards collapse to an edge tab rather than hiding: an editor window is where the
-    /// user is now, and a stack of cards over it is in the way — but hiding them means
-    /// putting them back at the right moment, and either mistake loses a card or flashes it
-    /// over the window.
+    /// The cards hide rather than sit over the editor. A peek tab stays in the same
+    /// corner so the user can bring them back without waiting for the editor to quit.
+    /// Opening the editor is high-intent: that card stops auto-dismissing.
     func openInEditor(_ url: URL) {
-        setPeeking(true)
+        if let item = panels.first(where: { $0.item.fileURL == url })?.item {
+            noteEngagement(with: item)
+        }
+        if !panels.isEmpty {
+            setPeeking(true)
+        }
         editor.open(url)
     }
 

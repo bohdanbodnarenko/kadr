@@ -29,8 +29,12 @@ struct QuickAccessCardActions {
     /// has a session beside it — without one there is nothing to edit but the trim.
     var studio: () -> Void = {}
     var studioAvailable = false
-    /// The user has touched this card, so it stops closing on its own (docs/09 U2.1).
-    var engage: () -> Void = {}
+    /// Hover pauses auto-dismiss; it does not claim the card (docs/03 §2).
+    var setHovered: (Bool) -> Void = { _ in }
+    /// Dragging pauses auto-dismiss until the drop finishes.
+    var beginDrag: () -> Void = {}
+    /// Tucks the stack into the peek tab (swipe toward the screen edge).
+    var peek: () -> Void = {}
     /// Whether Annotate, Pin and OCR do anything yet.
     var annotateAvailable = false
     var pinAvailable = false
@@ -81,11 +85,7 @@ struct QuickAccessCardView: View {
         )
         .onHover { hovering in
             isHovering = hovering
-            // Hovering counts: reaching for a card is working with it, and having it
-            // vanish mid-thought is what makes people turn auto-close off entirely.
-            if hovering {
-                actions.engage()
-            }
+            actions.setHovered(hovering)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
@@ -119,9 +119,15 @@ struct QuickAccessCardView: View {
                     if actions.annotateAvailable {
                         actions.annotate()
                     }
-                }
+                },
+                onDragBegan: { actions.beginDrag() }
             )
         )
+        .overlay {
+            if isHovering {
+                hoverOverlay
+            }
+        }
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Double-tap to expand actions, or drag to another app")
     }
@@ -147,6 +153,7 @@ struct QuickAccessCardView: View {
                     .foregroundStyle(.secondary)
                     .help("Kept in the overlay only. Saved when you act on it.")
             }
+            hideButton
         }
         .frame(height: Self.actionRowHeight)
     }
@@ -173,6 +180,48 @@ struct QuickAccessCardView: View {
         }
     }
 
+    /// Hover chrome: the layout's corner actions, plus a close that hides without deleting.
+    ///
+    /// Corners were configured in settings and never drawn — they only exist on hover,
+    /// over the thumbnail, which is where there is room for them (docs/09 U2.3).
+    private var hoverOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.32))
+                .allowsHitTesting(false)
+            VStack {
+                HStack(alignment: .top) {
+                    corner(.topLeading)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        corner(.topTrailing)
+                        hideButton
+                    }
+                }
+                Spacer()
+                HStack {
+                    corner(.bottomLeading)
+                    Spacer()
+                    corner(.bottomTrailing)
+                }
+            }
+            .padding(6)
+        }
+    }
+
+    /// Hide, not delete. The file stays where the save policy put it (docs/03 §2).
+    private var hideButton: some View {
+        Button(action: actions.dismiss) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 22, height: 22)
+                .background(.regularMaterial, in: Circle())
+        }
+        .buttonStyle(.borderless)
+        .help("Hide — the file stays")
+        .accessibilityLabel("Hide card")
+    }
+
     /// The buttons the user's layout asks for, in the order they asked for them
     /// (docs/09 U2.3).
     ///
@@ -188,7 +237,7 @@ struct QuickAccessCardView: View {
         .frame(height: Self.actionRowHeight)
     }
 
-    /// The corner buttons, which are always visible.
+    /// The corner buttons, shown on hover over the thumbnail.
     private func corner(_ slot: CardSlot) -> some View {
         ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { action in
             button(for: action)

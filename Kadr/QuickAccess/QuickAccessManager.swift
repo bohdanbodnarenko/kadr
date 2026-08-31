@@ -32,18 +32,25 @@ final class QuickAccessManager {
     let logger = KadrLog.logger(.overlay)
 
     var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
-    /// Cards the user has touched, which no longer close on their own (docs/09 U2.1).
-    private var engagedItems: Set<UUID> = []
-    /// Whether the cards are collapsed to an edge tab.
-    private(set) var isPeeking = false
+    /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
+    var engagedItems: Set<UUID> = []
+    /// Whether the cards are collapsed to the peek tab (docs/03 §2).
+    var isPeeking = false
     /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
-    private var editorExitObserver: (any NSObjectProtocol)?
-    private var dismissTasks: [UUID: Task<Void, Never>] = [:]
-    /// Dismissed cards, newest first, for "Restore Recently Closed" (docs/03 §2).
+    var editorExitObserver: (any NSObjectProtocol)?
+    var dismissTasks: [UUID: Task<Void, Never>] = [:]
+    /// The card the pointer is over. Hover pauses auto-dismiss; it does not claim the card.
+    var hoveredItemID: UUID?
+    /// The card currently being dragged out.
+    var draggingItemID: UUID?
+    var peekPanel: QuickAccessPeekPanel?
+    var hoverKeyMonitor: Any?
+    var localKeyMonitor: Any?
+    /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
     private var recentlyClosed: [QuickAccessItem] = []
 
-    private static let cardSpacing: CGFloat = 12
-    private static let screenMargin: CGFloat = 16
+    static let cardSpacing: CGFloat = 12
+    static let screenMargin: CGFloat = 16
     private static let maximumRecentlyClosed = 10
 
     init(settings: AppSettings, output: CaptureOutput, pins: PinManager, history: HistoryController? = nil) {
@@ -184,11 +191,22 @@ final class QuickAccessManager {
         panels.removeAll()
         dismissTasks.values.forEach { $0.cancel() }
         dismissTasks.removeAll()
+        engagedItems.removeAll()
+        hoveredItemID = nil
+        draggingItemID = nil
+        stopHoverKeyMonitor()
+        isPeeking = false
+        stopWatchingForEditorExit()
+        teardownPeekTab()
     }
 
     // MARK: - Presenting
 
     func present(_ item: QuickAccessItem) {
+        // A new capture should be seen, even if the stack was tucked into the peek tab.
+        if isPeeking {
+            setPeeking(false)
+        }
         let panel = QuickAccessPanel(item: item, settings: settings, actions: actions(for: item))
         panels.insert((item, panel), at: 0)
         panel.present(at: .zero)
@@ -203,40 +221,43 @@ final class QuickAccessManager {
     /// the Dock and the menu bar (docs/03 §2 accept list).
     func restack() {
         guard let screen = targetScreen() else { return }
+        if isPeeking {
+            layoutPeekTab(on: screen)
+            return
+        }
+        hidePeekTab()
+        layoutCards(on: screen)
+    }
+
+    func layoutCards(on screen: NSScreen) {
         let area = screen.visibleFrame
         let maxVisible = settings.overlayMaxVisibleCards
-
         let cardWidth = CGFloat(settings.overlayCardWidth)
         for (index, entry) in panels.enumerated() {
-            // Peeking narrows the card to a tab; everything below still positions it, so
-            // there is no separate layout to keep in step (docs/09 U2.1).
-            entry.panel.setPresentation(
-                isPeeking ? .peeking : .expanded,
-                edge: settings.overlayCorner.isLeading
-                    ? area.minX + Self.screenMargin + QuickAccessPanel.peekWidth
-                    : area.maxX - Self.screenMargin,
-                width: cardWidth,
-                height: entry.panel.frame.height
-            )
+            entry.panel.revealFromPeek()
+            entry.panel.setCardSize(width: cardWidth, height: entry.panel.frame.height)
             let size = entry.panel.frame.size
-            // Collapsed cards peek out from behind the front one rather than stacking
-            // off the screen forever.
-            let step = index < maxVisible ? Self.cardSpacing + size.height : Self.cardSpacing
-            let offset = index < maxVisible
-                ? CGFloat(index) * step
-                : CGFloat(maxVisible) * (Self.cardSpacing + size.height) + CGFloat(index - maxVisible) * 6
-
-            let x = settings.overlayCorner.isLeading
-                ? area.minX + Self.screenMargin
-                : area.maxX - size.width - Self.screenMargin
-            let y = settings.overlayCorner.isBottom
-                ? area.minY + Self.screenMargin + offset
-                : area.maxY - size.height - Self.screenMargin - offset
-
-            entry.panel.setStackDepth(index, origin: CGPoint(x: x, y: y))
+            let origin = cardOrigin(index: index, size: size, area: area, maxVisible: maxVisible)
+            entry.panel.setStackDepth(index, origin: origin)
             // Beyond the visible count the card is a hint that more exist, not a card.
-            entry.panel.alphaValue = index < maxVisible ? entry.panel.alphaValue : 0.25
+            if index >= maxVisible {
+                entry.panel.alphaValue = 0.25
+            }
         }
+    }
+
+    func cardOrigin(index: Int, size: CGSize, area: CGRect, maxVisible: Int) -> CGPoint {
+        let step = index < maxVisible ? Self.cardSpacing + size.height : Self.cardSpacing
+        let offset = index < maxVisible
+            ? CGFloat(index) * step
+            : CGFloat(maxVisible) * (Self.cardSpacing + size.height) + CGFloat(index - maxVisible) * 6
+        let x = settings.overlayCorner.isLeading
+            ? area.minX + Self.screenMargin
+            : area.maxX - size.width - Self.screenMargin
+        let y = settings.overlayCorner.isBottom
+            ? area.minY + Self.screenMargin + offset
+            : area.maxY - size.height - Self.screenMargin - offset
+        return CGPoint(x: x, y: y)
     }
 
     func targetScreen() -> NSScreen? {
@@ -249,82 +270,6 @@ final class QuickAccessManager {
             NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
         }
         return matching ?? NSScreen.main ?? NSScreen.screens.first
-    }
-
-    func scheduleAutoDismiss(for item: QuickAccessItem) {
-        let seconds = settings.overlayTimeout.seconds
-        guard seconds > 0, !engagedItems.contains(item.id) else { return }
-        dismissTasks[item.id] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled else { return }
-            self?.dismiss(item)
-        }
-    }
-
-    /// The user has touched this card, so it stops being disposable (docs/09 U2.1).
-    ///
-    /// Permanently, not for another timeout's worth: someone who has reached for a card is
-    /// working with it, and having it vanish mid-thought because they paused to read is the
-    /// behaviour that makes people turn auto-close off entirely. The card still closes —
-    /// by being dismissed, dragged out, or acted on.
-    func noteEngagement(with item: QuickAccessItem) {
-        guard !engagedItems.contains(item.id) else { return }
-        engagedItems.insert(item.id)
-        dismissTasks.removeValue(forKey: item.id)?.cancel()
-        logger.info("Card engaged; auto-close cancelled")
-    }
-
-    /// Whether a card has been touched and will no longer close on its own.
-    func isEngaged(_ item: QuickAccessItem) -> Bool {
-        engagedItems.contains(item.id)
-    }
-
-    // MARK: - Peek (docs/09 U2.1)
-
-    /// Collapses every card to an edge tab, or restores them.
-    ///
-    /// Called when an editor window opens over the cards. Peeking rather than hiding
-    /// because hide-and-restore is a race — the card has to come back in the right place
-    /// at the right moment, and either mistake loses it or flashes it over the editor.
-    func setPeeking(_ peeking: Bool) {
-        guard isPeeking != peeking else { return }
-        isPeeking = peeking
-        if peeking {
-            watchForEditorExit()
-        } else {
-            stopWatchingForEditorExit()
-        }
-        restack()
-    }
-
-    /// Restores the cards when the editor process goes away.
-    ///
-    /// The editor is a separate app that exits with its last window, so its termination is
-    /// the signal that the user is done with it — and it is a notification rather than a
-    /// poll, so a peeking agent costs nothing while it waits (CLAUDE.md rule 2).
-    private func watchForEditorExit() {
-        guard editorExitObserver == nil else { return }
-        editorExitObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let key = NSWorkspace.applicationUserInfoKey
-            guard let application = notification.userInfo?[key] as? NSRunningApplication,
-                  application.bundleIdentifier == Self.editorBundleIdentifier
-            else {
-                return
-            }
-            MainActor.assumeIsolated {
-                self?.setPeeking(false)
-            }
-        }
-    }
-
-    private func stopWatchingForEditorExit() {
-        guard let editorExitObserver else { return }
-        NSWorkspace.shared.notificationCenter.removeObserver(editorExitObserver)
-        self.editorExitObserver = nil
     }
 
     nonisolated static let editorBundleIdentifier = "app.kadr.Kadr.Editor"
@@ -395,6 +340,7 @@ final class QuickAccessManager {
     /// dismissing at drag start loses the capture when the user changes their mind
     /// (docs/09 U0.1).
     func dragCompleted(_ item: QuickAccessItem, accepted: Bool) {
+        endDrag(for: item)
         guard accepted, settings.overlayDismissOnDrag else { return }
         dismiss(item)
     }
@@ -411,17 +357,17 @@ final class QuickAccessManager {
     func dismiss(_ item: QuickAccessItem) {
         guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
         let entry = panels.remove(at: index)
-        dismissTasks.removeValue(forKey: item.id)?.cancel()
+        forgetTransientState(for: item)
         recordClosed(entry.item)
         entry.panel.dismiss()
-        restack()
+        finishRemoval()
     }
 
     /// Deletes the capture as well as the card.
     func delete(_ item: QuickAccessItem) {
         guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
         let entry = panels.remove(at: index)
-        dismissTasks.removeValue(forKey: item.id)?.cancel()
+        forgetTransientState(for: item)
         entry.panel.dismiss()
         // The library keeps its own content-addressed copy, so trashing the file alone
         // left a "deleted" capture sitting in App Support until retention expired — which
@@ -431,6 +377,28 @@ final class QuickAccessManager {
         // Deleted means gone, so it is not offered for restore.
         try? FileManager.default.trashItem(at: entry.item.fileURL, resultingItemURL: nil)
         logger.info("Deleted \(entry.item.filename, privacy: .public)")
+        finishRemoval()
+    }
+
+    func forgetTransientState(for item: QuickAccessItem) {
+        dismissTasks.removeValue(forKey: item.id)?.cancel()
+        engagedItems.remove(item.id)
+        if hoveredItemID == item.id {
+            hoveredItemID = nil
+            stopHoverKeyMonitorIfIdle()
+        }
+        if draggingItemID == item.id {
+            draggingItemID = nil
+        }
+    }
+
+    func finishRemoval() {
+        if panels.isEmpty {
+            isPeeking = false
+            stopWatchingForEditorExit()
+            teardownPeekTab()
+            return
+        }
         restack()
     }
 

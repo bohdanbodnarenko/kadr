@@ -4,6 +4,13 @@ import SettingsKit
 import Shared
 import SwiftUI
 
+/// First click on a non-activating overlay must count (docs/04 §5).
+final class OverlayHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+}
+
 /// A floating thumbnail card (docs/03 §2).
 ///
 /// Focus is the delicate part. The card must never take key status just by appearing —
@@ -12,27 +19,17 @@ import SwiftUI
 /// showing the panel steals nothing, clicking it hands it the keyboard.
 @MainActor
 final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
-    private let hostingView: NSHostingView<QuickAccessCardView>
-
-    /// How the card is showing itself (docs/09 U2.1).
-    enum Presentation: Equatable {
-        /// The whole card.
-        case expanded
-        /// A tab at the screen edge, out of the way of an editor window.
-        case peeking
-    }
-
-    private(set) var presentation: Presentation = .expanded
-
-    /// How wide the peek tab is. Enough to grab and to show a thumbnail sliver, narrow
-    /// enough that it reads as parked rather than as a small card.
-    static let peekWidth: CGFloat = 26
+    private let hostingView: OverlayHostingView<QuickAccessCardView>
+    private var cardActions: QuickAccessCardActions
+    private let settings: AppSettings
 
     init(item: QuickAccessItem, settings: AppSettings, actions: QuickAccessCardActions) {
+        self.settings = settings
+        cardActions = actions
         let width = CGFloat(settings.overlayCardWidth)
         let height = QuickAccessCardView.height(forWidth: width, item: item)
 
-        hostingView = NSHostingView(rootView: QuickAccessCardView(
+        hostingView = OverlayHostingView(rootView: QuickAccessCardView(
             item: item,
             actions: actions,
             width: width,
@@ -71,13 +68,24 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
         close()
     }
 
+    /// Parks the card while the peek tab is showing. The panel stays alive so restore
+    /// is a show, not a rebuild (docs/03 §2).
+    func hideForPeek() {
+        guard isVisible else { return }
+        InteractiveRegionTracker.shared.unregister(self)
+        orderOut(nil)
+    }
+
+    func revealFromPeek() {
+        guard !isVisible else { return }
+        orderFrontRegardless()
+        CaptureExclusionRegistry.shared.register(self)
+        InteractiveRegionTracker.shared.register(self)
+    }
+
     // MARK: - Pass-through (docs/09 U2.1)
 
     /// The card's own frame, because every part of a card is a control.
-    ///
-    /// The rectangle a card occupies is nearly all thumbnail and buttons; what makes the
-    /// pass-through worth having is that a *peeking* card is almost entirely out of the
-    /// way, and that a card which has been asked to hide takes no clicks at all.
     var interactiveRegions: InteractiveRegions {
         guard !isIgnoringClicks else { return .none }
         return InteractiveRegions(rects: [frame])
@@ -95,26 +103,8 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
         }
     }
 
-    // MARK: - Peek (docs/09 U2.1)
-
-    /// Collapses the card to an edge tab, or restores it.
-    ///
-    /// Peeking rather than hiding, because hiding and showing again is a race: the card
-    /// has to be put back exactly where it was, at exactly the right moment, and any
-    /// mistake either loses the card or flashes it over the editor. A tab is always
-    /// present, so there is no moment to get wrong — and it is still a target the user can
-    /// click to bring the card back.
-    func setPresentation(_ presentation: Presentation, edge: CGFloat, width: CGFloat, height: CGFloat) {
-        self.presentation = presentation
-        switch presentation {
-        case .expanded:
-            setFrame(CGRect(x: frame.minX, y: frame.minY, width: width, height: height), display: true)
-        case .peeking:
-            setFrame(
-                CGRect(x: edge - Self.peekWidth, y: frame.minY, width: Self.peekWidth, height: height),
-                display: true
-            )
-        }
+    func setCardSize(width: CGFloat, height: CGFloat) {
+        setFrame(CGRect(x: frame.minX, y: frame.minY, width: width, height: height), display: true)
         InteractiveRegionTracker.shared.update(at: NSEvent.mouseLocation)
     }
 
@@ -123,6 +113,7 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
     /// The hosting view holds a value, not a reference, so a card whose item has gained a
     /// savings badge needs a new root rather than a redraw.
     func refresh(item: QuickAccessItem, settings: AppSettings, actions: QuickAccessCardActions) {
+        cardActions = actions
         hostingView.rootView = QuickAccessCardView(
             item: item,
             actions: actions,
@@ -135,5 +126,31 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
     func setStackDepth(_ depth: Int, origin: CGPoint) {
         setFrameOrigin(origin)
         alphaValue = depth == 0 ? 1 : max(0.35, 1 - CGFloat(depth) * 0.18)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        switch OverlaySwipe.from(
+            deltaX: event.scrollingDeltaX,
+            deltaY: event.scrollingDeltaY,
+            corner: settings.overlayCorner
+        ) {
+        case .dismiss:
+            cardActions.dismiss()
+        case .peek:
+            cardActions.peek()
+        case nil:
+            super.scrollWheel(with: event)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 51, 117:
+            cardActions.delete()
+        case 53:
+            cardActions.dismiss()
+        default:
+            super.keyDown(with: event)
+        }
     }
 }

@@ -29,9 +29,9 @@ struct OverlayEngagementTests {
 
     // MARK: - Engagement
 
-    /// A card someone has reached for stops being disposable. Having it vanish mid-thought
-    /// is what makes people turn auto-close off entirely.
-    @Test("Touching a card cancels its auto-close for good")
+    /// Opening the editor claims the card. Hovering must not, or a timeout setting does
+    /// nothing the moment the pointer crosses the thumbnail (docs/03 §2).
+    @Test("Opening the editor cancels auto-close for good")
     func engagementCancelsAutoClose() throws {
         let harness = makeHarness()
         let item = try showCard(harness)
@@ -43,7 +43,41 @@ struct OverlayEngagementTests {
         // Re-arming must not bring it back: the card has been claimed.
         harness.manager.scheduleAutoDismiss(for: item)
         #expect(harness.manager.isEngaged(item))
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.contains { $0.id == item.id })
         harness.manager.dismissAll()
+    }
+
+    @Test("Hovering pauses auto-close without claiming the card")
+    func hoverPausesWithoutEngaging() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+
+        harness.manager.setHovered(item, hovering: true)
+        #expect(harness.manager.isHovered(item))
+        #expect(!harness.manager.isEngaged(item))
+        #expect(!harness.manager.isIdleForAutoDismiss(item))
+
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.contains { $0.id == item.id }, "hover must not dismiss")
+
+        harness.manager.setHovered(item, hovering: false)
+        #expect(harness.manager.isIdleForAutoDismiss(item))
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.isEmpty)
+    }
+
+    @Test("Dragging pauses auto-close")
+    func dragPausesAutoClose() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.beginDrag(for: item)
+        #expect(!harness.manager.isIdleForAutoDismiss(item))
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.count == 1)
+        harness.manager.endDrag(for: item)
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.isEmpty)
     }
 
     @Test("Engagement is per card, not per overlay")
@@ -75,8 +109,8 @@ struct OverlayEngagementTests {
         #expect(!makeHarness().manager.isPeeking)
     }
 
-    /// Peeking rather than hiding: hide-and-restore is a race, and either mistake loses a
-    /// card or flashes it over the editor.
+    /// Peeking hides the cards and leaves a tab. Hide-and-destroy is a race; the items
+    /// stay so restore is a show, not a rebuild (docs/03 §2).
     @Test("Opening the editor collapses the cards to a tab")
     func peekingCollapses() throws {
         let harness = makeHarness()
@@ -85,19 +119,90 @@ struct OverlayEngagementTests {
         harness.manager.setPeeking(true)
         #expect(harness.manager.isPeeking)
         #expect(harness.manager.items.count == 1, "peeking must not lose the card")
+        #expect(harness.manager.isPeekTabVisible)
+        #expect(harness.manager.panels.allSatisfy { !$0.panel.isVisible })
 
         harness.manager.setPeeking(false)
         #expect(!harness.manager.isPeeking)
+        #expect(!harness.manager.isPeekTabVisible)
+        #expect(harness.manager.panels.contains { $0.panel.isVisible })
         harness.manager.dismissAll()
     }
 
     @Test("Setting the same state twice is a no-op")
-    func peekingIsIdempotent() {
+    func peekingIsIdempotent() throws {
         let harness = makeHarness()
+        _ = try showCard(harness)
         harness.manager.setPeeking(true)
         harness.manager.setPeeking(true)
         #expect(harness.manager.isPeeking)
         harness.manager.setPeeking(false)
+        harness.manager.dismissAll()
+    }
+
+    @Test("Peeking with nothing on screen does nothing")
+    func peekingEmptyIsANoOp() {
+        let harness = makeHarness()
+        harness.manager.setPeeking(true)
+        #expect(!harness.manager.isPeeking)
+        #expect(!harness.manager.isPeekTabVisible)
+    }
+
+    @Test("A new capture expands a peeked stack")
+    func newCaptureExpandsPeek() throws {
+        let harness = makeHarness()
+        _ = try showCard(harness)
+        harness.manager.setPeeking(true)
+        #expect(harness.manager.isPeeking)
+
+        _ = try showCard(harness)
+        #expect(!harness.manager.isPeeking)
+        #expect(harness.manager.items.count == 2)
+        harness.manager.dismissAll()
+    }
+
+    @Test("Dismissing from the overlay keeps the file")
+    func dismissFromCloseKeepsTheFile() throws {
+        let harness = makeHarness()
+        harness.settings.defaultAction = .saveToFolder
+        let item = try showCard(harness)
+        let path = item.fileURL.path
+        harness.manager.dismiss(item)
+        #expect(harness.manager.items.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: path))
+    }
+
+    @Test("Dismissing the last peeked card tears the tab down")
+    func lastPeekedCardTearsDownTheTab() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setPeeking(true)
+        harness.manager.dismiss(item)
+        #expect(!harness.manager.isPeeking)
+        #expect(!harness.manager.isPeekTabVisible)
+    }
+
+    // MARK: - Swipe
+
+    @Test("A flick toward the docked edge hides the card")
+    func swipeOutwardDismisses() {
+        #expect(OverlaySwipe.from(deltaX: 12, deltaY: 0, corner: .bottomRight) == .dismiss)
+        #expect(OverlaySwipe.from(deltaX: -12, deltaY: 0, corner: .bottomLeft) == .dismiss)
+        #expect(OverlaySwipe.from(deltaX: 12, deltaY: 0, corner: .bottomLeft) == nil)
+    }
+
+    @Test("A flick toward the screen edge peeks")
+    func swipeTowardEdgePeeks() {
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 10, corner: .bottomLeft) == .peek)
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: -10, corner: .topRight) == .peek)
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 10, corner: .topRight) == nil)
+    }
+
+    @Test("The peek tab names screenshots unless a recording is in the stack")
+    func peekTitleFollowsContents() {
+        #expect(OverlayPeekCopy.title(count: 1, hasVideo: false) == "1 Screenshot")
+        #expect(OverlayPeekCopy.title(count: 3, hasVideo: false) == "3 Screenshots")
+        #expect(OverlayPeekCopy.title(count: 2, hasVideo: true) == "2 Captures")
     }
 
     // MARK: - Unsaved work

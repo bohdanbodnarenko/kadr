@@ -162,6 +162,8 @@ struct FilePromiseDragView: NSViewRepresentable {
     var dragImage: @MainActor () -> NSImage?
     var onTap: @MainActor () -> Void = {}
     var onDoubleTap: @MainActor () -> Void = {}
+    /// Fired when the drag threshold is crossed, so auto-dismiss can pause.
+    var onDragBegan: @MainActor () -> Void = {}
 
     func makeNSView(context: Context) -> DragSourceView {
         let view = DragSourceView()
@@ -188,6 +190,7 @@ struct FilePromiseDragView: NSViewRepresentable {
         }
 
         func beginDrag(from view: NSView, event: NSEvent) {
+            owner.onDragBegan()
             dragController.beginDrag(
                 from: view,
                 event: event,
