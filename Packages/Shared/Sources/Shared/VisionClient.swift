@@ -135,6 +135,101 @@ public final class VisionClient {
         }
     }
 
+    /// Transcribes a recording in the helper (docs/13 T1.1).
+    public func transcribe(
+        _ request: SpeechTranscriptionRequest,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> SpeechTranscriptDTO {
+        let interval = signposter.beginInterval("speech.transcribe")
+        defer { signposter.endInterval("speech.transcribe", interval) }
+
+        let sink = SpeechClientSink()
+        sink.onProgress = progress
+        let requestData = try JSONEncoder().encode(request)
+        let timeout: Duration = request.timeoutSeconds > 0
+            ? .seconds(request.timeoutSeconds)
+            : .seconds(1800)
+        let connection = makeSpeechConnection(sink: sink)
+        self.connection = connection
+        return try await send(
+            timeout: timeout,
+            fallback: .transcriptionFailed,
+            connection: connection
+        ) { service, reply in
+            service.transcribe(requestData: requestData, reply: reply)
+        }
+    }
+
+    public func speechStatus(_ request: SpeechStatusRequest) async throws -> SpeechStatusResponse {
+        let requestData = try JSONEncoder().encode(request)
+        return try await send(timeout: .seconds(30), fallback: .speechUnavailable) { service, reply in
+            service.speechStatus(requestData: requestData, reply: reply)
+        }
+    }
+
+    public func installSpeechModel(
+        _ request: SpeechInstallRequest,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> SpeechStatusResponse {
+        let sink = SpeechClientSink()
+        sink.onProgress = progress
+        let requestData = try JSONEncoder().encode(request)
+        let connection = makeSpeechConnection(sink: sink)
+        self.connection = connection
+        return try await send(
+            timeout: .seconds(3600),
+            fallback: .speechUnavailable,
+            connection: connection
+        ) { service, reply in
+            service.installSpeechModel(requestData: requestData, reply: reply)
+        }
+    }
+
+    public func cancelSpeech() {
+        let connection = connection ?? makeConnection()
+        self.connection = connection
+        (connection.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
+    }
+
+    public func warmUpSpeech(_ request: SpeechStatusRequest) async throws {
+        let requestData = try JSONEncoder().encode(request)
+        let _: Bool = try await send(timeout: .seconds(60), fallback: .speechUnavailable) { service, reply in
+            service.warmUpSpeech(requestData: requestData, reply: reply)
+        }
+    }
+
+    public func startLiveSpeech(
+        _ request: SpeechLiveStartRequest,
+        onHypothesis: @escaping @Sendable (SpeechHypothesisDTO) -> Void
+    ) async throws {
+        let sink = SpeechClientSink()
+        sink.onHypothesis = { data in
+            if let hypothesis = try? JSONDecoder().decode(SpeechHypothesisDTO.self, from: data) {
+                onHypothesis(hypothesis)
+            }
+        }
+        let connection = makeSpeechConnection(sink: sink)
+        self.connection = connection
+        let requestData = try JSONEncoder().encode(request)
+        let _: Data = try await send(
+            timeout: .seconds(30),
+            fallback: .speechUnavailable,
+            connection: connection
+        ) { service, reply in
+            service.startLiveSpeech(requestData: requestData, reply: reply)
+        }
+    }
+
+    public func feedLiveSpeechAudio(_ pcm: Data) {
+        guard let connection else { return }
+        (connection.remoteObjectProxy as? any VisionServiceProtocol)?.feedLiveSpeechAudio(pcm)
+    }
+
+    public func stopLiveSpeech() {
+        (connection?.remoteObjectProxy as? any VisionServiceProtocol)?.stopLiveSpeech()
+        disconnect()
+    }
+
     // MARK: - The one round trip
 
     /// What every call to the helper does: connect, send, decode, and never hang.
@@ -152,14 +247,15 @@ public final class VisionClient {
     private func send<Response: Decodable>(
         timeout: Duration,
         fallback: VisionServiceError,
+        connection: NSXPCConnection? = nil,
         invoke: @escaping @Sendable (any VisionServiceProtocol, @escaping @Sendable (Data?, (any Error)?) -> Void)
             -> Void
     ) async throws -> Response {
-        let connection = connection ?? makeConnection()
-        self.connection = connection
+        let connection = connection ?? self.connection ?? makeConnection()
+        if connection !== self.connection, self.connection == nil {
+            self.connection = connection
+        }
 
-        // `NSXPCConnection` is not `Sendable`; it is used only from the request task,
-        // which is the single consumer, so it crosses in a documented box (docs/04 §8).
         let boxed = UncheckedSendableBox(connection)
         let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
             group.addTask { try await Self.request(on: boxed.value, fallback: fallback, invoke: invoke) }
@@ -214,15 +310,20 @@ public final class VisionClient {
     }
 
     private func makeConnection() -> NSXPCConnection {
+        makeSpeechConnection(sink: SpeechClientSink())
+    }
+
+    private func makeSpeechConnection(sink: SpeechClientSink) -> NSXPCConnection {
         let connection = NSXPCConnection(serviceName: VisionServiceName.machServiceName)
         connection.remoteObjectInterface = NSXPCInterface(with: VisionServiceProtocol.self)
+        connection.exportedInterface = NSXPCInterface(with: SpeechClientProtocol.self)
+        connection.exportedObject = sink
         connection.invalidationHandler = { [weak self] in
             Task { @MainActor in
                 self?.connection = nil
             }
         }
         connection.interruptionHandler = { [weak self] in
-            // Expected: this is what an idle helper exiting looks like from here.
             Task { @MainActor in
                 self?.connection = nil
             }
@@ -270,5 +371,19 @@ private final nonisolated class ResumeOnce: @unchecked Sendable {
         guard !hasResumed else { return }
         hasResumed = true
         continuation.resume(with: result)
+    }
+}
+
+/// Receives progress and live hypotheses from the helper (docs/13 T1.4, T2.1).
+final class SpeechClientSink: NSObject, SpeechClientProtocol, @unchecked Sendable {
+    var onProgress: (@Sendable (Double) -> Void)?
+    var onHypothesis: (@Sendable (Data) -> Void)?
+
+    func speechDidProgress(_ fraction: Double) {
+        onProgress?(fraction)
+    }
+
+    func speechDidHypothesize(_ data: Data) {
+        onHypothesis?(data)
     }
 }

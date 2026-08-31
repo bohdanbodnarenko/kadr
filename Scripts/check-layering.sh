@@ -78,7 +78,7 @@ fi
 # is used freely — a check that conflated the two would push callers into pretending not
 # to know whether a model is there, which is worse than the thing it prevents.
 ASSET_SYMBOLS='assetInstallationRequest|downloadAndInstall'
-SPEECH_PATHS='^Packages/StudioRender/Sources/StudioRender/SpeechModelInstaller\.swift$'
+SPEECH_PATHS='^Packages/VisionServices/Sources/VisionServices/SpeechModelInstaller\.swift$'
 
 asset_hits=""
 while IFS= read -r file; do

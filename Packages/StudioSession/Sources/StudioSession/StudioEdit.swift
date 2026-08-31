@@ -32,6 +32,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     public var showsClicks: Bool
     /// Whether to caption keyboard shortcuts.
     public var showsKeystrokes: Bool
+    /// Burned-in captions from the transcript (docs/13 T2.2).
+    public var showsCaptions: Bool
 
     public init(
         version: Int = StudioEdit.currentVersion,
@@ -42,7 +44,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         camera: CameraBubble = .standard,
         showsCursor: Bool = true,
         showsClicks: Bool = true,
-        showsKeystrokes: Bool = true
+        showsKeystrokes: Bool = true,
+        showsCaptions: Bool = false
     ) {
         self.version = version
         self.clips = clips
@@ -53,6 +56,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         self.showsCursor = showsCursor
         self.showsClicks = showsClicks
         self.showsKeystrokes = showsKeystrokes
+        self.showsCaptions = showsCaptions
     }
 
     /// The edit a freshly-stopped recording starts with: everything, unchanged.
@@ -121,7 +125,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes
+        case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes, showsCaptions
     }
 
     /// Every field defaults, so an edit written by a later Kadr still opens — it simply
@@ -137,7 +141,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
             camera: container.decodeIfPresent(CameraBubble.self, forKey: .camera) ?? .standard,
             showsCursor: container.decodeIfPresent(Bool.self, forKey: .showsCursor) ?? true,
             showsClicks: container.decodeIfPresent(Bool.self, forKey: .showsClicks) ?? true,
-            showsKeystrokes: container.decodeIfPresent(Bool.self, forKey: .showsKeystrokes) ?? true
+            showsKeystrokes: container.decodeIfPresent(Bool.self, forKey: .showsKeystrokes) ?? true,
+            showsCaptions: container.decodeIfPresent(Bool.self, forKey: .showsCaptions) ?? false
         )
     }
 }

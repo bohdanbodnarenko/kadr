@@ -62,13 +62,38 @@ public final class StudioDocumentModel {
     /// Nil until asked, and asked only when the studio shows the speech controls. Checking
     /// at launch would consult the asset catalogue for every recording somebody opens,
     /// including the ones they never intend to transcribe.
-    public internal(set) var speechStatus: SpeechModelInstaller.Status?
+    public internal(set) var speechStatus: SpeechModelStatus?
 
     /// Progress of a model download the user started, or nil if none is running.
     public internal(set) var installProgress: Double?
 
+    /// Progress of a transcription, 0…1, or nil if none is running.
+    public internal(set) var transcriptionProgress: Double?
+
     /// Whether a transcription is running.
     public internal(set) var isTranscribing = false
+
+    /// The persisted (or just-produced) transcript for this session.
+    public internal(set) var transcript: Transcript?
+
+    /// Cuts waiting for the user to review (docs/13 T0.4).
+    public var pendingCuts: [ProposedCut] = []
+
+    /// Which pending cuts are selected to apply. All on by default.
+    public var selectedCutIDs: Set<UUID> = []
+
+    /// Set when applying the selected cuts would remove more than ~40% of the recording.
+    public internal(set) var requiresCutConfirmation = false
+
+    public internal(set) var dictationSettingsNeeded = false
+    public internal(set) var supportedLocales: [String] = []
+    public var speechLocaleIdentifier = ""
+    public var transcriptQuery = ""
+    public internal(set) var chapters: [ChapterMark] = []
+
+    public var isSpeechBusy: Bool {
+        isTranscribing || installTask != nil
+    }
 
     /// Held so closing the window or quitting can stop it (docs/11 S0.4).
     ///
@@ -77,7 +102,9 @@ public final class StudioDocumentModel {
     @ObservationIgnored var exportTask: Task<Void, Never>?
 
     @ObservationIgnored var installTask: Task<Void, Never>?
+    @ObservationIgnored var transcribeTask: Task<Void, Never>?
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
+    @ObservationIgnored var transcriber: any Transcribing
 
     @ObservationIgnored private var undoStack: [StudioEdit] = []
     @ObservationIgnored private var redoStack: [StudioEdit] = []
@@ -88,13 +115,14 @@ public final class StudioDocumentModel {
     /// session is a slow leak. Fifty is far past what anybody reaches for and still small.
     static let undoDepth = 50
 
-    public init?(session: RecordingSession) {
+    public init?(session: RecordingSession, transcriber: (any Transcribing)? = nil) {
         guard session.hasFootage else { return nil }
         self.session = session
         document = SessionDocument(session: session)
         telemetry = document.telemetry() ?? InputTelemetry()
         guard let manifest = document.manifest() else { return nil }
         self.manifest = manifest
+        self.transcriber = transcriber ?? HelperTranscriber()
 
         // The draft wins over the commit, so reopening lands where the user left off
         // rather than at the last thing they exported.
@@ -103,6 +131,12 @@ public final class StudioDocumentModel {
             // A recording made without a baked cursor has one drawn back; one made with a
             // cursor already in the picture does not, or it gets two.
             edit.showsCursor = !manifest.hasBakedCursor
+        }
+
+        let hash = try? AudioContentHash.hash(fileAt: session.screenURL)
+        transcript = document.transcript(matchingHash: hash)
+        if let transcript {
+            chapters = ChapterMarks.marks(from: transcript, duration: manifest.duration)
         }
     }
 

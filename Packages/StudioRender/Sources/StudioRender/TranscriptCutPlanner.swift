@@ -1,60 +1,6 @@
 import Foundation
 import StudioSession
 
-/// One recognised word, with when it was said (docs/09 U3.6).
-///
-/// Word-level timings rather than sentences, because a filler word is removed by cutting
-/// exactly around it — a sentence-level transcript can say "um" was in there somewhere and
-/// nothing more.
-public struct TranscriptWord: Sendable, Hashable, Codable {
-    public var text: String
-    public var start: TimeInterval
-    public var end: TimeInterval
-
-    public init(text: String, start: TimeInterval, end: TimeInterval) {
-        self.text = text
-        self.start = start
-        self.end = max(end, start)
-    }
-
-    public var duration: TimeInterval {
-        end - start
-    }
-
-    /// The word with punctuation and case removed, for matching against the filler list.
-    public var normalized: String {
-        text
-            .lowercased()
-            .trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-    }
-}
-
-/// What was said, and when (docs/09 U3.6).
-public struct Transcript: Sendable, Hashable, Codable {
-    public var words: [TranscriptWord]
-
-    public init(words: [TranscriptWord] = []) {
-        self.words = words.sorted { $0.start < $1.start }
-    }
-
-    public var isEmpty: Bool {
-        words.isEmpty
-    }
-
-    public var duration: TimeInterval {
-        words.last?.end ?? 0
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case words
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        try self.init(words: container.decodeIfPresent([TranscriptWord].self, forKey: .words) ?? [])
-    }
-}
-
 /// A stretch of the recording proposed for removal (docs/09 U3.6).
 public struct ProposedCut: Sendable, Hashable, Identifiable {
     public enum Reason: String, Sendable, Hashable {
@@ -124,17 +70,22 @@ public struct TranscriptCutPlanner: Sendable {
     public var removesFillers: Bool
     /// Whether to propose removing long pauses.
     public var removesSilences: Bool
+    /// A plan that would throw away more than this of the recording needs confirmation
+    /// before it is applied (docs/13 T0.3, T-C2).
+    public var maximumRemovedFraction: Double
 
     public init(
         minimumSilence: TimeInterval = 1.1,
         silencePadding: TimeInterval = 0.35,
         removesFillers: Bool = true,
-        removesSilences: Bool = true
+        removesSilences: Bool = true,
+        maximumRemovedFraction: Double = 0.4
     ) {
         self.minimumSilence = max(minimumSilence, 0.2)
         self.silencePadding = max(silencePadding, 0)
         self.removesFillers = removesFillers
         self.removesSilences = removesSilences
+        self.maximumRemovedFraction = min(max(maximumRemovedFraction, 0.05), 0.95)
     }
 
     /// The words treated as filler.
@@ -161,6 +112,17 @@ public struct TranscriptCutPlanner: Sendable {
             cuts.append(contentsOf: silenceCuts(in: transcript, duration: duration))
         }
         return merged(cuts.sorted { $0.start < $1.start })
+    }
+
+    /// How much of the recording these cuts would throw away.
+    public func removedFraction(of cuts: [ProposedCut], duration: TimeInterval) -> Double {
+        guard duration > 0 else { return 0 }
+        let removed = cuts.reduce(0.0) { $0 + $1.duration }
+        return min(removed / duration, 1)
+    }
+
+    public func exceedsRemovalCap(_ cuts: [ProposedCut], duration: TimeInterval) -> Bool {
+        removedFraction(of: cuts, duration: duration) > maximumRemovedFraction
     }
 
     /// Every filler word, cut exactly around itself.

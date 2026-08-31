@@ -1,4 +1,5 @@
 import Foundation
+import StudioSession
 
 /// Turning a timed stretch of recognised text into words (docs/09 U3.6).
 ///

@@ -22,6 +22,7 @@ public struct StudioFrameComposer: Sendable {
     public let plan: StudioRenderPlan
     public let edit: StudioEdit
     public let telemetry: InputTelemetry
+    public let transcript: Transcript
 
     /// Recorded pixels per point (docs/11 S0.5).
     ///
@@ -53,6 +54,7 @@ public struct StudioFrameComposer: Sendable {
         plan: StudioRenderPlan,
         edit: StudioEdit,
         telemetry: InputTelemetry,
+        transcript: Transcript = Transcript(),
         frameRate: Int = 60,
         // Two, not one: a Mac with no Retina display is now the unusual case, and a
         // session written before the manifest carried a real scale is far more likely to
@@ -64,6 +66,7 @@ public struct StudioFrameComposer: Sendable {
         self.plan = plan
         self.edit = edit
         self.pointPixelScale = max(pointPixelScale, 0.0001)
+        self.transcript = transcript
         // Rebased once, here (docs/10 R0.2). The sidecar is written in source time and
         // every method below is called with an edited-time playhead; converting at the
         // boundary is what stops the two being confused anywhere past it, and is why the
@@ -197,6 +200,9 @@ public struct StudioFrameComposer: Sendable {
             image = compositingCursor(cursor, scale: scale, in: viewport, over: image)
         }
         if edit.showsKeystrokes, let caption = caption(at: time) {
+            image = compositing(caption.image, at: nil, in: viewport, over: image, placement: caption.placement)
+        }
+        if edit.showsCaptions, let caption = speechCaption(at: time) {
             image = compositing(caption.image, at: nil, in: viewport, over: image, placement: caption.placement)
         }
         return image

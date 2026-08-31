@@ -25,7 +25,8 @@ struct StudioSpeechTests {
     private func model(
         in folder: URL,
         duration: TimeInterval = 10,
-        telemetry: InputTelemetry = InputTelemetry()
+        telemetry: InputTelemetry = InputTelemetry(),
+        transcriber: (any Transcribing)? = nil
     ) throws -> StudioDocumentModel {
         let session = RecordingSession.create(in: folder, named: "session")
         try session.create()
@@ -41,7 +42,7 @@ struct StudioSpeechTests {
             hasBakedCursor: true,
             hasCamera: false
         ))
-        return try #require(StudioDocumentModel(session: session))
+        return try #require(StudioDocumentModel(session: session, transcriber: transcriber))
     }
 
     /// The guarantee the whole arrangement rests on: the studio opens, and everything in it
@@ -202,5 +203,113 @@ struct StudioSpeechTests {
 
         let cue = try #require(studio.edit.zooms.first)
         #expect(abs(cue.start - 15) < 2, "the cue landed at \(cue.start)s rather than about 15s")
+    }
+
+    // MARK: - tidySpeech (docs/13 T0.2)
+
+    @Test("A fixture transcript produces a review list and does not apply cuts")
+    func tidySpeechProducesReviewList() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 0.4),
+            TranscriptWord(text: "um", start: 0.5, end: 0.8),
+            TranscriptWord(text: "world", start: 0.9, end: 1.4)
+        ]))
+        let studio = try model(in: folder, duration: 2, transcriber: stub)
+        let before = studio.edit.clips
+        await studio.tidySpeech()
+        #expect(stub.calls == 1)
+        #expect(!studio.pendingCuts.isEmpty, "the review list was empty")
+        #expect(studio.pendingCuts.contains { $0.reason == .fillerWord })
+        #expect(studio.edit.clips == before, "cuts were applied without a review")
+        #expect(studio.transcript != nil)
+    }
+
+    @Test("Zero timestamps refuse rather than collapse the timeline (T-C3)")
+    func tidySpeechRefusesCollapsedTimestamps() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 0.1),
+            TranscriptWord(text: "world", start: 0.1, end: 0.2)
+        ]))
+        let studio = try model(in: folder, duration: 600, transcriber: stub)
+        let before = studio.edit.clips
+        await studio.tidySpeech()
+        #expect(studio.edit.clips == before)
+        #expect(studio.pendingCuts.isEmpty)
+        #expect(studio.failure != nil)
+    }
+
+    @Test("Narration then silence asks for confirmation instead of deleting 94% (T-C2)")
+    func tidySpeechCapsDestructiveEdits() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Done", start: 0, end: 40)
+        ]))
+        let studio = try model(in: folder, duration: 600, transcriber: stub)
+        let before = studio.edit.clips
+        await studio.tidySpeech()
+        #expect(studio.edit.clips == before, "the tail was cut without a review")
+        #expect(studio.requiresCutConfirmation)
+        #expect(!studio.pendingCuts.isEmpty)
+
+        studio.applyPendingCuts(confirmingLargeRemoval: false)
+        #expect(studio.edit.clips == before, "applying without confirmation still cut")
+
+        studio.applyPendingCuts(confirmingLargeRemoval: true)
+        #expect(studio.edit.clips != before)
+        #expect(studio.edit.duration < 600)
+    }
+
+    @Test("An edited timeline is refused before transcription runs")
+    func tidySpeechDoesNotTranscribeAnEditedTimeline() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 1)
+        ]))
+        let studio = try model(in: folder, transcriber: stub)
+        studio.setSpeedAtPlayhead(2)
+        await studio.tidySpeech()
+        #expect(stub.calls == 0, "transcription ran despite an edited timeline")
+        #expect(studio.failure == StudioDocumentModel.tidyRefusal)
+    }
+
+    @Test("A persisted transcript is reused on reopen")
+    func transcriptPersists() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        let transcript = Transcript(
+            words: [TranscriptWord(text: "Hello", start: 0, end: 1)],
+            audioContentHash: (try? AudioContentHash.hash(fileAt: studio.session.screenURL)) ?? ""
+        )
+        try studio.document.write(transcript)
+        let reopened = try #require(StudioDocumentModel(session: studio.session, transcriber: StubTranscriber(
+            transcript: Transcript()
+        )))
+        #expect(reopened.transcript?.words.first?.text == "Hello")
+    }
+}
+
+final class StubTranscriber: Transcribing, @unchecked Sendable {
+    var transcript: Transcript
+    var calls = 0
+
+    init(transcript: Transcript) {
+        self.transcript = transcript
+    }
+
+    func transcribe(
+        audioAt url: URL,
+        options: TranscriptionOptions,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws -> Transcript {
+        calls += 1
+        progress?(1)
+        return transcript
     }
 }

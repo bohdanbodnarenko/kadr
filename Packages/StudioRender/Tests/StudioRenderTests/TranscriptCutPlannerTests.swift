@@ -250,4 +250,22 @@ struct TranscriptCutPlannerTests {
         #expect(first.map(\.end) == second.map(\.end))
         #expect(first.map(\.label) == second.map(\.label))
     }
+
+    /// Narrate for 40 s of a 10-minute capture: the tail cut is most of the recording
+    /// (docs/13 T-C2). The planner still *proposes* it — the studio refuses to apply
+    /// without confirmation — and this is the number that refusal is keyed on.
+    @Test("A short narration in a long recording exceeds the removal cap")
+    func narrationThenSilenceExceedsCap() {
+        let script = transcript([word("Done", 0, 40)])
+        let cuts = planner.cuts(for: script, duration: 600)
+        #expect(planner.exceedsRemovalCap(cuts, duration: 600))
+        #expect(planner.removedFraction(of: cuts, duration: 600) > 0.4)
+    }
+
+    @Test("A fully narrated recording stays under the cap")
+    func fullNarrationIsUnderCap() {
+        let words = (0 ..< 20).map { word("word", Double($0), Double($0) + 0.8) }
+        let cuts = planner.cuts(for: transcript(words), duration: 20)
+        #expect(!planner.exceedsRemovalCap(cuts, duration: 20))
+    }
 }

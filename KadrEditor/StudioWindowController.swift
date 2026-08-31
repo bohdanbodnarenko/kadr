@@ -124,6 +124,19 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
     /// ten-minute recording — worse than no file, because one of those is obviously missing
     /// and the other is quietly wrong.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if model.isSpeechBusy {
+            let alert = NSAlert()
+            alert.messageText = "Stop speech work on “\(sender.title)”?"
+            alert.informativeText = "A transcription or a model download is still running. "
+                + "Closing now cancels it."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Stop and Close")
+            alert.addButton(withTitle: "Keep Working")
+            guard alert.runModal() == .alertFirstButtonReturn else { return false }
+            model.cancelTidySpeech()
+            model.cancelSpeechModelInstall()
+            return true
+        }
         guard model.isExporting else { return true }
 
         let alert = NSAlert()

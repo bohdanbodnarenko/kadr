@@ -148,6 +148,10 @@ public struct SessionDocument: Sendable {
         try write(stamp, to: session.renderStampURL)
     }
 
+    public func write(_ transcript: Transcript) throws {
+        try write(transcript, to: session.transcriptURL)
+    }
+
     /// Commits an edit, and clears the draft it came from.
     public func commit(_ edit: some Encodable) throws {
         try write(edit, to: session.editURL)
@@ -177,6 +181,15 @@ public struct SessionDocument: Sendable {
 
     public func renderStamp() -> RenderStamp? {
         read(RenderStamp.self, from: session.renderStampURL)
+    }
+
+    /// The cached transcript, if it still matches this footage.
+    public func transcript(matchingHash hash: String? = nil) -> Transcript? {
+        guard let stored = read(Transcript.self, from: session.transcriptURL) else { return nil }
+        if let hash, !stored.audioContentHash.isEmpty, stored.audioContentHash != hash {
+            return nil
+        }
+        return stored
     }
 
     /// The edit to open: the draft if there is one, otherwise the committed edit.

@@ -54,6 +54,7 @@ struct RecordingSessionTests {
         #expect(names.contains("edit.draft.json"))
         #expect(names.contains("render.json"))
         #expect(names.contains("poster.jpg"))
+        #expect(names.contains("transcript.json"))
     }
 
     /// The draft is separate from the committed edit on purpose: an autosave that

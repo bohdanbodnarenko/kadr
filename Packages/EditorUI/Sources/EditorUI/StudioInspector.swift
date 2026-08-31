@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import Shared
 import StudioSession
 import SwiftUI
 
@@ -10,6 +12,7 @@ import SwiftUI
 @MainActor
 struct StudioInspector: View {
     let model: StudioDocumentModel
+    @State private var largeRemovalArmed = false
 
     var body: some View {
         Form {
@@ -22,7 +25,10 @@ struct StudioInspector: View {
             presetSection
         }
         .formStyle(.grouped)
-        .task { await model.refreshSpeechStatus() }
+        .task {
+            await model.refreshSpeechStatus()
+            model.warmUpSpeech()
+        }
     }
 
     // MARK: - Speech
@@ -35,9 +41,34 @@ struct StudioInspector: View {
     /// button that hangs instead of one that explains.
     private var speechSection: some View {
         Section("Speech") {
+            if !model.supportedLocales.isEmpty {
+                Picker("Language", selection: Bindable(model).speechLocaleIdentifier) {
+                    ForEach(model.supportedLocales, id: \.self) { identifier in
+                        Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier)
+                            .tag(identifier)
+                    }
+                }
+                .onChange(of: model.speechLocaleIdentifier) {
+                    Task { await model.refreshSpeechStatus() }
+                }
+            }
             switch model.speechStatus {
-            case .installed, .notApplicable, .none:
+            case .installed, .none:
                 tidyControl
+            case .notApplicable:
+                if model.dictationSettingsNeeded {
+                    Text("Removing filler words needs on-device dictation for this language. "
+                        + "Turn it on in System Settings ▸ Keyboard ▸ Dictation.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button("Open Dictation Settings") {
+                        if let url = SpeechDictationSettings.url {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                } else {
+                    tidyControl
+                }
             case .available:
                 Text("Removing filler words needs the language model for your language, which "
                     + "this Mac does not have yet. Everything else in the studio works without it.")
@@ -52,16 +83,35 @@ struct StudioInspector: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            if !model.pendingCuts.isEmpty {
+                cutReview
+            }
+            if model.transcript != nil {
+                Toggle("Burn in captions", isOn: Binding(
+                    get: { model.edit.showsCaptions },
+                    set: { value in model.change { $0.showsCaptions = value } }
+                ))
+            }
+        }
+        .onChange(of: model.pendingCuts.map(\.id)) {
+            largeRemovalArmed = false
         }
     }
 
     @ViewBuilder
     private var tidyControl: some View {
         if model.isTranscribing {
-            HStack {
-                ProgressView().controlSize(.small)
+            VStack(alignment: .leading, spacing: 6) {
+                if let progress = model.transcriptionProgress {
+                    ProgressView(value: progress)
+                        .progressViewStyle(.linear)
+                } else {
+                    ProgressView().controlSize(.small)
+                }
                 Text("Listening to the recording…")
                     .foregroundStyle(.secondary)
+                Button("Cancel") { model.cancelTidySpeech() }
+                    .controlSize(.small)
             }
         } else {
             Button("Remove filler words and long pauses") {
@@ -71,6 +121,51 @@ struct StudioInspector: View {
                 + "so one undo puts them all back and the recording is never altered.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var cutReview: some View {
+        Text("Proposed cuts")
+            .font(.callout.weight(.semibold))
+        ForEach(model.pendingCuts) { cut in
+            HStack {
+                Toggle(isOn: Binding(
+                    get: { model.selectedCutIDs.contains(cut.id) },
+                    set: { _ in model.toggleCut(cut.id) }
+                )) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(cut.label)
+                        Text(Self.clock(cut.start) + " · " + cut.reason.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Button("Preview") { model.seekToCut(cut) }
+                    .controlSize(.small)
+            }
+        }
+        HStack {
+            Button(largeRemovalArmed ? "Apply anyway" : "Apply selected") {
+                if model.requiresCutConfirmation, !largeRemovalArmed {
+                    largeRemovalArmed = true
+                    return
+                }
+                model.applyPendingCuts(confirmingLargeRemoval: largeRemovalArmed)
+                largeRemovalArmed = false
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {
+                largeRemovalArmed = false
+                model.discardPendingCuts()
+            }
+        }
+        if model.requiresCutConfirmation {
+            Text(largeRemovalArmed
+                ? "This would remove more than 40% of the recording. Press Apply anyway to confirm."
+                : "This would remove more than 40% of the recording. Press Apply again to confirm.")
+                .font(.callout)
+                .foregroundStyle(.orange)
         }
     }
 
@@ -295,5 +390,10 @@ struct StudioInspector: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private static func clock(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded(.down))
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

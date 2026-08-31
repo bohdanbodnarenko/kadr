@@ -18,25 +18,23 @@ struct StudioPreviewPipeline {
     let composer: StudioFrameComposer
     /// The edit this was built for, which is the whole cache key.
     private let edit: StudioEdit
+    private let captioned: Bool
 
-    init(edit: StudioEdit, manifest: CaptureManifest, telemetry: InputTelemetry) {
+    init(edit: StudioEdit, manifest: CaptureManifest, telemetry: InputTelemetry, transcript: Transcript = Transcript()) {
         self.edit = edit
+        captioned = edit.showsCaptions && !transcript.isEmpty
         plan = StudioRenderPlan(edit: edit, sourceSize: manifest.pixelSize)
         composer = StudioFrameComposer(
             plan: plan,
             edit: edit,
             telemetry: telemetry,
+            transcript: transcript,
             frameRate: manifest.frameRate,
             pointPixelScale: manifest.scale
         )
     }
 
-    /// Whether this pipeline still describes the edit being shown.
-    ///
-    /// `StudioEdit` is `Hashable` and compared whole rather than by the fields that happen
-    /// to matter today. A cache key that lists what it cares about is a cache key that goes
-    /// stale the moment somebody adds a field — silently, and only in the preview.
-    func matches(_ edit: StudioEdit) -> Bool {
-        self.edit == edit
+    func matches(_ edit: StudioEdit, transcript: Transcript?) -> Bool {
+        self.edit == edit && captioned == (edit.showsCaptions && !(transcript?.isEmpty ?? true))
     }
 }

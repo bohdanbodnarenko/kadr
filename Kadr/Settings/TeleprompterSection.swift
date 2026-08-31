@@ -39,7 +39,7 @@ struct TeleprompterSection: View {
                     Text("Fast")
                 }
             }
-            .disabled(!settings.teleprompterEnabled || settings.teleprompterFollowsSpeech)
+            .disabled(!settings.teleprompterEnabled)
 
             LabeledContent("Text size") {
                 Slider(

@@ -188,6 +188,22 @@ struct SessionDocumentTests {
         try document.write(stamp)
         #expect(document.renderStamp() == stamp)
     }
+
+    @Test("A transcript round-trips and invalidates on a different hash")
+    func transcriptSidecar() throws {
+        let scratch = try scratch()
+        let (document, root) = (scratch.document, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let transcript = Transcript(
+            words: [TranscriptWord(text: "Hello", start: 0, end: 1)],
+            audioContentHash: "abc"
+        )
+        try document.write(transcript)
+        #expect(document.transcript()?.words.first?.text == "Hello")
+        #expect(document.transcript(matchingHash: "abc") != nil)
+        #expect(document.transcript(matchingHash: "other") == nil)
+    }
 }
 
 /// What is captured alongside the footage (docs/09 U3.1).

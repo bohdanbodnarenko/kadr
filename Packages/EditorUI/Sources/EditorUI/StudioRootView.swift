@@ -24,8 +24,15 @@ public struct StudioRootView: View {
                 Divider()
                 controls
             }
-            StudioInspector(model: model)
-                .frame(minWidth: 260, idealWidth: 300, maxWidth: 380)
+            VSplitView {
+                StudioInspector(model: model)
+                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 380)
+                if model.transcript != nil {
+                    StudioTranscriptPanel(model: model)
+                        .frame(minHeight: 140)
+                }
+            }
+            .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
         }
         .frame(minWidth: 820, minHeight: 520)
         .alert(

@@ -60,13 +60,14 @@ struct StudioPreviewView: View {
 
     /// The pipeline for the edit on screen, rebuilt only when that edit changes.
     private func currentPipeline() -> StudioPreviewPipeline {
-        if let pipeline, pipeline.matches(model.edit) {
+        if let pipeline, pipeline.matches(model.edit, transcript: model.transcript) {
             return pipeline
         }
         let built = StudioPreviewPipeline(
             edit: model.edit,
             manifest: model.manifest,
-            telemetry: model.telemetry
+            telemetry: model.telemetry,
+            transcript: model.transcript ?? Transcript()
         )
         pipeline = built
         return built

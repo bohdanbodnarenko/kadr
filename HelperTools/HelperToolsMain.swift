@@ -14,13 +14,26 @@ import VisionServices
 /// It receives pixels and file paths, and returns text and files. It never touches
 /// ScreenCaptureKit — every capture call stays in the agent so the Screen Recording grant
 /// attaches to the app the user actually sees (docs/04 §1).
-final class VisionService: NSObject, VisionServiceProtocol {
+final class VisionService: NSObject, VisionServiceProtocol, @unchecked Sendable {
     private let recognizer = TextRecognizer()
     private let gifEncoder = ImageIOGIFEncoder()
     private let stitcher = ScrollStitcher()
     private let historyIndexer = HistoryTextIndexer()
     private let subjectMasker = SubjectMaskGenerator()
     private let logger = KadrLog.logger(.capture)
+    private var liveSpeech: LiveSpeechEngine?
+    private weak var connection: NSXPCConnection?
+    private var speechTask: Task<Void, Never>?
+    private var liveIsRunning = false
+
+    init(connection: NSXPCConnection) {
+        self.connection = connection
+        super.init()
+    }
+
+    private var speechClient: SpeechClientProtocol? {
+        connection?.remoteObjectProxy as? SpeechClientProtocol
+    }
 
     /// Re-encodes a capture smaller (docs/09 U2.4).
     ///
@@ -233,6 +246,126 @@ final class VisionService: NSObject, VisionServiceProtocol {
             }
         }
     }
+
+    func transcribe(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+        SpeechModelLifecycle.shared.begin()
+        speechTask?.cancel()
+        let client = speechClient
+        speechTask = Task {
+            defer {
+                IdleTerminator.shared.endTransaction()
+                SpeechModelLifecycle.shared.end()
+            }
+            do {
+                let data = try await SpeechXPCHandler.transcribe(requestData: requestData) { fraction in
+                    client?.speechDidProgress(fraction)
+                }
+                try Task.checkCancellation()
+                reply(data, nil)
+            } catch is CancellationError {
+                reply(nil, CancellationError())
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func speechStatus(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                try await reply(SpeechXPCHandler.status(requestData: requestData), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func installSpeechModel(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+        speechTask?.cancel()
+        let client = speechClient
+        speechTask = Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                let data = try await SpeechXPCHandler.install(requestData: requestData) { fraction in
+                    client?.speechDidProgress(fraction)
+                }
+                try Task.checkCancellation()
+                reply(data, nil)
+            } catch is CancellationError {
+                reply(nil, CancellationError())
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func cancelSpeech() {
+        speechTask?.cancel()
+        speechTask = nil
+    }
+
+    func warmUpSpeech(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        IdleTerminator.shared.beginTransaction()
+        Task {
+            defer { IdleTerminator.shared.endTransaction() }
+            do {
+                try await reply(SpeechXPCHandler.warmUp(requestData: requestData), nil)
+            } catch {
+                reply(nil, error)
+            }
+        }
+    }
+
+    func startLiveSpeech(requestData: Data, reply: @escaping @Sendable (Data?, (any Error)?) -> Void) {
+        if !liveIsRunning {
+            IdleTerminator.shared.beginTransaction()
+            liveIsRunning = true
+        }
+        let client = speechClient
+        Task {
+            // Asked here so the prompt names this process's display name, not a framework
+            // the agent must not load (docs/13 T1.1). The agent never imports Speech.
+            let authorized = await SpeechXPCHandler.requestAuthorization()
+            guard authorized else {
+                self.stopLiveSpeech()
+                reply(nil, VisionServiceError.speechUnavailable)
+                return
+            }
+            let engine = LiveSpeechEngine()
+            self.liveSpeech = engine
+            do {
+                let request = try JSONDecoder().decode(SpeechLiveStartRequest.self, from: requestData)
+                try engine.start(
+                    locale: Locale(identifier: request.localeIdentifier),
+                    sampleRate: request.sampleRate
+                ) { hypothesis in
+                    if let data = try? JSONEncoder().encode(hypothesis) {
+                        client?.speechDidHypothesize(data)
+                    }
+                }
+                reply(Data(), nil)
+            } catch {
+                self.stopLiveSpeech()
+                reply(nil, error)
+            }
+        }
+    }
+
+    func feedLiveSpeechAudio(_ pcmData: Data) {
+        liveSpeech?.append(pcm: pcmData)
+    }
+
+    func stopLiveSpeech() {
+        liveSpeech?.stop()
+        liveSpeech = nil
+        guard liveIsRunning else { return }
+        liveIsRunning = false
+        IdleTerminator.shared.endTransaction()
+    }
 }
 
 /// Terminates the process once nothing has needed it for a while (docs/04 §1).
@@ -284,8 +417,13 @@ final class IdleTerminator: @unchecked Sendable {
 /// delegate from its own queue, and every connection gets a fresh `VisionService`.
 final class ServiceDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        let service = VisionService(connection: connection)
         connection.exportedInterface = NSXPCInterface(with: VisionServiceProtocol.self)
-        connection.exportedObject = VisionService()
+        connection.remoteObjectInterface = NSXPCInterface(with: SpeechClientProtocol.self)
+        connection.exportedObject = service
+        connection.invalidationHandler = {
+            service.stopLiveSpeech()
+        }
         connection.resume()
         return true
     }

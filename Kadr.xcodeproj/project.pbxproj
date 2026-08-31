@@ -857,6 +857,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -877,6 +878,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.HelperTools;
 				PRODUCT_NAME = HelperTools;

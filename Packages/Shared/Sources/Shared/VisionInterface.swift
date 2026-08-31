@@ -439,6 +439,48 @@ public protocol VisionServiceProtocol {
         requestData: Data,
         reply: @escaping @Sendable (Data?, (any Error)?) -> Void
     )
+
+    /// Transcribes a recording's audio, in the helper (docs/13 T1.1).
+    ///
+    /// Paths rather than samples: a 45-minute recording is hundreds of megabytes, and the
+    /// point of doing this in the helper is that Speech's models and decode buffers die
+    /// with a process rather than lingering in the editor or the agent.
+    func transcribe(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Whether a language can be transcribed, without downloading anything.
+    func speechStatus(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Downloads the on-device model, only when a person pressed the button that says so.
+    func installSpeechModel(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Stops a transcription or a model download that is still running.
+    func cancelSpeech()
+
+    /// Prepares the speech engine so the first tidy is not a cold start (docs/13 T1.5).
+    func warmUpSpeech(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// Starts live recognition for the teleprompter (docs/13 T2.1).
+    func startLiveSpeech(
+        requestData: Data,
+        reply: @escaping @Sendable (Data?, (any Error)?) -> Void
+    )
+
+    /// PCM Int16 16 kHz mono, one chunk.
+    func feedLiveSpeechAudio(_ pcmData: Data)
+
+    func stopLiveSpeech()
 }
 
 /// The service name the helper listens on and the agent connects to.
@@ -446,32 +488,4 @@ public enum VisionServiceName {
     public static let machServiceName = "app.kadr.Kadr.HelperTools"
     /// How long the helper stays alive with nothing to do (docs/04 §1).
     public static let idleTimeout: TimeInterval = 30
-}
-
-/// Errors the helper can report back.
-public enum VisionServiceError: Int, Error, Sendable, Codable {
-    case couldNotDecodeImage = 1
-    case recognitionFailed = 2
-    case invalidRequest = 3
-    case stitchFailed = 4
-    case notEnoughFrames = 5
-    case historyUnavailable = 6
-    case noSubjectFound = 7
-    case maskFailed = 8
-    /// The capture could not be re-encoded smaller (docs/09 U2.4).
-    case compressionFailed = 9
-
-    public var localizedDescription: String {
-        switch self {
-        case .couldNotDecodeImage: "Kadr could not read the captured image."
-        case .recognitionFailed: "Text recognition failed."
-        case .invalidRequest: "The text recognition request was malformed."
-        case .stitchFailed: "Kadr could not stitch the scrolling capture."
-        case .notEnoughFrames: "A scrolling capture needs at least two frames."
-        case .historyUnavailable: "Kadr could not open the capture library."
-        case .noSubjectFound: "Kadr could not find a subject in this capture."
-        case .compressionFailed: "Kadr could not compress this capture."
-        case .maskFailed: "Kadr could not separate the subject from the background."
-        }
-    }
 }

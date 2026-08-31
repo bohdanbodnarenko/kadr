@@ -132,6 +132,11 @@ public struct RecordingSession: Sendable, Hashable {
         directory.appendingPathComponent("poster.jpg")
     }
 
+    /// The persisted transcript, versioned like every other sidecar (docs/13 T1.3).
+    public var transcriptURL: URL {
+        directory.appendingPathComponent("transcript.json")
+    }
+
     /// Every file a session may contain, for sweeps and size reporting.
     public var allURLs: [URL] {
         [
@@ -140,7 +145,8 @@ public struct RecordingSession: Sendable, Hashable {
             // Was missing (docs/11 S2). Every caller of this treats it as "everything this
             // session owns" — deleting a session, measuring what it costs — so a file left
             // out is a file left behind on disk and a size that under-reports.
-            copyMarkerURL
+            copyMarkerURL,
+            transcriptURL
         ]
     }
 

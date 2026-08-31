@@ -40,7 +40,7 @@ public struct SegmentStitcher: SegmentStitching {
         ) else {
             throw RecordingError.writingFailed("could not create a video track")
         }
-        var audioTrack: AVMutableCompositionTrack?
+        var audioTracks: [AVMutableCompositionTrack] = []
 
         var cursor = CMTime.zero
         for segment in segments {
@@ -51,14 +51,18 @@ public struct SegmentStitcher: SegmentStitching {
             if let source = try await asset.loadTracks(withMediaType: .video).first {
                 try videoTrack.insertTimeRange(range, of: source, at: cursor)
             }
-            if let source = try await asset.loadTracks(withMediaType: .audio).first {
-                if audioTrack == nil {
-                    audioTrack = composition.addMutableTrack(
-                        withMediaType: .audio,
-                        preferredTrackID: kCMPersistentTrackID_Invalid
-                    )
+            let sources = try await asset.loadTracks(withMediaType: .audio)
+            while audioTracks.count < sources.count {
+                guard let added = composition.addMutableTrack(
+                    withMediaType: .audio,
+                    preferredTrackID: kCMPersistentTrackID_Invalid
+                ) else {
+                    throw RecordingError.writingFailed("could not create an audio track")
                 }
-                try audioTrack?.insertTimeRange(range, of: source, at: cursor)
+                audioTracks.append(added)
+            }
+            for (index, source) in sources.enumerated() {
+                try audioTracks[index].insertTimeRange(range, of: source, at: cursor)
             }
             // Butt the next segment against this one: the gap while paused is time the
             // user chose not to record, so it must not appear in the result.

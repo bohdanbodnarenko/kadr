@@ -82,7 +82,8 @@ public struct StudioRenderer: Sendable {
             edit: edit,
             pixelSize: manifest?.pixelSize,
             cameraStartOffset: manifest?.cameraStartOffset ?? 0,
-            pointPixelScale: manifest?.scale ?? 2
+            pointPixelScale: manifest?.scale ?? 2,
+            transcript: document.transcript() ?? Transcript()
         )
         return try await render(
             source,
@@ -113,6 +114,7 @@ public struct StudioRenderer: Sendable {
         /// Recorded pixels per point, for drawing the cursor at its real size
         /// (docs/11 S0.5).
         public var pointPixelScale: CGFloat
+        public var transcript: Transcript
 
         public init(
             screen: URL,
@@ -121,7 +123,8 @@ public struct StudioRenderer: Sendable {
             edit: StudioEdit,
             pixelSize: CGSize? = nil,
             cameraStartOffset: TimeInterval = 0,
-            pointPixelScale: CGFloat = 2
+            pointPixelScale: CGFloat = 2,
+            transcript: Transcript = Transcript()
         ) {
             self.screen = screen
             self.camera = camera
@@ -130,6 +133,7 @@ public struct StudioRenderer: Sendable {
             self.pixelSize = pixelSize
             self.cameraStartOffset = cameraStartOffset
             self.pointPixelScale = pointPixelScale
+            self.transcript = transcript
         }
     }
 
@@ -156,6 +160,7 @@ public struct StudioRenderer: Sendable {
             plan: plan,
             edit: edit,
             telemetry: source.telemetry,
+            transcript: source.transcript,
             frameRate: options.frameRate,
             pointPixelScale: source.pointPixelScale
         )

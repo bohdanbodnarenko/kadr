@@ -81,6 +81,9 @@ public extension StudioDocumentModel {
         // somewhere else is not the same thing as exporting.
         if reuseRenderedFile(at: destination) {
             notice = "That edit was already exported, so Kadr copied the finished file."
+            if let transcript = transcript {
+                writeCaptions(transcript, beside: destination)
+            }
             return
         }
 
@@ -108,6 +111,9 @@ public extension StudioDocumentModel {
                 outputPath: output.fileURL.path,
                 pixelSize: output.pixelSize
             ))
+            if let transcript = transcript {
+                writeCaptions(transcript, beside: destination)
+            }
             exportProgress = nil
         } catch is CancellationError {
             // The user asked for this, so it is not a failure to report back to them. The
@@ -122,5 +128,15 @@ public extension StudioDocumentModel {
             failure = "The export failed: \(error.localizedDescription)"
             logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// SRT and VTT beside the movie (docs/13 T2.2). Tiny, and the reason the transcript
+    /// was persisted.
+    private func writeCaptions(_ transcript: Transcript, beside destination: URL) {
+        let base = destination.deletingPathExtension()
+        let srt = CaptionExport.srt(from: transcript, timeline: edit.clips)
+        let vtt = CaptionExport.vtt(from: transcript, timeline: edit.clips)
+        try? srt.data(using: .utf8)?.write(to: base.appendingPathExtension("srt"), options: .atomic)
+        try? vtt.data(using: .utf8)?.write(to: base.appendingPathExtension("vtt"), options: .atomic)
     }
 }
