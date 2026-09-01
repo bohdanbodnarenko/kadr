@@ -73,9 +73,25 @@ struct QuickAccessCardView: View {
     private static let actionRowHeight: CGFloat = 30
     private static let padding: CGFloat = 7
 
-    /// The panel needs its height before SwiftUI has laid anything out.
+    /// Room around the card for its shadow, inside the panel.
+    ///
+    /// A window clips its content, and the card filled its panel exactly — so the shadow
+    /// that lifts it off the desktop was being cut off at the edges, and a hover that
+    /// scaled the card pushed the buttons at its edges outside the window and hid them.
+    /// The panel is a little larger than the card, and the difference is where the shadow
+    /// lives.
+    static let shadowMargin: CGFloat = 12
+
+    /// The panel needs its size before SwiftUI has laid anything out.
+    ///
+    /// Both include the margin, so a caller sizing a window gets the window's size and the
+    /// card inside it stays the width the user asked for.
     static func height(forWidth width: CGFloat, item: QuickAccessItem) -> CGFloat {
-        thumbnailHeight + actionRowHeight + padding * 2
+        thumbnailHeight + actionRowHeight + padding * 2 + shadowMargin * 2
+    }
+
+    static func panelWidth(forCardWidth width: CGFloat) -> CGFloat {
+        width + shadowMargin * 2
     }
 
     var body: some View {
@@ -105,8 +121,14 @@ struct QuickAccessCardView: View {
         )
         // Lifts a little under the pointer, so the card the pointer is on is obvious in a
         // stack of them.
-        .shadow(color: .black.opacity(isHovering ? 0.28 : 0.16), radius: isHovering ? 16 : 8, y: isHovering ? 5 : 2)
-        .scaleEffect(isHovering ? 1.015 : 1, anchor: .center)
+        // Deepens under the pointer, and does not scale.
+        //
+        // Scaling was the wrong way to say "this one": the card fills its panel, a window
+        // clips its content, so growing the card pushed the buttons along its edges outside
+        // the window and cut them in half. The shadow says the same thing and stays inside
+        // the frame — now that there is a margin for it to occupy.
+        .shadow(color: .black.opacity(isHovering ? 0.3 : 0.18), radius: isHovering ? 10 : 5, y: isHovering ? 4 : 2)
+        .padding(Self.shadowMargin)
         .animation(.snappy(duration: 0.16), value: isHovering)
         .animation(.snappy(duration: 0.16), value: isExpanded)
         .onHover { hovering in

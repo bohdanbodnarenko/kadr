@@ -48,13 +48,14 @@ final class QuickAccessPanel: NonActivatingPanel {
     init(item: QuickAccessItem, settings: AppSettings, actions: QuickAccessCardActions) {
         self.settings = settings
         cardActions = actions
-        let width = CGFloat(settings.overlayCardWidth)
-        let height = QuickAccessCardView.height(forWidth: width, item: item)
+        let cardWidth = CGFloat(settings.overlayCardWidth)
+        let width = QuickAccessCardView.panelWidth(forCardWidth: cardWidth)
+        let height = QuickAccessCardView.height(forWidth: cardWidth, item: item)
 
         hostingView = OverlayHostingView(rootView: QuickAccessCardView(
             item: item,
             actions: actions,
-            width: width,
+            width: cardWidth,
             layout: settings.cardLayout
         ))
 

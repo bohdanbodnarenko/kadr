@@ -236,10 +236,14 @@ final class QuickAccessManager {
     func layoutCards(on screen: NSScreen) {
         let area = screen.visibleFrame
         let maxVisible = settings.overlayMaxVisibleCards
-        let cardWidth = CGFloat(settings.overlayCardWidth)
+        // The panel is wider than the card by the shadow margin on each side, so the window
+        // has somewhere to draw a shadow that a window would otherwise clip.
+        let panelWidth = QuickAccessCardView.panelWidth(
+            forCardWidth: CGFloat(settings.overlayCardWidth)
+        )
         for (index, entry) in panels.enumerated() {
             entry.panel.revealFromPeek()
-            entry.panel.setCardSize(width: cardWidth, height: entry.panel.frame.height)
+            entry.panel.setCardSize(width: panelWidth, height: entry.panel.frame.height)
             let size = entry.panel.frame.size
             let origin = cardOrigin(index: index, size: size, area: area, maxVisible: maxVisible)
             entry.panel.setStackDepth(index, origin: origin)
@@ -251,16 +255,22 @@ final class QuickAccessManager {
     }
 
     func cardOrigin(index: Int, size: CGSize, area: CGRect, maxVisible: Int) -> CGPoint {
-        let step = index < maxVisible ? Self.cardSpacing + size.height : Self.cardSpacing
+        // Positions are for the *visible* card, not the panel. The panel is larger by the
+        // shadow margin on every side, and without taking that off, a card would sit a
+        // shadow's width further from the screen edge and a shadow's width further apart
+        // from the next one — every gap in the stack quietly widened by invisible padding.
+        let bleed = QuickAccessCardView.shadowMargin
+        let visible = CGSize(width: size.width - bleed * 2, height: size.height - bleed * 2)
+        let step = index < maxVisible ? Self.cardSpacing + visible.height : Self.cardSpacing
         let offset = index < maxVisible
             ? CGFloat(index) * step
-            : CGFloat(maxVisible) * (Self.cardSpacing + size.height) + CGFloat(index - maxVisible) * 6
+            : CGFloat(maxVisible) * (Self.cardSpacing + visible.height) + CGFloat(index - maxVisible) * 6
         let x = settings.overlayCorner.isLeading
-            ? area.minX + Self.screenMargin
-            : area.maxX - size.width - Self.screenMargin
+            ? area.minX + Self.screenMargin - bleed
+            : area.maxX - size.width - Self.screenMargin + bleed
         let y = settings.overlayCorner.isBottom
-            ? area.minY + Self.screenMargin + offset
-            : area.maxY - size.height - Self.screenMargin - offset
+            ? area.minY + Self.screenMargin + offset - bleed
+            : area.maxY - size.height - Self.screenMargin - offset + bleed
         return CGPoint(x: x, y: y)
     }
 
