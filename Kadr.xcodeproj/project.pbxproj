@@ -27,8 +27,8 @@
 		KADR00000000000000000444 /* EditorUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000424 /* EditorUI */; };
 		KADR00000000000000000445 /* StudioSession in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000425 /* StudioSession */; };
 		KADR00000000000000000446 /* StudioRender in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000426 /* StudioRender */; };
-		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		KADR00000000000000000450 /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = KADR00000000000000000501 /* HelperTools.xpc */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		KADR00000000000000000540 /* Shared in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000520 /* Shared */; };
 		KADR00000000000000000541 /* VisionServices in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000521 /* VisionServices */; };
 		KADR00000000000000000542 /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000522 /* MediaExport */; };
@@ -53,14 +53,14 @@
 			remoteGlobalIDString = KADR00000000000000000400;
 			remoteInfo = KadrEditor;
 		};
-		KADR0000000000000000050C /* PBXContainerItemProxy */ = {
+		KADR00000000000000000452 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = KADR00000000000000000500;
 			remoteInfo = HelperTools;
 		};
-		KADR00000000000000000452 /* PBXContainerItemProxy */ = {
+		KADR0000000000000000050C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
 			proxyType = 1;
@@ -88,17 +88,6 @@
 			name = "Embed Editor";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		KADR00000000000000000509 /* Embed XPC Services */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = Contents/XPCServices;
-			dstSubfolderSpec = 1;
-			files = (
-				KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */,
-			);
-			name = "Embed XPC Services";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		KADR00000000000000000451 /* Embed XPC Services */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -106,6 +95,17 @@
 			dstSubfolderSpec = 1;
 			files = (
 				KADR00000000000000000450 /* HelperTools.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000509 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/XPCServices;
+			dstSubfolderSpec = 1;
+			files = (
+				KADR0000000000000000050A /* HelperTools.xpc in Embed XPC Services */,
 			);
 			name = "Embed XPC Services";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -542,15 +542,15 @@
 			target = KADR00000000000000000400 /* KadrEditor */;
 			targetProxy = KADR0000000000000000040C /* PBXContainerItemProxy */;
 		};
-		KADR0000000000000000050B /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = KADR00000000000000000500 /* HelperTools */;
-			targetProxy = KADR0000000000000000050C /* PBXContainerItemProxy */;
-		};
 		KADR00000000000000000453 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = KADR00000000000000000500 /* HelperTools */;
 			targetProxy = KADR00000000000000000452 /* PBXContainerItemProxy */;
+		};
+		KADR0000000000000000050B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000500 /* HelperTools */;
+			targetProxy = KADR0000000000000000050C /* PBXContainerItemProxy */;
 		};
 		KADR0000000000000000070B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

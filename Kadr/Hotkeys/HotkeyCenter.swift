@@ -15,6 +15,9 @@ extension KeyboardShortcuts.Name {
     static let pickColor = Self("pickColor", initial: .init(.p, modifiers: [.control, .shift]))
     static let recordRegion = Self("recordRegion", initial: .init(.five, modifiers: [.control, .shift]))
     static let recordDisplay = Self("recordDisplay", initial: .init(.six, modifiers: [.control, .shift]))
+    // Period, because it is the "stop" key everywhere else on the Mac — ⌘. has cancelled
+    // things since before the App Store.
+    static let stopRecording = Self("stopRecording", initial: .init(.period, modifiers: [.control, .shift]))
     static let freezeScreen = Self("freezeScreen", initial: .init(.z, modifiers: [.control, .shift]))
     static let toggleDesktopIcons = Self("toggleDesktopIcons", initial: .init(.h, modifiers: [.control, .shift]))
 }
@@ -31,6 +34,7 @@ extension CaptureCommand {
         case .pickColor: .pickColor
         case .recordRegion: .recordRegion
         case .recordDisplay: .recordDisplay
+        case .stopRecording: .stopRecording
         case .freezeScreen: .freezeScreen
         case .toggleDesktopIcons: .toggleDesktopIcons
         }

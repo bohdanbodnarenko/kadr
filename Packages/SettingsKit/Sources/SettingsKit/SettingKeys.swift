@@ -50,6 +50,10 @@ public enum SettingKeys {
     public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
     /// Draw a halo where the user clicks (docs/03 §1.8).
     public static let recordingShowsClicks = SettingKey("recording.showsClicks", default: false)
+    /// The floating Stop/Pause bar (docs/03 §1.8). On by default: the recorder shipped with
+    /// no on-screen way to stop, and "I could not work out how to stop it" is the first
+    /// thing anybody said about it.
+    public static let recordingShowsControlBar = SettingKey("recording.showsControlBar", default: true)
     /// Show pressed keys. Off by default and shortcuts-only by default: showing every
     /// keystroke means showing whatever gets typed into a password field.
     public static let recordingShowsKeystrokes = SettingKey("recording.showsKeystrokes", default: false)

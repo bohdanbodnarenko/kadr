@@ -17,7 +17,7 @@ import StudioSession
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     /// NSApplication.delegate is *unretained* — keep a strong reference.
-    private static let shared = AppDelegate()
+    static let shared = AppDelegate()
 
     @MainActor
     static func main() {
@@ -28,30 +28,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         app.run()
     }
 
-    private let logger = KadrLog.logger(.app)
+    let logger = KadrLog.logger(.app)
     private let signposter = KadrLog.signposter(.app)
     private var launchInterval: OSSignpostIntervalState?
     private var statusItemInterval: OSSignpostIntervalState?
     private var launchStartedAt: ContinuousClock.Instant?
 
-    private var statusItemController: StatusItemController?
+    var statusItemController: StatusItemController?
     private var hotkeyCenter: HotkeyCenter?
 
     /// The capture layer. Constructing it touches no framework — ScreenCaptureKit is
     /// not messaged until the first capture, which is what keeps the idle budget
     /// (docs/04 §7.1).
-    private lazy var captureEngine = CaptureEngine()
-    private lazy var permissions = PermissionCoordinator()
+    lazy var captureEngine = CaptureEngine()
+    lazy var permissions = PermissionCoordinator()
     // Settings state is Foundation-only and cheap; the window that presents it is not,
     // and is built on first use.
-    private lazy var settings = AppSettings()
-    private lazy var history = HistoryController(settings: settings)
-    private lazy var desktopHygiene = DesktopHygieneController(settings: settings)
+    lazy var settings = AppSettings()
+    lazy var history = HistoryController(settings: settings)
+    lazy var desktopHygiene = DesktopHygieneController(settings: settings)
     /// Written out rather than `lazy` so the quit path can ask whether the capture layer
     /// was ever built without building it: a `lazy var` read at termination would
     /// construct the whole thing to discover it has nothing to say (docs/04 §7.1).
-    private var areaCaptureStorage: AreaCaptureCoordinator?
-    private var areaCapture: AreaCaptureCoordinator {
+    var areaCaptureStorage: AreaCaptureCoordinator?
+    var areaCapture: AreaCaptureCoordinator {
         if let areaCaptureStorage {
             return areaCaptureStorage
         }
@@ -66,8 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return created
     }
 
-    private var scrollCaptureStorage: ScrollCaptureCoordinator?
-    private var scrollCapture: ScrollCaptureCoordinator {
+    var scrollCaptureStorage: ScrollCaptureCoordinator?
+    var scrollCapture: ScrollCaptureCoordinator {
         if let scrollCaptureStorage {
             return scrollCaptureStorage
         }
@@ -84,8 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return created
     }
 
-    private var recordingStorage: RecordingCoordinator?
-    private var recording: RecordingCoordinator {
+    /// The floating Stop/Pause/Discard bar, built only while recording (docs/03 §1.8).
+    let recordingControlBar = RecordingControlBar()
+
+    var recordingStorage: RecordingCoordinator?
+    var recording: RecordingCoordinator {
         if let recordingStorage {
             return recordingStorage
         }
@@ -113,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The automation frontends (docs/03 §8.4). The router is built lazily; the listener
     /// is one run-loop source with no thread and no timer behind it, which is what lets
     /// automation exist without costing the idle budget (PRD §8).
-    private lazy var automation = AutomationRouter(
+    lazy var automation = AutomationRouter(
         areaCapture: areaCapture,
         scrollCapture: scrollCapture,
         recording: recording,
@@ -125,7 +128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var automationListener: AutomationListener?
 
     private lazy var loginItem = LoginItemController()
-    private lazy var settingsWindowController = SettingsWindowController(
+    lazy var settingsWindowController = SettingsWindowController(
         settings: settings,
         loginItem: loginItem,
         history: history
@@ -135,13 +138,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// controller is not mapped before the app can answer a hotkey (docs/10 R2.3).
     private lazy var updater = UpdaterManager.shared
 
-    private lazy var onboarding = OnboardingWindowController(
+    lazy var onboarding = OnboardingWindowController(
         model: OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem),
         settings: settings
     )
 
     #if DEBUG
-        private var debugCaptureMenu: DebugCaptureMenu?
+        var debugCaptureMenu: DebugCaptureMenu?
     #endif
 
     // MARK: - Launch
@@ -271,123 +274,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.info("Hotkeys armed in \(milliseconds, format: .fixed(precision: 1), privacy: .public) ms")
             self.launchStartedAt = nil
         }
-    }
-
-    // MARK: - Commands
-
-    private func perform(_ command: CaptureCommand) {
-        logger.info("Command requested: \(command.rawValue, privacy: .public)")
-        if performCapture(command) {
-            return
-        }
-        switch command {
-        case .captureScrolling:
-            scrollCapture.begin()
-        case .recordRegion:
-            recording.beginRegionRecording()
-        case .recordDisplay:
-            recording.beginDisplayRecording()
-        case .toggleDesktopIcons:
-            desktopHygiene.toggleUserHide()
-        default:
-            break
-        }
-    }
-
-    /// The commands that go through the selection overlay. Returns whether it was one.
-    private func performCapture(_ command: CaptureCommand) -> Bool {
-        switch command {
-        case .captureArea:
-            areaCapture.beginAreaCapture()
-        case .capturePreviousArea:
-            areaCapture.capturePreviousArea()
-        case .captureWindow:
-            areaCapture.beginWindowCapture()
-        case .captureFullscreen:
-            areaCapture.captureAllDisplays()
-        case .captureText:
-            areaCapture.beginTextCapture()
-        case .pickColor:
-            areaCapture.beginColorPick()
-        case .freezeScreen:
-            areaCapture.toggleFreezeScreen()
-        default:
-            return false
-        }
-        return true
-    }
-
-    /// Keeps the menu bar in step with the recording.
-    private func refreshStatusItemIcon() {
-        guard let recording = recordingStorage, recording.isRecording else {
-            statusItemController?.showIdleIcon()
-            return
-        }
-        statusItemController?.showRecordingIcon(
-            elapsed: recording.elapsedText,
-            isPaused: recording.state == .paused
-        )
-    }
-
-    /// The menu's view of a recording in progress, or nil when nothing is recording.
-    private func currentRecordingControls() -> RecordingControls? {
-        guard let recording = recordingStorage, recording.isRecording else { return nil }
-        return RecordingControls(
-            elapsedText: recording.elapsedText,
-            isPaused: recording.state == .paused,
-            stop: { [weak self] in self?.recording.stop() },
-            togglePause: {
-                if recording.state == .paused {
-                    recording.resume()
-                } else {
-                    recording.pause()
-                }
-            },
-            cancel: { [weak self] in self?.recording.cancel() }
-        )
-    }
-
-    /// Reopens onboarding, which is also how the user recovers a revoked grant.
-    func showOnboarding() {
-        onboarding.show()
-    }
-
-    private func openSettings() {
-        settingsWindowController.show()
-    }
-
-    /// The command layer, for the Shortcuts actions (docs/03 §8.4).
-    @MainActor
-    static func performAutomation(_ command: AppCommand, completion: @escaping (AutomationResponse) -> Void) {
-        shared.automation.perform(command, completion: completion)
-    }
-
-    /// Copies a file into the capture library (docs/03 §8.4 `add-to-history`).
-    ///
-    /// How a `.kadr` project saved in the editor gets into History: the editor writes the
-    /// file and opens `kadr://add-to-history`, because the library belongs to the agent.
-    private func addToHistory(_ url: URL) -> Bool {
-        guard let draft = ProjectIngest().draft(for: url) else { return false }
-        history.ingest(draft)
-        return true
-    }
-
-    private func openHistory() {
-        history.showWindow { [weak self] record in
-            self?.areaCapture.reopenFromHistory(record)
-        }
-    }
-
-    /// Debug builds get a submenu that drives CaptureCore directly (docs/06 M1).
-    private func debugMenuItems() -> [NSMenuItem] {
-        #if DEBUG
-            if debugCaptureMenu == nil {
-                debugCaptureMenu = DebugCaptureMenu(engine: captureEngine, permissions: permissions)
-            }
-            return [debugCaptureMenu].compactMap { $0?.makeMenuItem() }
-        #else
-            return []
-        #endif
     }
 
     // MARK: - Lifecycle

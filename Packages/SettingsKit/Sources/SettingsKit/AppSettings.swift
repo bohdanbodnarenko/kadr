@@ -110,6 +110,11 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingEnablesFocus] = recordingEnablesFocus }
     }
 
+    /// Whether the floating Stop/Pause bar appears while recording (docs/03 §1.8).
+    public var recordingShowsControlBar: Bool {
+        didSet { store[SettingKeys.recordingShowsControlBar] = recordingShowsControlBar }
+    }
+
     public var recordingShowsClicks: Bool {
         didSet { store[SettingKeys.recordingShowsClicks] = recordingShowsClicks }
     }
@@ -320,6 +325,7 @@ public final class AppSettings {
         recordsMicrophone = store[SettingKeys.recordsMicrophone]
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
+        recordingShowsControlBar = store[SettingKeys.recordingShowsControlBar]
         recordingShowsClicks = store[SettingKeys.recordingShowsClicks]
         recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]
         recordingKeystrokesShortcutsOnly = store[SettingKeys.recordingKeystrokesShortcutsOnly]

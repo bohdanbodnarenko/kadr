@@ -51,6 +51,14 @@ struct RecordingPane: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("While recording") {
+                Toggle("Show the floating controls", isOn: $settings.recordingShowsControlBar)
+                Text("A small bar with Stop, Pause and Discard. It never appears in the "
+                    + "recording, and you can drag it anywhere.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Overlays") {
                 Toggle("Show the pointer", isOn: $settings.recordingShowsCursor)
                 Toggle("Highlight clicks", isOn: $settings.recordingShowsClicks)
