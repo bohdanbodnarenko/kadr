@@ -75,7 +75,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             backing: .buffered,
             defer: false
         )
-        window.title = model.session.directory.deletingPathExtension().lastPathComponent
+        window.title = model.session.displayName
         window.contentView = hosting
         window.delegate = self
         window.center()
@@ -106,12 +106,20 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         model.redo()
     }
 
+    /// Copies the original footage. A focused text field still gets ⌘C first because it
+    /// sits earlier in the responder chain than this controller.
+    @objc func copy(_ sender: Any?) {
+        model.copyOriginalToClipboard()
+    }
+
     /// Greys the menu items out when there is nothing to undo, rather than letting them
     /// look available and do nothing.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(undo(_:)): model.canUndo
         case #selector(redo(_:)): model.canRedo
+        case #selector(copy(_:)):
+            FileManager.default.fileExists(atPath: model.session.screenURL.path)
         default: true
         }
     }
@@ -124,8 +132,8 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// Application Support, which is not somewhere anybody looks for a video.
     private func presentExportPanel(for model: StudioDocumentModel) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.quickTimeMovie]
-        panel.nameFieldStringValue = "\(window?.title ?? "Recording").mov"
+        panel.allowedContentTypes = [model.exportSettings.utType]
+        panel.nameFieldStringValue = "\(window?.title ?? "Recording").\(model.exportSettings.filenameExtension)"
         panel.canCreateDirectories = true
         panel.message = "Export the edited recording."
 
@@ -196,7 +204,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     func windowWillClose(_ notification: Notification) {
         // Stop decoding before anything else: a playback loop left running holds the frame
         // generator and keeps composing for a window nobody can see.
-        model.pausePlayback()
+        model.stopPlayback()
         // Committing is what makes this a *clean* close rather than a disappearance. The
         // agent offers to recover sessions that have a draft and no commit, so a window
         // that closes without one leaves its recording looking interrupted forever.
