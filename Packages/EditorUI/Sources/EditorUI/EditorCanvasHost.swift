@@ -36,9 +36,8 @@ struct EditorCanvasHost: NSViewRepresentable {
         scrollView.onMagnificationChanged = { [weak session] value in
             session?.noteLiveMagnification(value)
         }
-        scrollView.onCommandScrollZoom = { [weak session] factor in
-            guard let session else { return }
-            session.setMagnification(session.magnification * factor)
+        scrollView.onZoomed = { [weak session] value in
+            session?.noteLiveMagnification(value)
         }
         context.coordinator.startObserving(scrollView)
         return scrollView
@@ -58,7 +57,7 @@ struct EditorCanvasHost: NSViewRepresentable {
     static func dismantleNSView(_ nsView: EditorCanvasScrollView, coordinator: Coordinator) {
         coordinator.tearDown()
         nsView.onMagnificationChanged = nil
-        nsView.onCommandScrollZoom = nil
+        nsView.onZoomed = nil
     }
 
     func makeCoordinator() -> Coordinator {
@@ -164,11 +163,25 @@ struct EditorCanvasHost: NSViewRepresentable {
             defer { NSAnimationContext.endGrouping() }
 
             if abs(scrollView.magnification - target) > 0.002 {
-                // Assign rather than `setMagnification(_:centeredAt:)`: the centered API
-                // animates and recenters, which is the jump during a live window resize.
-                scrollView.magnification = target
+                if session.zoomToFit {
+                    // Fit re-centres by definition, so a plain assignment is right — and it
+                    // avoids the centred API recentring during a live window resize, which
+                    // is the jump the previous comment here was about.
+                    scrollView.magnification = target
+                } else {
+                    // Anchored at the middle of what the user is looking at.
+                    //
+                    // A plain assignment magnifies about the clip view's *origin*, so ⌘- did
+                    // not zoom out from the centre — it walked the visible region towards the
+                    // top-left corner and, past the point where the canvas fits, dumped it
+                    // there. That is the jump: not a glitch, the documented behaviour of
+                    // assigning to `magnification`.
+                    scrollView.setMagnification(target, centeredAt: scrollView.viewportCentre)
+                }
             }
             (scrollView.contentView as? CenteringClipView)?.recenterDocument()
+            // Rasterise the vector chrome for the density it is now being seen at.
+            canvas.updateContentsScale(forMagnification: scrollView.magnification)
 
             let overflowing = EditorCanvasLayout.canPan(
                 canvas: canvasSize,
@@ -221,11 +234,32 @@ final class CenteringClipView: NSClipView {
 /// Pinch, ⌘-scroll zoom, and a callback when the user leaves "fit" by magnifying.
 final class EditorCanvasScrollView: NSScrollView {
     var onMagnificationChanged: ((CGFloat) -> Void)?
-    var onCommandScrollZoom: ((CGFloat) -> Void)?
+    /// Reports a magnification this view performed itself, so the session can follow.
+    var onZoomed: ((CGFloat) -> Void)?
     var isUserMagnifying = false
 
     override var isOpaque: Bool {
         false
+    }
+
+    /// The middle of the visible region, in the coordinates `setMagnification` wants.
+    var viewportCentre: CGPoint {
+        CGPoint(x: contentView.bounds.midX, y: contentView.bounds.midY)
+    }
+
+    /// Zooms about a fixed point, so whatever is under it stays under it.
+    ///
+    /// The anchor is the whole feature. Without one, zooming is a scale about the corner of
+    /// the document and the thing the user was looking at slides away — which on the way out
+    /// ends with the canvas parked at the top-left.
+    func zoom(by factor: CGFloat, at point: CGPoint) {
+        let target = EditorCanvasLayout.clampMagnification(magnification * factor)
+        guard abs(target - magnification) > 0.0001 else { return }
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        setMagnification(target, centeredAt: point)
+        NSAnimationContext.endGrouping()
+        onZoomed?(magnification)
     }
 
     override func magnify(with event: NSEvent) {
@@ -246,7 +280,10 @@ final class EditorCanvasScrollView: NSScrollView {
         }
         let delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 16
         let step = min(max(1 + delta * 0.004, 0.85), 1.15)
-        onCommandScrollZoom?(step)
+        // Under the pointer, which is where a ⌘-scroll zoom is expected to happen: the
+        // gesture names its own anchor, so zooming in on a detail should not require
+        // scrolling back to it afterwards.
+        zoom(by: step, at: contentView.convert(event.locationInWindow, from: nil))
     }
 }
 

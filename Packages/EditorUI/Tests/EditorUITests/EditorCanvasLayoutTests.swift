@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import EditorUI
 
@@ -136,5 +137,56 @@ struct EditorCanvasLayoutTests {
                 magnification: 3
             )
         )
+    }
+
+    // MARK: - Zoom anchoring
+
+    /// The bug this guards was not in the arithmetic, so no arithmetic test would have found
+    /// it: `NSScrollView` magnifies about the clip view's *origin* when you assign to
+    /// `magnification`, and about a point when you call `setMagnification(_:centeredAt:)`.
+    /// The editor assigned. Zooming out therefore walked the visible region towards the
+    /// top-left and, once the canvas fitted, left it parked there — reported as "sometimes it
+    /// jumps to the left top corner".
+    ///
+    /// Asserted structurally because the behaviour belongs to AppKit: what this codebase can
+    /// get wrong is *which call it makes*, and that is what this checks.
+    @Test("A user zoom is anchored, not assigned")
+    func userZoomIsAnchored() throws {
+        let source = try String(
+            contentsOf: hostSourceURL(),
+            encoding: .utf8
+        )
+        #expect(
+            source.contains("setMagnification(target, centeredAt:"),
+            "the centred API is gone; zoom will magnify about the corner again"
+        )
+        #expect(
+            source.contains("setMagnification(target, centeredAt: scrollView.viewportCentre)"),
+            "a keyboard zoom has to anchor at the middle of what the user is looking at"
+        )
+    }
+
+    /// A ⌘-scroll names its own anchor, so zooming in on a detail must not require scrolling
+    /// back to it afterwards.
+    @Test("A command-scroll zoom is anchored under the pointer")
+    func commandScrollZoomIsAnchoredAtThePointer() throws {
+        let source = try String(contentsOf: hostSourceURL(), encoding: .utf8)
+        #expect(source.contains("zoom(by: step, at: contentView.convert(event.locationInWindow, from: nil))"))
+    }
+
+    /// Fit is the one case that *should* assign: it recentres by definition, and the centred
+    /// API recentring mid-resize is the jump the original comment was about.
+    @Test("Fit still assigns rather than anchoring")
+    func fitStillAssigns() throws {
+        let source = try String(contentsOf: hostSourceURL(), encoding: .utf8)
+        #expect(source.contains("scrollView.magnification = target"))
+    }
+
+    private func hostSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/EditorUI/EditorCanvasHost.swift")
     }
 }

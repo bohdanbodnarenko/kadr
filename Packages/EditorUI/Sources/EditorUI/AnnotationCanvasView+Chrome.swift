@@ -24,6 +24,45 @@ extension AnnotationCanvasView {
     /// last good render stays on screen, stretched — wrong in detail, right in shape, and
     /// free. The real render happens once the value stops moving, which is the only moment
     /// anyone looks closely (docs/09 U1.3).
+    /// Re-rasterises the vector chrome for the magnification it is being viewed at.
+    ///
+    /// Every annotation layer was built with `contentsScale` set to the window's backing
+    /// factor and nothing ever changed it, so at 4× zoom a stroke drawn for 2× was blown up
+    /// four times — soft edges on exactly the zoom somebody reached for to check an edge.
+    /// Setting `contentsScale` on a `CAShapeLayer` re-renders the path at the new density,
+    /// which is far cheaper than rebuilding the layer and is the whole fix.
+    ///
+    /// Clamped at four times the backing scale. Past that the memory a layer costs grows
+    /// faster than the detail anybody can see, and the base image is a bitmap that has no
+    /// more detail to give in any case.
+    func updateContentsScale(forMagnification magnification: CGFloat) {
+        let backing = window?.backingScaleFactor ?? 2
+        let scale = min(max(backing * magnification, backing), backing * 4)
+        guard abs(scale - lastContentsScale) > 0.01 else { return }
+        lastContentsScale = scale
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        for parent in [annotationLayer, reviewLayer, draftLayer, selectionLayer, cropLayer] {
+            parent.contentsScale = scale
+            applyContentsScale(scale, to: parent.sublayers)
+        }
+    }
+
+    /// Depth-first, because a composed annotation is a layer with layers inside it.
+    private func applyContentsScale(_ scale: CGFloat, to layers: [CALayer]?) {
+        guard let layers else { return }
+        for layer in layers {
+            // A layer showing a bitmap gains nothing and would only re-interpolate it; the
+            // vector ones are the ones that resolve.
+            if layer.contents == nil {
+                layer.contentsScale = scale
+            }
+            applyContentsScale(scale, to: layer.sublayers)
+        }
+    }
+
     func updateExpensiveChrome() {
         guard needsOffscreenRender else {
             chromeSettle.cancel()

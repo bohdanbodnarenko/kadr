@@ -60,6 +60,9 @@ public final class AnnotationCanvasView: NSView {
     let draftLayer = CALayer()
     let selectionLayer = CALayer()
     let cropLayer = CALayer()
+    /// The density the vector chrome was last rasterised at, so a zoom that changes nothing
+    /// does not walk every layer.
+    var lastContentsScale: CGFloat = 0
     private let logger = KadrLog.logger(.overlay)
 
     /// Layers by annotation, so an update finds its own layer without a search.
