@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor
 public struct StudioRootView: View {
     @State private var model: StudioDocumentModel
+    @State private var isInspectorPresented = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
     public init(model: StudioDocumentModel, onExport: @escaping (StudioDocumentModel) -> Void) {
@@ -17,25 +19,27 @@ public struct StudioRootView: View {
     }
 
     public var body: some View {
-        HSplitView {
+        HStack(spacing: 0) {
             VStack(spacing: 0) {
                 StudioPreviewView(model: model)
                     .frame(minWidth: 480, minHeight: 270)
-                Divider()
                 controls
             }
-            VSplitView {
-                StudioInspector(model: model)
-                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 380)
-                if model.transcript != nil {
-                    StudioTranscriptPanel(model: model)
-                        .frame(minHeight: 140)
-                }
+            .frame(maxWidth: .infinity)
+
+            if isInspectorPresented {
+                Divider()
+                sidebar
+                    .frame(width: 320)
+                    // Slides in from the edge it lives on rather than appearing, which is
+                    // what makes collapsing read as the panel moving out of the way instead
+                    // of the window rearranging itself.
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            .frame(minWidth: 260, idealWidth: 300, maxWidth: 420)
         }
+        .animation(motion(.snappy(duration: 0.28)), value: isInspectorPresented)
         .frame(minWidth: 820, minHeight: 520)
-        .animation(.easeOut(duration: 0.18), value: model.notice)
+        .animation(motion(.easeOut(duration: 0.2)), value: model.notice)
         .overlay(alignment: .top) { banner }
         // A failure still stops the user, because it means the thing they asked for did not
         // happen. Everything else is a banner (docs/08 §2 item 13).
@@ -98,6 +102,29 @@ public struct StudioRootView: View {
 
     // MARK: - Below the preview
 
+    /// The inspector and, under it, the transcript once there is one.
+    private var sidebar: some View {
+        VSplitView {
+            StudioInspector(model: model)
+                .frame(minHeight: 200)
+            if model.transcript != nil {
+                StudioTranscriptPanel(model: model)
+                    .frame(minHeight: 140)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
+    }
+
+    /// Honours Reduce Motion everywhere one animation is asked for.
+    ///
+    /// A studio is a lot of moving panels, and "smooth" for most people is nausea for some.
+    /// One helper rather than an `@Environment` check at every call site, because the check
+    /// somebody forgets is the one that matters.
+    private func motion(_ animation: Animation) -> Animation? {
+        reduceMotion ? nil : animation
+    }
+
     private var controls: some View {
         VStack(spacing: 8) {
             StudioTimelineView(model: model)
@@ -109,10 +136,29 @@ public struct StudioRootView: View {
                 Divider().frame(height: 16)
                 zoomButtons
                 Spacer()
+                inspectorToggle
                 exportControl
             }
         }
         .padding(12)
+        .background(.bar)
+    }
+
+    /// Folds the inspector away, the way the annotation editor already does.
+    ///
+    /// The studio had no way to hide it: the preview is the thing being judged and it was
+    /// permanently three hundred points narrower than the window for the sake of controls
+    /// nobody is touching while they watch.
+    private var inspectorToggle: some View {
+        Button {
+            isInspectorPresented.toggle()
+        } label: {
+            Image(systemName: "sidebar.right")
+        }
+        .keyboardShortcut("i", modifiers: .command)
+        .help(isInspectorPresented ? "Hide the inspector (⌘I)" : "Show the inspector (⌘I)")
+        .accessibilityLabel("Inspector")
+        .accessibilityValue(isInspectorPresented ? "Shown" : "Hidden")
     }
 
     /// Play, and step a frame either way (docs/08 §2 item 10).

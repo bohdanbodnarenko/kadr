@@ -21,7 +21,7 @@ extension StudioInspector {
     /// not what that button says it does — and on a machine with no network it would be a
     /// button that hangs instead of one that explains.
     var speechSection: some View {
-        Section("Speech") {
+        StudioInspectorSection(title: "Speech", key: "speech", startsOpen: false) {
             if !model.supportedLocales.isEmpty {
                 Picker("Language", selection: Bindable(model).speechLocaleIdentifier) {
                     ForEach(model.supportedLocales, id: \.self) { identifier in

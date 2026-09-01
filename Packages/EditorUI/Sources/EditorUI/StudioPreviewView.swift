@@ -30,17 +30,28 @@ struct StudioPreviewView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color.black
+                // A recessed well rather than a black rectangle butted against the window
+                // edge: the picture is the thing being judged, and a surround that reads as
+                // a surface tells the eye where it stops.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.black)
                 if let frame {
                     Image(decorative: frame, scale: 1)
                         .resizable()
                         .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 } else {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
+            // Deliberately not crossfaded between frames. A fade needs a view-identity
+            // change to animate across, and forcing one thirty times a second during
+            // playback would have SwiftUI tear down and rebuild the image for every frame —
+            // paying for a flourish nobody can see at that rate with the smoothness of the
+            // playback itself.
             .frame(width: geometry.size.width, height: geometry.size.height)
+            .padding(10)
         }
         .task {
             renderer = StudioPreviewRenderer(

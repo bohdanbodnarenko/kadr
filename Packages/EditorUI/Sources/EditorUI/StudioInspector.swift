@@ -38,7 +38,7 @@ struct StudioInspector: View {
     @ViewBuilder
     private var selectedZoomSection: some View {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
-            Section("Zoom") {
+            StudioInspectorSection(title: "Zoom", key: "zoom") {
                 InspectorSlider(
                     title: "Starts at",
                     value: Binding(
@@ -93,7 +93,7 @@ struct StudioInspector: View {
     // MARK: - Shape
 
     private var shapeSection: some View {
-        Section("Shape") {
+        StudioInspectorSection(title: "Shape", key: "shape") {
             Picker("Aspect", selection: Binding(
                 get: { model.edit.reframe.aspect },
                 set: { value in model.change { $0.reframe.aspect = value } }
@@ -115,7 +115,7 @@ struct StudioInspector: View {
     /// An arbitrary rectangle in the recording, applied before the aspect reframe
     /// (docs/10 R3.5).
     private var cropSection: some View {
-        Section("Crop") {
+        StudioInspectorSection(title: "Crop", key: "crop", startsOpen: false) {
             if model.canTrimNotch {
                 Button("Remove the notch strip") { model.trimNotchStrip() }
                 Text("This display has a notch, so the top of the recording has a bite out "
@@ -183,7 +183,7 @@ struct StudioInspector: View {
     // MARK: - Camera
 
     private var cameraSection: some View {
-        Section("Camera") {
+        StudioInspectorSection(title: "Camera", key: "camera") {
             Toggle("Show the camera", isOn: Binding(
                 get: { model.edit.camera.isVisible },
                 set: { value in model.change { $0.camera.isVisible = value } }
@@ -229,7 +229,7 @@ struct StudioInspector: View {
     // MARK: - Overlays
 
     private var overlaySection: some View {
-        Section("On top") {
+        StudioInspectorSection(title: "On top", key: "overlays") {
             Toggle("Draw the pointer", isOn: Binding(
                 get: { model.edit.showsCursor },
                 set: { value in model.change { $0.showsCursor = value } }
@@ -255,7 +255,7 @@ struct StudioInspector: View {
     // MARK: - Presets
 
     private var presetSection: some View {
-        Section("Presets") {
+        StudioInspectorSection(title: "Presets", key: "presets", startsOpen: false) {
             ForEach(StudioPreset.builtIn) { preset in
                 Button(preset.name) { model.apply(preset) }
             }
