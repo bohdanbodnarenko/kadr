@@ -40,7 +40,7 @@ final class OverlayHostingView: NSHostingView<AnyView> {
 /// once the user is interacting with it. `becomesKeyOnlyIfNeeded` gives exactly that:
 /// showing the panel steals nothing, clicking it hands it the keyboard.
 @MainActor
-final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
+final class QuickAccessPanel: NonActivatingPanel {
     private let hostingView: OverlayHostingView
     private var cardActions: QuickAccessCardActions
     private let settings: AppSettings
@@ -76,14 +76,11 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
     func present(at origin: CGPoint) {
         setFrameOrigin(origin)
         orderFrontRegardless()
-        // Kept out of Kadr's own captures, and out of everyone's way except where it has
-        // a control (docs/09 U2.1).
+        // Kept out of Kadr's own captures (docs/09 U2.1).
         CaptureExclusionRegistry.shared.register(self)
-        InteractiveRegionTracker.shared.register(self)
     }
 
     func dismiss() {
-        InteractiveRegionTracker.shared.unregister(self)
         CaptureExclusionRegistry.shared.unregister(self)
         contentView = nil
         orderOut(nil)
@@ -94,7 +91,6 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
     /// is a show, not a rebuild (docs/03 §2).
     func hideForPeek() {
         guard isVisible else { return }
-        InteractiveRegionTracker.shared.unregister(self)
         orderOut(nil)
     }
 
@@ -102,32 +98,36 @@ final class QuickAccessPanel: NonActivatingPanel, InteractivelyMasked {
         guard !isVisible else { return }
         orderFrontRegardless()
         CaptureExclusionRegistry.shared.register(self)
-        InteractiveRegionTracker.shared.register(self)
     }
 
     // MARK: - Pass-through (docs/09 U2.1)
 
-    /// The card's own frame, because every part of a card is a control.
-    var interactiveRegions: InteractiveRegions {
-        guard !isIgnoringClicks else { return .none }
-        return InteractiveRegions(rects: [frame])
-    }
-
-    var passesMouseThrough: Bool {
-        get { ignoresMouseEvents }
-        set { ignoresMouseEvents = newValue }
-    }
-
+    /// The card does not use `InteractiveRegionTracker`, and taking it out is what brought
+    /// hover back.
+    ///
+    /// The tracker exists for a panel with *sparse* controls: it publishes the few rects
+    /// that take clicks and flips `ignoresMouseEvents` so the rest of a big transparent
+    /// window lets the app underneath through. This card published its entire frame, so the
+    /// mechanism had nothing to pass through — a window already ignores everything outside
+    /// itself — and one real effect: while the pointer was anywhere else, the card sat with
+    /// `ignoresMouseEvents = true`.
+    ///
+    /// A window that ignores mouse events receives no `mouseEntered` and no `mouseMoved`, so
+    /// SwiftUI's `onHover` could never fire from inside it. The only thing that could turn
+    /// the card back on was a *global* monitor, which sees events dispatched to other
+    /// applications — and the moment the card became interactive it started taking those
+    /// events itself, so the signal that was meant to maintain hover went quiet exactly when
+    /// hover was needed. Hence: no hover, ever, and clicks that sometimes did not land.
+    ///
+    /// The pass-through machinery is still right for the overlays it was written for. It was
+    /// wrong here.
     /// Set while the card is deliberately inert — during a capture, say.
     var isIgnoringClicks = false {
-        didSet {
-            InteractiveRegionTracker.shared.update(at: NSEvent.mouseLocation)
-        }
+        didSet { ignoresMouseEvents = isIgnoringClicks }
     }
 
     func setCardSize(width: CGFloat, height: CGFloat) {
         setFrame(CGRect(x: frame.minX, y: frame.minY, width: width, height: height), display: true)
-        InteractiveRegionTracker.shared.update(at: NSEvent.mouseLocation)
     }
 
     /// Rebuilds the card's content after its item changed (docs/09 U2.4).

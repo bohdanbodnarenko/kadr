@@ -50,7 +50,14 @@ struct QuickAccessCardView: View {
     var layout: CardLayout = .standard
 
     @State private var isHovering = false
+    /// Pinned open by a click, so the actions stay while the pointer travels to one.
     @State private var isExpanded = false
+
+    /// Hovering reveals the actions; a click pins them.
+    private var showsActions: Bool {
+        isHovering || isExpanded
+    }
+
     /// The scale of the screen this card is on.
     ///
     /// Read rather than assumed: hard-coding 2× decoded twice the pixels needed on a
@@ -70,10 +77,19 @@ struct QuickAccessCardView: View {
     var body: some View {
         VStack(spacing: 6) {
             thumbnail
-            if isExpanded {
+            // Actions on hover, details otherwise (docs/08 §2 item 13).
+            //
+            // They used to be behind a click on the thumbnail, which is the wrong gesture
+            // twice over: the card is a thing you want to *drag*, so clicking it to reveal a
+            // menu fights the drag, and a user who does not know the click exists sees a
+            // picture with no actions at all. Hovering a card to see what it can do is what
+            // every other capture tool does and what people try first.
+            if showsActions {
                 actionRow
+                    .transition(.opacity)
             } else {
                 details
+                    .transition(.opacity)
             }
         }
         .padding(Self.padding)
@@ -81,8 +97,14 @@ struct QuickAccessCardView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.primary.opacity(0.12))
+                .strokeBorder(Color.primary.opacity(isHovering ? 0.24 : 0.12))
         )
+        // Lifts a little under the pointer, so the card the pointer is on is obvious in a
+        // stack of them.
+        .shadow(color: .black.opacity(isHovering ? 0.28 : 0.16), radius: isHovering ? 16 : 8, y: isHovering ? 5 : 2)
+        .scaleEffect(isHovering ? 1.015 : 1, anchor: .center)
+        .animation(.snappy(duration: 0.16), value: isHovering)
+        .animation(.snappy(duration: 0.16), value: isExpanded)
         .onHover { hovering in
             isHovering = hovering
             actions.setHovered(hovering)
@@ -114,6 +136,8 @@ struct QuickAccessCardView: View {
                     )
                 },
                 dragImage: { NSImage(contentsOf: item.fileURL) },
+                // Pins the actions open. Hover already showed them, so this is for keeping
+                // them while the pointer leaves the card — not for discovering they exist.
                 onTap: { isExpanded.toggle() },
                 onDoubleTap: {
                     if actions.annotateAvailable {
@@ -129,7 +153,7 @@ struct QuickAccessCardView: View {
             }
         }
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Double-tap to expand actions, or drag to another app")
+        .accessibilityHint("Hover to see the actions, double-tap to open, or drag to another app")
     }
 
     private var details: some View {

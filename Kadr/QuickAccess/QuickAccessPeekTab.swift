@@ -54,16 +54,13 @@ final class QuickAccessPeekPanel: NonActivatingPanel, InteractivelyMasked {
         setFrameOrigin(origin)
         orderFrontRegardless()
         CaptureExclusionRegistry.shared.register(self)
-        InteractiveRegionTracker.shared.register(self)
     }
 
     func hide() {
-        InteractiveRegionTracker.shared.unregister(self)
         orderOut(nil)
     }
 
     func teardown() {
-        InteractiveRegionTracker.shared.unregister(self)
         CaptureExclusionRegistry.shared.unregister(self)
         contentView = nil
         orderOut(nil)
@@ -81,9 +78,15 @@ final class QuickAccessPeekPanel: NonActivatingPanel, InteractivelyMasked {
             CGRect(x: frame.minX, y: frame.minY, width: size.width, height: size.height),
             display: true
         )
-        InteractiveRegionTracker.shared.update(at: NSEvent.mouseLocation)
     }
 
+    /// The whole tab, because the whole tab is two buttons.
+    ///
+    /// Which is exactly why it no longer registers with the tracker — see
+    /// `QuickAccessPanel`. Publishing the entire frame gives the mechanism nothing to pass
+    /// through (a window already ignores everything outside itself) and one real effect: the
+    /// tab sits inert whenever the pointer is elsewhere, so the first press on a tab the
+    /// user has just moved to can land in the app behind it instead.
     var interactiveRegions: InteractiveRegions {
         InteractiveRegions(rects: [frame])
     }
