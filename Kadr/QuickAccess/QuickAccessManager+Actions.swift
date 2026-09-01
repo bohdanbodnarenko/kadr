@@ -149,10 +149,16 @@ extension QuickAccessManager {
         if let item = items.first(where: { $0.fileURL == url }) {
             noteEngagement(with: item)
         }
-        if !items.isEmpty {
+        // Tucked away when the editor is actually up, not when it is asked for (docs/03 §2).
+        //
+        // This used to collapse first and launch afterwards, so a launch that did nothing —
+        // a build with no editor embedded, or a failure — left the stack in the peek tab
+        // with nothing to come back from. The tab reads "1 Screenshot" and stays: the only
+        // thing that expands it again is the editor process terminating, and none started.
+        editor.open(url) { [weak self] opened in
+            guard let self, opened, !items.isEmpty else { return }
             setPeeking(true)
         }
-        editor.open(url)
     }
 
     /// Pins a file automation named, or a capture automation just took (docs/03 §8.4).

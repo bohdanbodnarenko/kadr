@@ -137,6 +137,29 @@ struct OverlayEngagementTests {
         harness.manager.dismissAll()
     }
 
+    /// Opening the editor tucks the cards away — but only if an editor actually opened.
+    ///
+    /// The overlay collapsed first and launched second, so when the launch did nothing (no
+    /// editor embedded in the bundle, or a failure) the stack sat in the peek tab reading
+    /// "1 Screenshot" forever: the only thing that expands it again is the editor process
+    /// terminating, and none had started. The test bundle has no embedded editor, so this is
+    /// that case exactly.
+    @Test("A failed editor launch does not strand the cards in the peek tab")
+    func failedEditorLaunchDoesNotStrandThePeekTab() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        // A launcher that cannot open anything, standing in for a build with no editor
+        // embedded — and keeping the test from starting a real one.
+        harness.manager.editor = EditorLauncher(editorURL: nil)
+        #expect(!harness.manager.editor.isAvailable)
+
+        harness.manager.annotate(item)
+
+        #expect(!harness.manager.isPeeking, "the cards were hidden for an editor that never opened")
+        #expect(harness.manager.items.count == 1)
+        harness.manager.dismissAll()
+    }
+
     @Test("Peeking with nothing on screen does nothing")
     func peekingEmptyIsANoOp() {
         let harness = makeHarness()

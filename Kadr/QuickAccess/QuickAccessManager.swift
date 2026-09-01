@@ -24,7 +24,7 @@ final class QuickAccessManager {
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored let output: CaptureOutput
     @ObservationIgnored let pins: PinManager
-    @ObservationIgnored let editor = EditorLauncher()
+    @ObservationIgnored var editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
     /// The helper connection for GIF encoding (docs/03 §1.8).
     @ObservationIgnored let vision = VisionClient()

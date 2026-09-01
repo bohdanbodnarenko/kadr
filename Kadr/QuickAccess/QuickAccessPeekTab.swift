@@ -45,6 +45,14 @@ struct QuickAccessPeekTabView: View {
             peekDismissButton
                 .padding(.trailing, 6)
         }
+        // Its own height, not its container's.
+        //
+        // The button inside asks for `maxHeight: .infinity` so its click target fills the
+        // pill. That used to be bounded by the pill's own 42-point panel; in the shared
+        // full-screen overlay panel nothing bounds it, so the pill grew into a full-height
+        // slab down the side of the screen — one that took clicks, too, because the overlay
+        // publishes it as interactive.
+        .frame(height: Self.pillHeight)
         .background(.regularMaterial, in: shape)
         .overlay {
             shape
