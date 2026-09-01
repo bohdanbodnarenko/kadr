@@ -101,10 +101,21 @@ extension AppDelegate {
             recordingControlBar.dismiss()
             return
         }
+        // During the countdown the bar offers the three things a recording is most often got
+        // wrong by forgetting — microphone, system sound, camera — instead of a clock that
+        // has not started (docs/03 §1.8's control strip, folded into the wait that already
+        // exists rather than added as a step of its own).
+        let preRoll: RecordingControlBar.PreRoll? = recordingStorage?.isCountingDown == true
+            ? RecordingControlBar.PreRoll(
+                startNow: { [weak self] in self?.recordingStorage?.startCountdownNow() },
+                cancel: { [weak self] in self?.recording.cancel() }
+            )
+            : nil
+
         if recordingControlBar.isShowing {
-            recordingControlBar.update(controls: controls)
+            recordingControlBar.update(controls: controls, settings: settings, preRoll: preRoll)
         } else {
-            recordingControlBar.show(controls: controls)
+            recordingControlBar.show(controls: controls, settings: settings, preRoll: preRoll)
         }
     }
 

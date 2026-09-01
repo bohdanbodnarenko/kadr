@@ -1,5 +1,7 @@
 import AppKit
 import OverlayKit
+import RecordingCore
+import SettingsKit
 import Shared
 import SwiftUI
 
@@ -36,8 +38,10 @@ final class RecordingControlBar {
         panel != nil
     }
 
-    func show(controls: RecordingControls) {
+    func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         model.apply(controls)
+        model.settings = settings
+        model.preRoll = preRoll
         guard panel == nil else { return }
 
         let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
@@ -69,9 +73,27 @@ final class RecordingControlBar {
     }
 
     /// Updates the timer and the paused state without rebuilding anything.
-    func update(controls: RecordingControls) {
+    func update(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         guard panel != nil else { return }
         model.apply(controls)
+        model.settings = settings
+        model.preRoll = preRoll
+    }
+
+    /// What the bar offers while the countdown is running.
+    ///
+    /// The three things a recording is usually got wrong by forgetting — microphone, system
+    /// sound, camera — were reachable only from Settings, so recording a demo with your
+    /// voice meant leaving the thing you were about to record, opening a window, finding a
+    /// checkbox and coming back. docs/03 §1.8 asks for a control strip before Record for
+    /// exactly this.
+    ///
+    /// Put in the countdown rather than in a step of its own: the wait already exists, the
+    /// user is already looking at the screen, and adding a panel they have to dismiss to
+    /// start recording would be a click nobody asked for.
+    struct PreRoll {
+        let startNow: () -> Void
+        let cancel: () -> Void
     }
 
     func dismiss() {
@@ -109,6 +131,11 @@ final class RecordingControlBarModel {
     var elapsedText = "0:00"
     var isPaused = false
 
+    /// Non-nil while the countdown is running.
+    var preRoll: RecordingControlBar.PreRoll?
+    /// Bound live so a toggle flipped here is the setting, and is still set next time.
+    var settings: AppSettings?
+
     @ObservationIgnored var stop: () -> Void = {}
     @ObservationIgnored var togglePause: () -> Void = {}
     @ObservationIgnored var cancel: () -> Void = {}
@@ -133,6 +160,79 @@ private struct RecordingControlBarView: View {
     @State private var isConfirmingCancel = false
 
     var body: some View {
+        if let preRoll = model.preRoll, let settings = model.settings {
+            preRollBar(preRoll: preRoll, settings: settings)
+        } else {
+            liveBar
+        }
+    }
+
+    /// Microphone, system sound and camera, while the countdown runs.
+    private func preRollBar(preRoll: RecordingControlBar.PreRoll, settings: AppSettings) -> some View {
+        HStack(spacing: 8) {
+            Text("Starting…")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Divider().frame(height: 20)
+
+            if RecordingOptions.microphoneIsAvailable {
+                toggle(
+                    on: Binding(get: { settings.recordsMicrophone }, set: { settings.recordsMicrophone = $0 }),
+                    symbol: "mic.fill",
+                    off: "mic.slash.fill",
+                    label: "Microphone"
+                )
+            }
+            toggle(
+                on: Binding(get: { settings.recordsSystemAudio }, set: { settings.recordsSystemAudio = $0 }),
+                symbol: "speaker.wave.2.fill",
+                off: "speaker.slash.fill",
+                label: "System sound"
+            )
+            toggle(
+                on: Binding(get: { settings.recordingShowsWebcam }, set: { settings.recordingShowsWebcam = $0 }),
+                symbol: "video.fill",
+                off: "video.slash.fill",
+                label: "Camera"
+            )
+
+            Divider().frame(height: 20)
+
+            Button("Start now") { preRoll.startNow() }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+            Button("Cancel") { preRoll.cancel() }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator))
+        .shadow(radius: 10, y: 3)
+        .padding(6)
+        .fixedSize()
+    }
+
+    /// One on/off control that says what it does, rather than a checkbox with a word.
+    private func toggle(
+        on binding: Binding<Bool>,
+        symbol: String,
+        off: String,
+        label: String
+    ) -> some View {
+        Button {
+            binding.wrappedValue.toggle()
+        } label: {
+            Image(systemName: binding.wrappedValue ? symbol : off)
+                .frame(width: 16)
+                .foregroundStyle(binding.wrappedValue ? Color.primary : Color.secondary)
+        }
+        .help(binding.wrappedValue ? "\(label) is on" : "\(label) is off")
+        .accessibilityLabel(label)
+        .accessibilityValue(binding.wrappedValue ? "On" : "Off")
+    }
+
+    private var liveBar: some View {
         HStack(spacing: 10) {
             statusDot
             Text(model.elapsedText)

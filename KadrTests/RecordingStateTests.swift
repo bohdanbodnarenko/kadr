@@ -41,6 +41,11 @@ struct RecordingStateTests {
     /// The guard, asserted structurally: it has to be claimed before the first `await`, or
     /// the window it exists to close is still open.
     ///
+    /// Matched on a prefix of the signature rather than the whole of it, because the whole
+    /// of it is not the invariant: adding the `alreadyClaimed` parameter — so a countdown
+    /// can hold the claim straight through into the recording without the state visibly
+    /// blinking — failed this test for a coordinator whose claim had not moved.
+    ///
     /// Over the whole function rather than its first 900 characters, which is what this used
     /// to read. A fixed window makes the test depend on how long the *comments* are: adding
     /// a sentence to the explanation above `state = .starting` pushed `Task {` out of range
@@ -56,7 +61,7 @@ struct RecordingStateTests {
             encoding: .utf8
         )
         let found = try #require(
-            Self.functionBody(named: "private func start(target: RecordingTarget)", in: source),
+            Self.functionBody(named: "func start(target: RecordingTarget", in: source),
             "RecordingCoordinator.start could not be found; did it get renamed?"
         )
         // Comments stripped before anything is matched. The explanation above the claim

@@ -142,45 +142,12 @@ final class RecordingCoordinator {
         startAfterCountdown(target: .display(displayID))
     }
 
-    /// Counts down, then records (docs/03 §1.8).
-    ///
-    /// Recording used to begin on the same frame as the click, so the first second of every
-    /// screen recording was the pointer travelling away from whatever had just been pressed
-    /// — the menu item, the Record button, the corner of the selection. A still gets a
-    /// timer and a recording did not, which is backwards: a photograph can be retaken in a
-    /// second and a recording has to be made again from the top.
-    ///
-    /// Escape cancels the countdown, and zero seconds skips it entirely rather than costing
-    /// a frame.
-    private func startAfterCountdown(target: RecordingTarget) {
-        // Never for an automated recording: `kadr record-screen` is a script, and a script
-        // does not need three seconds to put its pointer somewhere. A countdown there is
-        // just latency somebody has to work around.
-        let seconds = startedByAutomation ? 0 : settings.recordingCountdownSeconds
-        state = .starting
-        countdown.run(seconds: seconds) { [weak self] in
-            guard let self else { return }
-            // The countdown claimed `.starting` so a second hotkey press could not begin a
-            // second recording while the numbers were on screen; `start` claims it again.
-            state = .idle
-            start(target: target)
-        }
-    }
-
-    /// Cancels a countdown that has not started recording yet.
-    ///
-    /// Separate from `cancel()` because there is no engine, no session and no footage yet —
-    /// only a promise to begin, and the only thing to undo is the promise.
-    func cancelCountdown() -> Bool {
-        guard countdown.isRunning else { return false }
-        countdown.cancel()
-        state = .idle
-        return true
-    }
-
-    @ObservationIgnored private let countdown = CaptureCountdown()
-
-    private func start(target: RecordingTarget) {
+    /// - Parameter alreadyClaimed: true when a countdown has already moved the state to
+    ///   `.starting` on this recording's behalf. Dropping back to `.idle` first would work,
+    ///   but every observer sees that — the menu-bar icon and the floating bar both react to
+    ///   the state, so the bar would be torn down and rebuilt in the same breath and the
+    ///   user would watch it blink between the countdown ending and the recording starting.
+    func start(target: RecordingTarget, alreadyClaimed: Bool = false) {
         guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
         // Claimed synchronously, before the first await (docs/10 R0.3).
         //
@@ -190,8 +157,10 @@ final class RecordingCoordinator {
         // menu items stayed enabled, and a second press started a second recording — whose
         // failure path then ran `studio.cancel()`, deleting the *first* recording's session
         // directory, and put the desktop icons back while the first was still filming.
-        guard !isRecording else { return }
-        state = .starting
+        if !alreadyClaimed {
+            guard !isRecording else { return }
+            state = .starting
+        }
 
         if case .window = target {
             isWindowRecording = true
@@ -317,6 +286,10 @@ final class RecordingCoordinator {
     private var capturesStudioSession: Bool {
         settings.recordingCapturesStudioSession
     }
+
+    @ObservationIgnored let countdown = CaptureCountdown()
+    /// What the countdown is going to record, so "Start now" knows what to start.
+    @ObservationIgnored var pendingTarget: RecordingTarget?
 
     @ObservationIgnored private var isWindowRecording = false
     /// Follows a recorded window so a click can be placed against where it was at the time.
