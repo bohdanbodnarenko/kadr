@@ -1,6 +1,5 @@
 import CoreGraphics
 import CoreImage
-import CoreText
 import Foundation
 import StudioSession
 
@@ -35,6 +34,8 @@ public struct StudioFrameComposer: Sendable {
     private let cursorPath: [CGPoint]
     private let cursorImages: [CGImage?]
     private let frameDuration: TimeInterval
+    /// Decoded wallpaper, or nil when the canvas is a colour fill or there is no file.
+    let wallpaper: CIImage?
 
     /// Opaque black the size of the output, to put letterbox bars on.
     private var backdrop: CIImage {
@@ -61,7 +62,8 @@ public struct StudioFrameComposer: Sendable {
         // have come from a Retina machine than not. `CaptureManifest` decodes the same
         // default for the same reason.
         pointPixelScale: CGFloat = 2,
-        spring: MotionSpring = MotionSpring()
+        spring: MotionSpring = MotionSpring(),
+        wallpaper: CGImage? = nil
     ) {
         self.plan = plan
         self.edit = edit
@@ -78,6 +80,7 @@ public struct StudioFrameComposer: Sendable {
         // Decoded once. A cursor PNG is a few hundred bytes and there are rarely more than
         // a dozen of them, but decoding one per frame is a decode per frame.
         cursorImages = self.telemetry.cursors.map { CursorArtwork.decode($0.pngData) }
+        self.wallpaper = wallpaper.map { CIImage(cgImage: $0) }
     }
 
     /// The output frame at `time`.
@@ -88,13 +91,21 @@ public struct StudioFrameComposer: Sendable {
     public func frame(at time: TimeInterval, source: CIImage, camera: CIImage?) -> CIImage {
         var image = viewport(at: time, source: source)
         image = overlays(at: time, over: image)
+        if usesCardChrome {
+            image = clipToCard(image.composited(over: backdrop))
+            var ground = canvasBackdrop
+            if let shadow = cardShadow {
+                ground = shadow.composited(over: ground)
+            }
+            image = image.composited(over: ground)
+        }
         if let camera, edit.camera.isVisible {
             image = bubble(camera, over: image)
         }
-        // Over opaque black, so a letterboxed `.fit` frame has bars rather than holes. The
-        // uncovered region is transparent, and transparent is not a colour a video file can
-        // carry — it becomes whatever the encoder's buffer happened to hold.
-        image = image.composited(over: backdrop)
+        if !usesCardChrome {
+            // Over opaque black, so a letterboxed `.fit` frame has bars rather than holes.
+            image = image.composited(over: backdrop)
+        }
         // Cropped last and always: a composite whose extent has grown past the frame — a
         // ripple at the edge, a bubble flush to the corner — writes a pixel buffer with a
         // silently shifted origin, and the whole video comes out offset.
@@ -236,7 +247,10 @@ public struct StudioFrameComposer: Sendable {
         // own pixels-per-point on the belief that it arrived in pixels, which moved an
         // I-beam's tip up and to the left of the text it was pointing at. Size and hotspot
         // share a unit, so the only conversion either needs is the one applied to both.
-        let drawn = pointPixelScale * scale
+        let drawn = pointPixelScale * scale * min(
+            max(edit.cursorScale, StudioEdit.minimumCursorScale),
+            StudioEdit.maximumCursorScale
+        )
         let size = CGSize(width: recorded.size.width * drawn, height: recorded.size.height * drawn)
         guard size.width > 0, size.height > 0 else { return base }
 
@@ -278,7 +292,7 @@ public struct StudioFrameComposer: Sendable {
     }
 
     /// Places an image into a top-left rect of the output and composites it.
-    private func composite(_ overlay: CIImage, into rect: CGRect, over base: CIImage) -> CIImage {
+    func composite(_ overlay: CIImage, into rect: CGRect, over base: CIImage) -> CIImage {
         guard overlay.extent.width > 0, overlay.extent.height > 0 else { return base }
         let scaleX = rect.width / overlay.extent.width
         let scaleY = rect.height / overlay.extent.height
@@ -292,65 +306,6 @@ public struct StudioFrameComposer: Sendable {
             ))
         return placed.applyingFilter("CISourceOverCompositing", parameters: [
             kCIInputBackgroundImageKey: base
-        ])
-    }
-
-    // MARK: - The camera bubble
-
-    /// The webcam, cropped square-ish, rounded and placed.
-    private func bubble(_ camera: CIImage, over base: CIImage) -> CIImage {
-        let rect = edit.camera.frame(in: plan.outputSize)
-        guard rect.width > 1, rect.height > 1, camera.extent.width > 0, camera.extent.height > 0 else {
-            return base
-        }
-
-        // Aspect-fill: a webcam is 16:9 and the bubble is usually round, so fitting it
-        // would letterbox a circle — which looks like a bug rather than a choice.
-        let scale = max(rect.width / camera.extent.width, rect.height / camera.extent.height)
-        let scaled = camera
-            .transformed(by: CGAffineTransform(translationX: -camera.extent.minX, y: -camera.extent.minY))
-            .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let inset = CGRect(
-            x: (scaled.extent.width - rect.width) / 2,
-            y: (scaled.extent.height - rect.height) / 2,
-            width: rect.width,
-            height: rect.height
-        )
-        let cropped = scaled
-            .cropped(to: inset)
-            .transformed(by: CGAffineTransform(translationX: -inset.minX, y: -inset.minY))
-
-        let radius = edit.camera.cornerRadius(in: plan.outputSize)
-        let masked = mask(cropped, size: rect.size, radius: radius)
-        return composite(masked, into: rect, over: base)
-    }
-
-    /// Rounds an image's corners.
-    ///
-    /// A drawn mask rather than `CIRoundedRectangleGenerator`, which is macOS 14+ only in
-    /// the shape Kadr needs and produces a slightly different curve than the editor's own
-    /// rounded rects — the bubble would not match the card it was dragged from.
-    private func mask(_ image: CIImage, size: CGSize, radius: CGFloat) -> CIImage {
-        guard radius > 0.5 else { return image }
-        let width = Int(size.width.rounded())
-        let height = Int(size.height.rounded())
-        guard width > 0, height > 0,
-              let maskImage = BitmapCanvas.image(width: width, height: height, action: { context in
-                  context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
-                  context.addPath(CGPath(
-                      roundedRect: CGRect(x: 0, y: 0, width: size.width, height: size.height),
-                      cornerWidth: min(radius, size.width / 2),
-                      cornerHeight: min(radius, size.height / 2),
-                      transform: nil
-                  ))
-                  context.fillPath()
-              })
-        else {
-            return image
-        }
-        return image.applyingFilter("CIBlendWithAlphaMask", parameters: [
-            kCIInputMaskImageKey: CIImage(cgImage: maskImage),
-            kCIInputBackgroundImageKey: CIImage.empty()
         ])
     }
 }
@@ -384,40 +339,6 @@ enum BitmapCanvas {
         context.setShouldAntialias(true)
         action(context)
         return context.makeImage()
-    }
-}
-
-/// The keystroke caption's pill.
-enum CaptionCanvas {
-    static func image(text: String, fontSize: CGFloat, opacity: Double) -> CGImage? {
-        guard !text.isEmpty else { return nil }
-        let font = CTFontCreateUIFontForLanguage(.system, fontSize, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, fontSize, nil)
-        let attributed = NSAttributedString(string: text, attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): CGColor(
-                red: 1, green: 1, blue: 1, alpha: opacity
-            )
-        ])
-        let line = CTLineCreateWithAttributedString(attributed)
-        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
-        let padding = fontSize * 0.6
-        let width = Int((bounds.width + padding * 2).rounded(.up))
-        let height = Int((bounds.height + padding * 1.2).rounded(.up))
-
-        return BitmapCanvas.image(width: width, height: height) { context in
-            let rect = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
-            context.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.65 * opacity)
-            context.addPath(CGPath(
-                roundedRect: rect,
-                cornerWidth: rect.height / 2,
-                cornerHeight: rect.height / 2,
-                transform: nil
-            ))
-            context.fillPath()
-            context.textPosition = CGPoint(x: padding - bounds.minX, y: padding * 0.6 - bounds.minY)
-            CTLineDraw(line, context)
-        }
     }
 }
 

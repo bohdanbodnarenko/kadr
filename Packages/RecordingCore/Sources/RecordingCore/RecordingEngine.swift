@@ -213,6 +213,9 @@ public actor RecordingEngine {
             // ScreenCaptureKit records the mic alongside the screen, so there is no
             // second capture session to keep in sync (docs/03 §1.8, docs/04 §4.3).
             configuration.captureMicrophone = true
+            if let deviceID = options.microphoneDeviceID, !deviceID.isEmpty {
+                configuration.microphoneCaptureDeviceID = deviceID
+            }
         }
         // IOSurface-backed buffers straight from SCK's pool; the default depth of 3 is
         // deliberate — each retained frame is a full surface charged partly to

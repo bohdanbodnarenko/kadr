@@ -31,11 +31,15 @@ public struct ClipCompositionBuilder: Sendable {
     ///   landed. Camera time zero is screen time `cameraStartOffset`, so every camera range
     ///   is shifted back by it — without which the bubble is permanently ahead of the
     ///   picture by however long the capture session took to wake up (docs/10 R0.5).
+    /// - Parameter soundtrack: an imported file that stands in for the recording's own
+    ///   audio. It is laid on the edited timeline from zero rather than re-cut through
+    ///   the clips, because the import *is* the finished cut's soundtrack.
     public func composition(
         for timeline: ClipTimeline,
         screen: URL,
         camera: URL? = nil,
-        cameraStartOffset: TimeInterval = 0
+        cameraStartOffset: TimeInterval = 0,
+        soundtrack: URL? = nil
     ) async throws -> AVMutableComposition {
         let asset = AVURLAsset(url: screen)
         // `try?` rather than propagating: a file that is not a movie and a movie with no
@@ -44,7 +48,10 @@ public struct ClipCompositionBuilder: Sendable {
         guard let sourceVideo = try? await asset.loadTracks(withMediaType: .video).first else {
             throw BuildError.noVideoTrack
         }
-        let sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
+        let replacement = await soundtrackFile(at: soundtrack)
+        let sourceAudio = await replacement == nil
+            ? (try? asset.loadTracks(withMediaType: .audio).first)
+            : nil
 
         let composition = AVMutableComposition()
         guard let video = composition.addMutableTrack(
@@ -96,7 +103,24 @@ public struct ClipCompositionBuilder: Sendable {
         if let camera, FileManager.default.fileExists(atPath: camera.path) {
             try? await insertCamera(camera, into: composition, timeline: timeline, startOffset: cameraStartOffset)
         }
+        if let replacement {
+            try? await insertSoundtrack(replacement, into: composition, duration: elapsed)
+        }
         return composition
+    }
+
+    /// The imported file, but only when it actually carries audio.
+    ///
+    /// A picked file with no audio track must not mute the recording: the import is a
+    /// replacement, not a deletion.
+    private func soundtrackFile(at url: URL?) async -> URL? {
+        guard let url, FileManager.default.fileExists(atPath: url.path),
+              let track = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio).first
+        else {
+            return nil
+        }
+        _ = track
+        return url
     }
 
     /// Adds the camera recording, cut and retimed the same way the screen was.
@@ -163,5 +187,37 @@ public struct ClipCompositionBuilder: Sendable {
             // progressively further ahead of the picture for the rest of the recording.
             elapsed += clip.editedDuration
         }
+    }
+
+    /// Lays imported audio on the edited timeline from zero, clamped to the cut.
+    ///
+    /// The import is already the finished soundtrack, so it is not scaled through clips
+    /// the way the recording's own audio is. A file that overruns is trimmed; a shorter
+    /// one simply ends early.
+    private func insertSoundtrack(
+        _ url: URL,
+        into composition: AVMutableComposition,
+        duration: TimeInterval
+    ) async throws {
+        let asset = AVURLAsset(url: url)
+        guard let source = try? await asset.loadTracks(withMediaType: .audio).first,
+              let track = composition.addMutableTrack(
+                  withMediaType: .audio,
+                  preferredTrackID: kCMPersistentTrackID_Invalid
+              )
+        else {
+            return
+        }
+        let sourceDuration = await (try? CMTimeGetSeconds(asset.load(.duration))) ?? 0
+        let length = min(sourceDuration, duration)
+        guard length > 0.01 else { return }
+        try? track.insertTimeRange(
+            CMTimeRange(
+                start: .zero,
+                duration: CMTime(seconds: length, preferredTimescale: 600)
+            ),
+            of: source,
+            at: .zero
+        )
     }
 }

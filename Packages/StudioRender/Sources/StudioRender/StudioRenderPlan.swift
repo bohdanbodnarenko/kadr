@@ -18,6 +18,10 @@ public struct StudioRenderPlan: Sendable {
     public let crop: CGRect
     /// The exported frame's pixel size.
     public let outputSize: CGSize
+    /// Where the recording card sits inside `outputSize`, top-left origin.
+    public let cardRect: CGRect
+    /// Rounded-rect radius of the card, in output pixels.
+    public let cardCornerRadius: CGFloat
     /// The camera's position for every instant, over `crop.size`.
     public let viewports: ViewportTimeline
     /// The edited length, which is what the timeline and the cursor are indexed by.
@@ -37,11 +41,31 @@ public struct StudioRenderPlan: Sendable {
     ///   - sourceSize: the recording's pixel size.
     ///   - spring: shared with the cursor reconstruction so the camera and the pointer
     ///     settle together rather than one chasing the other.
-    public init(edit: StudioEdit, sourceSize: CGSize, spring: MotionSpring = MotionSpring()) {
+    ///   - pointer: edited-time pointer samples, in source pixels. Used only by cues
+    ///     whose anchor follows the pointer.
+    public init(
+        edit: StudioEdit,
+        sourceSize: CGSize,
+        spring: MotionSpring = MotionSpring(),
+        maxLongestEdge: Int? = nil,
+        pointer: [PointerSample] = []
+    ) {
         self.sourceSize = sourceSize
         let crop = edit.sourceRect(for: sourceSize)
         self.crop = crop
-        outputSize = Self.evenSize(edit.outputSize(for: sourceSize))
+        let contentSize = Self.evenSize(edit.outputSize(for: sourceSize))
+        let laid = edit.canvas.layout(cardSize: contentSize)
+        let canvas = Self.scaled(Self.evenSize(laid.canvasSize), maxLongestEdge: maxLongestEdge)
+        let scaleX = canvas.width / max(laid.canvasSize.width, 1)
+        let scaleY = canvas.height / max(laid.canvasSize.height, 1)
+        outputSize = canvas
+        cardRect = CGRect(
+            x: laid.cardRect.minX * scaleX,
+            y: laid.cardRect.minY * scaleY,
+            width: laid.cardRect.width * scaleX,
+            height: laid.cardRect.height * scaleY
+        )
+        cardCornerRadius = laid.cornerRadius * min(scaleX, scaleY)
         duration = edit.duration
         fill = edit.reframe.fill
 
@@ -52,12 +76,23 @@ public struct StudioRenderPlan: Sendable {
         // timeline is built over the crop rather than the whole frame.
         let replanned = edit.renderableZooms(in: sourceSize)
             .map { $0.translated(by: CGPoint(x: -crop.minX, y: -crop.minY), in: sourceSize) }
+        let localPointer = pointer.map { sample in
+            PointerSample(
+                time: sample.time,
+                position: CGPoint(
+                    x: sample.position.x - crop.minX,
+                    y: sample.position.y - crop.minY
+                ),
+                cursorIndex: sample.cursorIndex
+            )
+        }
 
         viewports = ViewportTimeline(
             cues: replanned,
             size: crop.size,
             duration: edit.duration,
-            spring: spring
+            spring: spring,
+            pointer: localPointer
         )
     }
 
@@ -107,20 +142,21 @@ public struct StudioRenderPlan: Sendable {
     /// lookups and the flat-cost budget in `TimeSortedLookupTests` caught it immediately,
     /// which is the entire reason that test is a gate rather than a comment.
     public func presentation(for rect: CGRect) -> Presentation {
-        guard rect.width > 0, rect.height > 0 else {
-            return Presentation(scale: 1, origin: .zero)
+        let card = cardRect
+        guard card.width > 0, card.height > 0, rect.width > 0, rect.height > 0 else {
+            return Presentation(scale: 1, origin: card.origin)
         }
         let scale = switch fill {
-        case .fit: min(outputSize.width / rect.width, outputSize.height / rect.height)
-        // Covers rather than fits, so the frame is full and the surplus is cropped by the
-        // composer's final crop — which is what "Fill the frame" says on the control.
-        case .fill: max(outputSize.width / rect.width, outputSize.height / rect.height)
+        case .fit: min(card.width / rect.width, card.height / rect.height)
+        // Covers rather than fits, so the card is full and the surplus is cropped by the
+        // composer's card clip — which is what "Fill the frame" says on the control.
+        case .fill: max(card.width / rect.width, card.height / rect.height)
         }
         return Presentation(
             scale: scale,
             origin: CGPoint(
-                x: (outputSize.width - rect.width * scale) / 2,
-                y: (outputSize.height - rect.height * scale) / 2
+                x: card.minX + (card.width - rect.width * scale) / 2,
+                y: card.minY + (card.height - rect.height * scale) / 2
             )
         )
     }
@@ -176,6 +212,19 @@ public struct StudioRenderPlan: Sendable {
             height: max(2, (size.height / 2).rounded(.down) * 2)
         )
     }
+
+    /// Shrinks a frame so its longest edge is at most `maxLongestEdge`, keeping aspect.
+    ///
+    /// 1080p means 1920 on the long side, not 1080: a 1920×1080 recording that "exported at
+    /// 1080p" by capping at 1080 would become 1080×608, which is not Full HD. Unchanged
+    /// when the frame already fits, so Original is a no-op.
+    static func scaled(_ size: CGSize, maxLongestEdge: Int?) -> CGSize {
+        guard let maxLongestEdge, maxLongestEdge > 0 else { return size }
+        let longest = max(size.width, size.height)
+        guard longest > CGFloat(maxLongestEdge) else { return size }
+        let scale = CGFloat(maxLongestEdge) / longest
+        return evenSize(CGSize(width: size.width * scale, height: size.height * scale))
+    }
 }
 
 extension ZoomCue {
@@ -186,6 +235,9 @@ extension ZoomCue {
     /// against.
     func translated(by offset: CGPoint, in size: CGSize) -> ZoomCue {
         var moved = self
+        if anchor.followsPointer {
+            return moved
+        }
         let point = anchor.point(in: size)
         moved.anchor = .fixed(CGPoint(x: point.x + offset.x, y: point.y + offset.y))
         return moved

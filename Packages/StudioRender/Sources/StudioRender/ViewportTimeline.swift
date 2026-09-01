@@ -61,11 +61,13 @@ public struct ViewportTimeline: Sendable {
     ///   - size: the recorded area.
     ///   - duration: the edited recording's length.
     ///   - spring: shared with the cursor reconstruction.
+    ///   - pointer: edited-time samples, used only by cues whose anchor follows the pointer.
     public init(
         cues: [ZoomCue],
         size: CGSize,
         duration: TimeInterval,
-        spring: MotionSpring = MotionSpring()
+        spring: MotionSpring = MotionSpring(),
+        pointer: [PointerSample] = []
     ) {
         self.size = size
         self.duration = max(duration, 0)
@@ -73,6 +75,7 @@ public struct ViewportTimeline: Sendable {
         let centre = CGPoint(x: size.width / 2, y: size.height / 2)
         let steps = max(Int(self.duration / MotionSpring.step) + 1, 1)
         let ordered = cues.sorted { $0.start < $1.start }
+        let pointer = pointer.sorted { $0.time < $1.time }
 
         var magnifications: [Double] = []
         var centres: [CGPoint] = []
@@ -84,7 +87,13 @@ public struct ViewportTimeline: Sendable {
 
         for step in 0 ..< steps {
             let time = Double(step) * MotionSpring.step
-            let target = Self.target(at: time, cues: ordered, size: size, centre: centre)
+            let target = Self.target(
+                at: time,
+                cues: ordered,
+                size: size,
+                centre: centre,
+                pointer: pointer
+            )
             // Springs rather than a curve per cue: overlapping cues then blend instead of
             // fighting, and a cue deleted mid-transition eases away rather than snapping.
             magnification = spring.advance(magnification, towards: target.magnification, by: MotionSpring.step)
@@ -106,14 +115,57 @@ public struct ViewportTimeline: Sendable {
         at time: TimeInterval,
         cues: [ZoomCue],
         size: CGSize,
-        centre: CGPoint
+        centre: CGPoint,
+        pointer: [PointerSample]
     ) -> Viewport {
         // The last cue that contains this moment wins, so a cue placed over another
         // replaces it rather than averaging with it.
         guard let cue = cues.last(where: { $0.range.contains(time) }) else {
             return Viewport(magnification: 1, centre: centre)
         }
-        return Viewport(magnification: cue.magnification, centre: cue.anchor.point(in: size))
+        let aim: CGPoint = if cue.anchor.followsPointer {
+            Self.pointerAim(
+                at: Self.pointerPosition(at: time, in: pointer) ?? centre,
+                in: size,
+                magnification: cue.magnification,
+                boundsBias: cue.boundsBias
+            )
+        } else {
+            cue.anchor.point(in: size)
+        }
+        return Viewport(magnification: cue.magnification, centre: aim)
+    }
+
+    /// Where pointer-follow aims, after "Edge in Frame" (docs/09 U3.3).
+    ///
+    /// Bias 0 centres the pointer. Bias 1 keeps it where it sat on the unzoomed screen, so
+    /// a click in the corner does not yank that corner into the middle of the zoom.
+    static func pointerAim(
+        at pointer: CGPoint,
+        in size: CGSize,
+        magnification: Double,
+        boundsBias: Double
+    ) -> CGPoint {
+        let bias = min(max(boundsBias, 0), 1)
+        guard bias > 0, size.width > 1, size.height > 1 else { return pointer }
+        let normalized = CGPoint(x: pointer.x / size.width, y: pointer.y / size.height)
+        let half = 1 / (2 * max(magnification, 1))
+        let span = 1 - 2 * half
+        let preserved = CGPoint(
+            x: half + normalized.x * span,
+            y: half + normalized.y * span
+        )
+        return CGPoint(
+            x: (normalized.x + (preserved.x - normalized.x) * bias) * size.width,
+            y: (normalized.y + (preserved.y - normalized.y) * bias) * size.height
+        )
+    }
+
+    static func pointerPosition(at time: TimeInterval, in samples: [PointerSample]) -> CGPoint? {
+        guard let index = TimeSortedLookup.lastIndex(atOrBefore: time, in: samples, key: \.time) else {
+            return samples.first?.position
+        }
+        return samples[index].position
     }
 
     /// The camera at `time`, interpolated between steps.

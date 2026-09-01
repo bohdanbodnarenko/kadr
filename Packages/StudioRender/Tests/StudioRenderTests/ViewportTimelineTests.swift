@@ -321,5 +321,7 @@ struct ZoomCuePlannerTests {
         let cue = try JSONDecoder().decode(ZoomCue.self, from: Data("{}".utf8))
         #expect(cue.magnification == 1.8)
         #expect(cue.anchor == .centre)
+        #expect(cue.isEnabled)
+        #expect(cue.boundsBias == 0)
     }
 }

@@ -338,6 +338,16 @@ public struct DisplayGeometry: Hashable, Sendable {
         )
     }
 
+    /// The inverse of `localRect(for:)`: a display-local rect, back in global display space.
+    public func globalRect(for local: DisplayRect) -> DisplayRect {
+        DisplayRect(
+            x: local.minX + frame.minX,
+            y: local.minY + frame.minY,
+            width: local.width,
+            height: local.height
+        )
+    }
+
     /// Converts a display-local point rect into backing-store pixels.
     ///
     /// Edges are rounded independently and the extent derived from them, so a rect that

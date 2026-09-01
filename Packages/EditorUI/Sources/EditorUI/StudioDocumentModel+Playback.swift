@@ -14,11 +14,18 @@ import StudioSession
 /// frame generator is allowed a tenth of a second of slack so it can keep up, and frames are
 /// dropped rather than queued when it cannot. The moment it pauses, the exact frame is drawn
 /// again — so "the preview is the export" still holds everywhere it is being relied on to.
+/// The soundtrack plays from the same clip composition the export muxes, so a cut or an
+/// imported file is heard here rather than only in the finished movie.
 @MainActor
 public extension StudioDocumentModel {
     /// Whether the edit is playing.
     var isPlaying: Bool {
         playbackTask != nil
+    }
+
+    /// Whether the preview currently has a soundtrack rolling.
+    var isPreviewAudioPlaying: Bool {
+        previewAudio.isPlaying
     }
 
     func togglePlayback() {
@@ -41,12 +48,17 @@ public extension StudioDocumentModel {
         // dropped frame and not a drifting playhead — the difference between playback that
         // is a moment behind and playback whose timing cannot be trusted, which for judging
         // a cut is the whole point.
-        let origin = ContinuousClock.now
         let from = playhead
         playbackTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await previewAudio.start(from: from, session: session, edit: edit)
+            guard !Task.isCancelled else { return }
+            // Clock starts after the soundtrack is armed, so prepare time is a pause
+            // rather than a jump in the playhead.
+            let origin = ContinuousClock.now
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.playbackTick)
-                guard let self, !Task.isCancelled else { return }
+                guard !Task.isCancelled else { return }
                 let elapsed = ContinuousClock.now - origin
                 let seconds = Double(elapsed.components.seconds)
                     + Double(elapsed.components.attoseconds) / 1e18
@@ -57,6 +69,7 @@ public extension StudioDocumentModel {
                     return
                 }
                 playhead = next
+                previewAudio.resync(to: next)
             }
         }
     }
@@ -64,6 +77,14 @@ public extension StudioDocumentModel {
     func pausePlayback() {
         playbackTask?.cancel()
         playbackTask = nil
+        previewAudio.pause()
+    }
+
+    /// Releases the audio decoder. Closing the window has to call this; pausing alone
+    /// leaves an `AVPlayer` item sitting on a composition.
+    func stopPlayback() {
+        pausePlayback()
+        previewAudio.stop()
     }
 
     /// How often the playhead is moved while playing.
@@ -90,5 +111,17 @@ public extension StudioDocumentModel {
     func step(seconds: TimeInterval) {
         pausePlayback()
         playhead += seconds
+    }
+
+    /// Jumps to the start of the edit.
+    func seekToStart() {
+        pausePlayback()
+        playhead = 0
+    }
+
+    /// Jumps to the end of the edit.
+    func seekToEnd() {
+        pausePlayback()
+        playhead = edit.duration
     }
 }

@@ -18,13 +18,15 @@ struct StudioInspector: View {
 
     var body: some View {
         Form {
+            selectedClipSection
             selectedZoomSection
             shapeSection
+            canvasSection
             cropSection
             cameraSection
             overlaySection
             speechSection
-            presetSection
+            audioSection
         }
         .formStyle(.grouped)
         .task {
@@ -33,61 +35,39 @@ struct StudioInspector: View {
         }
     }
 
-    // MARK: - The selected zoom
+    // MARK: - The selected clip
 
     @ViewBuilder
-    private var selectedZoomSection: some View {
-        if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
-            StudioInspectorSection(title: "Zoom", key: "zoom") {
+    private var selectedClipSection: some View {
+        if let clip = selectedClip {
+            StudioInspectorSection(title: "Clip", key: "clip") {
                 InspectorSlider(
-                    title: "Starts at",
+                    title: "Speed",
                     value: Binding(
-                        get: { cue.start },
-                        set: { value in model.moveZoom(id, to: value) }
+                        get: { clip.speed },
+                        set: { value in model.setSpeed(value, for: clip.id) }
                     ),
-                    range: 0 ... max(model.edit.duration, 1),
-                    format: .seconds
-                )
-                Button("Move to playhead") { model.moveZoom(id, to: model.playhead) }
-                    .controlSize(.small)
-                InspectorSlider(
-                    title: "Magnification",
-                    value: Binding(
-                        get: { cue.magnification },
-                        set: { value in
-                            model.updateZoom(id, coalescingAs: "zoom.magnification") { $0.magnification = value }
-                        }
-                    ),
-                    range: 1 ... ZoomCue.maximumMagnification,
+                    range: Clip.minimumSpeed ... Clip.maximumSpeed,
                     format: .multiplier
                 )
-                InspectorSlider(
-                    title: "Hold",
-                    value: Binding(
-                        get: { cue.duration },
-                        set: { value in model.updateZoom(id, coalescingAs: "zoom.hold") { $0.duration = value } }
-                    ),
-                    // Thirty seconds, or the recording if it is shorter — not the whole
-                    // recording. A slider that spans ten minutes puts every useful hold in
-                    // its first two pixels, and a zoom nobody holds for nine minutes is not
-                    // worth making the other case unusable for.
-                    range: 0.2 ... min(max(model.edit.duration, 1), 30),
-                    format: .seconds
-                )
-                InspectorSlider(
-                    title: "Move",
-                    value: Binding(
-                        get: { cue.transitionDuration },
-                        set: { value in
-                            model.updateZoom(id, coalescingAs: "zoom.move") { $0.transitionDuration = value }
-                        }
-                    ),
-                    range: 0.1 ... 2,
-                    format: .seconds
-                )
-                Button("Remove zoom", role: .destructive) { model.removeSelectedZoom() }
+                Text("Audio stays in sync. Faster than 8× is unreadable, so that is the cap.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("Split at playhead") { model.splitAtPlayhead() }
+                    .controlSize(.small)
+                Button("Delete clip") { model.removeClipAtPlayhead() }
+                    .controlSize(.small)
+                    .disabled(model.edit.clips.clips.count < 2)
             }
         }
+    }
+
+    private var selectedClip: Clip? {
+        if let id = model.selectedClip {
+            return model.edit.clips.clips.first(where: { $0.id == id })
+        }
+        guard let index = model.clipIndex(at: model.playhead) else { return nil }
+        return model.edit.clips.clips[index]
     }
 
     // MARK: - Shape
@@ -133,6 +113,8 @@ struct StudioInspector: View {
             InspectorSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
             Button("Reset crop") { model.change { $0.cropRect = nil } }
                 .disabled(model.edit.cropRect == nil)
+            Button("Crop on preview") { model.beginCrop() }
+                .help("Drag the crop on the picture rather than with these sliders")
         }
     }
 
@@ -189,6 +171,11 @@ struct StudioInspector: View {
                 set: { value in model.change { $0.camera.isVisible = value } }
             ))
             .disabled(!model.manifest.hasCamera)
+            if model.manifest.hasCamera {
+                Text("Drag the bubble to place it, or drag a corner to resize.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             if !model.manifest.hasCamera {
                 Text("This recording has no camera track.")
                     .font(.callout)
@@ -196,7 +183,7 @@ struct StudioInspector: View {
             }
             Picker("Corner", selection: Binding(
                 get: { model.edit.camera.placement },
-                set: { value in model.change { $0.camera.placement = value } }
+                set: { value in model.snapCamera(to: value) }
             )) {
                 ForEach(BubblePlacement.allCases, id: \.self) { Text($0.title).tag($0) }
             }
@@ -235,6 +222,19 @@ struct StudioInspector: View {
                 set: { value in model.change { $0.showsCursor = value } }
             ))
             .disabled(model.manifest.hasBakedCursor)
+            if !model.manifest.hasBakedCursor {
+                InspectorSlider(
+                    title: "Pointer size",
+                    value: Binding(
+                        get: { model.edit.cursorScale },
+                        set: { value in
+                            model.change(coalescingAs: "cursor.scale") { $0.cursorScale = value }
+                        }
+                    ),
+                    range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
+                    format: .multiplier
+                )
+            }
             if model.manifest.hasBakedCursor {
                 Text("This recording already has the pointer in it. Record without it to have "
                     + "the studio draw a smooth one instead.")
@@ -245,24 +245,66 @@ struct StudioInspector: View {
                 get: { model.edit.showsClicks },
                 set: { value in model.change { $0.showsClicks = value } }
             ))
+            if model.edit.showsClicks {
+                clickSizeSlider
+                clickColourPicker
+            }
+            Toggle("Enable zooms", isOn: Binding(
+                get: { model.edit.showsZooms },
+                set: { value in model.change { $0.showsZooms = value } }
+            ))
             Toggle("Caption shortcuts", isOn: Binding(
                 get: { model.edit.showsKeystrokes },
                 set: { value in model.change { $0.showsKeystrokes = value } }
             ))
+            if model.edit.showsKeystrokes {
+                Text("Position")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                overlayPlacementGrid(selection: Binding(
+                    get: { model.edit.keystrokePlacement },
+                    set: { value in model.change { $0.keystrokePlacement = value } }
+                ))
+                InspectorSlider(
+                    title: "Size",
+                    value: Binding(
+                        get: { model.edit.keystrokeScale },
+                        set: { value in
+                            model.change(coalescingAs: "keystroke.scale") { $0.keystrokeScale = value }
+                        }
+                    ),
+                    range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
+                    format: .multiplier
+                )
+            }
         }
     }
 
-    // MARK: - Presets
+    private var clickSizeSlider: some View {
+        InspectorSlider(
+            title: "Ripple size",
+            value: Binding(
+                get: { model.edit.clickScale },
+                set: { value in
+                    model.change(coalescingAs: "click.scale") { $0.clickScale = value }
+                }
+            ),
+            range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
+            format: .multiplier
+        )
+    }
 
-    private var presetSection: some View {
-        StudioInspectorSection(title: "Presets", key: "presets", startsOpen: false) {
-            ForEach(StudioPreset.builtIn) { preset in
-                Button(preset.name) { model.apply(preset) }
-            }
-            Text("A preset changes the look. It never moves a cut or a zoom.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
+    private var clickColourPicker: some View {
+        ColorPicker(
+            "Ripple colour",
+            selection: Binding(
+                get: { Color(model.edit.clickColor) },
+                set: { color in
+                    model.change(coalescingAs: "click.color") { $0.clickColor = StudioColor(color) }
+                }
+            ),
+            supportsOpacity: false
+        )
     }
 
     static func clock(_ seconds: TimeInterval) -> String {

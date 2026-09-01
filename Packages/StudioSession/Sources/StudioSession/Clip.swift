@@ -42,6 +42,13 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
     /// nothing in it can be followed.
     public static let maximumSpeed: Double = 8
 
+    /// Shortest a clip may be after an edge-drag, in edited time.
+    ///
+    /// Below this a clip collapses into a handle nobody can grab, and the next drag
+    /// deletes it by accident. Matching the floor Screendrop uses, so a trim that felt
+    /// precise there feels the same here.
+    public static let minimumEditedDuration: TimeInterval = 0.12
+
     /// How long this clip lasts in the finished video.
     public var editedDuration: TimeInterval {
         speed > 0 ? sourceDuration / speed : sourceDuration
@@ -53,6 +60,30 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
 
     public var sourceRange: ClosedRange<TimeInterval> {
         sourceStart ... max(sourceEnd, sourceStart)
+    }
+
+    /// The pieces of this clip that remain after cutting `[start, end)` out of the recording.
+    fileprivate func keepingOutside(start: TimeInterval, end: TimeInterval) -> [Clip] {
+        let range = sourceStart ..< sourceEnd
+        if end <= range.lowerBound || start >= range.upperBound {
+            return [self]
+        }
+        var pieces: [Clip] = []
+        if start > range.lowerBound {
+            pieces.append(Clip(
+                sourceStart: sourceStart,
+                sourceDuration: start - sourceStart,
+                speed: speed
+            ))
+        }
+        if end < range.upperBound {
+            pieces.append(Clip(
+                sourceStart: end,
+                sourceDuration: range.upperBound - end,
+                speed: speed
+            ))
+        }
+        return pieces
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -133,6 +164,18 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
             elapsed += clip.editedDuration
         }
         return nil
+    }
+
+    /// Whether this moment of the recording still appears in the edit.
+    public func containsSourceTime(_ time: TimeInterval) -> Bool {
+        clips.contains { $0.sourceStart <= time && time < $0.sourceEnd }
+    }
+
+    /// Cuts a stretch of the recording out of every clip that overlaps it.
+    public func removingSourceRange(from start: TimeInterval, to end: TimeInterval) -> ClipTimeline {
+        guard end > start else { return self }
+        let kept = clips.flatMap { $0.keepingOutside(start: start, end: end) }
+        return ClipTimeline(clips: kept.filter { $0.sourceDuration > 0.02 })
     }
 
     /// The clip playing at a moment of the finished video.
@@ -229,6 +272,53 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
     public mutating func setSpeed(_ speed: Double, for id: UUID) {
         guard let index = clips.firstIndex(where: { $0.id == id }) else { return }
         clips[index].speed = min(max(speed, Clip.minimumSpeed), Clip.maximumSpeed)
+    }
+
+    /// Shortens one clip from the left, in edited time.
+    ///
+    /// Dragging a clip's leading edge is how a start-trim actually happens on the
+    /// timeline: the menu "Trim Start to Playhead" cuts the *whole* recording, but
+    /// dragging this clip's in-point only skips the dead air at the start of that piece.
+    public mutating func trimClipStart(at index: Int, toEdited editedStart: TimeInterval) {
+        guard clips.indices.contains(index) else { return }
+        let elapsed = editedStartTime(ofClipAt: index)
+        let clip = clips[index]
+        let end = elapsed + clip.editedDuration
+        let latest = end - Clip.minimumEditedDuration
+        guard latest > elapsed else { return }
+        let clamped = min(max(editedStart, elapsed), latest)
+        guard clamped > elapsed else { return }
+        let skip = (clamped - elapsed) * clip.speed
+        clips[index] = Clip(
+            id: clip.id,
+            sourceStart: clip.sourceStart + skip,
+            sourceDuration: max(clip.sourceDuration - skip, 0),
+            speed: clip.speed
+        )
+    }
+
+    /// Shortens one clip from the right, in edited time.
+    public mutating func trimClipEnd(at index: Int, toEdited editedEnd: TimeInterval) {
+        guard clips.indices.contains(index) else { return }
+        let elapsed = editedStartTime(ofClipAt: index)
+        let clip = clips[index]
+        let end = elapsed + clip.editedDuration
+        let earliest = elapsed + Clip.minimumEditedDuration
+        guard end > earliest else { return }
+        let clamped = min(max(editedEnd, earliest), end)
+        guard clamped < end else { return }
+        let keep = (clamped - elapsed) * clip.speed
+        clips[index] = Clip(
+            id: clip.id,
+            sourceStart: clip.sourceStart,
+            sourceDuration: max(keep, 0),
+            speed: clip.speed
+        )
+    }
+
+    /// Where a clip begins on the finished timeline.
+    public func editedStartTime(ofClipAt index: Int) -> TimeInterval {
+        clips.prefix(index).reduce(0) { $0 + $1.editedDuration }
     }
 
     /// Rewrites zoom cues from source time into edited time, dropping the ones whose

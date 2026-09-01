@@ -34,6 +34,64 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     public var showsKeystrokes: Bool
     /// Burned-in captions from the transcript (docs/13 T2.2).
     public var showsCaptions: Bool
+    /// Colour the word being said, when captions are on (docs/13 T2.2).
+    public var highlightsSpokenWord: Bool
+    /// Where shortcut captions sit on the recording card.
+    public var keystrokePlacement: OverlayPlacement
+    /// Where burned-in speech captions sit on the recording card.
+    public var captionPlacement: OverlayPlacement
+    /// How large shortcut captions are drawn, 1 being the default size.
+    public var keystrokeScale: Double {
+        didSet {
+            let next = Self.clampedOverlayScale(keystrokeScale)
+            if next != keystrokeScale {
+                keystrokeScale = next
+            }
+        }
+    }
+
+    /// How large burned-in speech captions are drawn, 1 being the default size.
+    public var captionScale: Double {
+        didSet {
+            let next = Self.clampedOverlayScale(captionScale)
+            if next != captionScale {
+                captionScale = next
+            }
+        }
+    }
+
+    /// File name, inside the session folder, of a soundtrack imported to replace the
+    /// recording's own audio. Nil means use the clips' audio as captured.
+    public var soundtrackFileName: String?
+    /// The imported file's name as the user chose it, for the inspector.
+    public var soundtrackDisplayName: String?
+    /// How large the reconstructed pointer is drawn, 1 being the recorded size.
+    public var cursorScale: Double {
+        didSet {
+            let next = Self.clampedCursorScale(cursorScale)
+            if next != cursorScale {
+                cursorScale = next
+            }
+        }
+    }
+
+    /// How large click ripples are drawn, 1 being the default size.
+    public var clickScale: Double {
+        didSet {
+            let next = Self.clampedCursorScale(clickScale)
+            if next != clickScale {
+                clickScale = next
+            }
+        }
+    }
+
+    /// Colour of the click ripple. White is the live overlay; a brand colour is a look.
+    public var clickColor: StudioColor
+
+    /// Padding, corners and backdrop around the recording.
+    public var canvas: StudioCanvas
+    /// Whether any zoom runs. Off leaves the cues on the lane so they can be turned back on.
+    public var showsZooms: Bool
 
     public init(
         version: Int = StudioEdit.currentVersion,
@@ -45,7 +103,19 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         showsCursor: Bool = true,
         showsClicks: Bool = true,
         showsKeystrokes: Bool = true,
-        showsCaptions: Bool = false
+        showsCaptions: Bool = false,
+        highlightsSpokenWord: Bool = true,
+        keystrokePlacement: OverlayPlacement = .bottom,
+        captionPlacement: OverlayPlacement = .top,
+        keystrokeScale: Double = 1,
+        captionScale: Double = 1,
+        soundtrackFileName: String? = nil,
+        soundtrackDisplayName: String? = nil,
+        cursorScale: Double = 1,
+        clickScale: Double = 1,
+        clickColor: StudioColor = .white,
+        canvas: StudioCanvas = .identity,
+        showsZooms: Bool = true
     ) {
         self.version = version
         self.clips = clips
@@ -57,6 +127,31 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         self.showsClicks = showsClicks
         self.showsKeystrokes = showsKeystrokes
         self.showsCaptions = showsCaptions
+        self.highlightsSpokenWord = highlightsSpokenWord
+        self.keystrokePlacement = keystrokePlacement
+        self.captionPlacement = captionPlacement
+        self.keystrokeScale = Self.clampedOverlayScale(keystrokeScale)
+        self.captionScale = Self.clampedOverlayScale(captionScale)
+        self.soundtrackFileName = soundtrackFileName
+        self.soundtrackDisplayName = soundtrackDisplayName
+        self.cursorScale = Self.clampedCursorScale(cursorScale)
+        self.clickScale = Self.clampedCursorScale(clickScale)
+        self.clickColor = clickColor
+        self.canvas = canvas
+        self.showsZooms = showsZooms
+    }
+
+    public static let minimumCursorScale: Double = 0.5
+    public static let maximumCursorScale: Double = 4
+    public static let minimumOverlayScale: Double = 0.6
+    public static let maximumOverlayScale: Double = 1.8
+
+    static func clampedCursorScale(_ value: Double) -> Double {
+        min(max(value.isFinite ? value : 1, minimumCursorScale), maximumCursorScale)
+    }
+
+    static func clampedOverlayScale(_ value: Double) -> Double {
+        min(max(value.isFinite ? value : 1, minimumOverlayScale), maximumOverlayScale)
     }
 
     /// The edit a freshly-stopped recording starts with: everything, unchanged.
@@ -74,23 +169,28 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     /// Computed rather than stored, so changing the aspect ratio or the free crop re-plans
     /// the camera immediately instead of leaving cues that point off the new frame.
     public func renderableZooms(in size: CGSize) -> [ZoomCue] {
+        guard showsZooms else { return [] }
+        let active = zooms.filter(\.isEnabled)
         let crop = sourceRect(for: size)
-        guard crop.width > 0, crop.height > 0 else { return zooms }
+        guard crop.width > 0, crop.height > 0 else { return active }
         let identity = crop.origin == .zero
             && abs(crop.width - size.width) < 0.5
             && abs(crop.height - size.height) < 0.5
-        guard !identity else { return zooms }
+        guard !identity else { return active }
 
         let inherentZoom = size.width / crop.width
-        return zooms.map { cue in
+        return active.map { cue in
             var replanned = cue
+            replanned.magnification = max(cue.magnification / inherentZoom, 1)
+            if cue.anchor.followsPointer {
+                return replanned
+            }
             let anchor = cue.anchor.point(in: size)
             let pulled = CGPoint(
                 x: min(max(anchor.x, crop.minX), crop.maxX),
                 y: min(max(anchor.y, crop.minY), crop.maxY)
             )
             replanned.anchor = .fixed(pulled)
-            replanned.magnification = max(cue.magnification / inherentZoom, 1)
             return replanned
         }
     }
@@ -125,7 +225,9 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes, showsCaptions
+        case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes,
+             showsCaptions, highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeScale, captionScale,
+             soundtrackFileName, soundtrackDisplayName, cursorScale, clickScale, clickColor, canvas, showsZooms
     }
 
     /// Every field defaults, so an edit written by a later Kadr still opens — it simply
@@ -142,7 +244,25 @@ public struct StudioEdit: Sendable, Hashable, Codable {
             showsCursor: container.decodeIfPresent(Bool.self, forKey: .showsCursor) ?? true,
             showsClicks: container.decodeIfPresent(Bool.self, forKey: .showsClicks) ?? true,
             showsKeystrokes: container.decodeIfPresent(Bool.self, forKey: .showsKeystrokes) ?? true,
-            showsCaptions: container.decodeIfPresent(Bool.self, forKey: .showsCaptions) ?? false
+            showsCaptions: container.decodeIfPresent(Bool.self, forKey: .showsCaptions) ?? false,
+            highlightsSpokenWord: container.decodeIfPresent(Bool.self, forKey: .highlightsSpokenWord) ?? true,
+            keystrokePlacement: container.decodeIfPresent(
+                OverlayPlacement.self,
+                forKey: .keystrokePlacement
+            ) ?? .bottom,
+            captionPlacement: container.decodeIfPresent(
+                OverlayPlacement.self,
+                forKey: .captionPlacement
+            ) ?? .top,
+            keystrokeScale: container.decodeIfPresent(Double.self, forKey: .keystrokeScale) ?? 1,
+            captionScale: container.decodeIfPresent(Double.self, forKey: .captionScale) ?? 1,
+            soundtrackFileName: container.decodeIfPresent(String.self, forKey: .soundtrackFileName),
+            soundtrackDisplayName: container.decodeIfPresent(String.self, forKey: .soundtrackDisplayName),
+            cursorScale: container.decodeIfPresent(Double.self, forKey: .cursorScale) ?? 1,
+            clickScale: container.decodeIfPresent(Double.self, forKey: .clickScale) ?? 1,
+            clickColor: container.decodeIfPresent(StudioColor.self, forKey: .clickColor) ?? .white,
+            canvas: container.decodeIfPresent(StudioCanvas.self, forKey: .canvas) ?? .identity,
+            showsZooms: container.decodeIfPresent(Bool.self, forKey: .showsZooms) ?? true
         )
     }
 }
@@ -164,6 +284,15 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
     public var showsCursor: Bool
     public var showsClicks: Bool
     public var showsKeystrokes: Bool
+    public var highlightsSpokenWord: Bool
+    public var keystrokePlacement: OverlayPlacement
+    public var captionPlacement: OverlayPlacement
+    public var keystrokeScale: Double
+    public var captionScale: Double
+    public var cursorScale: Double
+    public var clickScale: Double
+    public var clickColor: StudioColor
+    public var canvas: StudioCanvas
 
     public init(
         id: UUID = UUID(),
@@ -173,7 +302,16 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         camera: CameraBubble = .standard,
         showsCursor: Bool = true,
         showsClicks: Bool = true,
-        showsKeystrokes: Bool = true
+        showsKeystrokes: Bool = true,
+        highlightsSpokenWord: Bool = true,
+        keystrokePlacement: OverlayPlacement = .bottom,
+        captionPlacement: OverlayPlacement = .top,
+        keystrokeScale: Double = 1,
+        captionScale: Double = 1,
+        cursorScale: Double = 1,
+        clickScale: Double = 1,
+        clickColor: StudioColor = .white,
+        canvas: StudioCanvas = .identity
     ) {
         self.id = id
         self.name = name
@@ -183,17 +321,41 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         self.showsCursor = showsCursor
         self.showsClicks = showsClicks
         self.showsKeystrokes = showsKeystrokes
+        self.highlightsSpokenWord = highlightsSpokenWord
+        self.keystrokePlacement = keystrokePlacement
+        self.captionPlacement = captionPlacement
+        self.keystrokeScale = StudioEdit.clampedOverlayScale(keystrokeScale)
+        self.captionScale = StudioEdit.clampedOverlayScale(captionScale)
+        self.cursorScale = StudioEdit.clampedCursorScale(cursorScale)
+        self.clickScale = StudioEdit.clampedCursorScale(clickScale)
+        self.clickColor = clickColor
+        self.canvas = canvas
     }
 
     /// The look an edit is currently wearing.
+    ///
+    /// Wallpaper files live in the session folder, so a saved look keeps the kind and
+    /// drops the file name — applying it to another recording must not point at a path
+    /// that recording does not have.
     public init(name: String, capturing edit: StudioEdit) {
+        var canvas = edit.canvas
+        canvas.wallpaperFileName = nil
         self.init(
             name: name,
             reframe: edit.reframe,
             camera: edit.camera,
             showsCursor: edit.showsCursor,
             showsClicks: edit.showsClicks,
-            showsKeystrokes: edit.showsKeystrokes
+            showsKeystrokes: edit.showsKeystrokes,
+            highlightsSpokenWord: edit.highlightsSpokenWord,
+            keystrokePlacement: edit.keystrokePlacement,
+            captionPlacement: edit.captionPlacement,
+            keystrokeScale: edit.keystrokeScale,
+            captionScale: edit.captionScale,
+            cursorScale: edit.cursorScale,
+            clickScale: edit.clickScale,
+            clickColor: edit.clickColor,
+            canvas: canvas
         )
     }
 
@@ -205,6 +367,19 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         updated.showsCursor = showsCursor
         updated.showsClicks = showsClicks
         updated.showsKeystrokes = showsKeystrokes
+        updated.highlightsSpokenWord = highlightsSpokenWord
+        updated.keystrokePlacement = keystrokePlacement
+        updated.captionPlacement = captionPlacement
+        updated.keystrokeScale = keystrokeScale
+        updated.captionScale = captionScale
+        updated.cursorScale = cursorScale
+        updated.clickScale = clickScale
+        updated.clickColor = clickColor
+        let wallpaper = edit.canvas.wallpaperFileName
+        updated.canvas = canvas
+        if case .wallpaper = canvas.background {
+            updated.canvas.wallpaperFileName = wallpaper
+        }
         return updated
     }
 
@@ -228,7 +403,9 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
     private static let comparisonID = UUID(uuidString: "00000000-0000-0000-0000-000000000000") ?? UUID()
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, version, reframe, camera, showsCursor, showsClicks, showsKeystrokes
+        case id, name, version, reframe, camera, showsCursor, showsClicks, showsKeystrokes,
+             highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeScale, captionScale,
+             cursorScale, clickScale, clickColor, canvas
     }
 
     public init(from decoder: any Decoder) throws {
@@ -241,7 +418,22 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
             camera: container.decodeIfPresent(CameraBubble.self, forKey: .camera) ?? .standard,
             showsCursor: container.decodeIfPresent(Bool.self, forKey: .showsCursor) ?? true,
             showsClicks: container.decodeIfPresent(Bool.self, forKey: .showsClicks) ?? true,
-            showsKeystrokes: container.decodeIfPresent(Bool.self, forKey: .showsKeystrokes) ?? true
+            showsKeystrokes: container.decodeIfPresent(Bool.self, forKey: .showsKeystrokes) ?? true,
+            highlightsSpokenWord: container.decodeIfPresent(Bool.self, forKey: .highlightsSpokenWord) ?? true,
+            keystrokePlacement: container.decodeIfPresent(
+                OverlayPlacement.self,
+                forKey: .keystrokePlacement
+            ) ?? .bottom,
+            captionPlacement: container.decodeIfPresent(
+                OverlayPlacement.self,
+                forKey: .captionPlacement
+            ) ?? .top,
+            keystrokeScale: container.decodeIfPresent(Double.self, forKey: .keystrokeScale) ?? 1,
+            captionScale: container.decodeIfPresent(Double.self, forKey: .captionScale) ?? 1,
+            cursorScale: container.decodeIfPresent(Double.self, forKey: .cursorScale) ?? 1,
+            clickScale: container.decodeIfPresent(Double.self, forKey: .clickScale) ?? 1,
+            clickColor: container.decodeIfPresent(StudioColor.self, forKey: .clickColor) ?? .white,
+            canvas: container.decodeIfPresent(StudioCanvas.self, forKey: .canvas) ?? .identity
         )
     }
 
@@ -269,6 +461,19 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
             camera: CameraBubble(isVisible: false),
             showsClicks: false,
             showsKeystrokes: false
+        ),
+        StudioPreset(
+            name: "Presenter",
+            canvas: .presenter
+        ),
+        StudioPreset(
+            name: "Paper",
+            canvas: .paper
         )
     ]
+
+    /// The look a recording nobody has styled yet opens with.
+    public static var presenter: StudioPreset {
+        builtIn.first { $0.name == "Presenter" } ?? StudioPreset(name: "Presenter", canvas: .presenter)
+    }
 }

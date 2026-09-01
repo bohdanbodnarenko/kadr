@@ -293,6 +293,46 @@ struct StudioSpeechTests {
         )))
         #expect(reopened.transcript?.words.first?.text == "Hello")
     }
+
+    @Test("Cutting selected words removes that stretch of the recording")
+    func cutWordsRemovesTheRange() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, duration: 10)
+        try studio.document.write(Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 1),
+            TranscriptWord(text: "um", start: 1.2, end: 1.5),
+            TranscriptWord(text: "world", start: 1.6, end: 2.2)
+        ]))
+        let reopened = try #require(StudioDocumentModel(session: studio.session))
+
+        let um = try #require(reopened.transcript?.words.first { $0.text == "um" })
+        #expect(reopened.transcriptWordSurvives(um))
+        #expect(reopened.isFillerWord(um))
+
+        reopened.cutWords([um])
+        #expect(!reopened.transcriptWordSurvives(um))
+        #expect(abs(reopened.edit.clips.editedDuration - 9.7) < 0.05)
+        #expect(reopened.edit.clips.editedTime(forSource: 1.3) == nil)
+    }
+
+    @Test("Cutting a sentence still removes the whole spoken stretch")
+    func cutSentenceRemovesTheWordsAroundIt() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, duration: 10)
+        try studio.document.write(Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 0.4),
+            TranscriptWord(text: "there.", start: 0.5, end: 1.0),
+            TranscriptWord(text: "Next", start: 2.2, end: 2.6)
+        ]))
+        let reopened = try #require(StudioDocumentModel(session: studio.session))
+        let hello = try #require(reopened.transcript?.words.first)
+
+        reopened.cutSentence(containing: hello)
+        #expect(reopened.edit.clips.editedTime(forSource: 0.2) == nil)
+        #expect(reopened.edit.clips.editedTime(forSource: 2.3) != nil)
+    }
 }
 
 final class StubTranscriber: Transcribing, @unchecked Sendable {

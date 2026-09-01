@@ -38,7 +38,8 @@ let package = Package(
             dependencies: [
                 "EditorUI",
                 .product(name: "StudioSession", package: "StudioSession"),
-                .product(name: "StudioRender", package: "StudioRender")
+                .product(name: "StudioRender", package: "StudioRender"),
+                .product(name: "MediaExport", package: "MediaExport")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )

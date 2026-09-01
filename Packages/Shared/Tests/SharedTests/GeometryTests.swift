@@ -159,6 +159,13 @@ struct DisplayLocalTests {
         #expect(left.localRect(for: global) == DisplayRect(x: 100, y: 40, width: 50, height: 50))
     }
 
+    @Test("A local rect maps back to the global one it came from")
+    func globalIsTheInverseOfLocal() {
+        let global = DisplayRect(x: 100, y: -1000, width: 50, height: 50)
+        let local = above.localRect(for: global)
+        #expect(above.globalRect(for: local) == global)
+    }
+
     @Test("Screen selection to pixel request, end to end")
     func fullPipeline() {
         // What the overlay hands us: an AppKit rect on the built-in Retina display.

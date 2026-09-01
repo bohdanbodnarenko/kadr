@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import StudioRender
 import StudioSession
@@ -24,18 +25,24 @@ struct StudioPreviewPipeline {
         edit: StudioEdit,
         manifest: CaptureManifest,
         telemetry: InputTelemetry,
-        transcript: Transcript = Transcript()
+        transcript: Transcript = Transcript(),
+        wallpaper: CGImage? = nil
     ) {
         self.edit = edit
         captioned = edit.showsCaptions && !transcript.isEmpty
-        plan = StudioRenderPlan(edit: edit, sourceSize: manifest.pixelSize)
+        plan = StudioRenderPlan(
+            edit: edit,
+            sourceSize: manifest.pixelSize,
+            pointer: telemetry.rebased(to: edit.clips).pointer
+        )
         composer = StudioFrameComposer(
             plan: plan,
             edit: edit,
             telemetry: telemetry,
             transcript: transcript,
             frameRate: manifest.frameRate,
-            pointPixelScale: manifest.scale
+            pointPixelScale: manifest.scale,
+            wallpaper: wallpaper
         )
     }
 

@@ -1,6 +1,5 @@
 import CoreGraphics
 import CoreImage
-import CoreText
 import Foundation
 import StudioSession
 
@@ -21,15 +20,24 @@ extension StudioFrameComposer {
     /// scaled by the camera, because a ripple belongs to the scene and zooms with it.
     func ripple(progress: Double, scale: CGFloat) -> CGImage? {
         let reference = min(plan.sourceSize.width, plan.sourceSize.height) * scale
-        let radius = reference * ClickRippleMetrics.radiusFraction(at: progress)
-        let stroke = reference * ClickRippleMetrics.strokeFraction(at: progress)
+        let drawn = min(
+            max(edit.clickScale, StudioEdit.minimumCursorScale),
+            StudioEdit.maximumCursorScale
+        )
+        let radius = reference * ClickRippleMetrics.radiusFraction(at: progress) * drawn
+        let stroke = reference * ClickRippleMetrics.strokeFraction(at: progress) * drawn
         let opacity = ClickRippleMetrics.opacity(at: progress)
         guard radius > 0.5, opacity > 0.001 else { return nil }
 
         let side = Int((radius * 2 + stroke * 2).rounded(.up))
         return BitmapCanvas.image(width: side, height: side) { context in
             let centre = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
-            context.setStrokeColor(red: 1, green: 1, blue: 1, alpha: opacity)
+            context.setStrokeColor(
+                red: edit.clickColor.red,
+                green: edit.clickColor.green,
+                blue: edit.clickColor.blue,
+                alpha: opacity
+            )
             context.setLineWidth(stroke)
             context.strokeEllipse(in: CGRect(
                 x: centre.x - radius,
@@ -58,7 +66,7 @@ extension StudioFrameComposer {
         // three keys in half a second, and a caption that replaces itself each time shows
         // the last one and implies the others never happened.
         let text = recent.suffix(3).map(\.caption).joined(separator: "  ")
-        // Against the output's *shortest* edge, not its height (docs/11 S0.5).
+        // Against the card's *shortest* edge, not the padded canvas (docs/11 S0.5).
         //
         // A ripple is sized from the recording and a caption from the output frame, which
         // is right — one belongs to the scene and one is drawn on top of it — but the
@@ -66,20 +74,13 @@ extension StudioFrameComposer {
         // once the frame can be 9:16. A vertical export made the caption two-thirds again
         // as large relative to its frame as the same caption on the same recording exported
         // 16:9, while the ripple beside it stayed put. On landscape output this is the
-        // number it always was.
-        let reference = min(plan.outputSize.width, plan.outputSize.height)
-        let fontSize = max(reference * 0.035, 12)
+        // number it always was. After a Presenter canvas the card is the frame that matters.
+        let reference = min(plan.cardRect.width, plan.cardRect.height)
+        let fontSize = max(reference * 0.035 * edit.keystrokeScale, 12)
         guard let image = CaptionCanvas.image(text: text, fontSize: fontSize, opacity: opacity) else {
             return nil
         }
-        let margin = reference * 0.06
-        let placement = CGRect(
-            x: (plan.outputSize.width - CGFloat(image.width)) / 2,
-            y: plan.outputSize.height - CGFloat(image.height) - margin,
-            width: CGFloat(image.width),
-            height: CGFloat(image.height)
-        )
-        return (image, placement)
+        return (image, overlayFrame(for: image, placing: edit.keystrokePlacement, marginFraction: 0.06))
     }
 
     /// Burned-in speech captions with karaoke highlighting (docs/13 T2.2).
@@ -87,23 +88,37 @@ extension StudioFrameComposer {
         guard let cue = CaptionExport.cue(from: transcript, timeline: edit.clips, at: time) else {
             return nil
         }
-        let reference = min(plan.outputSize.width, plan.outputSize.height)
-        let fontSize = max(reference * 0.032, 11)
-        let text: String = if let highlight = cue.highlight, !highlight.isEmpty {
-            cue.text
-        } else {
-            cue.text
-        }
-        guard let image = CaptionCanvas.image(text: text, fontSize: fontSize, opacity: 0.92) else {
+        let reference = min(plan.cardRect.width, plan.cardRect.height)
+        let fontSize = max(reference * 0.032 * edit.captionScale, 11)
+        let karaoke = edit.highlightsSpokenWord
+        guard let image = CaptionCanvas.image(
+            text: cue.text,
+            fontSize: fontSize,
+            opacity: 0.92,
+            activeIndex: karaoke ? cue.activeIndex : nil,
+            spokenCount: karaoke ? cue.spokenCount : 0
+        ) else {
             return nil
         }
-        let margin = reference * 0.05
-        let placement = CGRect(
-            x: (plan.outputSize.width - CGFloat(image.width)) / 2,
-            y: margin,
-            width: CGFloat(image.width),
-            height: CGFloat(image.height)
+        return (image, overlayFrame(for: image, placing: edit.captionPlacement, marginFraction: 0.05))
+    }
+
+    /// Top-left rect of `image` on the recording card, not the padded canvas.
+    ///
+    /// Captions are chrome on the picture. Placing them in `outputSize` after a Presenter
+    /// canvas put them in the margin; `cardRect` is the same slot whether the frame is
+    /// full-bleed or sitting on a card.
+    private func overlayFrame(
+        for image: CGImage,
+        placing: OverlayPlacement,
+        marginFraction: CGFloat
+    ) -> CGRect {
+        let card = plan.cardRect
+        let reference = min(card.width, card.height)
+        return placing.frame(
+            for: CGSize(width: image.width, height: image.height),
+            in: card,
+            margin: max(reference * marginFraction, 8)
         )
-        return (image, placement)
     }
 }

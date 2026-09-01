@@ -99,6 +99,20 @@ public actor HistoryStore {
         }
     }
 
+    /// Updates the name shown in History. The capture file itself is content-addressed
+    /// and is not renamed.
+    public func rename(id: UUID, to filename: String) async throws {
+        let trimmed = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let existing = try await record(id: id) else { return }
+        var copy = existing
+        copy.originalFilename = trimmed
+        let persisted = copy
+        try HistorySidecar.write(persisted, to: layout.sidecarURL(id: id))
+        try await write { db in
+            try persisted.update(db)
+        }
+    }
+
     /// Newest first. Used by the status-menu strip (docs/03 §5).
     public func recent(limit: Int) async throws -> [HistoryRecord] {
         try await loadPage(filter: .all, offset: 0, limit: limit)

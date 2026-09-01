@@ -72,6 +72,30 @@ extension StudioInspector {
                     get: { model.edit.showsCaptions },
                     set: { value in model.change { $0.showsCaptions = value } }
                 ))
+                if model.edit.showsCaptions {
+                    Text("Position")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    overlayPlacementGrid(selection: Binding(
+                        get: { model.edit.captionPlacement },
+                        set: { value in model.change { $0.captionPlacement = value } }
+                    ))
+                    InspectorSlider(
+                        title: "Size",
+                        value: Binding(
+                            get: { model.edit.captionScale },
+                            set: { value in
+                                model.change(coalescingAs: "caption.scale") { $0.captionScale = value }
+                            }
+                        ),
+                        range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
+                        format: .multiplier
+                    )
+                    Toggle("Highlight the spoken word", isOn: Binding(
+                        get: { model.edit.highlightsSpokenWord },
+                        set: { value in model.change { $0.highlightsSpokenWord = value } }
+                    ))
+                }
             }
         }
         .onChange(of: model.pendingCuts.map(\.id)) {

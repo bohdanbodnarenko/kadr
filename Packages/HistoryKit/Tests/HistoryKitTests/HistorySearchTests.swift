@@ -85,6 +85,20 @@ struct HistoryIndexTests {
         #expect(try await store.search("refund").isEmpty)
     }
 
+    @Test("A recording is findable by the name shown in History")
+    func findsByOriginalFilename() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let record = try await store.ingest(ingestDraft(seed: 20, kind: .video))
+        try await store.rename(id: record.id, to: "Onboarding walkthrough.mp4")
+
+        let hits = try await store.search("Onboarding")
+        #expect(hits.map(\.id) == [record.id])
+        #expect(try await store.search("walkthrough").map(\.id) == [record.id])
+        #expect(try await store.search("absent").isEmpty)
+    }
+
     @Test("The app a capture came from is searchable too")
     func findsByApplication() async throws {
         let (store, root) = try makeStore()

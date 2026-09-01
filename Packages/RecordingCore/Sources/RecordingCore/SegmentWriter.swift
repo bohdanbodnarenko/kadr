@@ -124,6 +124,9 @@ actor SegmentWriter: SegmentWriting {
             microphoneInput = nil
         }
 
+        // Fragments so a crash mid-segment still leaves a playable file (docs/03 §1.8).
+        writer.movieFragmentInterval = CMTime(seconds: 2, preferredTimescale: 600)
+
         guard writer.startWriting() else {
             throw RecordingError.couldNotCreateWriter(writer.error?.localizedDescription ?? "unknown")
         }

@@ -8,7 +8,7 @@ import Foundation
 /// change — or reverse entirely — without re-recording anything. A bubble burned into the
 /// screen recording is a bubble nobody can move.
 public struct CameraBubble: Sendable, Hashable, Codable {
-    /// Which corner it sits in.
+    /// Which corner it sits in, when `center` is nil.
     public var placement: BubblePlacement
     /// How big, as a fraction of the frame's shortest edge — normalized like every other
     /// metric in Kadr, so a layout carries between a 1080p and a 4K export.
@@ -20,19 +20,25 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     /// Whether to show it at all. Kept rather than removed so turning the camera off and
     /// on again restores the layout the user set.
     public var isVisible: Bool
+    /// Normalized (0…1, top-left) centre. Nil means snap to `placement`, the way a
+    /// corner picker works. A drag on the preview writes this so the bubble can sit
+    /// anywhere, not only in nine slots.
+    public var center: CGPoint?
 
     public init(
         placement: BubblePlacement = .bottomTrailing,
         sizeFraction: Double = 0.22,
         marginFraction: Double = 0.03,
         roundness: Double = 1,
-        isVisible: Bool = true
+        isVisible: Bool = true,
+        center: CGPoint? = nil
     ) {
         self.placement = placement
         self.sizeFraction = min(max(sizeFraction, 0.05), 0.6)
         self.marginFraction = min(max(marginFraction, 0), 0.2)
         self.roundness = min(max(roundness, 0), 1)
         self.isVisible = isVisible
+        self.center = center.map(Self.clampedCenter)
     }
 
     /// A circle in the corner: the layout almost everybody wants.
@@ -46,6 +52,16 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     public func frame(in size: CGSize) -> CGRect {
         let shortest = max(min(size.width, size.height), 1)
         let side = shortest * sizeFraction
+        if let center {
+            let maxX = max(size.width - side, 0)
+            let maxY = max(size.height - side, 0)
+            return CGRect(
+                x: min(max(center.x * size.width - side / 2, 0), maxX),
+                y: min(max(center.y * size.height - side / 2, 0), maxY),
+                width: side,
+                height: side
+            )
+        }
         let margin = shortest * marginFraction
         let box = CGRect(origin: .zero, size: size).insetBy(dx: margin, dy: margin)
 
@@ -57,13 +73,57 @@ public struct CameraBubble: Sendable, Hashable, Codable {
         )
     }
 
+    /// The centre of `frame(in:)`, as a fraction of `size`.
+    public func normalizedCenter(in size: CGSize) -> CGPoint {
+        let frame = frame(in: size)
+        guard size.width > 0, size.height > 0 else { return CGPoint(x: 0.5, y: 0.5) }
+        return CGPoint(x: frame.midX / size.width, y: frame.midY / size.height)
+    }
+
+    /// Snaps back to a named corner and forgets a free position.
+    public mutating func snap(to placement: BubblePlacement) {
+        self.placement = placement
+        center = nil
+    }
+
+    /// Places the bubble by dragging, and updates `placement` so the corner picker
+    /// follows the nearest slot.
+    public mutating func move(toNormalizedCenter point: CGPoint) {
+        let clamped = Self.clampedCenter(point)
+        center = clamped
+        placement = BubblePlacement.nearest(to: clamped)
+    }
+
+    /// Grows or shrinks around a pinned corner, so a handle drag does not shove the
+    /// opposite edge across the frame.
+    public mutating func resize(
+        toSizeFraction value: Double,
+        pinningTopLeading origin: CGPoint,
+        in size: CGSize
+    ) {
+        sizeFraction = min(max(value, 0.05), 0.6)
+        let side = max(min(size.width, size.height), 1) * sizeFraction
+        guard size.width > 0, size.height > 0 else { return }
+        move(toNormalizedCenter: CGPoint(
+            x: (origin.x + side / 2) / size.width,
+            y: (origin.y + side / 2) / size.height
+        ))
+    }
+
+    private static func clampedCenter(_ point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: min(max(point.x.isFinite ? point.x : 0.5, 0), 1),
+            y: min(max(point.y.isFinite ? point.y : 0.5, 0), 1)
+        )
+    }
+
     /// The corner radius for that frame.
     public func cornerRadius(in size: CGSize) -> CGFloat {
         frame(in: size).width / 2 * roundness
     }
 
     private enum CodingKeys: String, CodingKey {
-        case placement, sizeFraction, marginFraction, roundness, isVisible
+        case placement, sizeFraction, marginFraction, roundness, isVisible, center
     }
 
     public init(from decoder: any Decoder) throws {
@@ -74,7 +134,8 @@ public struct CameraBubble: Sendable, Hashable, Codable {
             sizeFraction: container.decodeIfPresent(Double.self, forKey: .sizeFraction) ?? 0.22,
             marginFraction: container.decodeIfPresent(Double.self, forKey: .marginFraction) ?? 0.03,
             roundness: container.decodeIfPresent(Double.self, forKey: .roundness) ?? 1,
-            isVisible: container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+            isVisible: container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true,
+            center: container.decodeIfPresent(CGPoint.self, forKey: .center)
         )
     }
 }
@@ -99,6 +160,14 @@ public enum BubblePlacement: String, Sendable, Hashable, Codable, CaseIterable {
         case .leading, .centre, .trailing: 0.5
         case .bottomLeading, .bottom, .bottomTrailing: 1
         }
+    }
+
+    /// The nine-slot neighbour of a free position, so a drag still has a named corner.
+    public static func nearest(to center: CGPoint) -> BubblePlacement {
+        allCases.min { left, right in
+            hypot(left.horizontalBias - center.x, left.verticalBias - center.y)
+                < hypot(right.horizontalBias - center.x, right.verticalBias - center.y)
+        } ?? .bottomTrailing
     }
 
     public var title: String {

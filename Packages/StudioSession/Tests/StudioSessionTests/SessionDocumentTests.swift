@@ -161,6 +161,33 @@ struct SessionDocumentTests {
         #expect(!stamp.matches(editDigest: "abc", pixelSize: CGSize(width: 1280, height: 720)))
     }
 
+    @Test("A stamp with export settings does not match a different encode")
+    func stampSettingsDigest() throws {
+        let scratch = try scratch()
+        let root = scratch.root
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let output = root.appendingPathComponent("out.mov")
+        try Data("movie".utf8).write(to: output)
+        let stamp = RenderStamp(
+            editDigest: "abc",
+            outputPath: output.path,
+            pixelSize: CGSize(width: 1920, height: 1080),
+            settingsDigest: "hevc-high"
+        )
+
+        #expect(stamp.matches(
+            editDigest: "abc",
+            pixelSize: CGSize(width: 1920, height: 1080),
+            settingsDigest: "hevc-high"
+        ))
+        #expect(!stamp.matches(
+            editDigest: "abc",
+            pixelSize: CGSize(width: 1920, height: 1080),
+            settingsDigest: "h264-low"
+        ))
+    }
+
     @Test("An empty digest is a miss, even against another empty digest")
     func emptyDigestNeverMatches() {
         let stamp = RenderStamp(editDigest: "", outputPath: "/tmp/out.mp4", pixelSize: .zero)

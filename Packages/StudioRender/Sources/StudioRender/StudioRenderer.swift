@@ -43,11 +43,29 @@ public struct StudioRenderer: Sendable {
         public var frameRate: Int
         /// Bits per second, or nil to let the size and rate decide.
         public var bitRate: Int?
+        /// Applied to the computed (or explicit) bit rate. 1 is High; lower is a smaller file.
+        public var bitRateMultiplier: Double
+        public var fileType: AVFileType
+        public var includeAudio: Bool
+        /// Caps the longest output edge, in pixels. Nil leaves the edit's own size.
+        public var maxLongestEdge: Int?
 
-        public init(codec: AVVideoCodecType = .hevc, frameRate: Int = 60, bitRate: Int? = nil) {
+        public init(
+            codec: AVVideoCodecType = .hevc,
+            frameRate: Int = 60,
+            bitRate: Int? = nil,
+            bitRateMultiplier: Double = 1,
+            fileType: AVFileType = .mov,
+            includeAudio: Bool = true,
+            maxLongestEdge: Int? = nil
+        ) {
             self.codec = codec
             self.frameRate = frameRate
             self.bitRate = bitRate
+            self.bitRateMultiplier = bitRateMultiplier
+            self.fileType = fileType
+            self.includeAudio = includeAudio
+            self.maxLongestEdge = maxLongestEdge
         }
     }
 
@@ -57,6 +75,13 @@ public struct StudioRenderer: Sendable {
         public let pixelSize: CGSize
         public let duration: TimeInterval
         public let frameCount: Int
+
+        public init(fileURL: URL, pixelSize: CGSize, duration: TimeInterval, frameCount: Int) {
+            self.fileURL = fileURL
+            self.pixelSize = pixelSize
+            self.duration = duration
+            self.frameCount = frameCount
+        }
     }
 
     // MARK: - Rendering
@@ -83,15 +108,26 @@ public struct StudioRenderer: Sendable {
             pixelSize: manifest?.pixelSize,
             cameraStartOffset: manifest?.cameraStartOffset ?? 0,
             pointPixelScale: manifest?.scale ?? 2,
-            transcript: document.transcript() ?? Transcript()
+            transcript: document.transcript() ?? Transcript(),
+            soundtrack: session.soundtrackURL(for: edit),
+            wallpaper: session.wallpaperURL(for: edit)
         )
         return try await render(
             source,
             to: destination,
             // The recording's own frame rate rather than the caller's: rendering 30 fps
             // footage at 60 writes every frame twice and doubles the file for nothing.
-            options: manifest.map { Options(codec: options.codec, frameRate: $0.frameRate, bitRate: options.bitRate) }
-                ?? options,
+            options: manifest.map {
+                Options(
+                    codec: options.codec,
+                    frameRate: $0.frameRate,
+                    bitRate: options.bitRate,
+                    bitRateMultiplier: options.bitRateMultiplier,
+                    fileType: options.fileType,
+                    includeAudio: options.includeAudio,
+                    maxLongestEdge: options.maxLongestEdge
+                )
+            } ?? options,
             progress: progress
         )
     }
@@ -115,6 +151,10 @@ public struct StudioRenderer: Sendable {
         /// (docs/11 S0.5).
         public var pointPixelScale: CGFloat
         public var transcript: Transcript
+        /// Imported soundtrack that replaces the recording's own audio, when present.
+        public var soundtrack: URL?
+        /// Imported canvas wallpaper, when present.
+        public var wallpaper: URL?
 
         public init(
             screen: URL,
@@ -124,7 +164,9 @@ public struct StudioRenderer: Sendable {
             pixelSize: CGSize? = nil,
             cameraStartOffset: TimeInterval = 0,
             pointPixelScale: CGFloat = 2,
-            transcript: Transcript = Transcript()
+            transcript: Transcript = Transcript(),
+            soundtrack: URL? = nil,
+            wallpaper: URL? = nil
         ) {
             self.screen = screen
             self.camera = camera
@@ -134,6 +176,8 @@ public struct StudioRenderer: Sendable {
             self.cameraStartOffset = cameraStartOffset
             self.pointPixelScale = pointPixelScale
             self.transcript = transcript
+            self.soundtrack = soundtrack
+            self.wallpaper = wallpaper
         }
     }
 
@@ -152,17 +196,24 @@ public struct StudioRenderer: Sendable {
             edit: edit,
             sourceSize: source.pixelSize,
             options: options,
-            cameraStartOffset: source.cameraStartOffset
+            cameraStartOffset: source.cameraStartOffset,
+            soundtrack: source.soundtrack
         ).resolve()
 
-        let plan = StudioRenderPlan(edit: edit, sourceSize: state.sourceSize)
+        let plan = StudioRenderPlan(
+            edit: edit,
+            sourceSize: state.sourceSize,
+            maxLongestEdge: options.maxLongestEdge,
+            pointer: source.telemetry.rebased(to: edit.clips).pointer
+        )
         let composer = StudioFrameComposer(
             plan: plan,
             edit: edit,
             telemetry: source.telemetry,
             transcript: source.transcript,
             frameRate: options.frameRate,
-            pointPixelScale: source.pointPixelScale
+            pointPixelScale: source.pointPixelScale,
+            wallpaper: source.wallpaper.flatMap { StudioWallpaper.image(at: $0) }
         )
 
         let interval = Self.signposter.beginInterval("studio.render")
@@ -191,6 +242,7 @@ public struct StudioRenderer: Sendable {
         let sourceSize: CGSize?
         let options: Options
         let cameraStartOffset: TimeInterval
+        let soundtrack: URL?
 
         func resolve() async throws -> RenderState {
             let composition = try await build()
@@ -217,7 +269,8 @@ public struct StudioRenderer: Sendable {
                     for: edit.clips,
                     screen: screen,
                     camera: camera,
-                    cameraStartOffset: cameraStartOffset
+                    cameraStartOffset: cameraStartOffset,
+                    soundtrack: soundtrack
                 )
             } catch {
                 throw RenderError.noVideoTrack

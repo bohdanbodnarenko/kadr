@@ -74,6 +74,10 @@ public enum SettingKeys {
         default: true
     )
     public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
+    /// Which camera to record. Empty means the system default, once the webcam is on.
+    public static let recordingCameraDeviceID = SettingKey("recording.cameraDeviceID", default: "")
+    /// Which microphone to record. Empty means the system default, once the mic is on.
+    public static let recordingMicrophoneDeviceID = SettingKey("recording.microphoneDeviceID", default: "")
     /// Keep the pointer track, clicks and chords alongside a recording so it can be
     /// edited in the studio afterwards (docs/09 U3.1).
     ///

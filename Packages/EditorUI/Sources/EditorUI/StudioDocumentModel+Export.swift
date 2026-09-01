@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import MediaExport
 import os
 import Shared
 import StudioRender
@@ -13,6 +15,16 @@ import StudioSession
 @MainActor
 public extension StudioDocumentModel {
     // MARK: - Exporting
+
+    /// Puts the original recording on the clipboard as a file, the same way Quick Access
+    /// Copy does. The edit is not in that file — Export is how the cuts and zooms leave.
+    func copyOriginalToClipboard() {
+        let url = session.screenURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([url as NSURL])
+    }
 
     /// Renders the edit to `destination`.
     ///
@@ -48,14 +60,22 @@ public extension StudioDocumentModel {
     private func reuseRenderedFile(at destination: URL) -> Bool {
         guard let stamp = document.renderStamp(),
               let digest = RenderStamp.digest(of: edit),
-              stamp.matches(editDigest: digest, pixelSize: StudioRenderPlan(
-                  edit: edit,
-                  sourceSize: manifest.pixelSize
-              ).outputSize)
+              stamp.matches(
+                  editDigest: digest,
+                  pixelSize: StudioRenderPlan(
+                      edit: edit,
+                      sourceSize: manifest.pixelSize,
+                      maxLongestEdge: exportSettings.maxLongestEdge
+                  ).outputSize,
+                  settingsDigest: RenderStamp.digest(of: exportSettings)
+              )
         else {
             return false
         }
         let source = URL(fileURLWithPath: stamp.outputPath)
+        guard source.pathExtension.lowercased() == destination.pathExtension.lowercased() else {
+            return false
+        }
         guard source.standardizedFileURL != destination.standardizedFileURL else { return true }
         do {
             try? FileManager.default.removeItem(at: destination)
@@ -94,30 +114,13 @@ public extension StudioDocumentModel {
         try? document.commit(edit)
 
         do {
-            let output = try await StudioRenderer().render(
-                session: session,
-                edit: edit,
-                to: destination,
-                progress: { [weak self] value in
-                    Task { @MainActor in self?.exportProgress = value }
-                }
-            )
-            guard let digest = RenderStamp.digest(of: edit) else {
-                exportProgress = nil
-                return
-            }
-            try? document.write(RenderStamp(
-                editDigest: digest,
-                outputPath: output.fileURL.path,
-                pixelSize: output.pixelSize
-            ))
+            let output = try await exportMedia(to: destination)
+            recordStamp(output, at: destination)
             if let transcript {
                 writeCaptions(transcript, beside: destination)
             }
             exportProgress = nil
         } catch is CancellationError {
-            // The user asked for this, so it is not a failure to report back to them. The
-            // renderer's `defer` has already removed the partial file.
             exportProgress = nil
             logger.info("Studio export cancelled")
         } catch StudioRenderer.RenderError.cancelled {
@@ -128,6 +131,57 @@ public extension StudioDocumentModel {
             failure = "The export failed: \(error.localizedDescription)"
             logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func exportMedia(to destination: URL) async throws -> StudioRenderer.Output {
+        if exportSettings.container == .gif {
+            return try await exportGIF(to: destination)
+        }
+        return try await renderMovie(to: destination)
+    }
+
+    private func renderMovie(to destination: URL) async throws -> StudioRenderer.Output {
+        try await StudioRenderer().render(
+            session: session,
+            edit: edit,
+            to: destination,
+            options: exportSettings.rendererOptions,
+            progress: { [weak self] value in
+                Task { @MainActor in self?.exportProgress = value }
+            }
+        )
+    }
+
+    /// Movie first, then ImageIO (docs/03 §1.8). GIF is not a video container, so the
+    /// renderer writes a throwaway MOV and the encoder samples it.
+    private func exportGIF(to destination: URL) async throws -> StudioRenderer.Output {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-gif-\(UUID().uuidString)")
+            .appendingPathExtension("mov")
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let movie = try await renderMovie(to: temp)
+        try Task.checkCancellation()
+        _ = try await ImageIOGIFEncoder().encode(
+            movieAt: temp,
+            to: destination,
+            options: exportSettings.gifOptions
+        )
+        return StudioRenderer.Output(
+            fileURL: destination,
+            pixelSize: movie.pixelSize,
+            duration: movie.duration,
+            frameCount: movie.frameCount
+        )
+    }
+
+    private func recordStamp(_ output: StudioRenderer.Output, at destination: URL) {
+        guard let digest = RenderStamp.digest(of: edit) else { return }
+        try? document.write(RenderStamp(
+            editDigest: digest,
+            outputPath: destination.path,
+            pixelSize: output.pixelSize,
+            settingsDigest: RenderStamp.digest(of: exportSettings)
+        ))
     }
 
     /// SRT and VTT beside the movie (docs/13 T2.2). Tiny, and the reason the transcript

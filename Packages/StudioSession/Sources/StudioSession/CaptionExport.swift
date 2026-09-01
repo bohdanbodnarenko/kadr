@@ -8,19 +8,27 @@ public struct CaptionCue: Sendable, Hashable, Identifiable {
     public var text: String
     /// The word currently being said, for karaoke highlighting.
     public var highlight: String?
+    /// Index into the cue's words of the word being said, if one is.
+    public var activeIndex: Int?
+    /// How many words in the cue have already been said.
+    public var spokenCount: Int
 
     public init(
         id: UUID = UUID(),
         start: TimeInterval,
         end: TimeInterval,
         text: String,
-        highlight: String? = nil
+        highlight: String? = nil,
+        activeIndex: Int? = nil,
+        spokenCount: Int = 0
     ) {
         self.id = id
         self.start = max(start, 0)
         self.end = max(end, self.start)
         self.text = text
         self.highlight = highlight
+        self.activeIndex = activeIndex
+        self.spokenCount = max(spokenCount, 0)
     }
 }
 
@@ -45,20 +53,14 @@ public enum CaptionExport {
             guard let start = cueStart, !buffer.isEmpty else { return }
             let texts = buffer.map(\.text)
             let end = buffer.last.flatMap { timeline.editedTime(forSource: $0.end) } ?? start
-            var highlight: String?
-            if let time {
-                highlight = buffer.first { word in
-                    guard let wordStart = timeline.editedTime(forSource: word.start),
-                          let wordEnd = timeline.editedTime(forSource: word.end)
-                    else { return false }
-                    return time >= wordStart && time < wordEnd
-                }?.text
-            }
+            let karaoke = time.map { Self.karaoke(in: buffer, at: $0, timeline: timeline) }
             cues.append(CaptionCue(
                 start: start,
                 end: max(end, start + 0.4),
                 text: texts.joined(separator: " "),
-                highlight: highlight
+                highlight: karaoke?.word,
+                activeIndex: karaoke?.activeIndex,
+                spokenCount: karaoke?.spokenCount ?? 0
             ))
             buffer = []
             cueStart = nil
@@ -115,6 +117,38 @@ public enum CaptionExport {
         }
         .joined(separator: "\n\n")
         return "WEBVTT\n\n" + body + (body.isEmpty ? "" : "\n")
+    }
+
+    private struct KaraokeHighlight {
+        var word: String?
+        var activeIndex: Int?
+        var spokenCount: Int
+    }
+
+    /// Which word is live, and how many have already been said, at one instant.
+    private static func karaoke(
+        in buffer: [TranscriptWord],
+        at time: TimeInterval,
+        timeline: ClipTimeline
+    ) -> KaraokeHighlight {
+        var spoken = 0
+        var active: Int?
+        for (index, word) in buffer.enumerated() {
+            guard let start = timeline.editedTime(forSource: word.start),
+                  let end = timeline.editedTime(forSource: word.end)
+            else { continue }
+            if end <= time {
+                spoken = index + 1
+            }
+            if time >= start, time < end {
+                active = index
+            }
+        }
+        return KaraokeHighlight(
+            word: active.map { buffer[$0].text },
+            activeIndex: active,
+            spokenCount: spoken
+        )
     }
 
     private static func endsSentence(_ text: String) -> Bool {

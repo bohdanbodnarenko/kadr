@@ -32,6 +32,8 @@ public extension AppSettings {
         recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
         recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
+        recordingCameraDeviceID = SettingKeys.recordingCameraDeviceID.defaultValue
+        recordingMicrophoneDeviceID = SettingKeys.recordingMicrophoneDeviceID.defaultValue
         recordingCapturesStudioSession = SettingKeys.recordingCapturesStudioSession.defaultValue
         recordingReconstructsCursor = SettingKeys.recordingReconstructsCursor.defaultValue
         teleprompterEnabled = SettingKeys.teleprompterEnabled.defaultValue

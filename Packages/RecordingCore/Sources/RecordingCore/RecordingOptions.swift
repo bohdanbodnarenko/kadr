@@ -52,6 +52,8 @@ public struct RecordingOptions: Sendable, Hashable {
     /// System audio, through ScreenCaptureKit — no audio driver to install (docs/03 §1.8).
     public var capturesSystemAudio: Bool
     public var capturesMicrophone: Bool
+    /// ScreenCaptureKit's microphone device id (macOS 15+). Nil uses the system default.
+    public var microphoneDeviceID: String?
     public var showsCursor: Bool
     /// Kadr's own sound never belongs in a recording of the user's screen.
     public var excludesOwnAudio: Bool
@@ -63,6 +65,7 @@ public struct RecordingOptions: Sendable, Hashable {
         codec: RecordingCodec = .hevc,
         capturesSystemAudio: Bool = true,
         capturesMicrophone: Bool = false,
+        microphoneDeviceID: String? = nil,
         showsCursor: Bool = true,
         excludesOwnAudio: Bool = true,
         dynamicRange: DynamicRange = .standard
@@ -72,6 +75,7 @@ public struct RecordingOptions: Sendable, Hashable {
         self.capturesSystemAudio = capturesSystemAudio
         // Resolved here, so a writer never creates a track nothing can feed.
         self.capturesMicrophone = capturesMicrophone && Self.microphoneIsAvailable
+        self.microphoneDeviceID = microphoneDeviceID
         self.showsCursor = showsCursor
         self.excludesOwnAudio = excludesOwnAudio
         // Resolved here rather than at the call site, so a recording started on macOS 14

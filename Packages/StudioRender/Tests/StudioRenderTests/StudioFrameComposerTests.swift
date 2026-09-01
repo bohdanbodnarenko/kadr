@@ -68,11 +68,16 @@ struct StudioFrameComposerTests {
         return edit
     }
 
-    private func composer(_ edit: StudioEdit, telemetry: InputTelemetry = InputTelemetry()) -> StudioFrameComposer {
+    private func composer(
+        _ edit: StudioEdit,
+        telemetry: InputTelemetry = InputTelemetry(),
+        transcript: Transcript = Transcript()
+    ) -> StudioFrameComposer {
         StudioFrameComposer(
             plan: StudioRenderPlan(edit: edit, sourceSize: sourceSize),
             edit: edit,
-            telemetry: telemetry
+            telemetry: telemetry,
+            transcript: transcript
         )
     }
 
@@ -224,6 +229,25 @@ struct StudioFrameComposerTests {
         #expect(frame.at(300, 100).green < 60)
     }
 
+    @Test("A larger pointer scale covers more of the frame")
+    func cursorScaleGrowsTheArtwork() throws {
+        let telemetry = try cursorTelemetry(at: CGPoint(x: 300, y: 100))
+        let small = try render(
+            composer(edit(showsCursor: true), telemetry: telemetry)
+                .frame(at: 3.5, source: halvedSource(), camera: nil),
+            size: sourceSize
+        )
+        var scaled = edit(showsCursor: true)
+        scaled.cursorScale = 3
+        let large = try render(
+            composer(scaled, telemetry: telemetry)
+                .frame(at: 3.5, source: halvedSource(), camera: nil),
+            size: sourceSize
+        )
+        #expect(small.at(330, 100).green < 60, "the recorded cursor already reached 30 px away")
+        #expect(large.at(330, 100).green > 180, "a 3× cursor did not reach 30 px away")
+    }
+
     /// Overlay tests draw over a flat background rather than the halved one: a ripple is
     /// detected by looking for a channel the background does not have, and a sampling row
     /// that crossed the red/blue boundary would report the boundary as the ripple.
@@ -277,6 +301,34 @@ struct StudioFrameComposerTests {
         #expect(!stillDim, "the caption outlived its own duration")
     }
 
+    @Test("A top-placed caption sits near the top of the card")
+    func captionFollowsPlacement() throws {
+        var telemetry = InputTelemetry()
+        telemetry.keystrokes = [KeystrokeEvent(time: 1, caption: "⌘S")]
+        var placed = edit(showsKeystrokes: true)
+        placed.keystrokePlacement = .top
+        let composed = composer(placed, telemetry: telemetry)
+        let during = try render(composed.frame(at: 1.1, source: flatSource(), camera: nil), size: sourceSize)
+
+        let atTop = (150 ... 250).contains { x in during.at(x, 20).red < 150 }
+        let atBottom = (150 ... 250).contains { x in during.at(x, 180).red < 150 }
+        #expect(atTop, "the caption stayed off the top")
+        #expect(!atBottom, "the caption was still drawn at the bottom")
+    }
+
+    @Test("A larger keystroke scale draws a wider caption")
+    func captionScaleChangesSize() {
+        var telemetry = InputTelemetry()
+        telemetry.keystrokes = [KeystrokeEvent(time: 1, caption: "⌘S")]
+        var small = edit(showsKeystrokes: true)
+        small.keystrokeScale = StudioEdit.minimumOverlayScale
+        var large = edit(showsKeystrokes: true)
+        large.keystrokeScale = StudioEdit.maximumOverlayScale
+        let smallWidth = composer(small, telemetry: telemetry).caption(at: 1.1)?.image?.width ?? 0
+        let largeWidth = composer(large, telemetry: telemetry).caption(at: 1.1)?.image?.width ?? 0
+        #expect(largeWidth > smallWidth)
+    }
+
     // MARK: - The camera bubble
 
     @Test("The bubble lands in the corner it was asked for")
@@ -324,6 +376,41 @@ struct StudioFrameComposerTests {
         #expect(frame.at(Int(rect.midX), Int(rect.midY)).green > 180, "the middle of the bubble is missing")
         let corner = frame.at(Int(rect.maxX) - 2, Int(rect.maxY) - 2)
         #expect(corner.green < 180, "a fully-round bubble should not fill its own corner, found \(corner)")
+    }
+
+    @Test("Padding around the card shows the backdrop, not the recording")
+    func canvasPaddingShowsBackdrop() throws {
+        var styled = edit()
+        styled.canvas = StudioCanvas(
+            paddingFraction: 0.12,
+            background: .solid(StudioColor(red: 0, green: 1, blue: 0))
+        )
+        let plan = StudioRenderPlan(edit: styled, sourceSize: sourceSize)
+        let composed = try composer(styled).frame(at: 0, source: halvedSource(), camera: nil)
+        let frame = try render(composed, size: plan.outputSize)
+
+        #expect(frame.at(2, 2).green > 180, "padding is not the backdrop")
+        let inside = frame.at(Int(plan.cardRect.minX) + 12, Int(plan.cardRect.midY))
+        #expect(inside.red > 180, "the card lost the recording, found \(inside)")
+    }
+
+    @Test("A wallpaper fills the padding around the card")
+    func canvasWallpaperFillsPadding() throws {
+        var styled = edit()
+        styled.canvas = StudioCanvas(paddingFraction: 0.12, background: .wallpaper)
+        let green = try #require(BitmapCanvas.image(width: 8, height: 8) { context in
+            context.setFillColor(red: 0, green: 1, blue: 0, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        })
+        let plan = StudioRenderPlan(edit: styled, sourceSize: sourceSize)
+        let composed = try StudioFrameComposer(
+            plan: plan,
+            edit: styled,
+            telemetry: InputTelemetry(),
+            wallpaper: green
+        ).frame(at: 0, source: halvedSource(), camera: nil)
+        let frame = try render(composed, size: plan.outputSize)
+        #expect(frame.at(2, 2).green > 180, "padding is not the wallpaper")
     }
 
     // MARK: - Determinism

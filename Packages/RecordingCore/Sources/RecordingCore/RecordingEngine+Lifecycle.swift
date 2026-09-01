@@ -43,7 +43,10 @@ extension RecordingEngine {
             // Everything for this recording lives in one directory, so a crash leaves an
             // obvious place to recover segments from.
             let directory = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Kadr-Recording-\(UUID().uuidString)", isDirectory: true)
+                .appendingPathComponent(
+                    "\(InterruptedRecordingStore.directoryPrefix)\(UUID().uuidString)",
+                    isDirectory: true
+                )
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             sessionDirectory = directory
             segments = []

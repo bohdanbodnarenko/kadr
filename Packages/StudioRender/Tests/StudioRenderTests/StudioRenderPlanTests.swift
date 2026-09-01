@@ -221,4 +221,37 @@ struct StudioRenderPlanTests {
         #expect(plan.scale(at: 0).isFinite)
         #expect(plan.outputPoint(.zero, at: 0).x.isFinite)
     }
+
+    @Test("Capping the longest edge shrinks a 4K frame to 1080p without changing aspect")
+    func longestEdgeCap() {
+        let fourK = CGSize(width: 3840, height: 2160)
+        let plan = StudioRenderPlan(edit: edit(), sourceSize: fourK, maxLongestEdge: 1920)
+        #expect(plan.outputSize.width == 1920)
+        #expect(plan.outputSize.height == 1080)
+    }
+
+    @Test("A cap larger than the frame leaves it alone")
+    func longestEdgeCapIsANoOpWhenAlreadySmaller() {
+        let plan = StudioRenderPlan(edit: edit(), sourceSize: size, maxLongestEdge: 3840)
+        #expect(plan.outputSize == size)
+    }
+
+    @Test("A padded canvas is larger than the recording and keeps the card centred")
+    func paddedCanvasGrows() {
+        var padded = edit()
+        padded.canvas = StudioCanvas(paddingFraction: 0.1)
+        let plan = StudioRenderPlan(edit: padded, sourceSize: size)
+        #expect(plan.outputSize.width > size.width)
+        #expect(plan.outputSize.height > size.height)
+        #expect(abs(plan.cardRect.width - size.width) < 1)
+        #expect(abs(plan.cardRect.midX - plan.outputSize.width / 2) < 1)
+        #expect(Int(plan.outputSize.width) % 2 == 0)
+        #expect(Int(plan.outputSize.height) % 2 == 0)
+    }
+
+    @Test("An identity canvas still maps a point onto itself")
+    func identityCardFillsTheFrame() {
+        let plan = StudioRenderPlan(edit: edit(), sourceSize: size)
+        #expect(plan.cardRect == CGRect(origin: .zero, size: size))
+    }
 }

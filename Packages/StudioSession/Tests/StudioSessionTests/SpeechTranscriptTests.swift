@@ -42,6 +42,29 @@ struct CaptionExportTests {
         #expect(!srt.contains("Gone"))
         #expect(srt.contains("Also"))
     }
+
+    @Test("The live word is the one whose interval covers the playhead")
+    func karaokePicksTheSpokenWord() {
+        let transcript = Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 0.4),
+            TranscriptWord(text: "world.", start: 0.5, end: 1.0)
+        ])
+        let timeline = ClipTimeline.whole(duration: 2)
+        let duringHello = CaptionExport.cue(from: transcript, timeline: timeline, at: 0.2)
+        #expect(duringHello?.highlight == "Hello")
+        #expect(duringHello?.activeIndex == 0)
+        #expect(duringHello?.spokenCount == 0)
+
+        let between = CaptionExport.cue(from: transcript, timeline: timeline, at: 0.45)
+        #expect(between?.highlight == nil)
+        #expect(between?.activeIndex == nil)
+        #expect(between?.spokenCount == 1)
+
+        let duringWorld = CaptionExport.cue(from: transcript, timeline: timeline, at: 0.7)
+        #expect(duringWorld?.highlight == "world.")
+        #expect(duringWorld?.activeIndex == 1)
+        #expect(duringWorld?.spokenCount == 1)
+    }
 }
 
 @Suite("Transcript post-processing")

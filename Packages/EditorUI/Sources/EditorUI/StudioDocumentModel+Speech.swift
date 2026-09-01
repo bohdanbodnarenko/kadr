@@ -223,35 +223,36 @@ public extension StudioDocumentModel {
     }
 
     func cutSentence(containing word: TranscriptWord) {
-        let sentence = sentence(containing: word)
-        guard let first = sentence.first, let last = sentence.last else { return }
-        let start = first.start
-        let end = last.end
+        cutWords(sentence(containing: word))
+    }
+
+    /// Cuts the selected words' footage out of the video (docs/03 §1.9).
+    func cutWords(_ words: [TranscriptWord]) {
+        guard let first = words.first, let last = words.last else { return }
+        cutSourceRange(from: first.start, to: last.end)
+    }
+
+    func cutSourceRange(from start: TimeInterval, to end: TimeInterval) {
         change { edit in
-            var clips: [Clip] = []
-            for clip in edit.clips.clips {
-                let range = clip.sourceStart ..< (clip.sourceStart + clip.sourceDuration)
-                if end <= range.lowerBound || start >= range.upperBound {
-                    clips.append(clip)
-                    continue
-                }
-                if start > range.lowerBound {
-                    clips.append(Clip(
-                        sourceStart: clip.sourceStart,
-                        sourceDuration: start - clip.sourceStart,
-                        speed: clip.speed
-                    ))
-                }
-                if end < range.upperBound {
-                    clips.append(Clip(
-                        sourceStart: end,
-                        sourceDuration: range.upperBound - end,
-                        speed: clip.speed
-                    ))
-                }
-            }
-            edit.clips = ClipTimeline(clips: clips.filter { $0.sourceDuration > 0.02 })
+            edit.clips = edit.clips.removingSourceRange(from: start, to: end)
         }
+        playhead = edit.clips.editedTime(forSource: end) ?? min(playhead, edit.clips.editedDuration)
+    }
+
+    /// Whether this word's footage still survives in the edit.
+    func transcriptWordSurvives(_ word: TranscriptWord) -> Bool {
+        edit.clips.containsSourceTime((word.start + word.end) / 2)
+    }
+
+    func isFillerWord(_ word: TranscriptWord) -> Bool {
+        TranscriptCutPlanner.fillerWords.contains(word.normalized)
+    }
+
+    /// The word being said at the playhead, if the transcript covers that moment.
+    func activeTranscriptWord(in words: [TranscriptWord]) -> TranscriptWord? {
+        let source = edit.clips.sourceTime(forEdited: playhead) ?? playhead
+        return words.first { source >= $0.start && source < $0.end }
+            ?? words.last { $0.start <= source }
     }
 
     var visibleTranscriptWords: [TranscriptWord] {

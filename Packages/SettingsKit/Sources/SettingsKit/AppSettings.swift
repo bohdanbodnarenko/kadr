@@ -141,6 +141,35 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingShowsWebcam] = recordingShowsWebcam }
     }
 
+    /// Which camera to record when the webcam is on. Empty is the system default.
+    ///
+    /// Computed so it does not grow the initializer: device ids are strings with no
+    /// defaulting logic beyond the key itself.
+    public var recordingCameraDeviceID: String {
+        get {
+            access(keyPath: \.recordingCameraDeviceID)
+            return store[SettingKeys.recordingCameraDeviceID]
+        }
+        set {
+            withMutation(keyPath: \.recordingCameraDeviceID) {
+                store[SettingKeys.recordingCameraDeviceID] = newValue
+            }
+        }
+    }
+
+    /// Which microphone to record when the mic is on. Empty is the system default.
+    public var recordingMicrophoneDeviceID: String {
+        get {
+            access(keyPath: \.recordingMicrophoneDeviceID)
+            return store[SettingKeys.recordingMicrophoneDeviceID]
+        }
+        set {
+            withMutation(keyPath: \.recordingMicrophoneDeviceID) {
+                store[SettingKeys.recordingMicrophoneDeviceID] = newValue
+            }
+        }
+    }
+
     public var recordingCapturesStudioSession: Bool {
         didSet { store[SettingKeys.recordingCapturesStudioSession] = recordingCapturesStudioSession }
     }

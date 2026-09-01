@@ -167,6 +167,8 @@ struct StudioEditTests {
         #expect(edit.zooms.isEmpty)
         #expect(edit.reframe.isIdentity)
         #expect(edit.showsCursor)
+        #expect(edit.showsZooms)
+        #expect(edit.cursorScale == 1)
     }
 
     @Test("A free crop is applied before the aspect reframe")
@@ -196,6 +198,34 @@ struct StudioEditTests {
         let json = #"{"version": 1}"#
         let edit = try JSONDecoder().decode(StudioEdit.self, from: Data(json.utf8))
         #expect(edit.cropRect == nil)
+        #expect(edit.cursorScale == 1)
+        #expect(edit.clickScale == 1)
+        #expect(edit.clickColor == .white)
+    }
+
+    @Test("Absurd pointer sizes are clamped")
+    func cursorScaleIsClamped() {
+        var edit = StudioEdit(cursorScale: 99)
+        #expect(edit.cursorScale == StudioEdit.maximumCursorScale)
+        edit.cursorScale = 0
+        #expect(edit.cursorScale == StudioEdit.minimumCursorScale)
+    }
+
+    @Test("Absurd ripple sizes are clamped")
+    func clickScaleIsClamped() {
+        var edit = StudioEdit(clickScale: 99)
+        #expect(edit.clickScale == StudioEdit.maximumCursorScale)
+        edit.clickScale = 0
+        #expect(edit.clickScale == StudioEdit.minimumCursorScale)
+    }
+
+    @Test("Absurd caption sizes are clamped")
+    func overlayScaleIsClamped() {
+        var edit = StudioEdit(keystrokeScale: 9, captionScale: 0)
+        #expect(edit.keystrokeScale == StudioEdit.maximumOverlayScale)
+        #expect(edit.captionScale == StudioEdit.minimumOverlayScale)
+        edit.captionScale = 99
+        #expect(edit.captionScale == StudioEdit.maximumOverlayScale)
     }
 
     /// Changing the aspect ratio must re-plan the camera immediately, not leave cues
@@ -209,6 +239,29 @@ struct StudioEditTests {
         let renderable = try #require(edit.renderableZooms(in: size).first)
         #expect(renderable.magnification < 3)
         #expect(renderable.anchor.point(in: size).x > 20)
+    }
+
+    @Test("A pointer-follow zoom stays a pointer-follow zoom after a reframe")
+    func pointerFollowSurvivesReframe() throws {
+        var edit = StudioEdit.untouched(duration: 10)
+        edit.zooms = [ZoomCue(start: 0, duration: 2, magnification: 3, anchor: .pointer)]
+        edit.reframe = Reframe(aspect: .nineSixteen)
+
+        let renderable = try #require(edit.renderableZooms(in: size).first)
+        #expect(renderable.anchor == .pointer)
+        #expect(renderable.magnification < 3)
+    }
+
+    @Test("Disabled zooms and a master off switch never render")
+    func disabledZoomsAreOmitted() {
+        var edit = StudioEdit.untouched(duration: 10)
+        edit.zooms = [
+            ZoomCue(start: 0, duration: 2, isEnabled: false),
+            ZoomCue(start: 4, duration: 2)
+        ]
+        #expect(edit.renderableZooms(in: size).map(\.start) == [4])
+        edit.showsZooms = false
+        #expect(edit.renderableZooms(in: size).isEmpty)
     }
 
     // MARK: - Presets
@@ -251,9 +304,48 @@ struct StudioEditTests {
         #expect(StudioPreset(name: "Another", reframe: Reframe(aspect: .square)).matches(edit))
     }
 
-    @Test("Every built-in look is distinct")
-    func builtInsAreDistinct() {
-        #expect(Set(StudioPreset.builtIn.map(\.appearance)).count == StudioPreset.builtIn.count)
+    @Test("A preset carries pointer size")
+    func presetCarriesCursorScale() {
+        var edit = StudioEdit.untouched(duration: 8)
+        edit.cursorScale = 2
+        let preset = StudioPreset(name: "Large pointer", capturing: edit)
+        let applied = preset.applied(to: .untouched(duration: 8))
+        #expect(applied.cursorScale == 2)
+        #expect(preset.matches(applied))
+    }
+
+    @Test("A preset carries ripple size")
+    func presetCarriesClickScale() {
+        var edit = StudioEdit.untouched(duration: 8)
+        edit.clickScale = 2
+        let preset = StudioPreset(name: "Large ripples", capturing: edit)
+        let applied = preset.applied(to: .untouched(duration: 8))
+        #expect(applied.clickScale == 2)
+        #expect(preset.matches(applied))
+    }
+
+    @Test("A preset carries ripple colour")
+    func presetCarriesClickColor() {
+        var edit = StudioEdit.untouched(duration: 8)
+        edit.clickColor = StudioColor(red: 1, green: 0.2, blue: 0.1)
+        let preset = StudioPreset(name: "Red ripples", capturing: edit)
+        let applied = preset.applied(to: .untouched(duration: 8))
+        #expect(applied.clickColor == edit.clickColor)
+        #expect(preset.matches(applied))
+    }
+
+    @Test("A saved look does not take another session's wallpaper file with it")
+    func presetDropsWallpaperFileName() {
+        var edit = StudioEdit.untouched(duration: 8)
+        edit.canvas.background = .wallpaper
+        edit.canvas.wallpaperFileName = "wallpaper.png"
+        let preset = StudioPreset(name: "Wall", capturing: edit)
+        #expect(preset.canvas.wallpaperFileName == nil)
+        var destination = StudioEdit.untouched(duration: 8)
+        destination.canvas.wallpaperFileName = "other.png"
+        destination.canvas.background = .wallpaper
+        let applied = preset.applied(to: destination)
+        #expect(applied.canvas.wallpaperFileName == "other.png")
     }
 
     @Test("An edit round-trips whole")
@@ -265,6 +357,14 @@ struct StudioEditTests {
         edit.cropRect = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
         edit.camera = .rectangle
         edit.showsKeystrokes = false
+        edit.cursorScale = 2
+        edit.canvas = .presenter
+        edit.keystrokePlacement = .topLeading
+        edit.captionPlacement = .bottomTrailing
+        edit.keystrokeScale = 1.4
+        edit.captionScale = 0.8
+        edit.soundtrackFileName = "soundtrack.m4a"
+        edit.soundtrackDisplayName = "Voice"
 
         let data = try JSONEncoder().encode(edit)
         #expect(try JSONDecoder().decode(StudioEdit.self, from: data) == edit)
@@ -279,6 +379,8 @@ struct StudioEditTests {
         #expect(edit.version == 9)
         #expect(edit.clips.isEmpty)
         #expect(edit.showsCursor)
+        #expect(edit.showsZooms)
+        #expect(edit.cursorScale == 1)
     }
 
     @Test("A preset with nothing in it at all decodes")

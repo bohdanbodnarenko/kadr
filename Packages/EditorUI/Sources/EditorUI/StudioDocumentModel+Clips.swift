@@ -13,7 +13,13 @@ public extension StudioDocumentModel {
 
     /// Splits the clip under the playhead.
     func splitAtPlayhead() {
-        change { $0.clips.split(atEdited: playhead) }
+        split(at: playhead)
+    }
+
+    /// Splits at an edited-time instant, which may not be the playhead — hover-C on the
+    /// timeline cuts where the pointer is, not where the clock is.
+    func split(at time: TimeInterval) {
+        change { $0.clips.split(atEdited: time) }
     }
 
     /// Whether this recording has a notch strip that could be trimmed (docs/08 §2 item 12).
@@ -78,11 +84,69 @@ public extension StudioDocumentModel {
         playhead = min(playhead, edit.duration)
     }
 
+    /// Puts the recording back to one uncut clip at real speed.
+    ///
+    /// The escape hatch after a session of splits, trims and retimes that went too far.
+    /// Footage is never deleted, so this is always possible.
+    func resetClips() {
+        change { $0.clips = .whole(duration: manifest.duration) }
+        selectedClip = nil
+        playhead = min(playhead, edit.duration)
+    }
+
+    /// True once a split, trim or speed change has left the original recording.
+    var hasClipEdits: Bool {
+        let clips = edit.clips.clips
+        guard clips.count == 1, let clip = clips.first else { return true }
+        return clip.speed != 1 || abs(clip.editedDuration - manifest.duration) > 0.001
+    }
+
+    /// Deletes the selected zoom, or the clip under the playhead.
+    ///
+    /// One trash control, the way the timeline's delete key already works: a selected zoom
+    /// is the thing being aimed at, so it goes first.
+    func deleteTimelineSelection() {
+        if selectedZoom != nil {
+            removeSelectedZoom()
+        } else {
+            removeClipAtPlayhead()
+        }
+    }
+
+    var canDeleteTimelineSelection: Bool {
+        selectedZoom != nil || edit.clips.clips.count > 1
+    }
+
     /// Sets the speed of the clip under the playhead.
     func setSpeedAtPlayhead(_ speed: Double) {
         guard let index = clipIndex(at: playhead) else { return }
         let id = edit.clips.clips[index].id
         change { $0.clips.setSpeed(speed, for: id) }
+        playhead = min(playhead, edit.duration)
+    }
+
+    /// Shortens a clip from the left, coalesced so one drag is one undo step.
+    func trimClipStart(_ id: Clip.ID, toEdited time: TimeInterval) {
+        guard let index = edit.clips.clips.firstIndex(where: { $0.id == id }) else { return }
+        change(coalescingAs: "clip.trim.start.\(id)") {
+            $0.clips.trimClipStart(at: index, toEdited: time)
+        }
+        playhead = min(playhead, edit.duration)
+    }
+
+    /// Shortens a clip from the right.
+    func trimClipEnd(_ id: Clip.ID, toEdited time: TimeInterval) {
+        guard let index = edit.clips.clips.firstIndex(where: { $0.id == id }) else { return }
+        change(coalescingAs: "clip.trim.end.\(id)") {
+            $0.clips.trimClipEnd(at: index, toEdited: time)
+        }
+        playhead = min(playhead, edit.duration)
+    }
+
+    /// Sets the speed of a clip by id, so the inspector can retime a selection that is not
+    /// under the playhead.
+    func setSpeed(_ speed: Double, for id: Clip.ID) {
+        change(coalescingAs: "clip.speed.\(id)") { $0.clips.setSpeed(speed, for: id) }
         playhead = min(playhead, edit.duration)
     }
 

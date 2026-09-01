@@ -55,6 +55,75 @@ struct RecordingSessionTests {
         #expect(names.contains("render.json"))
         #expect(names.contains("poster.jpg"))
         #expect(names.contains("transcript.json"))
+        #expect(names.contains("project.json"))
+    }
+
+    @Test("An imported soundtrack is copied into the session")
+    func soundtrackIsCopiedIn() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root)
+        let source = root.appendingPathComponent("voice.wav")
+        try Data("audio".utf8).write(to: source)
+
+        let name = try session.replaceSoundtrack(copying: source)
+        #expect(name == "soundtrack.wav")
+        #expect(session.soundtrackURLs.count == 1)
+        #expect(FileManager.default.fileExists(atPath: session.soundtrackURLs[0].path))
+
+        var edit = StudioEdit.untouched(duration: 1)
+        edit.soundtrackFileName = name
+        #expect(session.soundtrackURL(for: edit) == session.soundtrackURLs[0])
+
+        try session.removeSoundtracks()
+        #expect(session.soundtrackURLs.isEmpty)
+        #expect(session.soundtrackURL(for: edit) == nil)
+    }
+
+    @Test("An imported wallpaper is copied into the session")
+    func wallpaperIsCopiedIn() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root)
+        let source = root.appendingPathComponent("bg.png")
+        try Data("image".utf8).write(to: source)
+
+        let name = try session.replaceWallpaper(copying: source)
+        #expect(name == "wallpaper.png")
+        #expect(session.wallpaperURLs.count == 1)
+
+        var edit = StudioEdit.untouched(duration: 1)
+        edit.canvas.wallpaperFileName = name
+        #expect(session.wallpaperURL(for: edit) == session.wallpaperURLs[0])
+
+        try session.removeWallpapers()
+        #expect(session.wallpaperURLs.isEmpty)
+        #expect(session.wallpaperURL(for: edit) == nil)
+    }
+
+    @Test("A session is named for its folder until it is renamed")
+    func displayNameDefaultsToTheFolder() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root, named: "2026-09-01-142233")
+        #expect(session.displayName == "2026-09-01-142233")
+        try session.setDisplayName("  Onboarding walkthrough  ")
+        #expect(session.displayName == "Onboarding walkthrough")
+        try session.setDisplayName("   ")
+        #expect(session.displayName == "Onboarding walkthrough", "a blank rename must not hide the project")
+    }
+
+    @Test("Project titles match footage by identity, not by path")
+    func displayNamesMatchHardLinkedFootage() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root, named: "session")
+        try Data("movie".utf8).write(to: session.screenURL)
+        try session.setDisplayName("Demo")
+        let alias = root.appendingPathComponent("elsewhere.mov")
+        try FileManager.default.linkItem(at: session.screenURL, to: alias)
+        let names = RecordingSessionStore(root: root).displayNames(forFootageAt: [alias])
+        #expect(names[alias.standardizedFileURL.path] == "Demo")
     }
 
     /// The draft is separate from the committed edit on purpose: an autosave that
@@ -100,6 +169,30 @@ struct RecordingSessionTests {
         try Data("{}".utf8).write(to: session.draftEditURL)
 
         #expect(session.needsRecovery)
+    }
+
+    @Test("Footage without a capture sidecar needs recovering")
+    func needsCaptureRecovery() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root)
+        try writeFootage(session)
+
+        #expect(session.needsCaptureRecovery)
+        try Data("{}".utf8).write(to: session.captureURL)
+        #expect(!session.needsCaptureRecovery)
+    }
+
+    @Test("A camera file without screen footage is still media")
+    func cameraOnlyHasMedia() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root)
+        try Data("camera".utf8).write(to: session.cameraURL)
+
+        #expect(!session.hasFootage)
+        #expect(session.hasMedia)
+        #expect(RecordingSessionStore(root: root).sweepEmpty() == 0)
     }
 
     /// A session with a committed edit was finished with at some point; reopening it is

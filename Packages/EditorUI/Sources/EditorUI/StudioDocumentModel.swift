@@ -1,3 +1,4 @@
+import AnnotationModel
 import Foundation
 import os
 import Shared
@@ -46,6 +47,25 @@ public final class StudioDocumentModel {
     /// The selected zoom cue, if one is.
     public var selectedZoom: ZoomCue.ID?
 
+    /// The selected clip, if one is. Edge-trimming and the speed slider talk to this.
+    public var selectedClip: Clip.ID?
+
+    /// Edited time under the timeline pointer, for hover-skim of the preview.
+    ///
+    /// Independent of the playhead: hovering does not commit a cut, and the playhead is
+    /// where Split and Export still read from.
+    public var skimTime: TimeInterval?
+
+    /// How a forthcoming export should be encoded. Remembered across recordings.
+    public var exportSettings = StudioExportSettings.remembered
+
+    /// Whether the preview is in crop mode: the full recording is shown with a handle
+    /// overlay, the way Screendrop crops, rather than four sliders in the inspector.
+    public var isCropping = false
+    /// The crop being dragged, in normalised source space. Committed on Done.
+    public var workingCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
+    public var cropAspect: CropAspectPreset = .free
+
     /// Whether an export is running, and how far along.
     public internal(set) var exportProgress: Double?
 
@@ -54,6 +74,10 @@ public final class StudioDocumentModel {
 
     /// Set when something worked and saying so is the whole feedback.
     public var notice: String?
+
+    /// The look last applied from the preset bar.
+    var storedAppliedPresetID: UUID?
+    @ObservationIgnored var presetStore = StudioPresetStore()
 
     // MARK: - Speech
 
@@ -105,6 +129,7 @@ public final class StudioDocumentModel {
     /// thing is a way for them to disagree, and the one that would have gone wrong here is a
     /// play button stuck on after a cancelled task.
     @ObservationIgnored var playbackTask: Task<Void, Never>?
+    @ObservationIgnored let previewAudio = StudioPreviewAudio()
 
     @ObservationIgnored var exportTask: Task<Void, Never>?
 
@@ -122,7 +147,11 @@ public final class StudioDocumentModel {
     /// session is a slow leak. Fifty is far past what anybody reaches for and still small.
     static let undoDepth = 50
 
-    public init?(session: RecordingSession, transcriber: (any Transcribing)? = nil) {
+    public init?(
+        session: RecordingSession,
+        transcriber: (any Transcribing)? = nil,
+        presetStore: StudioPresetStore = StudioPresetStore()
+    ) {
         guard session.hasFootage else { return nil }
         self.session = session
         document = SessionDocument(session: session)
@@ -130,6 +159,7 @@ public final class StudioDocumentModel {
         guard let manifest = document.manifest() else { return nil }
         self.manifest = manifest
         self.transcriber = transcriber ?? HelperTranscriber()
+        self.presetStore = presetStore
 
         // The draft wins over the commit, so reopening lands where the user left off
         // rather than at the last thing they exported.
@@ -183,6 +213,12 @@ public final class StudioDocumentModel {
         saveDraft()
     }
 
+    /// A default look on a recording nobody has edited yet is the starting point, not a
+    /// step they should have to undo to reach "as recorded".
+    func adoptEditWithoutUndo(_ next: StudioEdit) {
+        edit = next
+    }
+
     /// The interaction currently being coalesced, if one is.
     @ObservationIgnored private var activeGesture: String?
 
@@ -222,105 +258,6 @@ public final class StudioDocumentModel {
         }
     }
 
-    // MARK: - Zooms
-
-    /// Adds a zoom over the playhead, anchored where the pointer was.
-    ///
-    /// Anchored at the pointer rather than the centre because a zoom to the middle of the
-    /// screen is almost never what somebody wants: they are zooming to whatever they were
-    /// doing, and where the pointer was is the best evidence of that available.
-    public func addZoom(duration: TimeInterval = 3, magnification: Double = 2) {
-        // A cue occupies its hold *and* both of its moves, so the span to fit inside the
-        // recording is longer than the duration asked for. Fitting the hold alone puts the
-        // move out past the end, where it never plays and the recording ends mid-zoom.
-        let transition = Self.defaultTransition
-        let footprint = duration + transition * 2
-        let start = max(0, min(playhead, edit.duration - footprint))
-        let available = max(edit.duration - start - transition * 2, 0.1)
-        let anchor = pointerPosition(at: start) ?? centreOfFrame
-        let cue = ZoomCue(
-            start: start,
-            duration: min(duration, available),
-            magnification: magnification,
-            anchor: .fixed(anchor),
-            transitionDuration: transition
-        )
-        change { $0.zooms.append(cue) }
-        selectedZoom = cue.id
-    }
-
-    /// How long a new cue takes to move in, and out again.
-    static let defaultTransition: TimeInterval = 0.6
-
-    /// Replaces the zooms with ones planned from the recorded clicks.
-    ///
-    /// Wholesale rather than additive: "add smart zooms" run twice should give the same
-    /// result as run once, and appending would stack cues on top of each other.
-    public func planSmartZooms() {
-        let planner = ZoomCuePlanner()
-        // Planned from the sidecar in source time, then rewritten onto the edited
-        // timeline. Clicks already on the edited timeline would be planned twice against
-        // cuts that have already moved them, and a second press of the button would not
-        // be a no-op (docs/10 R0.2, R3.3).
-        let planned = planner.cues(
-            for: telemetry.clicks,
-            in: manifest.pixelSize,
-            duration: manifest.duration
-        )
-        let rebased = edit.clips.rebasing(planned)
-        guard !rebased.isEmpty else {
-            failure = "There were no click clusters to zoom to in this recording."
-            return
-        }
-        change { $0.zooms = $0.clips.rebasing(planned) }
-        selectedZoom = nil
-    }
-
-    public func removeSelectedZoom() {
-        guard let selectedZoom else { return }
-        change { $0.zooms.removeAll { $0.id == selectedZoom } }
-        self.selectedZoom = nil
-    }
-
-    /// Updates one cue in place.
-    ///
-    /// - Parameter gesture: names a continuous interaction, so dragging a cue along the
-    ///   timeline is one undo step rather than one per pixel of travel (docs/11 S2).
-    public func updateZoom(
-        _ id: ZoomCue.ID,
-        coalescingAs gesture: String? = nil,
-        _ mutate: (inout ZoomCue) -> Void
-    ) {
-        change(coalescingAs: gesture) { edit in
-            guard let index = edit.zooms.firstIndex(where: { $0.id == id }) else { return }
-            mutate(&edit.zooms[index])
-        }
-    }
-
-    /// Moves a cue to a new start, keeping it inside the recording.
-    ///
-    /// A cue's start could not be changed at all: `addZoom` dropped it at the playhead and
-    /// the inspector offered magnification, hold and move but not *when*. Putting a zoom
-    /// half a second earlier meant deleting it and adding another, which throws away
-    /// everything else the user had set on it.
-    ///
-    /// Clamped so the whole cue — its hold *and* both of its moves — still fits. A cue that
-    /// runs off the end never finishes playing, and the recording ends mid-zoom.
-    public func moveZoom(_ id: ZoomCue.ID, to start: TimeInterval) {
-        guard let cue = edit.zooms.first(where: { $0.id == id }) else { return }
-        let footprint = cue.duration + cue.transitionDuration * 2
-        let latest = max(edit.duration - footprint, 0)
-        updateZoom(id, coalescingAs: "zoom.start.\(id)") { $0.start = min(max(start, 0), latest) }
-    }
-
-    /// Where the pointer was at an instant, in recorded pixels.
-    ///
-    /// Asked in edited time, because that is what the playhead is.
-    private func pointerPosition(at time: TimeInterval) -> CGPoint? {
-        let pointer = editedTelemetry.pointer
-        return pointer.last { $0.time <= time }?.position ?? pointer.first?.position
-    }
-
     /// The telemetry on the edited timeline (docs/10 R0.2).
     ///
     /// The sidecar is written in source time and everything in this model — the playhead,
@@ -339,10 +276,6 @@ public final class StudioDocumentModel {
     }
 
     @ObservationIgnored private var cachedEditedTelemetry: (clips: ClipTimeline, telemetry: InputTelemetry)?
-
-    private var centreOfFrame: CGPoint {
-        CGPoint(x: manifest.pixelSize.width / 2, y: manifest.pixelSize.height / 2)
-    }
 
     // MARK: - Presets
 

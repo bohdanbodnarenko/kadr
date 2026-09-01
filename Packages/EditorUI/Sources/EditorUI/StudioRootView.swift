@@ -1,3 +1,5 @@
+import AnnotationModel
+import AppKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -10,6 +12,7 @@ import SwiftUI
 public struct StudioRootView: View {
     @State private var model: StudioDocumentModel
     @State private var isInspectorPresented = true
+    @State private var showsExportOptions = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
@@ -124,6 +127,20 @@ public struct StudioRootView: View {
             }
         }
         .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                StudioPresetBar(model: model)
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(height: 0.5)
+            }
+            .background(.bar)
+        }
+        .onAppear { model.applyDefaultPresetIfFresh() }
+        .onChange(of: model.exportProgress) { _, progress in
+            Self.updateDockProgress(progress)
+        }
+        .onDisappear { Self.updateDockProgress(nil) }
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.
@@ -139,19 +156,54 @@ public struct StudioRootView: View {
         VStack(spacing: 8) {
             StudioTimelineView(model: model)
             HStack(spacing: 12) {
-                transport
-                timeLabel
-                Divider().frame(height: 16)
-                clipButtons
-                Divider().frame(height: 16)
-                zoomButtons
-                Spacer()
-                inspectorToggle
-                exportControl
+                if model.isCropping {
+                    cropBar
+                } else {
+                    StudioTransportBar(model: model)
+                        .frame(maxWidth: .infinity)
+                    cropButton
+                    inspectorToggle
+                    copyButton
+                    shareControl
+                    exportControl
+                }
             }
         }
         .padding(12)
         .background(.bar)
+        .onExitCommand {
+            if model.isCropping {
+                model.cancelCrop()
+            }
+        }
+    }
+
+    private var cropButton: some View {
+        Button("Crop") { model.beginCrop() }
+            .help("Crop the recording by dragging on the preview")
+            .disabled(model.exportProgress != nil)
+    }
+
+    private var cropBar: some View {
+        HStack(spacing: 8) {
+            Text("Crop")
+                .font(.headline)
+            Picker("Aspect", selection: Binding(
+                get: { model.cropAspect },
+                set: { model.applyCropAspect($0) }
+            )) {
+                ForEach(CropAspectPreset.allCases, id: \.self) { preset in
+                    Text(preset.title).tag(preset)
+                }
+            }
+            .frame(width: 110)
+            Button("Reset") { model.resetWorkingCrop() }
+            Spacer()
+            Button("Cancel") { model.cancelCrop() }
+                .keyboardShortcut(.cancelAction)
+            Button("Done") { model.applyCrop() }
+                .keyboardShortcut(.defaultAction)
+        }
     }
 
     /// Folds the inspector away, the way the annotation editor already does.
@@ -171,88 +223,19 @@ public struct StudioRootView: View {
         .accessibilityValue(isInspectorPresented ? "Shown" : "Hidden")
     }
 
-    /// Play, and step a frame either way (docs/08 §2 item 10).
-    ///
-    /// Visible buttons rather than key handling alone, and every one of them carries the
-    /// shortcut on its own label: a studio whose only transport is a keystroke nobody
-    /// mentioned is a studio people scrub frame by frame forever.
-    private var transport: some View {
-        HStack(spacing: 4) {
-            Button {
-                model.step(frames: -1)
-            } label: {
-                Image(systemName: "backward.frame")
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [])
-            .help("Back one frame (←)")
-
-            Button {
-                model.togglePlayback()
-            } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                    .frame(width: 14)
-            }
-            .keyboardShortcut(.space, modifiers: [])
-            .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
-
-            Button {
-                model.step(frames: 1)
-            } label: {
-                Image(systemName: "forward.frame")
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [])
-            .help("Forward one frame (→)")
-        }
-        .disabled(model.edit.duration <= 0)
+    private var copyButton: some View {
+        Button("Copy") { model.copyOriginalToClipboard() }
+            .help("Copy the original recording. Export first to copy the edit.")
+            .disabled(model.exportProgress != nil)
     }
 
-    private var timeLabel: some View {
-        Text("\(format(model.playhead)) / \(format(model.edit.duration))")
-            .font(.callout.monospacedDigit())
-            .foregroundStyle(.secondary)
-    }
-
-    private var clipButtons: some View {
-        HStack(spacing: 8) {
-            Menu("Trim") {
-                Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
-                Button("Trim End to Playhead") { model.trimEndToPlayhead() }
-            }
-            .frame(width: 78)
-            .disabled(model.playhead <= 0 || model.playhead >= model.edit.duration)
-            .help("Drop everything before or after the playhead")
-            Button("Split") { model.splitAtPlayhead() }
-                .keyboardShortcut("k", modifiers: .command)
-                .help("Cut the clip at the playhead (⌘K)")
-            Button("Delete clip") { model.removeClipAtPlayhead() }
-                .disabled(model.edit.clips.clips.count < 2)
-            Menu("Speed") {
-                ForEach([1.0, 1.5, 2.0, 4.0, 8.0], id: \.self) { speed in
-                    Button(speed == 1 ? "Normal" : "\(format(speed: speed))×") {
-                        model.setSpeedAtPlayhead(speed)
-                    }
-                }
-            }
-            .frame(width: 90)
+    private var shareControl: some View {
+        ShareLink(item: model.session.screenURL) {
+            Label("Share", systemImage: "square.and.arrow.up")
         }
-    }
-
-    private var zoomButtons: some View {
-        HStack(spacing: 8) {
-            Button("Add zoom") { model.addZoom() }
-            Button("Smart zooms") { model.planSmartZooms() }
-                .help("Plan zooms from where the recording was clicked")
-            // The shortcuts live here as well as on the menu. The menu's `undo:` reaches
-            // this model through `StudioWindowController`, which had to be put into the
-            // responder chain for it to arrive at all — before that, ⌘Z did nothing in the
-            // studio while an Undo button sat next to it doing something.
-            Button("Undo") { model.undo() }
-                .keyboardShortcut("z", modifiers: .command)
-                .disabled(!model.canUndo)
-            Button("Redo") { model.redo() }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
-                .disabled(!model.canRedo)
-        }
+        .labelStyle(.titleOnly)
+        .help("Share the original recording. Export first to share the edit.")
+        .disabled(model.exportProgress != nil)
     }
 
     @ViewBuilder
@@ -271,19 +254,29 @@ public struct StudioRootView: View {
                 .help("Stop the export and delete the partly-written file")
             }
         } else {
-            Button("Export…") { onExport(model) }
+            Button("Export…") { showsExportOptions = true }
                 .keyboardShortcut("e")
+                .popover(isPresented: $showsExportOptions, arrowEdge: .top) {
+                    StudioExportOptionsView(
+                        model: model,
+                        onConfirm: {
+                            showsExportOptions = false
+                            StudioExportSettings.remembered = model.exportSettings
+                            onExport(model)
+                        },
+                        onCancel: { showsExportOptions = false }
+                    )
+                }
         }
     }
 
-    // MARK: - Formatting
-
-    private func format(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded(.down))
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
-    private func format(speed: Double) -> String {
-        speed == speed.rounded() ? "\(Int(speed))" : String(format: "%.1f", speed)
+    /// A percent on the Dock icon so an export still reports after the window is covered.
+    static func updateDockProgress(_ progress: Double?) {
+        if let progress {
+            NSApp.dockTile.badgeLabel = "\(Int((progress * 100).rounded()))"
+        } else {
+            NSApp.dockTile.badgeLabel = nil
+        }
+        NSApp.dockTile.display()
     }
 }

@@ -29,6 +29,10 @@ struct StudioPreviewView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let fitted = StudioCropGeometry.fittedImageRect(
+                image: previewImageSize,
+                in: geometry.size
+            )
             ZStack {
                 // A recessed well rather than a black rectangle butted against the window
                 // edge: the picture is the thing being judged, and a surround that reads as
@@ -43,6 +47,15 @@ struct StudioPreviewView: View {
                 } else {
                     ProgressView()
                         .controlSize(.small)
+                }
+                if model.isCropping {
+                    StudioCropOverlay(model: model, fitted: fitted)
+                } else if model.manifest.hasCamera, model.edit.camera.isVisible {
+                    StudioCameraOverlay(
+                        model: model,
+                        fitted: fitted,
+                        imageSize: previewImageSize
+                    )
                 }
             }
             // Deliberately not crossfaded between frames. A fade needs a view-identity
@@ -63,29 +76,61 @@ struct StudioPreviewView: View {
         // Two triggers, because they cost different amounts. A scrub reuses the pipeline
         // and costs one decode; an edit rebuilds it. Watching the whole model instead would
         // redraw on the selection changing, which costs a decode and changes nothing.
-        .task(id: model.playhead) { await refresh() }
+        // Hover-skim is a third: it must not move the playhead, but it must show the frame
+        // under the pointer. Quantised so a fast sweep does not decode every pixel.
+        .task(id: model.playhead) {
+            guard model.skimTime == nil else { return }
+            await refresh()
+        }
+        .task(id: skimKey) { await refresh() }
         .task(id: model.edit) { await refresh() }
+        .task(id: model.isCropping) { await refresh() }
+    }
+
+    /// The uncropped recording while a crop is being placed, so the overlay can grow.
+    private var previewEdit: StudioEdit {
+        guard model.isCropping else { return model.edit }
+        var edit = model.edit
+        edit.cropRect = nil
+        return edit
+    }
+
+    private var previewImageSize: CGSize {
+        model.isCropping ? model.manifest.pixelSize : currentPipeline().plan.outputSize
+    }
+
+    private var previewTime: TimeInterval {
+        model.skimTime ?? model.playhead
+    }
+
+    /// Fifteen keys a second while skimming. Enough to follow a hover without decoding
+    /// every pointer-moved event. −1 when not skimming, so the playhead task owns that path.
+    private var skimKey: Int {
+        guard let skim = model.skimTime else { return -1 }
+        return Int((skim * 15).rounded())
     }
 
     private func refresh() async {
         guard let renderer else { return }
         frame = await renderer.image(
-            at: model.playhead,
+            at: previewTime,
             using: currentPipeline().composer,
-            exact: !model.isPlaying
+            exact: !model.isPlaying && model.skimTime == nil
         )
     }
 
     /// The pipeline for the edit on screen, rebuilt only when that edit changes.
     private func currentPipeline() -> StudioPreviewPipeline {
-        if let pipeline, pipeline.matches(model.edit, transcript: model.transcript) {
+        let edit = previewEdit
+        if let pipeline, pipeline.matches(edit, transcript: model.transcript) {
             return pipeline
         }
         let built = StudioPreviewPipeline(
-            edit: model.edit,
+            edit: edit,
             manifest: model.manifest,
             telemetry: model.telemetry,
-            transcript: model.transcript ?? Transcript()
+            transcript: model.transcript ?? Transcript(),
+            wallpaper: model.session.wallpaperURL(for: edit).flatMap { StudioWallpaper.image(at: $0) }
         )
         pipeline = built
         return built

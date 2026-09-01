@@ -253,4 +253,59 @@ struct ClipCompositionTests {
         let start = try await firstFootageStart(of: tracks[1])
         #expect(start < 0.2)
     }
+
+    @Test("An imported soundtrack replaces the recording's own audio")
+    func soundtrackReplacesScreenAudio() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await makeMovie(seconds: 3, in: folder)
+        let wav = folder.appendingPathComponent("voice.wav")
+        try writeSilentWav(seconds: 2, to: wav)
+
+        let composition = try await ClipCompositionBuilder().composition(
+            for: .whole(duration: 3),
+            screen: movie,
+            soundtrack: wav
+        )
+        let tracks = try await composition.loadTracks(withMediaType: .audio)
+        #expect(tracks.count == 1, "the soundtrack should be the only audio track")
+        let length = try await duration(of: composition)
+        #expect(abs(length - 3) < 0.2)
+        let audioLength = try await CMTimeGetSeconds(tracks[0].load(.timeRange).duration)
+        #expect(abs(audioLength - 2) < 0.2, "a shorter soundtrack ends early, got \(audioLength)")
+    }
+
+    /// A tiny PCM file, so the soundtrack path can be tested without a real recording.
+    private func writeSilentWav(seconds: Double, to url: URL) throws {
+        let sampleRate: UInt32 = 44100
+        let samples = UInt32((seconds * Double(sampleRate)).rounded())
+        let dataSize = samples * 2
+        var data = Data()
+        func ascii(_ text: String) {
+            data.append(contentsOf: text.utf8)
+        }
+        func u32(_ value: UInt32) {
+            var little = value.littleEndian
+            Swift.withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+        }
+        func u16(_ value: UInt16) {
+            var little = value.littleEndian
+            Swift.withUnsafeBytes(of: &little) { data.append(contentsOf: $0) }
+        }
+        ascii("RIFF")
+        u32(36 + dataSize)
+        ascii("WAVE")
+        ascii("fmt ")
+        u32(16)
+        u16(1)
+        u16(1)
+        u32(sampleRate)
+        u32(sampleRate * 2)
+        u16(2)
+        u16(16)
+        ascii("data")
+        u32(dataSize)
+        data.append(Data(count: Int(dataSize)))
+        try data.write(to: url)
+    }
 }

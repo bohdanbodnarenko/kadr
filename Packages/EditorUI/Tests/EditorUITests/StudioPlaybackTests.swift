@@ -3,6 +3,16 @@ import StudioSession
 import Testing
 @testable import EditorUI
 
+@Suite("Studio clock")
+struct StudioClockTests {
+    @Test("The transport clock shows tenths of a second")
+    func tenthsOfASecond() {
+        #expect(StudioClock.precise(4.2) == "0:04.2")
+        #expect(StudioClock.precise(65) == "1:05.0")
+        #expect(StudioClock.precise(3723.4) == "1:02:03.4")
+    }
+}
+
 /// Playing the edit, and moving a zoom (docs/08 §2 items 10 and 13).
 ///
 /// Both were gaps rather than defects, which is why no test caught them: the preview could
@@ -159,6 +169,18 @@ struct StudioPlaybackTests {
         #expect(!studio.isPlaying)
     }
 
+    @Test("Seeking jumps to the ends")
+    func seekToEnds() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.playhead = 5
+        studio.seekToStart()
+        #expect(studio.playhead == 0)
+        studio.seekToEnd()
+        #expect(studio.playhead == studio.edit.duration)
+    }
+
     @Test("Stepping moves by whole frames of the recording")
     func steppingMovesOneFrame() throws {
         let folder = scratch()
@@ -170,6 +192,21 @@ struct StudioPlaybackTests {
         #expect(abs(studio.playhead - (5 + 1.0 / 60)) < 0.0001)
         studio.step(frames: -1)
         #expect(abs(studio.playhead - 5) < 0.0001)
+    }
+
+    @Test("A five-second skip jumps by time, not frames")
+    func skippingFiveSeconds() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.playhead = 2
+
+        studio.step(seconds: 5)
+        #expect(abs(studio.playhead - 7) < 0.0001)
+        studio.step(seconds: -5)
+        #expect(abs(studio.playhead - 2) < 0.0001)
+        studio.step(seconds: -10)
+        #expect(studio.playhead == 0)
     }
 
     /// The playhead's own clamp still applies, so stepping back from zero stays at zero

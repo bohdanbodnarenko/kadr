@@ -14,14 +14,31 @@ public enum ZoomAnchor: Sendable, Hashable, Codable {
     case cluster(CGPoint)
     /// The middle of the frame.
     case centre
+    /// Follow the recorded pointer for the life of the cue.
+    ///
+    /// Explicit, not the default: chasing the pointer is how automatic zooms look cheap
+    /// (the camera dithers as the user moves). Offered as a mode because Screendrop's
+    /// "Pointer" focus is a real edit, and some recordings want the camera to stay on
+    /// whatever is being pointed at.
+    case pointer
 
     /// Where this anchor is, given the recorded area.
+    ///
+    /// Pointer-follow is resolved against samples at render time; this is the fallback
+    /// used by the focus pad and a crop that has no telemetry in hand.
     public func point(in size: CGSize) -> CGPoint {
         switch self {
         case let .fixed(point): point
         case let .cluster(point): point
-        case .centre: CGPoint(x: size.width / 2, y: size.height / 2)
+        case .centre, .pointer: CGPoint(x: size.width / 2, y: size.height / 2)
         }
+    }
+
+    public var followsPointer: Bool {
+        if case .pointer = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -43,6 +60,21 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
     public var anchor: ZoomAnchor
     /// How long the camera takes to move in, and out again.
     public var transitionDuration: TimeInterval
+    /// Whether this cue runs. Off leaves it on the lane so it can be turned back on.
+    public var isEnabled: Bool
+    /// How far a pointer-follow zoom keeps the subject from the centre of the frame.
+    ///
+    /// 0 is "always centre the pointer". 1 keeps it where it sat on the unzoomed screen, so
+    /// the camera does not yank a corner click into the middle. Screendrop calls this
+    /// "Edge in Frame".
+    public var boundsBias: Double {
+        didSet {
+            let next = Self.clampedBoundsBias(boundsBias)
+            if next != boundsBias {
+                boundsBias = next
+            }
+        }
+    }
 
     public init(
         id: UUID = UUID(),
@@ -50,7 +82,9 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
         duration: TimeInterval,
         magnification: Double = 1.8,
         anchor: ZoomAnchor = .centre,
-        transitionDuration: TimeInterval = 0.6
+        transitionDuration: TimeInterval = 0.6,
+        isEnabled: Bool = true,
+        boundsBias: Double = 0
     ) {
         self.id = id
         self.start = max(start, 0)
@@ -58,10 +92,18 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
         self.magnification = min(max(magnification, 1), Self.maximumMagnification)
         self.anchor = anchor
         self.transitionDuration = min(max(transitionDuration, 0.1), 2)
+        self.isEnabled = isEnabled
+        self.boundsBias = Self.clampedBoundsBias(boundsBias)
     }
 
     /// Past about four times, a 1080p recording is showing individual pixels.
     public static let maximumMagnification: Double = 4
+    /// Sensible starting bias when somebody first turns on pointer-follow.
+    public static let defaultPointerBoundsBias: Double = 0.25
+
+    static func clampedBoundsBias(_ value: Double) -> Double {
+        min(max(value, 0), 1)
+    }
 
     /// When the camera has finished moving out again.
     public var end: TimeInterval {
@@ -78,7 +120,7 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, start, duration, magnification, anchor, transitionDuration
+        case id, start, duration, magnification, anchor, transitionDuration, isEnabled, boundsBias
     }
 
     /// Every field defaults, so a cue written by a later Kadr still opens (docs/08 §2.6).
@@ -93,7 +135,9 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
             transitionDuration: container.decodeIfPresent(
                 TimeInterval.self,
                 forKey: .transitionDuration
-            ) ?? 0.6
+            ) ?? 0.6,
+            isEnabled: container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true,
+            boundsBias: container.decodeIfPresent(Double.self, forKey: .boundsBias) ?? 0
         )
     }
 }

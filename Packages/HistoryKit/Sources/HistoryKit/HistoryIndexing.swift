@@ -27,23 +27,67 @@ public extension HistoryStore {
         }
 
         return try await read { db in
-            // Two steps rather than a join: FTS5's rank is only available on the virtual
-            // table's own query, and the ordering is the point of a search.
-            let ids = try String.fetchAll(
-                db,
-                sql: "SELECT id FROM capture_fts WHERE capture_fts MATCH ? ORDER BY rank LIMIT ?",
-                arguments: [expression, limit]
+            try Self.rankedHits(
+                expression: expression,
+                tokens: HistorySearchQuery.tokens(in: text),
+                filter: filter,
+                limit: limit,
+                db: db
             )
-            guard !ids.isEmpty else { return [] }
-
-            var request = HistoryRecord.filter(ids.contains(Column("id")))
-            request = Self.apply(filter, to: request)
-            let records = try request.fetchAll(db)
-
-            // Put them back in rank order; the SQL above lost it.
-            let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
-            return records.sorted { rank[$0.id.uuidString, default: .max] < rank[$1.id.uuidString, default: .max] }
         }
+    }
+
+    /// FTS5 hits first, then captures whose original filename matches — recordings have
+    /// no OCR index, and a renamed project title is stored as that filename.
+    private static func rankedHits(
+        expression: String,
+        tokens: [String],
+        filter: HistoryFilter,
+        limit: Int,
+        db: Database
+    ) throws -> [HistoryRecord] {
+        let ids = try String.fetchAll(
+            db,
+            sql: "SELECT id FROM capture_fts WHERE capture_fts MATCH ? ORDER BY rank LIMIT ?",
+            arguments: [expression, limit]
+        )
+        var ftsRecords: [HistoryRecord] = []
+        if !ids.isEmpty {
+            var request = HistoryRecord.filter(ids.contains(Column("id")))
+            request = apply(filter, to: request)
+            let records = try request.fetchAll(db)
+            let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
+            ftsRecords = records.sorted {
+                rank[$0.id.uuidString, default: .max] < rank[$1.id.uuidString, default: .max]
+            }
+        }
+
+        var filenameRequest = HistoryRecord.all()
+        for token in tokens {
+            filenameRequest = filenameRequest.filter(
+                Column("original_filename").like(likePattern(for: token), escape: "\\")
+            )
+        }
+        filenameRequest = apply(filter, to: filenameRequest)
+        let filenameRecords = try filenameRequest.fetchAll(db)
+
+        var seen = Set<UUID>()
+        var merged: [HistoryRecord] = []
+        for record in ftsRecords + filenameRecords where seen.insert(record.id).inserted {
+            merged.append(record)
+            if merged.count == limit {
+                break
+            }
+        }
+        return merged
+    }
+
+    private static func likePattern(for token: String) -> String {
+        let escaped = token
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+        return "%\(escaped)%"
     }
 
     /// Captures with no index row yet, newest first (docs/03 §5: index what is retained).

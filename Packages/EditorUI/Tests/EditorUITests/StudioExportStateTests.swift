@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import StudioRender
 import StudioSession
@@ -83,5 +84,15 @@ struct StudioExportStateTests {
         studio.change { $0.showsClicks.toggle() }
         let changed = try #require(RenderStamp.digest(of: studio.edit))
         #expect(!stamp.matches(editDigest: changed, pixelSize: size))
+    }
+
+    @Test("Copy puts the original recording on the clipboard as a file")
+    func copyOriginalPutsTheFileOnTheClipboard() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.copyOriginalToClipboard()
+        let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self]) as? [URL]
+        #expect(urls?.map(\.standardizedFileURL).contains(studio.session.screenURL.standardizedFileURL) == true)
     }
 }

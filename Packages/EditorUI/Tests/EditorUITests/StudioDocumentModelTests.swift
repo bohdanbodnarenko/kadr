@@ -365,6 +365,32 @@ struct StudioDocumentModelTests {
         #expect(studio.edit.clips.clips[0].speed == Clip.maximumSpeed)
     }
 
+    @Test("Resetting clips restores the uncut recording")
+    func resetClips() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.playhead = 4
+        studio.splitAtPlayhead()
+        studio.setSpeedAtPlayhead(2)
+        studio.resetClips()
+        #expect(studio.edit.clips.clips.count == 1)
+        #expect(studio.edit.clips.clips[0].speed == 1)
+        #expect(abs(studio.edit.duration - 10) < 0.001)
+    }
+
+    @Test("An edge trim on a clip shortens only that clip")
+    func trimClipEdge() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        let id = studio.edit.clips.clips[0].id
+        studio.trimClipStart(id, toEdited: 2)
+        #expect(abs(studio.edit.duration - 8) < 0.001)
+        studio.trimClipEnd(id, toEdited: 5)
+        #expect(abs(studio.edit.duration - 5) < 0.001)
+    }
+
     @Test("The playhead cannot be dragged outside the recording")
     func playheadStaysInRange() throws {
         let folder = scratch()

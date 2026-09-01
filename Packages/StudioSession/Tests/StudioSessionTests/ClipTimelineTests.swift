@@ -190,6 +190,47 @@ struct ClipTimelineTests {
     func emptyObject() throws {
         #expect(try JSONDecoder().decode(ClipTimeline.self, from: Data("{}".utf8)).isEmpty)
     }
+
+    // MARK: - Edge trim
+
+    @Test("Dragging a clip's leading edge skips the start of that piece")
+    func trimClipStart() throws {
+        var timeline = whole()
+        let id = timeline.clips[0].id
+        timeline.trimClipStart(at: 0, toEdited: 2)
+        #expect(abs(timeline.editedDuration - 8) < 0.001)
+        #expect(try abs(#require(timeline.sourceTime(forEdited: 0)) - 2) < 0.001)
+        #expect(timeline.clips[0].id == id)
+    }
+
+    @Test("Dragging a clip's trailing edge drops the end of that piece")
+    func trimClipEnd() {
+        var timeline = whole()
+        let id = timeline.clips[0].id
+        timeline.trimClipEnd(at: 0, toEdited: 7)
+        #expect(abs(timeline.editedDuration - 7) < 0.001)
+        #expect(timeline.clips[0].id == id)
+        #expect(timeline.sourceTime(forEdited: 8) == nil)
+    }
+
+    @Test("An edge trim will not shrink a clip past the grab-able floor")
+    func trimClipRespectsMinimum() {
+        var timeline = whole(1)
+        timeline.trimClipEnd(at: 0, toEdited: 0.01)
+        #expect(abs(timeline.editedDuration - Clip.minimumEditedDuration) < 0.001)
+        timeline.trimClipStart(at: 0, toEdited: 0.9)
+        #expect(timeline.editedDuration >= Clip.minimumEditedDuration - 0.001)
+    }
+
+    @Test("Trimming the second clip does not move the first")
+    func trimIsPerClip() throws {
+        var timeline = whole()
+        timeline.split(atEdited: 4)
+        let firstDuration = timeline.clips[0].editedDuration
+        timeline.trimClipStart(at: 1, toEdited: 6)
+        #expect(abs(timeline.clips[0].editedDuration - firstDuration) < 0.001)
+        #expect(try abs(#require(timeline.sourceTime(forEdited: 4)) - 6) < 0.001)
+    }
 }
 
 /// The webcam bubble (docs/09 U3.4).
@@ -271,6 +312,60 @@ struct CameraBubbleTests {
         #expect(bubble == .standard)
     }
 
+    @Test("A free centre places the bubble there")
+    func freeCenter() {
+        var bubble = CameraBubble.standard
+        bubble.move(toNormalizedCenter: CGPoint(x: 0.5, y: 0.5))
+        let frame = bubble.frame(in: size)
+        #expect(abs(frame.midX - size.width / 2) < 0.5)
+        #expect(abs(frame.midY - size.height / 2) < 0.5)
+        #expect(bubble.placement == .centre)
+    }
+
+    @Test("A free centre at a corner stays inside the frame")
+    func freeCenterStaysInside() {
+        var bubble = CameraBubble.standard
+        bubble.move(toNormalizedCenter: CGPoint(x: 0, y: 0))
+        let frame = bubble.frame(in: size)
+        #expect(CGRect(origin: .zero, size: size).insetBy(dx: -0.001, dy: -0.001).contains(frame))
+        #expect(bubble.placement == .topLeading)
+    }
+
+    @Test("Resizing from a corner keeps the opposite edge still")
+    func resizePinsTheOppositeCorner() {
+        var bubble = CameraBubble.standard
+        bubble.move(toNormalizedCenter: CGPoint(x: 0.4, y: 0.4))
+        let before = bubble.frame(in: size)
+        let origin = CGPoint(x: before.minX, y: before.minY)
+        bubble.resize(toSizeFraction: 0.35, pinningTopLeading: origin, in: size)
+        let after = bubble.frame(in: size)
+        #expect(abs(after.minX - before.minX) < 1)
+        #expect(abs(after.minY - before.minY) < 1)
+        #expect(after.width > before.width)
+        #expect(CGRect(origin: .zero, size: size).insetBy(dx: -0.001, dy: -0.001).contains(after))
+    }
+
+    @Test("Snapping to a corner forgets the free position")
+    func snapClearsCenter() {
+        var bubble = CameraBubble.standard
+        bubble.move(toNormalizedCenter: CGPoint(x: 0.4, y: 0.6))
+        bubble.snap(to: .bottomTrailing)
+        #expect(bubble.center == nil)
+        #expect(bubble.placement == .bottomTrailing)
+        let snapped = bubble.frame(in: size)
+        var corner = CameraBubble.standard
+        corner.placement = .bottomTrailing
+        #expect(snapped == corner.frame(in: size))
+    }
+
+    @Test("A bubble with a free centre round-trips")
+    func freeCenterRoundTrips() throws {
+        var bubble = CameraBubble.standard
+        bubble.move(toNormalizedCenter: CGPoint(x: 0.3, y: 0.7))
+        let data = try JSONEncoder().encode(bubble)
+        #expect(try JSONDecoder().decode(CameraBubble.self, from: data) == bubble)
+    }
+
     // MARK: - Trimming (docs/08 §2 item 12)
 
     /// Dropping the dead air off the front is the commonest edit anybody makes to a screen
@@ -331,5 +426,34 @@ struct CameraBubbleTests {
 
         #expect(timeline.clips.allSatisfy { $0.speed == 2 })
         #expect(abs(timeline.editedDuration - 4) < 0.0001)
+    }
+
+    // MARK: - Cutting a source range
+
+    @Test("Cutting a stretch of the recording leaves the rest")
+    func removingSourceRangeKeepsTheSides() {
+        let cut = ClipTimeline.whole(duration: 10).removingSourceRange(from: 2, to: 5)
+        #expect(cut.clips.count == 2)
+        #expect(abs(cut.editedDuration - 7) < 0.0001)
+        #expect(cut.containsSourceTime(1))
+        #expect(!cut.containsSourceTime(3))
+        #expect(cut.containsSourceTime(6))
+        #expect(cut.editedTime(forSource: 3) == nil)
+        #expect(abs((cut.editedTime(forSource: 6) ?? -1) - 3) < 0.0001)
+    }
+
+    @Test("A cut that misses the recording is a no-op")
+    func removingAMissDoesNothing() {
+        let original = ClipTimeline.whole(duration: 4)
+        #expect(original.removingSourceRange(from: 8, to: 9) == original)
+        #expect(original.removingSourceRange(from: 2, to: 2) == original)
+    }
+
+    @Test("Speed survives a source-range cut")
+    func removingSourceRangeKeepsSpeed() {
+        let cut = ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 10, speed: 2)])
+            .removingSourceRange(from: 2, to: 4)
+        #expect(cut.clips.allSatisfy { $0.speed == 2 })
+        #expect(abs(cut.editedDuration - 4) < 0.0001)
     }
 }

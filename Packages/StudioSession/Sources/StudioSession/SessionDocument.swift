@@ -102,11 +102,20 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// What it was rendered at, so a request for a different size is not mistaken for a
     /// cache hit.
     public var pixelSize: CGSize
+    /// A digest of the export settings this file was encoded with. Optional so stamps
+    /// written before the options popover existed still decode.
+    public var settingsDigest: String?
 
-    public init(editDigest: String, outputPath: String, pixelSize: CGSize) {
+    public init(
+        editDigest: String,
+        outputPath: String,
+        pixelSize: CGSize,
+        settingsDigest: String? = nil
+    ) {
         self.editDigest = editDigest
         self.outputPath = outputPath
         self.pixelSize = pixelSize
+        self.settingsDigest = settingsDigest
     }
 
     /// Whether a cached render can be handed over instead of doing the work again.
@@ -114,8 +123,11 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// The file has to still be there: a stamp naming a file the user has since moved is a
     /// stamp for nothing. An empty digest is never a hit — two failed encodes used to
     /// collide into shipping the wrong file (docs/10 R3.5).
-    public func matches(editDigest: String, pixelSize: CGSize) -> Bool {
+    public func matches(editDigest: String, pixelSize: CGSize, settingsDigest: String? = nil) -> Bool {
         guard !editDigest.isEmpty, !self.editDigest.isEmpty else { return false }
+        if let stored = self.settingsDigest, stored != settingsDigest {
+            return false
+        }
         return self.editDigest == editDigest
             && self.pixelSize == pixelSize
             && FileManager.default.fileExists(atPath: outputPath)

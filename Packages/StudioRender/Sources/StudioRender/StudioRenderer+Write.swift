@@ -45,7 +45,7 @@ extension StudioRenderer {
             }
         }
 
-        let reader = try makeReader(state)
+        let reader = try makeReader(state, includeAudio: options.includeAudio)
         open.reader = reader
         let writer = try makeWriter(destination: destination, size: plan.outputSize, options: options, state: state)
         open.writer = writer
@@ -177,7 +177,7 @@ extension StudioRenderer {
         let audio: AVAssetReaderTrackOutput?
     }
 
-    private func makeReader(_ state: RenderState) throws -> ReaderBundle {
+    private func makeReader(_ state: RenderState, includeAudio: Bool) throws -> ReaderBundle {
         let reader: AVAssetReader
         do {
             reader = try AVAssetReader(asset: state.composition)
@@ -205,7 +205,7 @@ extension StudioRenderer {
         }
 
         var audio: AVAssetReaderTrackOutput?
-        if let track = state.audioTrack {
+        if includeAudio, let track = state.audioTrack {
             let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
                 AVFormatIDKey: kAudioFormatLinearPCM
             ])
@@ -235,7 +235,7 @@ extension StudioRenderer {
     ) throws -> WriterBundle {
         let writer: AVAssetWriter
         do {
-            writer = try AVAssetWriter(outputURL: destination, fileType: .mov)
+            writer = try AVAssetWriter(outputURL: destination, fileType: options.fileType)
         } catch {
             throw RenderError.couldNotCreateWriter(error.localizedDescription)
         }
@@ -244,7 +244,10 @@ extension StudioRenderer {
             AVVideoExpectedSourceFrameRateKey: options.frameRate,
             AVVideoMaxKeyFrameIntervalKey: options.frameRate * 2
         ]
-        compression[AVVideoAverageBitRateKey] = options.bitRate ?? Self.bitRate(for: size, frameRate: options.frameRate)
+        compression[AVVideoAverageBitRateKey] = Int(
+            Double(options.bitRate ?? Self.bitRate(for: size, frameRate: options.frameRate))
+                * max(options.bitRateMultiplier, 0.05)
+        )
 
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: options.codec,
@@ -259,7 +262,7 @@ extension StudioRenderer {
         writer.add(video)
 
         var audio: AVAssetWriterInput?
-        if state.audioTrack != nil {
+        if options.includeAudio, state.audioTrack != nil {
             let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVNumberOfChannelsKey: 2,
