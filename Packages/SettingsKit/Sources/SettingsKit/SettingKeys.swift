@@ -54,6 +54,12 @@ public enum SettingKeys {
     /// no on-screen way to stop, and "I could not work out how to stop it" is the first
     /// thing anybody said about it.
     public static let recordingShowsControlBar = SettingKey("recording.showsControlBar", default: true)
+    /// Seconds counted down before a recording starts (docs/03 §1.8).
+    ///
+    /// Its own key rather than sharing the still timer: three seconds before a screenshot is
+    /// a pose, three seconds before a recording is time to put the pointer where the first
+    /// shot begins — and somebody who wants one rarely wants the other.
+    public static let recordingCountdownSeconds = SettingKey("recording.countdownSeconds", default: 3)
     /// Show pressed keys. Off by default and shortcuts-only by default: showing every
     /// keystroke means showing whatever gets typed into a password field.
     public static let recordingShowsKeystrokes = SettingKey("recording.showsKeystrokes", default: false)

@@ -115,6 +115,11 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingShowsControlBar] = recordingShowsControlBar }
     }
 
+    /// Seconds counted down before a recording starts (docs/03 §1.8).
+    public var recordingCountdownSeconds: Int {
+        didSet { store[SettingKeys.recordingCountdownSeconds] = recordingCountdownSeconds }
+    }
+
     public var recordingShowsClicks: Bool {
         didSet { store[SettingKeys.recordingShowsClicks] = recordingShowsClicks }
     }
@@ -326,6 +331,7 @@ public final class AppSettings {
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
         recordingShowsControlBar = store[SettingKeys.recordingShowsControlBar]
+        recordingCountdownSeconds = store[SettingKeys.recordingCountdownSeconds]
         recordingShowsClicks = store[SettingKeys.recordingShowsClicks]
         recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]
         recordingKeystrokesShortcutsOnly = store[SettingKeys.recordingKeystrokesShortcutsOnly]

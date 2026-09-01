@@ -60,7 +60,13 @@ final class CaptureCountdown {
         }
     }
 
-    /// Esc cancels the countdown (docs/03 §1.5).
+    /// Called off before it fires.
+    ///
+    /// This used to say "Esc cancels the countdown (docs/03 §1.5)" and nothing anywhere
+    /// listened for Escape — the badge is a non-activating panel in an accessory app, so it
+    /// never becomes key, and a global key monitor would need an Accessibility grant this
+    /// feature has no other reason to ask for. What actually calls it off is pressing the
+    /// same shortcut again, which is the behaviour the recording path documents.
     func cancel() {
         task?.cancel()
         task = nil

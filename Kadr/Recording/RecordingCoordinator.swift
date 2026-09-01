@@ -104,7 +104,11 @@ final class RecordingCoordinator {
     /// Arms the next recording with automation's overrides (docs/03 §8.4).
     func arm(_ overrides: RecordingOverrides) {
         self.overrides = overrides
+        startedByAutomation = true
     }
+
+    /// Whether the recording about to start was asked for by a script rather than a person.
+    @ObservationIgnored var startedByAutomation = false
 
     /// Picks a region with the selection overlay, then records it.
     func beginRegionRecording() {
@@ -120,7 +124,9 @@ final class RecordingCoordinator {
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) }
                 ) { [weak self] outcome in
                     guard case let .region(result) = outcome else { return }
-                    self?.start(target: .region(result.rect, display: result.display.displayID))
+                    self?.startAfterCountdown(
+                        target: .region(result.rect, display: result.display.displayID)
+                    )
                 }
             } catch {
                 permissions.noteCaptureFailure(error)
@@ -133,8 +139,46 @@ final class RecordingCoordinator {
     /// Records a whole display, with no overlay.
     func beginDisplayRecording(_ displayID: CGDirectDisplayID = CGMainDisplayID()) {
         guard !isRecording else { return }
-        start(target: .display(displayID))
+        startAfterCountdown(target: .display(displayID))
     }
+
+    /// Counts down, then records (docs/03 §1.8).
+    ///
+    /// Recording used to begin on the same frame as the click, so the first second of every
+    /// screen recording was the pointer travelling away from whatever had just been pressed
+    /// — the menu item, the Record button, the corner of the selection. A still gets a
+    /// timer and a recording did not, which is backwards: a photograph can be retaken in a
+    /// second and a recording has to be made again from the top.
+    ///
+    /// Escape cancels the countdown, and zero seconds skips it entirely rather than costing
+    /// a frame.
+    private func startAfterCountdown(target: RecordingTarget) {
+        // Never for an automated recording: `kadr record-screen` is a script, and a script
+        // does not need three seconds to put its pointer somewhere. A countdown there is
+        // just latency somebody has to work around.
+        let seconds = startedByAutomation ? 0 : settings.recordingCountdownSeconds
+        state = .starting
+        countdown.run(seconds: seconds) { [weak self] in
+            guard let self else { return }
+            // The countdown claimed `.starting` so a second hotkey press could not begin a
+            // second recording while the numbers were on screen; `start` claims it again.
+            state = .idle
+            start(target: target)
+        }
+    }
+
+    /// Cancels a countdown that has not started recording yet.
+    ///
+    /// Separate from `cancel()` because there is no engine, no session and no footage yet —
+    /// only a promise to begin, and the only thing to undo is the promise.
+    func cancelCountdown() -> Bool {
+        guard countdown.isRunning else { return false }
+        countdown.cancel()
+        state = .idle
+        return true
+    }
+
+    @ObservationIgnored private let countdown = CaptureCountdown()
 
     private func start(target: RecordingTarget) {
         guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }

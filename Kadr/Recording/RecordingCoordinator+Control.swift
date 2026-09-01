@@ -89,6 +89,7 @@ extension RecordingCoordinator {
                 state = .idle
                 elapsed = 0
                 overrides = .none
+                startedByAutomation = false
                 logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
 
                 // The card goes up before the session is assembled. Linking the footage and
@@ -104,6 +105,7 @@ extension RecordingCoordinator {
                 state = .idle
                 elapsed = 0
                 overrides = .none
+                startedByAutomation = false
                 studio.cancel()
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
                 report(.failed(error.localizedDescription))
@@ -112,6 +114,12 @@ extension RecordingCoordinator {
     }
 
     func cancel() {
+        // A countdown that has not started recording yet has no engine, no session and no
+        // footage — only a promise to begin. Cancelling that is the whole job, and falling
+        // through would ask the engine to tear down a recording it never started.
+        if cancelCountdown() {
+            return
+        }
         guard isRecording else { return }
         state = .idle
         stopTicking()
@@ -126,6 +134,7 @@ extension RecordingCoordinator {
             self?.state = .idle
             self?.elapsed = 0
             self?.overrides = .none
+            self?.startedByAutomation = false
             self?.report(.cancelled)
         }
     }

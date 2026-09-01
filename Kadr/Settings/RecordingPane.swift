@@ -51,6 +51,19 @@ struct RecordingPane: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Before recording") {
+                Picker("Countdown", selection: $settings.recordingCountdownSeconds) {
+                    Text("Off").tag(0)
+                    Text("3 seconds").tag(3)
+                    Text("5 seconds").tag(5)
+                    Text("10 seconds").tag(10)
+                }
+                Text("Time to get into position before the recording starts. "
+                    + "Press the recording shortcut again to call it off.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("While recording") {
                 Toggle("Show the floating controls", isOn: $settings.recordingShowsControlBar)
                 Text("A small bar with Stop, Pause and Discard. It never appears in the "
