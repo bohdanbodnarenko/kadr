@@ -39,6 +39,25 @@
 
 Process split + <30 MB agent (their editor RAM can never be reclaimed — everything is one process); 13 tested packages vs zero tests (~575 tests vs "build success is the only verification" per their AGENTS.md); ScreenCaptureKit stills vs shelling out to `/usr/sbin/screencapture` (note their documented reason — SCK display capture drops inter-window shadows — as a real caveat we should handle deliberately); macOS 14 floor vs 26.4; CALayer-per-shape editor rendering vs full-view redraw per drag frame; command-stack undo vs 200-snapshot stack ×2 disjoint systems (their crop has its own undo — ⌘Z means different things in different modes); zero network vs in-app uploader; onboarding (they have none); pixelate jitter (ours is at least attempted; theirs is a plain downsample); Developer-ID discipline both have.
 
+## 3a. Status, 2026-09-01
+
+Everything in the table below has since been built. The last four to land were the ones the
+recording and editing experience was actually judged on, and they are worth naming because
+each was a *whole missing affordance* rather than a rough edge:
+
+- **Stopping a recording.** There was no on-screen way at all — only the menu-bar dropdown.
+  Now a floating bar (Stop/Pause/Discard, draggable, excluded from the capture, never takes
+  key status), the record hotkey toggling, and a dedicated ⌃⇧. .
+- **Deciding mic/system-sound/camera before recording.** Settings-only, so recording a demo
+  with your voice meant leaving the thing you were about to record. Now folded into the
+  countdown, which itself was missing — a still got a self-timer and a recording did not.
+- **Watching a video edit.** The preview scrubbed and could not play, so a zoom, a cut or a
+  speed change could only be judged by exporting and waiting. Space plays; the timeline
+  zooms to sixty times the window, because fit-to-window is 1.3 points a second on a
+  ten-minute recording and "split here" was a guess.
+- **Leaving crop mode in the screenshot editor.** docs/03 §3 says "Crop is a mode until
+  **Done**" and there was no Done.
+
 ## 4. Full verdict table
 
 | Capability | Screendrop vs Kadr today | Action |
