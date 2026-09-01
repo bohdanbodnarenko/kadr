@@ -1,4 +1,5 @@
 import Foundation
+import HistoryKit
 import SettingsKit
 import Shared
 import StudioSession
@@ -77,5 +78,47 @@ struct StudioCardActionTests {
         try Data(repeating: 5, count: 512).write(to: recording)
 
         #expect(RecordingSessionStore(root: root).session(forFootageAt: recording) == nil)
+    }
+
+    @Test("A history recording with a session opens in the studio")
+    func historyRecordingWithSessionOpensStudio() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = RecordingSession.create(in: root, named: "from-history")
+        try session.create()
+        try Data(repeating: 5, count: 512).write(to: session.screenURL)
+        let recording = root.appendingPathComponent("Demo.mp4")
+        try FileManager.default.linkItem(at: session.screenURL, to: recording)
+        let store = RecordingSessionStore(root: root)
+        let routed = HistoryOpenRouting.destination(kind: .video, fileURL: recording, store: store)
+        guard case let .studio(directory) = routed else {
+            Issue.record("expected a studio session, got \(routed)")
+            return
+        }
+        #expect(directory.standardizedFileURL == session.directory.standardizedFileURL)
+    }
+
+    @Test("A screenshot from history stays on the overlay")
+    func historyScreenshotStaysOnOverlay() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let shot = root.appendingPathComponent("Shot.png")
+        try Data(repeating: 1, count: 64).write(to: shot)
+        let store = RecordingSessionStore(root: root)
+
+        #expect(HistoryOpenRouting.destination(kind: .image, fileURL: shot, store: store) == .overlay)
+    }
+
+    @Test("A recording with no session stays on the overlay")
+    func historyRecordingWithoutSessionStaysOnOverlay() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recording = root.appendingPathComponent("Old.mp4")
+        try Data(repeating: 5, count: 512).write(to: recording)
+        let store = RecordingSessionStore(root: root)
+
+        #expect(
+            HistoryOpenRouting.destination(kind: .video, fileURL: recording, store: store) == .overlay
+        )
     }
 }
