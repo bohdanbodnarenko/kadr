@@ -153,6 +153,30 @@ final class FilePromiseDragController: NSObject, NSFilePromiseProviderDelegate, 
 /// A SwiftUI drag source that hands over a file promise.
 ///
 /// The view owns the whole mouse interaction — click, double-click and drag — because
+/// When a press and a wobble is a drag, and when it is still a click.
+///
+/// One view owns click, double-click and drag, so this decides between them.
+///
+/// The threshold used to be 3 points, which is smaller than the wobble in an ordinary
+/// double-click. So the first click of a double-click started a drag: the card lifted, the
+/// user released without a drop, macOS played its snap-back animation — and because starting
+/// the drag cleared the pending press, the double-click never arrived. Double-clicking a card
+/// did not open the editor at all, it just made the card jump.
+enum CardDragGesture {
+    /// Below this a press and a move is still a click.
+    ///
+    /// Ten points rather than three: the number has to be larger than a hand holding still
+    /// through two clicks, not merely larger than zero.
+    static let dragThreshold: CGFloat = 10
+
+    static func shouldBeginDrag(travelled: CGFloat, clickCount: Int) -> Bool {
+        // Nothing that begins as the second click of a double-click is a drag, however far
+        // the pointer then travels.
+        guard clickCount < 2 else { return false }
+        return travelled >= dragThreshold
+    }
+}
+
 /// splitting them between SwiftUI gestures and an AppKit drag source is what makes drags
 /// start when the user meant to click.
 struct FilePromiseDragView: NSViewRepresentable {
@@ -205,9 +229,6 @@ struct FilePromiseDragView: NSViewRepresentable {
         var coordinator: Coordinator?
         private var mouseDownEvent: NSEvent?
 
-        /// Below this a mouse-down-and-move is still a click, not a drag.
-        private static let dragThreshold: CGFloat = 3
-
         override func mouseDown(with event: NSEvent) {
             mouseDownEvent = event
         }
@@ -218,7 +239,12 @@ struct FilePromiseDragView: NSViewRepresentable {
                 event.locationInWindow.x - start.locationInWindow.x,
                 event.locationInWindow.y - start.locationInWindow.y
             )
-            guard travelled >= Self.dragThreshold else { return }
+            guard CardDragGesture.shouldBeginDrag(
+                travelled: travelled,
+                clickCount: start.clickCount
+            ) else {
+                return
+            }
 
             mouseDownEvent = nil
             coordinator?.beginDrag(from: self, event: start)

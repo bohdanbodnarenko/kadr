@@ -131,3 +131,69 @@ struct OverlayCardLayoutTests {
         #expect(wide < 420)
     }
 }
+
+/// Click, double-click and drag all come from one view, so something has to tell them apart
+/// (docs/03 §2).
+@MainActor
+@Suite("Card gestures")
+struct CardGestureTests {
+    /// The bug this exists for: the threshold was 3 points, which is less than the wobble in
+    /// an ordinary double-click. The first click started a drag, the card snapped back, and
+    /// the double-click was swallowed — so double-clicking a card never opened the editor.
+    @Test("A double-click's wobble is not a drag")
+    func doubleClickWobbleIsNotADrag() {
+        for travelled in [CGFloat(0), 1, 3, 5, 8, 9.9] {
+            #expect(
+                !CardDragGesture.shouldBeginDrag(travelled: travelled, clickCount: 1),
+                "\(travelled) points of wobble started a drag"
+            )
+        }
+    }
+
+    @Test("A deliberate pull is a drag")
+    func deliberatePullIsADrag() {
+        #expect(CardDragGesture.shouldBeginDrag(travelled: 10, clickCount: 1))
+        #expect(CardDragGesture.shouldBeginDrag(travelled: 40, clickCount: 1))
+    }
+
+    /// Whatever the pointer does afterwards, the second click of a double-click is not the
+    /// start of a drag.
+    @Test("The second click of a double-click never drags")
+    func secondClickNeverDrags() {
+        for travelled in [CGFloat(0), 10, 100] {
+            #expect(!CardDragGesture.shouldBeginDrag(travelled: travelled, clickCount: 2))
+            #expect(!CardDragGesture.shouldBeginDrag(travelled: travelled, clickCount: 3))
+        }
+    }
+}
+
+/// The hover chrome has to fit inside the card it is drawn over (docs/03 §2).
+@MainActor
+@Suite("Card action layout")
+struct CardActionLayoutTests {
+    /// The bug: the default layout puts nine actions in the column slot, drawn as one
+    /// `HStack`. That is 302 points of buttons inside a 200-point card, clipped at both ends
+    /// by the card's own rounded shape — the outer two sliced in half, the rest invisible.
+    @Test("Every action fits inside the card at any width it can be set to")
+    func actionsFitTheCard() {
+        let actions = CardLayout.standard.actions(in: .column, for: .screenshot)
+        #expect(actions.count > 1, "this only proves something if the default row is crowded")
+
+        for width in [CGFloat(140), 160, 200, 280, 420] {
+            let rows = QuickAccessCardView.actionRows(actions, width: width)
+            let widest = rows.map(\.count).max() ?? 0
+            let used = CGFloat(widest) * QuickAccessCardView.actionButtonSize
+                + CGFloat(max(0, widest - 1)) * QuickAccessCardView.actionSpacing
+            let available = width - QuickAccessCardView.chromeInset * 2
+            #expect(used <= available, "a row of \(widest) needs \(used) in \(available) at width \(width)")
+            #expect(rows.flatMap(\.self) == actions, "wrapping must not drop or reorder an action")
+        }
+    }
+
+    /// A wider card puts more on a row, which is the only reason to wrap by width at all.
+    @Test("A wider card fits more buttons per row")
+    func widerCardsFitMore() {
+        #expect(QuickAccessCardView.actionsPerRow(width: 420) > QuickAccessCardView.actionsPerRow(width: 140))
+        #expect(QuickAccessCardView.actionsPerRow(width: 140) >= 1)
+    }
+}

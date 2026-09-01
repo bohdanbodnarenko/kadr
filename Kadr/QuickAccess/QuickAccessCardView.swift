@@ -74,6 +74,37 @@ struct QuickAccessCardView: View {
     /// What is left of an older card once the stack runs out of room.
     static let sliverHeight: CGFloat = 6
 
+    /// One action button, edge to edge, and the gap between two.
+    static let actionButtonSize: CGFloat = 28
+    static let actionSpacing: CGFloat = 4
+    /// How far the chrome is inset from the card's edge.
+    ///
+    /// Enough to clear the corner radius, so a button in a corner is not shaved by the
+    /// rounded clip the card draws itself with.
+    static let chromeInset: CGFloat = 8
+
+    /// How many action buttons fit across a card of this width.
+    ///
+    /// The default layout puts nine actions in the column slot, and they were drawn as one
+    /// `HStack`: 302 points of buttons inside a card 200 points wide, clipped at both ends
+    /// by the card's own rounded shape. Every action past the fifth was invisible, and the
+    /// two at the edges were sliced in half — which is exactly what a row that cannot count
+    /// looks like. So it wraps, and this is the count it wraps at.
+    static func actionsPerRow(width: CGFloat) -> Int {
+        let available = width - chromeInset * 2
+        let stride = actionButtonSize + actionSpacing
+        guard available > 0, stride > 0 else { return 1 }
+        return max(1, Int((available + actionSpacing) / stride))
+    }
+
+    /// The column's actions, split into rows that fit.
+    static func actionRows(_ actions: [CardAction], width: CGFloat) -> [[CardAction]] {
+        let perRow = actionsPerRow(width: width)
+        return stride(from: 0, to: actions.count, by: perRow).map { start in
+            Array(actions[start ..< min(start + perRow, actions.count)])
+        }
+    }
+
     /// Proportional to the width, not a constant.
     ///
     /// The height used to be a fixed 104 points at any width. The width is a setting that
@@ -93,7 +124,38 @@ struct QuickAccessCardView: View {
         isHovering && !suppressHoverChrome
     }
 
+    /// Chrome fades for hover, and simply goes when the stack starts moving.
+    ///
+    /// Double-clicking a card opens the editor, which tucks the stack into the peek tab — so
+    /// the card slides away while its own chrome is still fading out over the top. Two
+    /// animations of different lengths on the same view, one of them on something leaving the
+    /// screen. The slide is the one worth watching.
+    private var chromeAnimation: Animation? {
+        guard !reduceMotion, !suppressHoverChrome else { return nil }
+        return .snappy(duration: 0.16)
+    }
+
     var body: some View {
+        card
+            .animation(chromeAnimation, value: showsChrome)
+            .onHover { hovering in
+                isHovering = hovering
+                actions.setHovered(hovering)
+            }
+            .contextMenu {
+                Button("Hide", action: actions.dismiss)
+                Button("Delete", action: actions.delete)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
+            .accessibilityHint("Hover for the actions, double-tap to open, or drag to another app")
+    }
+
+    /// The capture, the chrome over it, and the border and shadow around the pair.
+    ///
+    /// Split out of `body` because the whole thing in one chain stopped type-checking in
+    /// reasonable time.
+    private var card: some View {
         ThumbnailImage(
             url: item.fileURL,
             maxPixelSize: Int((width * displayScale).rounded()),
@@ -107,28 +169,7 @@ struct QuickAccessCardView: View {
         // One AppKit view owns click, double-click and drag. A file promise rather than a
         // URL, so a staged capture is finalised when the receiver asks for it and an
         // abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
-        .overlay(
-            FilePromiseDragView(
-                payload: {
-                    FilePromisePayload(
-                        suggestedName: item.filename,
-                        contentType: item.contentType,
-                        resolve: actions.resolveForDrag,
-                        completed: actions.dragCompleted
-                    )
-                },
-                dragImage: { NSImage(contentsOf: item.fileURL) },
-                onTap: {},
-                onDoubleTap: {
-                    if item.isVideo, actions.studioAvailable {
-                        actions.studio()
-                    } else if actions.annotateAvailable {
-                        actions.annotate()
-                    }
-                },
-                onDragBegan: { actions.beginDrag() }
-            )
-        )
+        .overlay(dragSurface)
         // Above the drag view, so the buttons take their own clicks. The scrim behind them
         // does not, which is what keeps a hovered card draggable.
         .overlay {
@@ -147,18 +188,29 @@ struct QuickAccessCardView: View {
         .compositingGroup()
         .shadow(color: .black.opacity(0.20), radius: 14, y: 6)
         .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.16), value: showsChrome)
-        .onHover { hovering in
-            isHovering = hovering
-            actions.setHovered(hovering)
-        }
-        .contextMenu {
-            Button("Hide", action: actions.dismiss)
-            Button("Delete", action: actions.delete)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
-        .accessibilityHint("Hover for the actions, double-tap to open, or drag to another app")
+    }
+
+    private var dragSurface: some View {
+        FilePromiseDragView(
+            payload: {
+                FilePromisePayload(
+                    suggestedName: item.filename,
+                    contentType: item.contentType,
+                    resolve: actions.resolveForDrag,
+                    completed: actions.dragCompleted
+                )
+            },
+            dragImage: { NSImage(contentsOf: item.fileURL) },
+            onTap: {},
+            onDoubleTap: {
+                if item.isVideo, actions.studioAvailable {
+                    actions.studio()
+                } else if actions.annotateAvailable {
+                    actions.annotate()
+                }
+            },
+            onDragBegan: { actions.beginDrag() }
+        )
     }
 
     /// Everything the card can tell you and everything it can do (docs/03 §2).
@@ -246,14 +298,20 @@ struct QuickAccessCardView: View {
     }
 
     /// The actions the user put in the column slot, across the middle of the card.
+    ///
+    /// Wrapped to the card's width rather than run off both edges — see `actionsPerRow`.
     @ViewBuilder
     private var centreActions: some View {
         let column = layout.actions(in: .column, for: item.captureKind)
         if !column.isEmpty {
-            HStack(spacing: 4) {
-                ForEach(column, id: \.self) { action in
-                    button(for: action)
-                        .background(.regularMaterial, in: Circle())
+            VStack(spacing: Self.actionSpacing) {
+                ForEach(Array(Self.actionRows(column, width: width).enumerated()), id: \.offset) { _, row in
+                    HStack(spacing: Self.actionSpacing) {
+                        ForEach(row, id: \.self) { action in
+                            button(for: action)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                    }
                 }
             }
         }
@@ -292,7 +350,7 @@ struct QuickAccessCardView: View {
             // system picker can offer the right services for the file.
             ShareLink(item: item.fileURL) {
                 Image(systemName: cardAction.systemImage)
-                    .frame(width: 26, height: 26)
+                    .frame(width: Self.actionButtonSize, height: Self.actionButtonSize)
             }
             .buttonStyle(.borderless)
             .help("Share")
@@ -352,106 +410,13 @@ struct QuickAccessCardView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .frame(width: 24, height: 24)
+                // The style adds 3 points on each side, making `actionButtonSize` — which is
+                // what the wrap arithmetic counts in.
+                .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
         }
         .buttonStyle(CardActionButtonStyle())
         .disabled(!enabled)
         .help(enabled ? title : "\(title) — coming soon")
         .accessibilityLabel(title)
-    }
-}
-
-/// A thumbnail loaded through HistoryKit's downsampling pipeline, so the card never
-/// decodes a full-resolution capture (doc 04 §7 rule 2).
-///
-/// A recording gets a poster frame instead, which ImageIO cannot produce — hence the
-/// two paths.
-private struct ThumbnailImage: View {
-    let url: URL
-    let maxPixelSize: Int
-    let isVideo: Bool
-
-    @State private var image: CGImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.15))
-            }
-        }
-        .overlay {
-            if isVideo {
-                Image(systemName: "play.circle.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.white, .black.opacity(0.4))
-            }
-        }
-        .task(id: url) {
-            image = isVideo
-                ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
-                : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
-        }
-    }
-}
-
-/// A card action that answers the pointer.
-///
-/// The action row was `.borderless`, which on macOS draws an icon and nothing else — no
-/// hover, no press, no hit area beyond the glyph. On a floating card that is a row of
-/// symbols the user cannot tell are buttons until one of them works. This gives each a
-/// target, a fill that arrives under the pointer, and a press that reads as a press.
-private struct CardActionButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.5))
-            .padding(3)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(fill(for: configuration)))
-            }
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
-            .onHover { isHovering = $0 && isEnabled }
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-
-    private func fill(for configuration: Configuration) -> Double {
-        guard isEnabled else { return 0 }
-        if configuration.isPressed {
-            return 0.22
-        }
-        return isHovering ? 0.12 : 0
-    }
-}
-
-/// The close, which has to read over any capture and answer the pointer.
-private struct CardCloseButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
-            .background {
-                Circle()
-                    .fill(.regularMaterial)
-                    .overlay(Circle().fill(Color.primary.opacity(isHovering ? 0.14 : 0)))
-            }
-            .scaleEffect(configuration.isPressed ? 0.9 : (isHovering ? 1.08 : 1))
-            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
-            .onHover { isHovering = $0 }
-            .contentShape(Circle())
     }
 }
