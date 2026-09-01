@@ -8,7 +8,15 @@ import Foundation
 /// for a 5K one, then the canvas fits inside whatever is left.
 public enum EditorWindowGeometry {
     public static let minSize = CGSize(width: 760, height: 580)
+    /// The inspector's resting width, and how far the user may drag it.
+    ///
+    /// An ideal rather than a fixed size now that the inspector is the system's own column:
+    /// the window opens at this width and the divider moves from there. The bounds are what
+    /// keeps a drag from collapsing the controls into an unreadable strip at one end or
+    /// squeezing the canvas out at the other.
     public static let inspectorWidth: CGFloat = 268
+    public static let inspectorMinWidth: CGFloat = 232
+    public static let inspectorMaxWidth: CGFloat = 420
     public static let toolbarHeight: CGFloat = 52
     public static let screenFill: CGFloat = 0.92
 

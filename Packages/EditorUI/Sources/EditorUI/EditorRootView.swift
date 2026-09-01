@@ -58,17 +58,23 @@ public struct EditorRootView: View {
                 }
             }
             Divider()
-            HStack(spacing: 0) {
-                workspace
-                if isInspectorPresented {
-                    Divider()
+            // The system's inspector column, not a panel of our own (docs/03 §3).
+            //
+            // This was an `HStack` with a `Divider` and a hard-coded width, which meant
+            // re-implementing — badly — what `NSSplitViewItem`'s inspector behaviour already
+            // does: a divider the user can drag, a width that holds against window resizes,
+            // the right material against the window background, and a collapse that animates
+            // the way every other macOS inspector animates. A hand-rolled one is a panel that
+            // merely looks like an inspector until the user tries to drag its edge.
+            workspace
+                .inspector(isPresented: $isInspectorPresented) {
                     EditorInspector(model: model)
-                        .frame(width: EditorWindowGeometry.inspectorWidth)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .inspectorColumnWidth(
+                            min: EditorWindowGeometry.inspectorMinWidth,
+                            ideal: EditorWindowGeometry.inspectorWidth,
+                            max: EditorWindowGeometry.inspectorMaxWidth
+                        )
                 }
-            }
-            .animation(.easeInOut(duration: 0.2), value: isInspectorPresented)
         }
         .overlay {
             if showsCopiedToast {

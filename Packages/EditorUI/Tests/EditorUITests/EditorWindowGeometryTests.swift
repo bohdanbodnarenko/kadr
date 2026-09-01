@@ -49,4 +49,23 @@ struct EditorWindowGeometryTests {
         #expect(frame.height <= screen.height * EditorWindowGeometry.screenFill + 0.5)
         #expect(screen.contains(frame))
     }
+
+    /// The inspector is the system's column now, so its width is a range rather than a
+    /// number — and a range is only useful if the resting width is inside it.
+    ///
+    /// Worth pinning: `inspectorColumnWidth(min:ideal:max:)` takes all three, and an ideal
+    /// outside the bounds is not a compile error, it is an inspector that jumps to a
+    /// different width the first time the user touches the divider.
+    @Test("The resting inspector width sits inside the range it can be dragged to")
+    func inspectorWidthIsWithinItsBounds() {
+        #expect(EditorWindowGeometry.inspectorMinWidth < EditorWindowGeometry.inspectorWidth)
+        #expect(EditorWindowGeometry.inspectorWidth < EditorWindowGeometry.inspectorMaxWidth)
+    }
+
+    /// Even dragged to its widest, the inspector has to leave a usable canvas beside it.
+    @Test("A window at its minimum still fits the widest inspector and a canvas")
+    func theWidestInspectorStillLeavesACanvas() {
+        let remaining = EditorWindowGeometry.minSize.width - EditorWindowGeometry.inspectorMaxWidth
+        #expect(remaining > 300, "a fully dragged-out inspector leaves only \(remaining) points of canvas")
+    }
 }

@@ -13,31 +13,41 @@ public struct StudioRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
+    /// The inspector's resting width, and the bounds a drag may move it between.
+    ///
+    /// Wider than the annotation editor's, because this one carries the timeline's cue list
+    /// and a transcript rather than a column of sliders.
+    static let inspectorWidth: CGFloat = 320
+    static let inspectorMinWidth: CGFloat = 280
+    static let inspectorMaxWidth: CGFloat = 460
+
     public init(model: StudioDocumentModel, onExport: @escaping (StudioDocumentModel) -> Void) {
         _model = State(initialValue: model)
         self.onExport = onExport
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                StudioPreviewView(model: model)
-                    .frame(minWidth: 480, minHeight: 270)
-                controls
-            }
-            .frame(maxWidth: .infinity)
-
-            if isInspectorPresented {
-                Divider()
-                sidebar
-                    .frame(width: 320)
-                    // Slides in from the edge it lives on rather than appearing, which is
-                    // what makes collapsing read as the panel moving out of the way instead
-                    // of the window rearranging itself.
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
+        VStack(spacing: 0) {
+            StudioPreviewView(model: model)
+                .frame(minWidth: 480, minHeight: 270)
+            controls
         }
-        .animation(motion(.snappy(duration: 0.28)), value: isInspectorPresented)
+        .frame(maxWidth: .infinity)
+        // The system's inspector column, the same one the annotation editor uses.
+        //
+        // It was an `HStack` with a fixed 320-point panel and a `move` transition — a fair
+        // imitation of an inspector right up to the moment somebody tried to drag its edge,
+        // which is the first thing anyone does to a panel this size. `NSSplitViewItem`'s
+        // inspector behaviour brings the draggable divider, the material, and a collapse
+        // animation that matches every other macOS inspector including Xcode's.
+        .inspector(isPresented: $isInspectorPresented) {
+            sidebar
+                .inspectorColumnWidth(
+                    min: Self.inspectorMinWidth,
+                    ideal: Self.inspectorWidth,
+                    max: Self.inspectorMaxWidth
+                )
+        }
         .frame(minWidth: 820, minHeight: 520)
         .animation(motion(.easeOut(duration: 0.2)), value: model.notice)
         .overlay(alignment: .top) { banner }
