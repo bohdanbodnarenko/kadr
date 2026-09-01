@@ -1,22 +1,24 @@
 import AppKit
 import SettingsKit
 
-/// Peek tab: hide the cards, leave a pill in the same corner (docs/03 §2).
+/// Peek tab: tuck the cards away, leave a pill in the same corner (docs/03 §2).
 ///
-/// Squashing each card to a sliver looked broken and was not clickable as a restore.
-/// One tab owns expand and dismiss-all; the card panels stay alive off-screen so coming
-/// back is a show, not a rebuild.
+/// Squashing each card to a sliver looked broken and was not clickable as a restore. One
+/// tab owns expand and dismiss-all.
+///
+/// Collapsing is now a flag rather than a piece of window management. The stack and the
+/// pill are both mounted in the same panel the whole time, and this slides one out as the
+/// other slides in — so there is no ordering-out to race a capture that arrives mid-collapse,
+/// and the transition is something the user can actually see happen.
 @MainActor
 extension QuickAccessManager {
     /// Collapses every card to the peek tab, or restores them.
     ///
-    /// Called when an editor window opens over the cards, or when the user flicks the
-    /// stack toward the screen edge. Peeking rather than destroying the panels because
-    /// hide-and-restore of the *items* is a race — the tab is always present, so there
-    /// is no moment to get wrong. Clicking the tab expands even while the editor is still
-    /// open; a new capture expands on its own so the new card is seen.
+    /// Called when an editor window opens over the cards, or when the user flicks the stack
+    /// toward the screen edge. Clicking the tab expands even while the editor is still open;
+    /// a new capture expands on its own so the new card is seen.
     func setPeeking(_ peeking: Bool) {
-        if peeking, panels.isEmpty {
+        if peeking, items.isEmpty {
             return
         }
         guard isPeeking != peeking else { return }
@@ -27,63 +29,6 @@ extension QuickAccessManager {
             stopWatchingForEditorExit()
         }
         restack()
-    }
-
-    var isPeekTabVisible: Bool {
-        peekPanel?.isVisible == true
-    }
-
-    func hidePeekTab() {
-        peekPanel?.hide()
-    }
-
-    func teardownPeekTab() {
-        peekPanel?.teardown()
-        peekPanel = nil
-    }
-
-    func layoutPeekTab(on screen: NSScreen) {
-        for entry in panels {
-            entry.panel.hideForPeek()
-        }
-
-        let width = CGFloat(settings.overlayCardWidth)
-        let height = QuickAccessPeekTabView.pillHeight
-        let area = screen.visibleFrame
-        let origin = CGPoint(
-            x: settings.overlayCorner.isLeading
-                ? area.minX + Self.screenMargin
-                : area.maxX - width - Self.screenMargin,
-            y: settings.overlayCorner.isBottom
-                ? area.minY + Self.screenMargin
-                : area.maxY - height - Self.screenMargin
-        )
-        let title = OverlayPeekCopy.title(
-            count: panels.count,
-            hasVideo: panels.contains { $0.item.isVideo }
-        )
-        let panel = peekPanelIfNeeded()
-        panel.update(
-            title: title,
-            corner: settings.overlayCorner,
-            size: CGSize(width: width, height: height)
-        )
-        panel.show(at: origin)
-    }
-
-    func peekPanelIfNeeded() -> QuickAccessPeekPanel {
-        if let peekPanel {
-            return peekPanel
-        }
-        let panel = QuickAccessPeekPanel(
-            width: CGFloat(settings.overlayCardWidth),
-            corner: settings.overlayCorner,
-            title: "",
-            onExpand: { [weak self] in self?.setPeeking(false) },
-            onDismissAll: { [weak self] in self?.dismissAll() }
-        )
-        peekPanel = panel
-        return panel
     }
 
     /// Restores the cards when the editor process goes away.

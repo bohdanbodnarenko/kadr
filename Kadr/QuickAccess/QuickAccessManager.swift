@@ -2,10 +2,12 @@ import AppKit
 import CaptureCore
 import HistoryKit
 import MediaExport
+import Observation
 import os
 import OverlayKit
 import SettingsKit
 import Shared
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// Owns the Quick Access Overlay: the cards, where they sit, and when they go away.
@@ -17,43 +19,65 @@ import UniformTypeIdentifiers
 /// Several members are internal rather than private: the card actions live in
 /// `QuickAccessManager+Actions.swift`, and `private` is file-scoped.
 @MainActor
+@Observable
 final class QuickAccessManager {
-    let settings: AppSettings
-    let output: CaptureOutput
-    let pins: PinManager
-    let editor = EditorLauncher()
+    @ObservationIgnored let settings: AppSettings
+    @ObservationIgnored let output: CaptureOutput
+    @ObservationIgnored let pins: PinManager
+    @ObservationIgnored let editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
     /// The helper connection for GIF encoding (docs/03 §1.8).
-    let vision = VisionClient()
-    let textRecognizer = TextRecognizer()
+    @ObservationIgnored let vision = VisionClient()
+    @ObservationIgnored let textRecognizer = TextRecognizer()
     /// Shows what OCR found, the same panel the selection overlay's text mode uses.
-    let textToast = TextCaptureToast()
-    let history: HistoryController?
-    let logger = KadrLog.logger(.overlay)
+    @ObservationIgnored let textToast = TextCaptureToast()
+    @ObservationIgnored let history: HistoryController?
+    @ObservationIgnored let logger = KadrLog.logger(.overlay)
 
     /// The one-time tip over the first card, while it is up.
-    var coachTip: QuickAccessCoachTip?
+    @ObservationIgnored var coachTip: QuickAccessCoachTip?
+    /// Space, over a card, to look at the capture full size.
+    @ObservationIgnored lazy var quickLook = QuickLookPresenter { [weak self] peeking in
+        self?.setPeeking(peeking)
+    }
 
-    var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
-    /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
-    var engagedItems: Set<UUID> = []
+    /// The cards currently on screen, newest first.
+    ///
+    /// Observed, along with `isPeeking`: these two are what the stack draws, and the whole
+    /// point of the single-panel overlay is that changing them animates rather than
+    /// repositioning windows.
+    var items: [QuickAccessItem] = []
     /// Whether the cards are collapsed to the peek tab (docs/03 §2).
     var isPeeking = false
+
+    /// The one panel the whole stack lives in. Created with the first card, torn down with
+    /// the last, so an agent with nothing to show owns no windows (CLAUDE.md rule 2).
+    @ObservationIgnored var overlayPanel: QuickAccessOverlayPanel?
+    /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
+    @ObservationIgnored var engagedItems: Set<UUID> = []
     /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
-    var editorExitObserver: (any NSObjectProtocol)?
-    var dismissTasks: [UUID: Task<Void, Never>] = [:]
+    @ObservationIgnored var editorExitObserver: (any NSObjectProtocol)?
+    @ObservationIgnored var dismissTasks: [UUID: Task<Void, Never>] = [:]
     /// The card the pointer is over. Hover pauses auto-dismiss; it does not claim the card.
-    var hoveredItemID: UUID?
+    ///
+    /// Not observed: the card tracks its own hover, so publishing this would redraw the
+    /// whole stack every time the pointer crossed a card.
+    @ObservationIgnored var hoveredItemID: UUID?
     /// The card currently being dragged out.
-    var draggingItemID: UUID?
-    var peekPanel: QuickAccessPeekPanel?
-    var hoverKeyMonitor: Any?
-    var localKeyMonitor: Any?
+    @ObservationIgnored var draggingItemID: UUID?
+    @ObservationIgnored var hoverKeyMonitor: Any?
+    @ObservationIgnored var localKeyMonitor: Any?
     /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
-    private var recentlyClosed: [QuickAccessItem] = []
+    @ObservationIgnored private var recentlyClosed: [QuickAccessItem] = []
 
     static let cardSpacing: CGFloat = 12
     static let screenMargin: CGFloat = 16
+
+    /// The stack's identity, for the animation that reflows it.
+    var itemIDs: [UUID] {
+        items.map(\.id)
+    }
+
     private static let maximumRecentlyClosed = 10
 
     init(settings: AppSettings, output: CaptureOutput, pins: PinManager, history: HistoryController? = nil) {
@@ -65,11 +89,6 @@ final class QuickAccessManager {
 
     var hasRecentlyClosed: Bool {
         !recentlyClosed.isEmpty
-    }
-
-    /// The cards currently on screen, newest first.
-    var items: [QuickAccessItem] {
-        panels.map(\.item)
     }
 
     /// Shows a card for a capture that has just been exported.
@@ -187,11 +206,10 @@ final class QuickAccessManager {
 
     /// Dismisses every card without deleting anything.
     func dismissAll() {
-        for entry in panels {
-            recordClosed(entry.item)
-            entry.panel.dismiss()
+        for item in items {
+            recordClosed(item)
         }
-        panels.removeAll()
+        items.removeAll()
         dismissTasks.values.forEach { $0.cancel() }
         dismissTasks.removeAll()
         engagedItems.removeAll()
@@ -200,7 +218,7 @@ final class QuickAccessManager {
         stopHoverKeyMonitor()
         isPeeking = false
         stopWatchingForEditorExit()
-        teardownPeekTab()
+        teardownOverlay()
     }
 
     // MARK: - Presenting
@@ -210,68 +228,67 @@ final class QuickAccessManager {
         if isPeeking {
             setPeeking(false)
         }
-        let panel = QuickAccessPanel(item: item, settings: settings, actions: actions(for: item))
-        panels.insert((item, panel), at: 0)
-        panel.present(at: .zero)
+        items.insert(item, at: 0)
         restack()
         scheduleAutoDismiss(for: item)
-        presentCoachTipIfNeeded(over: panel, item: item)
+        presentCoachTipIfNeeded(for: item)
         logger.info("Quick Access card shown for \(item.filename, privacy: .public)")
     }
 
-    /// Positions every card in the configured corner, newest in front.
+    /// Makes sure the stack has a panel, on the right screen.
     ///
-    /// Positions come off `visibleFrame`, not `frame`, which is what keeps cards clear of
-    /// the Dock and the menu bar (docs/03 §2 accept list).
+    /// This is all that is left of what used to be a layout pass over every card. Positions
+    /// come off `visibleFrame`, not `frame`, which is what keeps cards clear of the Dock and
+    /// the menu bar (docs/03 §2 accept list) — the panel covers exactly that, and SwiftUI
+    /// arranges the column inside it.
     func restack() {
-        guard let screen = targetScreen() else { return }
-        if isPeeking {
-            layoutPeekTab(on: screen)
+        guard !items.isEmpty, let screen = targetScreen() else { return }
+        overlayPanelIfNeeded().present(on: screen)
+    }
+
+    func overlayPanelIfNeeded() -> QuickAccessOverlayPanel {
+        if let overlayPanel {
+            return overlayPanel
+        }
+        let panel = QuickAccessOverlayPanel(content: EmptyView())
+        // The content needs the panel, to hand back the frames that take clicks; the panel
+        // needs the content. Set after construction rather than tangling the two.
+        panel.setContent(QuickAccessStackView(manager: self) { [weak panel] rects in
+            panel?.setInteractiveRects(rects)
+        })
+        panel.onScroll = { [weak self] deltaX, deltaY in
+            self?.handleScroll(deltaX: deltaX, deltaY: deltaY)
+        }
+        overlayPanel = panel
+        return panel
+    }
+
+    func teardownOverlay() {
+        overlayPanel?.dismiss()
+        overlayPanel = nil
+    }
+
+    /// A trackpad flick over a card: outward hides it, toward the screen edge tucks the
+    /// stack into the peek tab (docs/03 §2).
+    ///
+    /// Acts on the hovered card, which is the one under the pointer that produced the
+    /// scroll. When the overlay was one window per card this came for free — the card's own
+    /// window got the event — so the wiring had to be rebuilt when they became one.
+    func handleScroll(deltaX: CGFloat, deltaY: CGFloat) {
+        guard !isPeeking,
+              let hoveredItemID,
+              let item = items.first(where: { $0.id == hoveredItemID })
+        else {
             return
         }
-        hidePeekTab()
-        layoutCards(on: screen)
-    }
-
-    func layoutCards(on screen: NSScreen) {
-        let area = screen.visibleFrame
-        let maxVisible = settings.overlayMaxVisibleCards
-        // The panel is wider than the card by the shadow margin on each side, so the window
-        // has somewhere to draw a shadow that a window would otherwise clip.
-        let panelWidth = QuickAccessCardView.panelWidth(
-            forCardWidth: CGFloat(settings.overlayCardWidth)
-        )
-        for (index, entry) in panels.enumerated() {
-            entry.panel.revealFromPeek()
-            entry.panel.setCardSize(width: panelWidth, height: entry.panel.frame.height)
-            let size = entry.panel.frame.size
-            let origin = cardOrigin(index: index, size: size, area: area, maxVisible: maxVisible)
-            entry.panel.setStackDepth(index, origin: origin)
-            // Beyond the visible count the card is a hint that more exist, not a card.
-            if index >= maxVisible {
-                entry.panel.alphaValue = 0.25
-            }
+        switch OverlaySwipe.from(deltaX: deltaX, deltaY: deltaY, corner: settings.overlayCorner) {
+        case .dismiss:
+            dismiss(item)
+        case .peek:
+            setPeeking(true)
+        case nil:
+            break
         }
-    }
-
-    func cardOrigin(index: Int, size: CGSize, area: CGRect, maxVisible: Int) -> CGPoint {
-        // Positions are for the *visible* card, not the panel. The panel is larger by the
-        // shadow margin on every side, and without taking that off, a card would sit a
-        // shadow's width further from the screen edge and a shadow's width further apart
-        // from the next one — every gap in the stack quietly widened by invisible padding.
-        let bleed = QuickAccessCardView.shadowMargin
-        let visible = CGSize(width: size.width - bleed * 2, height: size.height - bleed * 2)
-        let step = index < maxVisible ? Self.cardSpacing + visible.height : Self.cardSpacing
-        let offset = index < maxVisible
-            ? CGFloat(index) * step
-            : CGFloat(maxVisible) * (Self.cardSpacing + visible.height) + CGFloat(index - maxVisible) * 6
-        let x = settings.overlayCorner.isLeading
-            ? area.minX + Self.screenMargin - bleed
-            : area.maxX - size.width - Self.screenMargin + bleed
-        let y = settings.overlayCorner.isBottom
-            ? area.minY + Self.screenMargin + offset - bleed
-            : area.maxY - size.height - Self.screenMargin - offset + bleed
-        return CGPoint(x: x, y: y)
     }
 
     func targetScreen() -> NSScreen? {
@@ -279,7 +296,7 @@ final class QuickAccessManager {
             return NSScreen.screens.first
         }
         // The display the capture came from, falling back to the one with the pointer.
-        let captureDisplay = panels.first?.item.displayID
+        let captureDisplay = items.first?.displayID
         let matching = captureDisplay.flatMap { displayID in
             NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
         }
@@ -294,7 +311,7 @@ final class QuickAccessManager {
     /// the 24-hour sweep will delete it. Quitting with those on screen throws work away
     /// silently, which is the one thing a capture tool must not do.
     var unsavedItems: [QuickAccessItem] {
-        panels.map(\.item).filter(\.isStaged)
+        items.filter(\.isStaged)
     }
 
     var hasUnsavedItems: Bool {
@@ -337,12 +354,12 @@ final class QuickAccessManager {
     /// and the card goes if the user asked for that (docs/03 §2).
     /// The receiver asked for the file: finalise it and hand back where it now lives.
     ///
-    /// Reading the URL back out of `panels` rather than trusting the captured item is the
+    /// Reading the URL back out of `items` rather than trusting the captured item is the
     /// whole fix for docs/07 C1 — `finalizeIfStaged` *moves* the file, and the card view's
     /// copy of the item still holds the path it had before the move.
     func resolveForDrag(_ item: QuickAccessItem) -> URL? {
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
             logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .public)")
             return nil
@@ -361,38 +378,36 @@ final class QuickAccessManager {
 
     /// The first thing a user does with a staged capture finalises it (docs/03 §2).
     func finalizeIfStaged(_ item: QuickAccessItem) {
-        guard item.isStaged, let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        guard item.isStaged, let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         guard let moved = output.finalizeStaged(item.fileURL) else { return }
-        panels[index].item.fileURL = moved
-        panels[index].item.isStaged = false
+        items[index].fileURL = moved
+        items[index].isStaged = false
     }
 
     /// Dismiss ≠ delete: the file stays where the policy put it (docs/03 §2).
     func dismiss(_ item: QuickAccessItem) {
-        guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         dismissCoachTip(for: item)
-        let entry = panels.remove(at: index)
+        let removed = items.remove(at: index)
         forgetTransientState(for: item)
-        recordClosed(entry.item)
-        entry.panel.dismiss()
+        recordClosed(removed)
         finishRemoval()
     }
 
     /// Deletes the capture as well as the card.
     func delete(_ item: QuickAccessItem) {
-        guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         dismissCoachTip(for: item)
-        let entry = panels.remove(at: index)
+        let removed = items.remove(at: index)
         forgetTransientState(for: item)
-        entry.panel.dismiss()
         // The library keeps its own content-addressed copy, so trashing the file alone
         // left a "deleted" capture sitting in App Support until retention expired — which
         // for a sensitive screenshot is the whole problem (docs/07 H5). Hashed before the
         // trash, because afterwards there is nothing to hash.
-        history?.deleteFromLibrary(matching: entry.item.fileURL)
+        history?.deleteFromLibrary(matching: removed.fileURL)
         // Deleted means gone, so it is not offered for restore.
-        try? FileManager.default.trashItem(at: entry.item.fileURL, resultingItemURL: nil)
-        logger.info("Deleted \(entry.item.filename, privacy: .public)")
+        try? FileManager.default.trashItem(at: removed.fileURL, resultingItemURL: nil)
+        logger.info("Deleted \(removed.filename, privacy: .public)")
         finishRemoval()
     }
 
@@ -409,10 +424,10 @@ final class QuickAccessManager {
     }
 
     func finishRemoval() {
-        if panels.isEmpty {
+        if items.isEmpty {
             isPeeking = false
             stopWatchingForEditorExit()
-            teardownPeekTab()
+            teardownOverlay()
             return
         }
         restack()

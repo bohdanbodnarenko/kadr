@@ -41,22 +41,26 @@ struct QuickAccessCardActions {
     var textAvailable = false
 }
 
-/// The card's content (docs/03 §2): thumbnail, hover details, expanding action row.
+/// The card (docs/03 §2): a thumbnail at rest, everything else on hover.
+///
+/// At rest it is only the capture. It used to be a material panel wrapping the thumbnail
+/// with a row of filename and dimensions underneath, which made it half as big again for
+/// information nobody reads at a glance — and docs/03 §2 puts that information on hover
+/// anyway, along with the actions and the close.
+///
+/// So hover is where the card explains itself, and at rest it says the one thing it is for:
+/// this is what you just captured, and it is over here.
 struct QuickAccessCardView: View {
     let item: QuickAccessItem
     let actions: QuickAccessCardActions
     let width: CGFloat
     /// Which buttons this card offers, and where (docs/09 U2.3).
     var layout: CardLayout = .standard
+    /// Held back while the stack is reflowing, so the actions do not flash across every
+    /// card that passes under a stationary pointer.
+    var suppressHoverChrome = false
 
     @State private var isHovering = false
-    /// Pinned open by a click, so the actions stay while the pointer travels to one.
-    @State private var isExpanded = false
-
-    /// Hovering reveals the actions; a click pins them.
-    private var showsActions: Bool {
-        isHovering || isExpanded
-    }
 
     /// The scale of the screen this card is on.
     ///
@@ -64,93 +68,45 @@ struct QuickAccessCardView: View {
     /// non-Retina display, and — once Apple ships anything above 2× — too few on a better
     /// one (docs/07 LOW).
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // Smaller than it was (140/36/8). A card is a notification about something that
-    // already happened, and this one occupied a fifth of the height of a laptop screen for
-    // a thumbnail nobody inspects at that size — what it needs to do is be recognisable and
-    // reachable, which 104 points manages.
-    private static let thumbnailHeight: CGFloat = 104
-    private static let actionRowHeight: CGFloat = 30
-    private static let padding: CGFloat = 7
+    static let cornerRadius: CGFloat = 12
+    /// What is left of an older card once the stack runs out of room.
+    static let sliverHeight: CGFloat = 6
 
-    /// Room around the card for its shadow, inside the panel.
+    /// Proportional to the width, not a constant.
     ///
-    /// A window clips its content, and the card filled its panel exactly — so the shadow
-    /// that lifts it off the desktop was being cut off at the edges, and a hover that
-    /// scaled the card pushed the buttons at its edges outside the window and hid them.
-    /// The panel is a little larger than the card, and the difference is where the shadow
-    /// lives.
-    static let shadowMargin: CGFloat = 12
-
-    /// The panel needs its size before SwiftUI has laid anything out.
-    ///
-    /// Both include the margin, so a caller sizing a window gets the window's size and the
-    /// card inside it stays the width the user asked for.
-    static func height(forWidth width: CGFloat, item: QuickAccessItem) -> CGFloat {
-        thumbnailHeight + actionRowHeight + padding * 2 + shadowMargin * 2
+    /// The height used to be a fixed 104 points at any width. The width is a setting that
+    /// ranges from 140 to 420, so at the top of that range the card was a letterbox slot
+    /// showing a horizontal strip cropped out of the middle of the capture — the setting
+    /// made the card wider without making it show any more.
+    static func height(forWidth width: CGFloat) -> CGFloat {
+        (width * 0.66).rounded()
     }
 
-    static func panelWidth(forCardWidth width: CGFloat) -> CGFloat {
-        width + shadowMargin * 2
+    private var height: CGFloat {
+        Self.height(forWidth: width)
+    }
+
+    /// Hover chrome is suppressed while the stack is moving.
+    private var showsChrome: Bool {
+        isHovering && !suppressHoverChrome
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            thumbnail
-            // Actions on hover, details otherwise (docs/08 §2 item 13).
-            //
-            // They used to be behind a click on the thumbnail, which is the wrong gesture
-            // twice over: the card is a thing you want to *drag*, so clicking it to reveal a
-            // menu fights the drag, and a user who does not know the click exists sees a
-            // picture with no actions at all. Hovering a card to see what it can do is what
-            // every other capture tool does and what people try first.
-            if showsActions {
-                actionRow
-                    .transition(.opacity)
-            } else {
-                details
-                    .transition(.opacity)
-            }
-        }
-        .padding(Self.padding)
-        .frame(width: width)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.primary.opacity(isHovering ? 0.24 : 0.12))
-        )
-        // Lifts a little under the pointer, so the card the pointer is on is obvious in a
-        // stack of them.
-        // Deepens under the pointer, and does not scale.
-        //
-        // Scaling was the wrong way to say "this one": the card fills its panel, a window
-        // clips its content, so growing the card pushed the buttons along its edges outside
-        // the window and cut them in half. The shadow says the same thing and stays inside
-        // the frame — now that there is a margin for it to occupy.
-        .shadow(color: .black.opacity(isHovering ? 0.3 : 0.18), radius: isHovering ? 10 : 5, y: isHovering ? 4 : 2)
-        .padding(Self.shadowMargin)
-        .animation(.snappy(duration: 0.16), value: isHovering)
-        .animation(.snappy(duration: 0.16), value: isExpanded)
-        .onHover { hovering in
-            isHovering = hovering
-            actions.setHovered(hovering)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
-    }
-
-    private var thumbnail: some View {
         ThumbnailImage(
             url: item.fileURL,
             maxPixelSize: Int((width * displayScale).rounded()),
             isVideo: item.isVideo
         )
-        .frame(height: Self.thumbnailHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .contentShape(RoundedRectangle(cornerRadius: 8))
-        // One AppKit view owns click, double-click and drag. A file promise rather
-        // than a URL, so a staged capture is finalised when the receiver asks for it
-        // and an abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
+        .frame(width: width, height: height)
+        // Rounded at the source as well as by the outer clip: during a compound animation
+        // (the stack reflowing while a card slides) the outer clip can lag a frame and flash
+        // square corners past the rounded card.
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        // One AppKit view owns click, double-click and drag. A file promise rather than a
+        // URL, so a staged capture is finalised when the receiver asks for it and an
+        // abandoned drag changes nothing (docs/03 §2, §6; docs/09 U0.1).
         .overlay(
             FilePromiseDragView(
                 payload: {
@@ -162,46 +118,98 @@ struct QuickAccessCardView: View {
                     )
                 },
                 dragImage: { NSImage(contentsOf: item.fileURL) },
-                // Pins the actions open. Hover already showed them, so this is for keeping
-                // them while the pointer leaves the card — not for discovering they exist.
-                onTap: { isExpanded.toggle() },
+                onTap: {},
                 onDoubleTap: {
-                    if actions.annotateAvailable {
+                    if item.isVideo, actions.studioAvailable {
+                        actions.studio()
+                    } else if actions.annotateAvailable {
                         actions.annotate()
                     }
                 },
                 onDragBegan: { actions.beginDrag() }
             )
         )
+        // Above the drag view, so the buttons take their own clicks. The scrim behind them
+        // does not, which is what keeps a hovered card draggable.
         .overlay {
-            if isHovering {
-                hoverOverlay
+            if showsChrome {
+                hoverChrome
+                    .transition(.opacity)
             }
         }
-        // Always in the same place, hover or not.
-        //
-        // There used to be one in the details row and another over the thumbnail, so the
-        // close did not disappear on hover — it *moved*, from the bottom of the card to the
-        // top corner, out from under a pointer already travelling towards it. A target that
-        // relocates as you reach for it is worse than one that is simply absent.
-        .overlay(alignment: .topTrailing) {
-            hideButton
-                .padding(6)
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.22))
+        )
+        // Flattened first, so the shadow is cast by the rounded result rather than by the
+        // square image inside it.
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.20), radius: 14, y: 6)
+        .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.16), value: showsChrome)
+        .onHover { hovering in
+            isHovering = hovering
+            actions.setHovered(hovering)
         }
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Hover to see the actions, double-tap to open, or drag to another app")
+        .contextMenu {
+            Button("Hide", action: actions.dismiss)
+            Button("Delete", action: actions.delete)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
+        .accessibilityHint("Hover for the actions, double-tap to open, or drag to another app")
     }
 
+    /// Everything the card can tell you and everything it can do (docs/03 §2).
+    private var hoverChrome: some View {
+        ZStack {
+            // Dark regardless of the system appearance: it covers a screenshot, not a
+            // window, so what it has to stay legible against is the user's capture.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+                .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 4) {
+                    corner(.topLeading)
+                    Spacer(minLength: 0)
+                    corner(.topTrailing)
+                    hideButton
+                }
+                Spacer(minLength: 0)
+                centreActions
+                Spacer(minLength: 0)
+                HStack(alignment: .bottom, spacing: 4) {
+                    corner(.bottomLeading)
+                    Spacer(minLength: 0)
+                    corner(.bottomTrailing)
+                }
+            }
+            .padding(6)
+
+            VStack {
+                Spacer()
+                details
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 6)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Filename, dimensions and size — the things docs/03 §2 asks hover to show.
     private var details: some View {
         HStack(spacing: 6) {
-            Text(isHovering ? item.filename : item.dimensionsText)
-                .font(.caption)
+            Text(item.filename)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
-            if isHovering, let size = item.fileSizeText {
+            Text(item.dimensionsText)
+                .foregroundStyle(.secondary)
+            if let size = item.fileSizeText {
                 Text(size)
-                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             if item.wasCompressed {
@@ -209,12 +217,12 @@ struct QuickAccessCardView: View {
             }
             if item.isStaged {
                 Image(systemName: "tray")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
                     .help("Kept in the overlay only. Saved when you act on it.")
             }
         }
-        .frame(height: Self.actionRowHeight)
+        .font(.caption2)
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.6), radius: 2)
     }
 
     /// What the last compression achieved (docs/09 U2.4).
@@ -229,47 +237,29 @@ struct QuickAccessCardView: View {
                 .font(.caption2.weight(.semibold))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
-                .background(Color.green.opacity(0.22), in: Capsule())
+                .background(Color.green.opacity(0.35), in: Capsule())
                 .help("The compressed copy is on the clipboard.")
         } else {
             Text("no smaller")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
                 .help("This capture is already about as small as it gets.")
         }
     }
 
-    /// Hover chrome: the layout's corner actions, plus a close that hides without deleting.
-    ///
-    /// Corners were configured in settings and never drawn — they only exist on hover,
-    /// over the thumbnail, which is where there is room for them (docs/09 U2.3).
-    private var hoverOverlay: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.black.opacity(0.32))
-                .allowsHitTesting(false)
-            VStack {
-                HStack(alignment: .top) {
-                    corner(.topLeading)
-                    Spacer()
-                    corner(.topTrailing)
-                }
-                Spacer()
-                HStack {
-                    corner(.bottomLeading)
-                    Spacer()
-                    corner(.bottomTrailing)
+    /// The actions the user put in the column slot, across the middle of the card.
+    @ViewBuilder
+    private var centreActions: some View {
+        let column = layout.actions(in: .column, for: item.captureKind)
+        if !column.isEmpty {
+            HStack(spacing: 4) {
+                ForEach(column, id: \.self) { action in
+                    button(for: action)
+                        .background(.regularMaterial, in: Circle())
                 }
             }
-            .padding(6)
         }
     }
 
     /// Hide, not delete. The file stays where the save policy put it (docs/03 §2).
-    ///
-    /// Sits over the thumbnail's top corner whether or not the card is hovered, so it is
-    /// always in the same place — and carries its own material, because it has to stay
-    /// legible over whatever the capture happens to be.
     private var hideButton: some View {
         Button(action: actions.dismiss) {
             Image(systemName: "xmark")
@@ -287,16 +277,6 @@ struct QuickAccessCardView: View {
     /// The layout is read rather than hard-coded, and filtered by what the capture is:
     /// one layout serves both kinds, so placing Trim shows it on recordings and hides it
     /// on screenshots without anybody keeping two layouts in step.
-    private var actionRow: some View {
-        HStack(spacing: 2) {
-            ForEach(layout.actions(in: .column, for: item.captureKind), id: \.self) { action in
-                button(for: action)
-            }
-        }
-        .frame(height: Self.actionRowHeight)
-    }
-
-    /// The corner buttons, shown on hover over the thumbnail.
     private func corner(_ slot: CardSlot) -> some View {
         ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { action in
             button(for: action)

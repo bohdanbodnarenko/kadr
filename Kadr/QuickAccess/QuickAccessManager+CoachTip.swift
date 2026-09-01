@@ -20,26 +20,33 @@ extension QuickAccessManager {
     ///
     /// Not part of onboarding, which runs before the user has captured anything — the wrong
     /// moment to explain a card they have never seen.
-    func presentCoachTipIfNeeded(over panel: QuickAccessPanel, item: QuickAccessItem) {
+    func presentCoachTipIfNeeded(for item: QuickAccessItem) {
         guard !settings.hasSeenQuickAccessTip, coachTip == nil else { return }
-        guard let anchor = panel.contentView else { return }
 
         let tip = QuickAccessCoachTip { [weak self] in
             self?.settings.hasSeenQuickAccessTip = true
             self?.coachTip = nil
         }
         coachTip = tip
-        // After the card has been ordered in and laid out, so the popover has a frame to
-        // point at rather than a zero rect in the corner of the screen.
+        // After the stack has been laid out, so the popover has a card to point at rather
+        // than a zero rect in the corner of the screen.
         Task { @MainActor [weak self] in
-            guard let self, coachTip === tip, panel.isVisible else { return }
-            tip.show(relativeTo: anchor)
+            guard let self, coachTip === tip, let panel = overlayPanel, panel.isVisible else { return }
+            guard let card = panel.newestCardRect else { return }
+            // Away from the corner the cards are docked in. A tip below a card docked at
+            // the bottom of the screen points off the bottom of the display, and AppKit
+            // resolves that by putting it somewhere else entirely.
+            tip.show(
+                relativeTo: card,
+                of: panel.anchorView,
+                preferredEdge: settings.overlayCorner.isBottom ? .maxY : .minY
+            )
         }
     }
 
     /// Whether the first-run tip is currently pointing at this card.
     func isShowingCoachTip(for item: QuickAccessItem) -> Bool {
-        coachTip != nil && panels.first?.item.id == item.id
+        coachTip != nil && items.first?.id == item.id
     }
 
     // Closes the tip if it is pointing at a card that is going away.
@@ -50,7 +57,7 @@ extension QuickAccessManager {
     // nags.
 
     func dismissCoachTip(for item: QuickAccessItem) {
-        guard coachTip != nil, panels.first?.item.id == item.id else { return }
+        guard coachTip != nil, items.first?.id == item.id else { return }
         settings.hasSeenQuickAccessTip = true
         coachTip?.dismiss()
         coachTip = nil

@@ -113,7 +113,7 @@ extension QuickAccessManager {
 
     func copy(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         copyFile(at: url, isVideo: item.isVideo)
     }
 
@@ -121,7 +121,7 @@ extension QuickAccessManager {
     /// pointing at a file that the staging sweep later deletes would go blank.
     func pin(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         pins.pin(
             url,
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
@@ -136,7 +136,7 @@ extension QuickAccessManager {
     /// will delete underneath it.
     func annotate(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         openInEditor(url)
     }
 
@@ -146,10 +146,10 @@ extension QuickAccessManager {
     /// corner so the user can bring them back without waiting for the editor to quit.
     /// Opening the editor is high-intent: that card stops auto-dismissing.
     func openInEditor(_ url: URL) {
-        if let item = panels.first(where: { $0.item.fileURL == url })?.item {
+        if let item = items.first(where: { $0.fileURL == url }) {
             noteEngagement(with: item)
         }
-        if !panels.isEmpty {
+        if !items.isEmpty {
             setPeeking(true)
         }
         editor.open(url)
@@ -184,9 +184,9 @@ extension QuickAccessManager {
     /// Falls back to the path as given: a file that is not staged, or that cannot be
     /// moved, is still better shown than refused.
     func finalized(_ url: URL) -> URL {
-        if let item = panels.first(where: { $0.item.fileURL == url })?.item {
+        if let item = items.first(where: { $0.fileURL == url }) {
             finalizeIfStaged(item)
-            return panels.first { $0.item.id == item.id }?.item.fileURL ?? url
+            return items.first { $0.id == item.id }?.fileURL ?? url
         }
         guard output.isStaged(url), let moved = output.finalizeStaged(url) else { return url }
         return moved
@@ -199,7 +199,7 @@ extension QuickAccessManager {
     func trim(_ item: QuickAccessItem) {
         guard item.isVideo else { return }
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         openInEditor(url)
     }
 
@@ -211,7 +211,7 @@ extension QuickAccessManager {
     func compress(_ item: QuickAccessItem) {
         guard !item.isVideo else { return }
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         let format = settings.compressionFormat
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-compressed-\(UUID().uuidString)")
@@ -247,11 +247,12 @@ extension QuickAccessManager {
 
     /// Puts the savings on the card, or says there were none.
     private func showCompressionResult(_ response: CompressResponse?, for item: QuickAccessItem) {
-        guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
-        panels[index].item.compressionSavings = response.map(\.savingsFraction)
-        panels[index].item.wasCompressed = true
-        let entry = panels[index]
-        entry.panel.refresh(item: entry.item, settings: settings, actions: actions(for: entry.item))
+        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[index].compressionSavings = response.map(\.savingsFraction)
+        items[index].wasCompressed = true
+        // No redraw to ask for: the stack observes `items`, so the badge appears with the
+        // mutation. Rebuilding a card's root view by hand is what the old one-panel-per-card
+        // overlay needed, because a hosting view holds a value rather than a reference.
     }
 
     /// Recognises the text in a card's capture and copies it (docs/03 §1.7, §2).
@@ -261,8 +262,8 @@ extension QuickAccessManager {
     func recognizeText(_ item: QuickAccessItem) {
         guard !item.isVideo else { return }
         finalizeIfStaged(item)
-        let url = panels.first { $0.item.id == item.id }?.item.fileURL ?? item.fileURL
-        recognizeText(at: url, on: panels.first { $0.item.id == item.id }?.panel.screen)
+        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
+        recognizeText(at: url, on: overlayPanel?.screen)
     }
 
     /// Recognises the text in a file, copies it, and shows what was found.

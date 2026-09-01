@@ -109,8 +109,8 @@ struct OverlayEngagementTests {
         #expect(!makeHarness().manager.isPeeking)
     }
 
-    /// Peeking hides the cards and leaves a tab. Hide-and-destroy is a race; the items
-    /// stay so restore is a show, not a rebuild (docs/03 §2).
+    /// Peeking tucks the cards away and leaves a tab. Both are mounted in the same panel,
+    /// so this is a flag the stack animates on, and the items stay put (docs/03 §2).
     @Test("Opening the editor collapses the cards to a tab")
     func peekingCollapses() throws {
         let harness = makeHarness()
@@ -119,13 +119,10 @@ struct OverlayEngagementTests {
         harness.manager.setPeeking(true)
         #expect(harness.manager.isPeeking)
         #expect(harness.manager.items.count == 1, "peeking must not lose the card")
-        #expect(harness.manager.isPeekTabVisible)
-        #expect(harness.manager.panels.allSatisfy { !$0.panel.isVisible })
 
         harness.manager.setPeeking(false)
         #expect(!harness.manager.isPeeking)
-        #expect(!harness.manager.isPeekTabVisible)
-        #expect(harness.manager.panels.contains { $0.panel.isVisible })
+        #expect(harness.manager.items.count == 1)
         harness.manager.dismissAll()
     }
 
@@ -145,7 +142,7 @@ struct OverlayEngagementTests {
         let harness = makeHarness()
         harness.manager.setPeeking(true)
         #expect(!harness.manager.isPeeking)
-        #expect(!harness.manager.isPeekTabVisible)
+        #expect(harness.manager.overlayPanel == nil, "nothing to show means no window at all")
     }
 
     @Test("A new capture expands a peeked stack")
@@ -179,10 +176,59 @@ struct OverlayEngagementTests {
         harness.manager.setPeeking(true)
         harness.manager.dismiss(item)
         #expect(!harness.manager.isPeeking)
-        #expect(!harness.manager.isPeekTabVisible)
+        // The last card takes the panel with it: an agent with nothing to show owns no
+        // windows (CLAUDE.md rule 2).
+        #expect(harness.manager.overlayPanel == nil)
     }
 
     // MARK: - Swipe
+
+    /// The gesture, wired to the stack — not just the arithmetic that classifies it.
+    ///
+    /// `OverlaySwipe` was covered and its wiring was not, so when the per-card panels were
+    /// replaced by one panel the `scrollWheel` override went with them and every swipe test
+    /// still passed. These go through the manager.
+    @Test("A flick over a hovered card dismisses that card")
+    func swipeDismissesThroughTheManager() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.settings.overlayCorner = .bottomRight
+        harness.manager.setHovered(item, hovering: true)
+
+        // Through the panel's own closure, which is the part that broke: the handler kept
+        // working after the per-card panels went away, and nothing was calling it.
+        let onScroll = try #require(
+            harness.manager.overlayPanel?.onScroll,
+            "the panel must be wired to the swipe handler"
+        )
+        onScroll(20, 0)
+        #expect(harness.manager.items.isEmpty, "an outward flick hides the hovered card")
+    }
+
+    @Test("A flick toward the screen edge tucks the stack away")
+    func swipePeeksThroughTheManager() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.settings.overlayCorner = .bottomRight
+        harness.manager.setHovered(item, hovering: true)
+
+        harness.manager.handleScroll(deltaX: 0, deltaY: 20)
+        #expect(harness.manager.isPeeking)
+        #expect(harness.manager.items.count == 1, "peeking keeps the card")
+        harness.manager.dismissAll()
+    }
+
+    /// A flick that is not over a card belongs to whatever is underneath.
+    @Test("A flick with nothing hovered does nothing")
+    func swipeWithoutHoverIsIgnored() throws {
+        let harness = makeHarness()
+        _ = try showCard(harness)
+        harness.settings.overlayCorner = .bottomRight
+
+        harness.manager.handleScroll(deltaX: 20, deltaY: 0)
+        #expect(harness.manager.items.count == 1)
+        harness.manager.dismissAll()
+    }
 
     @Test("A flick toward the docked edge hides the card")
     func swipeOutwardDismisses() {

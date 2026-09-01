@@ -29,9 +29,13 @@ final class QuickAccessCoachTip {
 
     /// Shows the tip pointing at a card.
     ///
-    /// - Parameter anchor: the card's content view. The popover points at its edge, so it
-    ///   moves with the card and needs no positioning of its own.
-    func show(relativeTo anchor: NSView) {
+    /// - Parameters:
+    ///   - rect: the card's frame, in `anchor`'s coordinates.
+    ///   - anchor: the view that rect belongs to — the overlay's hosting view, which holds
+    ///     the whole stack.
+    ///   - preferredEdge: which side of the card to sit on. Chosen by the caller from the
+    ///     corner the stack is docked in, so the tip never points off the screen.
+    func show(relativeTo rect: NSRect, of anchor: NSView, preferredEdge: NSRectEdge) {
         guard popover == nil else { return }
 
         let popover = NSPopover()
@@ -44,7 +48,7 @@ final class QuickAccessCoachTip {
         popover.contentViewController = NSHostingController(
             rootView: QuickAccessCoachTipView { [weak self] in self?.dismiss() }
         )
-        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+        popover.show(relativeTo: rect, of: anchor, preferredEdge: preferredEdge)
         self.popover = popover
     }
 

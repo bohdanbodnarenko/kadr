@@ -1,5 +1,4 @@
 import AppKit
-import OverlayKit
 import SettingsKit
 import SwiftUI
 
@@ -8,92 +7,6 @@ enum OverlayPeekCopy {
     static func title(count: Int, hasVideo: Bool) -> String {
         let noun = hasVideo ? "Capture" : "Screenshot"
         return count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
-    }
-}
-
-/// The collapsed overlay: a pill in the same corner as the cards (docs/03 §2).
-///
-/// Cards hide rather than squash when the editor opens. This tab stays put so there is
-/// no hide-and-restore race — click it to bring the stack back, even while the editor
-/// is still open; the × dismisses every card without deleting files.
-@MainActor
-final class QuickAccessPeekPanel: NonActivatingPanel, InteractivelyMasked {
-    private let hostingView: OverlayHostingView
-    private var onExpand: () -> Void
-    private var onDismissAll: () -> Void
-
-    init(
-        width: CGFloat,
-        corner: OverlayCorner,
-        title: String,
-        onExpand: @escaping () -> Void,
-        onDismissAll: @escaping () -> Void
-    ) {
-        self.onExpand = onExpand
-        self.onDismissAll = onDismissAll
-        hostingView = OverlayHostingView(rootView: QuickAccessPeekTabView(
-            title: title,
-            corner: corner,
-            onExpand: onExpand,
-            onDismissAll: onDismissAll
-        ))
-
-        super.init(
-            contentRect: CGRect(x: 0, y: 0, width: width, height: QuickAccessPeekTabView.pillHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        configureAsOverlay(level: .floating)
-        becomesKeyOnlyIfNeeded = true
-        hidesOnDeactivate = false
-        contentView = hostingView
-    }
-
-    func show(at origin: CGPoint) {
-        setFrameOrigin(origin)
-        orderFrontRegardless()
-        CaptureExclusionRegistry.shared.register(self)
-    }
-
-    func hide() {
-        orderOut(nil)
-    }
-
-    func teardown() {
-        CaptureExclusionRegistry.shared.unregister(self)
-        contentView = nil
-        orderOut(nil)
-        close()
-    }
-
-    func update(title: String, corner: OverlayCorner, size: CGSize) {
-        hostingView.setRootView(QuickAccessPeekTabView(
-            title: title,
-            corner: corner,
-            onExpand: onExpand,
-            onDismissAll: onDismissAll
-        ))
-        setFrame(
-            CGRect(x: frame.minX, y: frame.minY, width: size.width, height: size.height),
-            display: true
-        )
-    }
-
-    /// The whole tab, because the whole tab is two buttons.
-    ///
-    /// Which is exactly why it no longer registers with the tracker — see
-    /// `QuickAccessPanel`. Publishing the entire frame gives the mechanism nothing to pass
-    /// through (a window already ignores everything outside itself) and one real effect: the
-    /// tab sits inert whenever the pointer is elsewhere, so the first press on a tab the
-    /// user has just moved to can land in the app behind it instead.
-    var interactiveRegions: InteractiveRegions {
-        InteractiveRegions(rects: [frame])
-    }
-
-    var passesMouseThrough: Bool {
-        get { ignoresMouseEvents }
-        set { ignoresMouseEvents = newValue }
     }
 }
 

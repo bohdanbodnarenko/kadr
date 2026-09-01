@@ -27,7 +27,7 @@ extension QuickAccessManager {
     /// card must not cancel auto-close forever, or a timeout setting does nothing the
     /// moment the pointer crosses the thumbnail. Engagement is permanent.
     func autoDismissIfIdle(_ item: QuickAccessItem) {
-        guard panels.contains(where: { $0.item.id == item.id }) else { return }
+        guard items.contains(where: { $0.id == item.id }) else { return }
         guard !engagedItems.contains(item.id) else { return }
         guard isIdleForAutoDismiss(item) else {
             dismissTasks[item.id] = Task { [weak self] in
@@ -119,11 +119,18 @@ extension QuickAccessManager {
         }
     }
 
-    /// ⌫ deletes, Esc hides. Only while a card is hovered, so the front app keeps its
-    /// keys the rest of the time (docs/03 §2).
+    /// ⌫ deletes, Esc hides, Space looks. Only while a card is hovered, so the front app
+    /// keeps its keys the rest of the time (docs/03 §2).
     func handleHoverKey(_ keyCode: UInt16) -> Bool {
+        // Esc closes Quick Look before it closes anything else — the panel is what the user
+        // is looking at, so it is what "escape" means while it is up. Handled before the
+        // hover lookup, because opening Quick Look tucks the cards away and nothing is
+        // hovered any more.
+        if keyCode == 53, quickLook.dismiss() {
+            return true
+        }
         guard let hoveredItemID,
-              let item = panels.first(where: { $0.item.id == hoveredItemID })?.item
+              let item = items.first(where: { $0.id == hoveredItemID })
         else {
             return false
         }
@@ -133,6 +140,12 @@ extension QuickAccessManager {
             return true
         case 53:
             dismiss(item)
+            return true
+        case 49:
+            // Looking at a capture is the user working with it, so the card stops being
+            // disposable — the same rule as opening the editor.
+            noteEngagement(with: item)
+            quickLook.show(item.fileURL)
             return true
         default:
             return false
