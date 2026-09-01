@@ -303,6 +303,12 @@ public enum AnnotationLayerFactory {
 
     /// Samples the capture under the box so the editor shows a real blur, not a grey
     /// stand-in (Screendrop's live redaction). Export still burns the effect in.
+    /// One rasterizer, not one per frame.
+    ///
+    /// This is built on every mouse-move while a redaction box is dragged, and building one
+    /// creates an `os.Logger` each time.
+    private static let redactionRasterizer = RedactionRasterizer()
+
     private static func redactionPreviewLayer(
         _ spec: RedactionSpec,
         baseImage: CGImage?,
@@ -323,7 +329,7 @@ public enum AnnotationLayerFactory {
         layer.masksToBounds = true
         layer.contentsGravity = .resize
         layer.borderWidth = 0
-        if let baseImage, let preview = RedactionRasterizer().preview(spec, from: baseImage, scale: imageScale) {
+        if let baseImage, let preview = redactionRasterizer.preview(spec, from: baseImage, scale: imageScale) {
             layer.contents = preview
             layer.backgroundColor = nil
             return
