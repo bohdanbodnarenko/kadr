@@ -86,19 +86,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// The floating Stop/Pause/Discard bar, built only while recording (docs/03 §1.8).
     let recordingControlBar = RecordingControlBar()
+    /// One camera session for the picker preview and the studio file. Constructed empty;
+    /// opening a device happens only when the user arms the camera.
+    let cameraRecorder = CameraFileRecorder()
 
     /// Record mode: pick a target and the options, then start (docs/03 §1.4).
     ///
     /// Built on first use like everything else here — an agent that never records never
     /// constructs it.
-    lazy var recordSetup = RecordSetupHUD(settings: settings) { [weak self] target in
-        guard let self else { return }
-        switch target {
-        case .area: recording.beginRegionRecording()
-        case .window: recording.beginWindowRecording()
-        case .screen: recording.beginDisplayRecording()
+    lazy var recordSetup = RecordSetupHUD(
+        bar: recordingControlBar,
+        settings: settings,
+        start: { [weak self] target in
+            guard let self else { return }
+            switch target {
+            case .area: recording.beginRegionRecording()
+            case .window: recording.beginWindowRecording()
+            case .screen: recording.beginDisplayRecording()
+            }
+        },
+        startDisplay: { [weak self] displayID in
+            self?.recording.beginDisplayRecording(displayID)
+        },
+        cameraPreview: { [weak self] enabled in
+            guard let self else { return }
+            cameraRecorder.setPreview(
+                enabled: enabled,
+                deviceID: settings.recordingCameraDeviceID
+            )
         }
-    }
+    )
 
     var recordingStorage: RecordingCoordinator?
     var recording: RecordingCoordinator {
@@ -109,7 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             captureEngine: captureEngine,
             permissions: permissions,
             settings: settings,
-            hygiene: desktopHygiene
+            hygiene: desktopHygiene,
+            camera: cameraRecorder
         )
         created.onFinished = { [weak self] result in
             self?.areaCapture.showRecording(at: result.fileURL)
@@ -178,6 +196,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.info("Reopened \(sessions.count, privacy: .public) unfinished recording(s)")
     }
 
+    /// Recovers in-flight recordings before sweeping empty session packages, so a crash
+    /// mid-record is not cleaned up as litter (docs/03 §1.8).
+    private func recoverInterruptedFootageThenSweep() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let count = await RecordingCrashRecovery.recover(
+                saveFolder: settings.saveFolder,
+                present: { [weak self] url in self?.areaCapture.showRecording(at: url) }
+            )
+            if count > 0 {
+                RecordingCrashRecovery.announce(count)
+            }
+            StudioSessionRecorder.sweep()
+        }
+    }
+
     private func beginLaunchInterval() {
         launchStartedAt = .now
         launchInterval = signposter.beginInterval("launchToHotkeyArmed")
@@ -199,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             recordingControls: { [weak self] in self?.currentRecordingControls() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] },
             history: history,
-            reopenFromHistory: { [weak self] record in self?.areaCapture.reopenFromHistory(record) },
+            reopenFromHistory: { [weak self] record in self?.areaCapture.openFromHistory(record) },
             canRestore: { [weak self] in
                 (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
             },
@@ -234,10 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
-
-        // Studio sessions, likewise once and never on a timer (docs/09 U3.1). A session
-        // whose footage is the last copy is never swept, however old it is.
-        StudioSessionRecorder.sweep()
+        recoverInterruptedFootageThenSweep()
 
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
@@ -296,13 +327,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// Warns before quitting with captures nobody has saved (docs/09 U2.1).
+    /// Warns before quitting with a recording in flight or captures nobody has saved
+    /// (docs/09 U2.1).
     ///
-    /// A staged capture lives in the staging area and the 24-hour sweep deletes it. Quitting
-    /// with cards on screen therefore throws work away, silently, which is the one thing a
-    /// capture tool must not do — the user's mental model is that a card on screen is a
-    /// screenshot they still have.
+    /// A live recording has to be finished, not killed: ⌘Q and a Sparkle relaunch used
+    /// to tear the writer down and throw the take away. Captures still on a card are
+    /// kept only temporarily, so those get the same "save or discard" question.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if let recording = recordingStorage, recording.state.isActive {
+            if recording.isCountingDown {
+                _ = recording.cancelCountdown()
+            } else if recording.state == .finishing {
+                recording.finishForTermination {
+                    sender.reply(toApplicationShouldTerminate: true)
+                }
+                return .terminateLater
+            } else {
+                NSApp.activate()
+                let alert = NSAlert()
+                alert.messageText = "A screen recording is still in progress."
+                alert.informativeText = "Kadr will finish and save the recording before quitting. "
+                    + "This can take a moment for a long recording."
+                alert.alertStyle = .warning
+                // Cancel is leftmost so Return does not discard the take.
+                alert.addButton(withTitle: "Cancel")
+                alert.addButton(withTitle: "Finish Recording and Quit")
+                guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+                recording.finishForTermination {
+                    sender.reply(toApplicationShouldTerminate: true)
+                }
+                return .terminateLater
+            }
+        }
+
         // Only if the capture layer exists: an agent that never captured anything has
         // nothing to lose, and asking would build the layer to find that out.
         guard let quickAccess = areaCaptureStorage?.quickAccess else { return .terminateNow }

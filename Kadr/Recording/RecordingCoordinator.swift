@@ -28,7 +28,10 @@ final class RecordingCoordinator {
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
     @ObservationIgnored let overlaySource = RecordingOverlaySource()
     /// The sidecar that makes a recording editable in the studio afterwards (docs/09 U3.1).
-    @ObservationIgnored let studio = StudioSessionRecorder()
+    ///
+    /// Shares the camera recorder the picker warmed, so the live bubble and the camera
+    /// file are one session rather than two devices fighting over the same webcam.
+    @ObservationIgnored let studio: StudioSessionRecorder
     /// The script somebody reads from while recording (docs/08).
     @ObservationIgnored lazy var teleprompter = TeleprompterController(settings: settings)
     @ObservationIgnored let logger = KadrLog.logger(.recording)
@@ -46,12 +49,18 @@ final class RecordingCoordinator {
         didSet { onStateChanged?() }
     }
 
+    /// Seconds left on the pre-roll, so the floating bar can show the same number as the overlay.
+    var countdownRemaining = 0 {
+        didSet { onStateChanged?() }
+    }
+
     /// A finished recording, ready for the overlay.
     var onFinished: ((RecordingResult) -> Void)?
     /// A finished recording that also has a studio session, so the editor can open it.
     var onStudioSessionReady: ((RecordingSession, RecordingResult) -> Void)?
     /// Fired whenever the state or the clock moves, so the menu bar can follow.
     var onStateChanged: (() -> Void)?
+    @ObservationIgnored var terminationCompletion: (() -> Void)?
 
     /// Ticks the elapsed time while recording.
     ///
@@ -67,13 +76,15 @@ final class RecordingCoordinator {
         permissions: PermissionCoordinator,
         settings: AppSettings,
         overlay: SelectionOverlayController = SelectionOverlayController(),
-        hygiene: DesktopHygieneController? = nil
+        hygiene: DesktopHygieneController? = nil,
+        camera: CameraFileRecorder = CameraFileRecorder()
     ) {
         self.captureEngine = captureEngine
         self.permissions = permissions
         self.settings = settings
         self.overlay = overlay
         self.hygiene = hygiene
+        studio = StudioSessionRecorder(camera: camera)
     }
 
     /// Whether a recording exists — including one still starting up.
@@ -161,6 +172,7 @@ final class RecordingCoordinator {
             guard !isRecording else { return }
             state = .starting
         }
+        lastTarget = target
 
         if case .window = target {
             isWindowRecording = true
@@ -275,6 +287,7 @@ final class RecordingCoordinator {
         configuration.showsKeystrokes = settings.recordingShowsKeystrokes
         configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
         configuration.showsWebcam = bakesWebcam
+        configuration.webcamDeviceID = settings.recordingCameraDeviceID
         configuration.pointConverter = Self.pointConverter(for: target)
 
         overlaySource.start(configuration: configuration)
@@ -288,12 +301,20 @@ final class RecordingCoordinator {
     }
 
     @ObservationIgnored let countdown = CaptureCountdown()
+    /// Dims the desk around a region recording so the frame is obvious while it runs.
+    @ObservationIgnored let areaHighlight = RecordingAreaHighlight()
     /// What the countdown is going to record, so "Start now" knows what to start.
     @ObservationIgnored var pendingTarget: RecordingTarget?
+    /// The source of the recording that is running (or just finished starting), so Restart
+    /// can point at the same thing without asking again.
+    @ObservationIgnored var lastTarget: RecordingTarget?
 
     @ObservationIgnored private var isWindowRecording = false
     /// Follows a recorded window so a click can be placed against where it was at the time.
     @ObservationIgnored var windowConverter: MovingWindowConverter?
+    /// The recorded window's hole, so the dim can follow it when it moves.
+    @ObservationIgnored var windowHighlightHole: DisplayRect?
+    @ObservationIgnored var windowHighlightDisplayID: CGDirectDisplayID?
 
     /// Starts the studio sidecar, if this recording is keeping one.
     ///
@@ -314,6 +335,7 @@ final class RecordingCoordinator {
 
         studio.start(
             recordsCamera: settings.recordingShowsWebcam,
+            cameraDeviceID: settings.recordingCameraDeviceID,
             pointConverter: converter,
             pointPixelScale: Self.pointPixelScale(for: target),
             topInset: Self.topInset(for: target)
@@ -382,6 +404,9 @@ final class RecordingCoordinator {
             await self?.engine.setGeometryObserver { [weak self] rect, scale, _ in
                 Task { @MainActor [weak self] in
                     self?.windowConverter?.update(rect, scale: scale)
+                    if self?.isWindowRecording == true {
+                        self?.followWindowHighlight(contentRect: rect)
+                    }
                 }
             }
         }
@@ -399,6 +424,7 @@ final class RecordingCoordinator {
     func stopOverlays() {
         overlaySource.stop()
         overlaySource.resetClock()
+        areaHighlight.hide()
         Task { await engine.setOverlayProvider(nil) }
     }
 
@@ -411,6 +437,9 @@ final class RecordingCoordinator {
             codec: settings.recordingCodec == .hevc ? .hevc : .h264,
             capturesSystemAudio: overrides.recordsSystemAudio ?? settings.recordsSystemAudio,
             capturesMicrophone: overrides.recordsMicrophone ?? settings.recordsMicrophone,
+            microphoneDeviceID: settings.recordingMicrophoneDeviceID.isEmpty
+                ? nil
+                : settings.recordingMicrophoneDeviceID,
             showsCursor: showsCursor,
             dynamicRange: settings.recordingDynamicRange
         )

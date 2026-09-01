@@ -26,6 +26,7 @@ extension RecordingCoordinator {
             // The script holds where it is: a prompter that keeps scrolling through a
             // pause is one the reader has to scroll back on when they resume.
             teleprompter.pause()
+            studio.pauseCamera()
             state = .paused
             pausedAt = Date()
             stopTicking()
@@ -50,6 +51,7 @@ extension RecordingCoordinator {
             pausedAt = nil
             state = .recording
             teleprompter.resume()
+            studio.resumeCamera()
             // The sidecar's clock needs no nudge here. It comes from the engine, which
             // counts composited frames and so has already left the pause out — deriving a
             // second answer from the wall clock would only give the two something to
@@ -101,6 +103,7 @@ extension RecordingCoordinator {
                 if let session = await studio.finish(with: result) {
                     onStudioSessionReady?(session, result)
                 }
+                finishTerminationIfNeeded()
             } catch {
                 state = .idle
                 elapsed = 0
@@ -109,6 +112,7 @@ extension RecordingCoordinator {
                 studio.cancel()
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
                 report(.failed(error.localizedDescription))
+                finishTerminationIfNeeded()
             }
         }
     }
@@ -136,7 +140,50 @@ extension RecordingCoordinator {
             self?.overrides = .none
             self?.startedByAutomation = false
             self?.report(.cancelled)
+            self?.finishTerminationIfNeeded()
         }
+    }
+
+    /// Throws this take away and starts the same source again.
+    ///
+    /// The commonest use is a false start: the first two seconds were reaching for the
+    /// mouse, or the wrong window was in front. Split-then-delete in the studio can do
+    /// the same job later, but restarting now is one click and does not leave a file
+    /// of that false start sitting in History.
+    func restart() {
+        let target = pendingTarget ?? lastTarget
+        guard let target else { return }
+        if cancelCountdown() {
+            startAfterCountdown(target: target)
+            return
+        }
+        guard isRecording else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            await discardWithoutReporting()
+            startAfterCountdown(target: target)
+        }
+    }
+
+    /// Tears a live recording down without announcing a cancellation.
+    ///
+    /// Restart uses this so History and the overlay do not briefly show a discarded
+    /// take that is about to be replaced. Cancel still reports `.cancelled` so a script
+    /// that asked to stop knows the recording did not land.
+    private func discardWithoutReporting() async {
+        state = .idle
+        stopTicking()
+        focus.disable()
+        stopOverlays()
+        hygiene?.endRecording()
+        studio.cancel()
+        stopGeometryObserver()
+        teleprompter.stop()
+        await engine.cancel()
+        elapsed = 0
+        overrides = .none
+        startedByAutomation = false
+        state = .idle
     }
 
     /// Reports to whoever asked for this recording, once.
@@ -144,5 +191,36 @@ extension RecordingCoordinator {
         guard let automationCompletion else { return }
         self.automationCompletion = nil
         automationCompletion(outcome)
+    }
+
+    /// Finishes the take before AppKit lets the process exit (Screendrop's quit-while-recording).
+    ///
+    /// ⌘Q and a Sparkle relaunch used to kill the writer. A countdown has no footage yet
+    /// and is cancelled; a live recording is stopped and saved; a stop already in flight
+    /// is waited out.
+    func finishForTermination(completion: @escaping () -> Void) {
+        if isCountingDown || state == .starting {
+            if isCountingDown {
+                _ = cancelCountdown()
+            } else {
+                cancel()
+            }
+            completion()
+            return
+        }
+        guard state.isActive else {
+            completion()
+            return
+        }
+        terminationCompletion = completion
+        if isRecording {
+            stop()
+        }
+    }
+
+    private func finishTerminationIfNeeded() {
+        let done = terminationCompletion
+        terminationCompletion = nil
+        done?()
     }
 }

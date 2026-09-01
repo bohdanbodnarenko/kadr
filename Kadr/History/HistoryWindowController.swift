@@ -13,6 +13,7 @@ import SwiftUI
 final class HistoryWindowController: NSObject, NSWindowDelegate {
     private let controller: HistoryController
     private let reopen: (HistoryRecord) -> Void
+    private let openStudio: (HistoryRecord) -> Void
     private let juggler: ActivationJuggler
     private let logger = KadrLog.logger(.history)
 
@@ -22,10 +23,12 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     init(
         controller: HistoryController,
         reopen: @escaping (HistoryRecord) -> Void,
+        openStudio: @escaping (HistoryRecord) -> Void,
         juggler: ActivationJuggler = .shared
     ) {
         self.controller = controller
         self.reopen = reopen
+        self.openStudio = openStudio
         self.juggler = juggler
     }
 
@@ -40,7 +43,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         }
 
         let hosting = NSHostingView(
-            rootView: HistoryView(controller: controller, reopen: reopen)
+            rootView: HistoryView(controller: controller, open: openStudio, openAsCard: reopen)
         )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),

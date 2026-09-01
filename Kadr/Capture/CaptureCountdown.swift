@@ -16,6 +16,11 @@ final class CaptureCountdown {
     private let logger = KadrLog.logger(.capture)
     private var task: Task<Void, Never>?
 
+    /// Seconds still showing, or 0 when nothing is counting.
+    private(set) var remainingSeconds = 0
+    /// Fired each time the number changes, so the recording bar can tick with the badge.
+    var onTick: (@MainActor (Int) -> Void)?
+
     var isRunning: Bool {
         task != nil
     }
@@ -24,7 +29,11 @@ final class CaptureCountdown {
     ///
     /// With zero seconds the work runs straight away and no badge appears — the timer
     /// being off must not add a frame of delay to every capture.
-    func run(seconds: Int, perform: @escaping @MainActor () -> Void) {
+    func run(
+        seconds: Int,
+        placement: CountdownPlacement = .corner,
+        perform: @escaping @MainActor () -> Void
+    ) {
         cancel()
 
         guard seconds > 0 else {
@@ -41,8 +50,9 @@ final class CaptureCountdown {
             }
 
             for remaining in stride(from: seconds, to: 0, by: -1) {
+                tick(remaining)
                 if let screen {
-                    panel.show(on: screen, seconds: remaining)
+                    panel.show(on: screen, seconds: remaining, placement: placement)
                 }
                 do {
                     try await Task.sleep(for: .seconds(1))
@@ -70,6 +80,12 @@ final class CaptureCountdown {
     func cancel() {
         task?.cancel()
         task = nil
+        remainingSeconds = 0
         panel.dismiss()
+    }
+
+    private func tick(_ remaining: Int) {
+        remainingSeconds = remaining
+        onTick?(remaining)
     }
 }

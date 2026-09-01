@@ -46,7 +46,8 @@ struct RecordingPane: View {
                         .foregroundStyle(.secondary)
                 }
                 Text("System audio needs no driver — macOS captures it directly. The "
-                    + "microphone is recorded as a separate track so it can be dropped later.")
+                    + "microphone is recorded as a separate track so it can be dropped later. "
+                    + "Pick which microphone from the recording bar.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -54,6 +55,7 @@ struct RecordingPane: View {
             Section("Before recording") {
                 Picker("Countdown", selection: $settings.recordingCountdownSeconds) {
                     Text("Off").tag(0)
+                    Text("1 second").tag(1)
                     Text("3 seconds").tag(3)
                     Text("5 seconds").tag(5)
                     Text("10 seconds").tag(10)
@@ -66,8 +68,9 @@ struct RecordingPane: View {
 
             Section("While recording") {
                 Toggle("Show the floating controls", isOn: $settings.recordingShowsControlBar)
-                Text("A small bar with Stop, Pause and Discard. It never appears in the "
-                    + "recording, and you can drag it anywhere.")
+                Text("A compact bar for picking what to record, then Stop, Pause, Restart "
+                    + "and Discard while it runs. It never appears in the recording, and "
+                    + "you can drag it anywhere.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

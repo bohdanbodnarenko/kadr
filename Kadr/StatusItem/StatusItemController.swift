@@ -28,6 +28,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let recordingControls: () -> RecordingControls?
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
+    /// Whether the status item is currently showing the recording icon (click = stop).
+    private var showsRecordingIcon = false
     private let history: HistoryController?
     private let reopenFromHistory: (HistoryRecord) -> Void
     private let canRestore: () -> Bool
@@ -83,18 +85,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // Items are built in menuNeedsUpdate, so launch pays for an empty menu only.
         menu.autoenablesItems = false
         menu.delegate = self
-        statusItem.menu = menu
+        attachIdleMenu()
     }
 
     // MARK: - Icon states (docs/03 §8.1)
 
     /// The resting icon: a template image, so it follows the menu bar's appearance.
     func showIdleIcon() {
+        showsRecordingIcon = false
         let icon = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Kadr")
         icon?.isTemplate = true
         statusItem.button?.image = icon
         statusItem.button?.title = ""
         statusItem.length = NSStatusItem.squareLength
+        statusItem.button?.toolTip = "Kadr"
+        attachIdleMenu()
     }
 
     /// While recording: a red dot and the elapsed time, so the state is unmistakable from
@@ -103,6 +108,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Deliberately *not* a template image — red is the point, and a template would be
     /// rendered monochrome like everything else in the menu bar.
     func showRecordingIcon(elapsed: String, isPaused: Bool) {
+        showsRecordingIcon = true
         let name = isPaused ? "pause.circle.fill" : "record.circle"
         let configuration = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
         let icon = NSImage(systemSymbolName: name, accessibilityDescription: "Recording")?
@@ -113,6 +119,41 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.title = " \(elapsed)"
         statusItem.button?.imagePosition = .imageLeading
         statusItem.length = NSStatusItem.variableLength
+        statusItem.button?.toolTip = "Click to stop · right-click for pause and discard"
+        attachRecordingClick()
+    }
+
+    /// Idle: the menu opens on a click, like every other extra.
+    private func attachIdleMenu() {
+        statusItem.menu = menu
+        statusItem.button?.target = nil
+        statusItem.button?.action = nil
+    }
+
+    /// Recording: a click stops, because that is the only thing the user is likely to want
+    /// (docs/03 §1.8). Right-click still opens the menu for pause and discard.
+    private func attachRecordingClick() {
+        statusItem.menu = nil
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(didClickStatusItem)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc
+    private func didClickStatusItem() {
+        guard showsRecordingIcon else { return }
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.option) == true {
+            popRecordingMenu()
+            return
+        }
+        recordingControls()?.stop()
+    }
+
+    private func popRecordingMenu() {
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        attachRecordingClick()
     }
 
     // MARK: - NSMenuDelegate
@@ -151,6 +192,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         pause.target = self
         menu.addItem(pause)
+
+        let restart = NSMenuItem(
+            title: "Restart Recording",
+            action: #selector(didSelectRestartRecording),
+            keyEquivalent: ""
+        )
+        restart.target = self
+        menu.addItem(restart)
 
         let cancel = NSMenuItem(
             title: "Cancel Recording",
@@ -365,6 +414,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc
+    private func didSelectRestartRecording() {
+        recordingControls()?.restart()
+    }
+
+    @objc
     private func didSelectCancelRecording() {
         recordingControls()?.cancel()
     }
@@ -403,4 +457,5 @@ struct RecordingControls {
     let stop: () -> Void
     let togglePause: () -> Void
     let cancel: () -> Void
+    var restart: () -> Void = {}
 }

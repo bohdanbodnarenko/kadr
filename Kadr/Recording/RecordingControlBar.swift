@@ -5,32 +5,31 @@ import SettingsKit
 import Shared
 import SwiftUI
 
-/// The floating controls shown while a recording runs (docs/03 §1.8, docs/08 §2).
+/// The floating controls shown before and during a recording (docs/03 §1.8, docs/08 §2).
 ///
-/// docs/03 asks for "an optional floating stop button" and the app shipped without one, so
-/// the only way to stop was the menu-bar dropdown: notice the icon changed, find it among
-/// twenty other menu extras, click, read a menu, choose Stop. Four deliberate steps to end
-/// something the user is doing *right now*, and no indication anywhere on screen that any
-/// of that was possible. The commonest report about the recorder was not knowing how to
-/// stop it, which is the most complete way a feature can fail.
+/// One panel, three modes. The picker, the countdown strip and the live Stop/Pause bar
+/// used to be three different windows that appeared and vanished independently, so starting
+/// a recording meant watching a card disappear and a different capsule pop up somewhere
+/// nearby. They now share this panel: picking a display morphs the icons into the clock,
+/// and only Area/Window hide it (the selection overlay has to own the screen).
 ///
 /// A non-activating panel, for the same reason the scrolling-capture HUD is one: the user
 /// is recording whatever is behind this, and a bar that stole focus would change the thing
 /// being filmed. It registers with `CaptureExclusionRegistry`, so it never appears in the
 /// recording it controls.
 ///
-/// Built when recording starts and destroyed when it stops. Nothing here exists while the
-/// agent is idle — no window, no view, no timer (PRD §8).
+/// Destroyed when idle — no window, no view, no timer (PRD §8).
 @MainActor
 final class RecordingControlBar {
     private var panel: NonActivatingPanel?
+    private var hosting: NSHostingView<RecordingControlBarView>?
     private let model = RecordingControlBarModel()
 
     /// Where the user last dragged it, so it comes back where they put it.
     ///
     /// Screen-relative and re-clamped on show: a bar remembered on a display that has since
     /// been unplugged has to come back somewhere visible rather than off the desk.
-    private static var savedOrigin: CGPoint?
+    static var savedOrigin: CGPoint?
 
     private static let margin: CGFloat = 22
 
@@ -38,46 +37,45 @@ final class RecordingControlBar {
         panel != nil
     }
 
+    /// The bar's frame in screen space, so the teleprompter composer can sit above it.
+    var screenFrame: NSRect? {
+        panel?.frame
+    }
+
+    var isShowingPicker: Bool {
+        panel != nil && model.picker != nil && model.session == nil
+    }
+
+    func showPicker(model picker: RecordSetupModel) {
+        model.picker = picker
+        model.session = nil
+        model.preRoll = nil
+        present(key: true)
+    }
+
+    func dismissPicker() {
+        guard isShowingPicker else { return }
+        dismiss()
+    }
+
     func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
+        model.picker = nil
         model.apply(controls)
         model.settings = settings
         model.preRoll = preRoll
-        guard panel == nil else { return }
-
-        let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
-        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
-
-        let panel = NonActivatingPanel(contentRect: hosting.frame, level: .floating)
-        panel.contentView = hosting
-        panel.setFrame(frame(for: hosting.fittingSize), display: false)
-        // Follows the user across Spaces: a recording is a global activity, and a bar left
-        // behind on Space 1 is a bar that cannot stop the recording running on Space 2.
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        // Dragged by its own background rather than by a SwiftUI gesture: AppKit already
-        // moves a window this way, and it keeps the mouse path out of SwiftUI — which the
-        // overlay rules ask for and which a gesture competing with the buttons would break.
-        // `isMovable` is false on the shared overlay recipe because a selection overlay must
-        // not move; this one must.
-        panel.isMovable = true
-        panel.isMovableByWindowBackground = true
-        // Key only if a control genuinely needs the keyboard — which none here do.
-        //
-        // The user is typing into whatever they are recording. A HUD that took key status
-        // on the first click would swallow their next keystroke, and on a recording with
-        // the keystroke overlay on it would swallow it from the sidecar too, so the video
-        // would show a pause exactly where they clicked Pause.
-        panel.becomesKeyOnlyIfNeeded = true
-        CaptureExclusionRegistry.shared.register(panel)
-        panel.orderFrontRegardless()
-        self.panel = panel
+        model.session = true
+        present(key: false)
     }
 
     /// Updates the timer and the paused state without rebuilding anything.
     func update(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         guard panel != nil else { return }
+        model.picker = nil
         model.apply(controls)
         model.settings = settings
         model.preRoll = preRoll
+        model.session = true
+        resizeToFittingSize()
     }
 
     /// What the bar offers while the countdown is running.
@@ -87,11 +85,8 @@ final class RecordingControlBar {
     /// voice meant leaving the thing you were about to record, opening a window, finding a
     /// checkbox and coming back. docs/03 §1.8 asks for a control strip before Record for
     /// exactly this.
-    ///
-    /// Put in the countdown rather than in a step of its own: the wait already exists, the
-    /// user is already looking at the screen, and adding a panel they have to dismiss to
-    /// start recording would be a click nobody asked for.
     struct PreRoll {
+        let remaining: Int
         let startNow: () -> Void
         let cancel: () -> Void
     }
@@ -103,6 +98,68 @@ final class RecordingControlBar {
         panel.orderOut(nil)
         panel.contentView = nil
         self.panel = nil
+        hosting = nil
+        model.picker = nil
+        model.session = nil
+        model.preRoll = nil
+    }
+
+    private func present(key: Bool) {
+        if let panel {
+            panel.becomesKeyOnlyIfNeeded = !key
+            if key {
+                panel.makeKeyAndOrderFront(nil)
+            } else {
+                panel.orderFrontRegardless()
+            }
+            resizeToFittingSize()
+            return
+        }
+
+        let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
+        hosting.sizingOptions = .intrinsicContentSize
+        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+
+        let panel = NonActivatingPanel(contentRect: hosting.frame, level: .floating)
+        panel.contentView = hosting
+        panel.setFrame(frame(for: hosting.fittingSize), display: false)
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.isMovable = true
+        panel.isMovableByWindowBackground = true
+        panel.becomesKeyOnlyIfNeeded = !key
+        CaptureExclusionRegistry.shared.register(panel)
+        if key {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            panel.orderFrontRegardless()
+        }
+        self.panel = panel
+        self.hosting = hosting
+    }
+
+    private func resizeToFittingSize() {
+        guard let panel, let hosting else { return }
+        hosting.invalidateIntrinsicContentSize()
+        let size = hosting.fittingSize
+        guard size.width > 0, size.height > 0 else { return }
+        var frame = panel.frame
+        // Keep the centre so a shorter live bar does not jump left when the picker
+        // morphs into the clock.
+        let centre = CGPoint(x: frame.midX, y: frame.midY)
+        frame.size = size
+        frame.origin.x = centre.x - size.width / 2
+        frame.origin.y = centre.y - size.height / 2
+        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? panel.frame
+        frame.origin.x = min(
+            max(frame.origin.x, visible.minX + Self.margin),
+            visible.maxX - size.width - Self.margin
+        )
+        frame.origin.y = min(
+            max(frame.origin.y, visible.minY + Self.margin),
+            visible.maxY - size.height - Self.margin
+        )
+        panel.setFrame(frame, display: true)
     }
 
     /// Bottom-centre of the active screen by default — where a recording HUD is expected,
@@ -113,7 +170,6 @@ final class RecordingControlBar {
             x: visible.midX - size.width / 2,
             y: visible.minY + Self.margin
         )
-        // Clamped back onto a screen that still exists.
         let x = min(max(origin.x, visible.minX + Self.margin), visible.maxX - size.width - Self.margin)
         let y = min(max(origin.y, visible.minY + Self.margin), visible.maxY - size.height - Self.margin)
         return NSRect(x: x, y: y, width: size.width, height: size.height)
@@ -121,24 +177,21 @@ final class RecordingControlBar {
 }
 
 /// What the bar shows, as one observable value the panel can update in place.
-///
-/// A model rather than rebuilding the root view every tick: the elapsed time changes once a
-/// second for the length of a recording, and replacing an `NSHostingView`'s root view that
-/// often re-creates the whole tree — in the process with the 30 MB budget.
 @MainActor
 @Observable
 final class RecordingControlBarModel {
     var elapsedText = "0:00"
     var isPaused = false
-
-    /// Non-nil while the countdown is running.
+    var picker: RecordSetupModel?
+    /// Non-nil once a recording (or its countdown) owns the bar.
+    var session: Bool?
     var preRoll: RecordingControlBar.PreRoll?
-    /// Bound live so a toggle flipped here is the setting, and is still set next time.
     var settings: AppSettings?
 
     @ObservationIgnored var stop: () -> Void = {}
     @ObservationIgnored var togglePause: () -> Void = {}
     @ObservationIgnored var cancel: () -> Void = {}
+    @ObservationIgnored var restart: () -> Void = {}
 
     func apply(_ controls: RecordingControls) {
         elapsedText = controls.elapsedText
@@ -146,119 +199,40 @@ final class RecordingControlBarModel {
         stop = controls.stop
         togglePause = controls.togglePause
         cancel = controls.cancel
+        restart = controls.restart
     }
 }
 
-/// Stop, pause and the clock — in that order of prominence.
-///
-/// Stop is the big red one because stopping is what the user came here to do and could not
-/// work out. Cancel is deliberately last and quiet: it throws the recording away, and a
-/// discard sitting next to a stop at equal weight is a discard somebody eventually hits by
-/// accident.
-private struct RecordingControlBarView: View {
+struct RecordingControlBarView: View {
     @Bindable var model: RecordingControlBarModel
     @State private var isConfirmingCancel = false
 
     var body: some View {
-        if let preRoll = model.preRoll, let settings = model.settings {
-            preRollBar(preRoll: preRoll, settings: settings)
-        } else {
-            liveBar
-        }
-    }
-
-    /// Microphone, system sound and camera, while the countdown runs.
-    private func preRollBar(preRoll: RecordingControlBar.PreRoll, settings: AppSettings) -> some View {
-        HStack(spacing: 8) {
-            Text("Starting…")
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            Divider().frame(height: 20)
-
-            if RecordingOptions.microphoneIsAvailable {
-                toggle(
-                    on: Binding(get: { settings.recordsMicrophone }, set: { settings.recordsMicrophone = $0 }),
-                    symbol: "mic.fill",
-                    off: "mic.slash.fill",
-                    label: "Microphone"
-                )
+        Group {
+            if let picker = model.picker, model.session == nil {
+                RecordSetupView(model: picker)
+            } else if let preRoll = model.preRoll, let settings = model.settings {
+                RecordingPreRollBar(preRoll: preRoll, settings: settings)
+            } else {
+                liveBar
             }
-            toggle(
-                on: Binding(get: { settings.recordsSystemAudio }, set: { settings.recordsSystemAudio = $0 }),
-                symbol: "speaker.wave.2.fill",
-                off: "speaker.slash.fill",
-                label: "System sound"
-            )
-            toggle(
-                on: Binding(get: { settings.recordingShowsWebcam }, set: { settings.recordingShowsWebcam = $0 }),
-                symbol: "video.fill",
-                off: "video.slash.fill",
-                label: "Camera"
-            )
-
-            Divider().frame(height: 20)
-
-            Button("Start now") { preRoll.startNow() }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            Button("Cancel") { preRoll.cancel() }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(barBackground)
-        .padding(10)
-        .fixedSize()
-    }
-
-    /// One on/off control that says what it does, rather than a checkbox with a word.
-    private func toggle(
-        on binding: Binding<Bool>,
-        symbol: String,
-        off: String,
-        label: String
-    ) -> some View {
-        Button {
-            binding.wrappedValue.toggle()
-        } label: {
-            Image(systemName: binding.wrappedValue ? symbol : off)
-                .frame(width: 16)
-                .foregroundStyle(binding.wrappedValue ? Color.primary : Color.secondary)
-        }
-        .help(binding.wrappedValue ? "\(label) is on" : "\(label) is off")
-        .accessibilityLabel(label)
-        .accessibilityValue(binding.wrappedValue ? "On" : "Off")
+        .animation(.snappy(duration: 0.22), value: model.session != nil)
+        .animation(.snappy(duration: 0.22), value: model.preRoll != nil)
     }
 
     private var liveBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             statusDot
             Text(model.elapsedText)
                 .font(.system(.title3, design: .rounded).monospacedDigit())
                 .foregroundStyle(.primary)
-                .frame(minWidth: 52, alignment: .leading)
+                .frame(minWidth: 56, alignment: .leading)
                 .accessibilityLabel("Recording time")
 
-            Divider().frame(height: 20)
+            RecordingBarDivider()
 
-            Button {
-                model.stop()
-            } label: {
-                Label("Stop", systemImage: "stop.fill")
-                    .labelStyle(.titleAndIcon)
-                    .font(.callout.weight(.medium))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(.red)
-            // No keyboard shortcut here on purpose: the panel never takes key status, so a
-            // shortcut printed on it would be one that does nothing. Stopping from the
-            // keyboard is a *global* hotkey (⌃⇧.), which works wherever the user is.
-            .help("Stop and keep the recording (⌃⇧.)")
-
-            circleButton(
+            RecordingBarCircleButton(
                 symbol: model.isPaused ? "play.fill" : "pause.fill",
                 help: model.isPaused ? "Resume" : "Pause"
             ) {
@@ -266,7 +240,23 @@ private struct RecordingControlBarView: View {
             }
             .accessibilityLabel(model.isPaused ? "Resume recording" : "Pause recording")
 
-            circleButton(symbol: "trash", help: "Discard this recording") {
+            RecordingBarCircleButton(
+                symbol: "arrow.counterclockwise",
+                help: "Start over — discard what's recorded and record again"
+            ) {
+                model.restart()
+            }
+            .accessibilityLabel("Restart recording")
+
+            RecordingBarFilledCircleButton(
+                symbol: "stop.fill",
+                help: "Stop and keep the recording (⌃⇧.)"
+            ) {
+                model.stop()
+            }
+            .accessibilityLabel("Stop and save")
+
+            RecordingBarCircleButton(symbol: "trash", help: "Discard this recording") {
                 isConfirmingCancel = true
             }
             .accessibilityLabel("Discard recording")
@@ -282,59 +272,10 @@ private struct RecordingControlBarView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
-        .background(barBackground)
+        .background(RecordingBarBackground())
         .padding(10)
         .fixedSize()
         .animation(.snappy(duration: 0.22), value: model.isPaused)
-    }
-
-    /// A soft glass capsule rather than a bordered rectangle.
-    ///
-    /// The first version was material plus a hard separator stroke and a flat shadow, which
-    /// on a dark desktop reads as a grey box someone forgot to style. Three things fix that
-    /// and they are all standard macOS: the thin material rather than the regular one so the
-    /// desktop shows through, a hairline highlight along the top edge where the light would
-    /// fall, and a wide soft shadow instead of a tight dark one — the difference between
-    /// something resting above the screen and something stuck to it.
-    private var barBackground: some View {
-        Capsule()
-            .fill(.thinMaterial)
-            .overlay {
-                Capsule()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.45),
-                                Color.white.opacity(0.08)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 0.8
-                    )
-            }
-            .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
-            .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
-    }
-
-    /// A quiet round button, sized so it can be hit without aiming.
-    ///
-    /// Bordered controls in a row of three read as a toolbar somebody bolted on; these are
-    /// the same shape as the bar they sit in and only show their edge on hover.
-    private func circleButton(
-        symbol: String,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 26, height: 26)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.borderless)
-        .background(Circle().fill(Color.primary.opacity(0.07)))
-        .help(help)
     }
 
     /// Red and steady while recording, amber while paused.
@@ -344,7 +285,9 @@ private struct RecordingControlBarView: View {
     private var statusDot: some View {
         Circle()
             .fill(model.isPaused ? Color.orange : Color.red)
-            .frame(width: 11, height: 11)
+            .frame(width: 8, height: 8)
+            .opacity(model.isPaused ? 0.45 : 1)
+            .padding(.leading, 6)
             .accessibilityLabel(model.isPaused ? "Paused" : "Recording")
     }
 }

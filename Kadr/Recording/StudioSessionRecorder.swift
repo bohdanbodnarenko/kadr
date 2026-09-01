@@ -21,7 +21,7 @@ import UniformTypeIdentifiers
 final class StudioSessionRecorder {
     private let logger = KadrLog.logger(.recording)
     private let telemetry = PointerTelemetryRecorder()
-    private let camera = CameraFileRecorder()
+    private let camera: CameraFileRecorder
     private var session: RecordingSession?
     /// When the session began, on the same clock the camera reports its first frame on.
     ///
@@ -29,6 +29,10 @@ final class StudioSessionRecorder {
     /// have to be subtractable. A wall clock would also move under a time-zone change or an
     /// NTP correction mid-recording, which a duration must not.
     private var startedAtUptime: TimeInterval?
+
+    init(camera: CameraFileRecorder = CameraFileRecorder()) {
+        self.camera = camera
+    }
 
     /// The session being captured, if one is.
     var current: RecordingSession? {
@@ -45,6 +49,7 @@ final class StudioSessionRecorder {
     ///   screen — `NSCursor` measures itself in points and the footage is in pixels.
     func start(
         recordsCamera: Bool,
+        cameraDeviceID: String? = nil,
         pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?,
         pointPixelScale: CGFloat,
         topInset: CGFloat = 0
@@ -72,7 +77,7 @@ final class StudioSessionRecorder {
         firstFrameUptime = nil
         telemetry.start(pointConverter: pointConverter, journalURL: session.inputJournalURL)
         if recordsCamera {
-            camera.start(writingTo: session.cameraURL)
+            camera.start(writingTo: session.cameraURL, deviceID: cameraDeviceID)
         }
         logger.info("Studio session started: \(session.directory.lastPathComponent, privacy: .public)")
     }
@@ -95,6 +100,15 @@ final class StudioSessionRecorder {
             firstFrameUptime = ProcessInfo.processInfo.systemUptime
         }
         telemetry.advance(to: elapsed)
+    }
+
+    /// Stops writing the camera file for a pause, without tearing the live preview down.
+    func pauseCamera() {
+        camera.pause()
+    }
+
+    func resumeCamera() {
+        camera.resume()
     }
 
     // MARK: - Where the window is

@@ -1,5 +1,6 @@
 import AppKit
 import HistoryKit
+import StudioSession
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -37,7 +38,8 @@ enum HistoryDateFilter: String, CaseIterable, Identifiable {
 /// Grid browser: type/date filters, drag-out, batch select, reveal, delete, storage meter.
 struct HistoryView: View {
     @Bindable var controller: HistoryController
-    let reopen: (HistoryRecord) -> Void
+    let open: (HistoryRecord) -> Void
+    let openAsCard: (HistoryRecord) -> Void
 
     @State private var selection: Set<UUID> = []
     @State private var kindFilter: HistoryItemKind?
@@ -46,6 +48,10 @@ struct HistoryView: View {
     /// fast typist does not queue a query per keystroke.
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
+    /// Project titles from `.kadrrec` sidecars, keyed by the footage path.
+    @State private var recordingTitles: [String: String] = [:]
+    @State private var renaming: HistoryRecord?
+    @State private var renameText = ""
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
@@ -64,11 +70,80 @@ struct HistoryView: View {
         .onChange(of: kindFilter) { _, _ in Task { await applyFilters() } }
         .onChange(of: dateFilter) { _, _ in Task { await applyFilters() } }
         .onChange(of: searchText) { _, text in scheduleSearch(text) }
+        .onChange(of: controller.records) { _, _ in refreshRecordingTitles() }
+        .onAppear { refreshRecordingTitles() }
         .onDisappear { searchTask?.cancel() }
+        .alert("Rename Recording", isPresented: renameAlertPresented) {
+            TextField("Name", text: $renameText)
+            Button("Rename") { applyRename() }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
     }
 
     private var currentFilter: HistoryFilter {
         HistoryFilter(kind: kindFilter, capturedAfter: dateFilter.capturedAfter)
+    }
+
+    private var renameAlertPresented: Binding<Bool> {
+        Binding(
+            get: { renaming != nil },
+            set: {
+                if !$0 {
+                    renaming = nil
+                }
+            }
+        )
+    }
+
+    private func title(for record: HistoryRecord) -> String {
+        if let url = controller.fileURL(for: record) {
+            return recordingTitles[url.standardizedFileURL.path] ?? record.originalFilename
+        }
+        return record.originalFilename
+    }
+
+    private func canRename(_ record: HistoryRecord) -> Bool {
+        guard record.kind == .video, let url = controller.fileURL(for: record) else {
+            return false
+        }
+        return StudioSessionRecorder.session(forRecordingAt: url) != nil
+    }
+
+    private func refreshRecordingTitles() {
+        guard let store = StudioSessionRecorder.store() else {
+            recordingTitles = [:]
+            return
+        }
+        let urls = controller.records.compactMap { controller.fileURL(for: $0) }
+        recordingTitles = store.displayNames(forFootageAt: urls)
+    }
+
+    private func applyRename() {
+        defer { renaming = nil }
+        guard let record = renaming else { return }
+        let filename = Self.libraryFilename(displayName: renameText, current: record.originalFilename)
+        if let session = studioSession(for: record) {
+            try? session.setDisplayName(renameText)
+        }
+        Task { await controller.rename(record, to: filename) }
+        refreshRecordingTitles()
+    }
+
+    private func studioSession(for record: HistoryRecord) -> RecordingSession? {
+        guard let url = controller.fileURL(for: record) else { return nil }
+        return StudioSessionRecorder.session(forRecordingAt: url)
+    }
+
+    /// Keeps the capture's extension so a drag-out still writes a movie, not a nameless file.
+    static func libraryFilename(displayName: String, current: String) -> String {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return current }
+        let ext = (current as NSString).pathExtension
+        guard !ext.isEmpty else { return trimmed }
+        if (trimmed as NSString).pathExtension.lowercased() == ext.lowercased() {
+            return trimmed
+        }
+        return "\(trimmed).\(ext)"
     }
 
     private var filterBar: some View {
@@ -131,6 +206,7 @@ struct HistoryView: View {
                     ForEach(controller.records) { record in
                         HistoryCell(
                             record: record,
+                            title: title(for: record),
                             image: controller.thumbnail(for: record, maxPixelSize: 280),
                             isSelected: selection.contains(record.id)
                         )
@@ -156,7 +232,7 @@ struct HistoryView: View {
                                         .map { NSImage(cgImage: $0, size: .zero) }
                                 },
                                 onTap: { toggleSelection(record.id) },
-                                onDoubleTap: { reopen(record) }
+                                onDoubleTap: { open(record) }
                             )
                         )
                         .contextMenu { cellMenu(record) }
@@ -174,7 +250,16 @@ struct HistoryView: View {
 
     @ViewBuilder
     private func cellMenu(_ record: HistoryRecord) -> some View {
-        Button("Open in Overlay") { reopen(record) }
+        if record.kind == .video {
+            Button("Open in Studio") { open(record) }
+            if canRename(record) {
+                Button("Rename") {
+                    renameText = title(for: record)
+                    renaming = record
+                }
+            }
+        }
+        Button("Open in Overlay") { openAsCard(record) }
         Button("Reveal in Finder") {
             selection = [record.id]
             revealSelected()
@@ -296,6 +381,7 @@ struct HistoryView: View {
 
 private struct HistoryCell: View {
     let record: HistoryRecord
+    let title: String
     let image: CGImage?
     let isSelected: Bool
 
@@ -332,7 +418,7 @@ private struct HistoryCell: View {
                     )
             )
 
-            Text(record.originalFilename)
+            Text(title)
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -341,7 +427,7 @@ private struct HistoryCell: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(record.originalFilename)
+        .accessibilityLabel(title)
         .accessibilityAddTraits(.isButton)
     }
 }

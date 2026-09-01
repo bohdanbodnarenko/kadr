@@ -24,6 +24,11 @@ extension AreaCaptureCoordinator {
         quickAccess.presentFromHistory(record)
     }
 
+    /// Opens a recording in the studio when a session still exists, otherwise the overlay.
+    func openFromHistory(_ record: HistoryRecord) {
+        quickAccess.openFromHistory(record)
+    }
+
     /// Pins a file automation named (docs/03 §8.4). Returns false when it is not an image.
     @discardableResult
     func pinFile(at url: URL) -> Bool {

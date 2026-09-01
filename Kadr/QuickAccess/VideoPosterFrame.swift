@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreMedia
 import Foundation
 import Shared
 
@@ -35,5 +36,14 @@ enum VideoPosterFrame {
 
         let size = natural.applying(transform)
         return PixelSize(width: Int(abs(size.width)), height: Int(abs(size.height)))
+    }
+
+    /// How long the movie is, or nil when it cannot be opened.
+    static func duration(of url: URL) async -> TimeInterval? {
+        let asset = AVURLAsset(url: url)
+        guard let duration = try? await asset.load(.duration) else { return nil }
+        let seconds = CMTimeGetSeconds(duration)
+        guard seconds.isFinite, seconds > 0.1 else { return nil }
+        return seconds
     }
 }

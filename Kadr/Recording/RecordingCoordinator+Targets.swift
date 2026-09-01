@@ -45,6 +45,7 @@ extension RecordingCoordinator {
                     windows: windows
                 ) { [weak self] outcome in
                     guard case let .window(selection) = outcome else { return }
+                    self?.beginWindowHighlight(from: selection)
                     self?.startAfterCountdown(target: .window(selection.window.id))
                 }
             } catch {

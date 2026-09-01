@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import OverlayKit
 import RecordingCore
+import SelectionUI
 import Shared
 
 /// Turning a screen click into a pixel of the recording (docs/03 §1.8).
@@ -96,5 +97,41 @@ extension RecordingCoordinator {
             return NSScreen.main?.backingScaleFactor ?? 2
         }
         return screen.backingScaleFactor
+    }
+
+    /// The dim around a region, or around a window once we know where it is.
+    func presentHighlight(for target: RecordingTarget) {
+        switch target {
+        case .region:
+            areaHighlight.show(for: target)
+        case .display:
+            areaHighlight.hide()
+        case .window:
+            if let hole = windowHighlightHole, let id = windowHighlightDisplayID {
+                areaHighlight.showWindow(hole: hole, displayID: id)
+            } else {
+                areaHighlight.hide()
+            }
+        }
+    }
+
+    /// Remembers the picked window's frame so the dim is up before the first captured frame.
+    func beginWindowHighlight(from selection: WindowSelection) {
+        windowHighlightHole = selection.display.globalRect(for: DisplayRect(cgRect: selection.window.frame))
+        windowHighlightDisplayID = selection.display.displayID
+    }
+
+    func followWindowHighlight(contentRect: CGRect) {
+        let hole = DisplayRect(cgRect: contentRect)
+        windowHighlightHole = hole
+        let displayID = Self.displayID(containing: hole) ?? windowHighlightDisplayID ?? CGMainDisplayID()
+        windowHighlightDisplayID = displayID
+        areaHighlight.showWindow(hole: hole, displayID: displayID)
+    }
+
+    static func displayID(containing hole: DisplayRect) -> CGDirectDisplayID? {
+        NSScreen.screens.compactMap(ScreenDescriptor.init).first { descriptor in
+            DisplayRect(cgRect: CGDisplayBounds(descriptor.displayID)).intersects(hole)
+        }?.displayID
     }
 }

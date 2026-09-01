@@ -11,11 +11,19 @@ import Shared
 /// what the studio exists to avoid.
 ///
 /// The camera is never opened twice: when a recording captures a studio session the live
-/// overlay's webcam stays off, so exactly one `AVCaptureSession` holds the device.
+/// overlay's webcam stays off, so exactly one `AVCaptureSession` holds the device. The
+/// picker warms that session and shows a live preview; `start(writingTo:)` then writes from
+/// the same session so the exposure fade-in is not in the file.
 @MainActor
 final class CameraFileRecorder {
     private let logger = KadrLog.logger(.recording)
+    private let preview = CameraPreviewPanel()
     private var machinery: CameraMachinery?
+    private var activeDeviceID: String?
+    private var isWriting = false
+    /// Bumps when the user toggles the camera, so a permission sheet that outlives a
+    /// toggle-off does not start a session that was already cancelled.
+    private var previewGeneration = 0
 
     /// Whether the machine has a camera at all, asked before offering to use one.
     static var hasCamera: Bool {
@@ -36,7 +44,22 @@ final class CameraFileRecorder {
     }
 
     var isRecording: Bool {
-        machinery != nil
+        isWriting
+    }
+
+    /// Warms the sensor and shows the circular preview, without writing a file yet.
+    ///
+    /// Called as soon as the camera is armed in the picker, and left running while Area or
+    /// Window selection hides the bar. A no-op while a recording is already writing — that
+    /// session owns the device until it finishes.
+    func setPreview(enabled: Bool, deviceID: String?) {
+        previewGeneration += 1
+        let generation = previewGeneration
+        guard enabled else {
+            stopPreview()
+            return
+        }
+        Task { await warmPreview(deviceID: deviceID, generation: generation) }
     }
 
     /// Starts recording the camera into `url`.
@@ -44,25 +67,55 @@ final class CameraFileRecorder {
     /// Best-effort by design: no camera, no permission, or a device already in use costs
     /// the bubble and never the screen recording. A webcam that fails to start must not
     /// take the thing the user actually asked for down with it.
-    func start(writingTo url: URL) {
-        guard machinery == nil else { return }
+    ///
+    /// Reuses a warm preview session for the same device when one is running, so the file
+    /// does not begin with the fade-in the picker already showed.
+    func start(writingTo url: URL, deviceID: String? = nil) {
+        guard !isWriting else { return }
+        if let machinery, matches(deviceID) {
+            guard machinery.beginWriting(to: url) else {
+                logger.info("Could not start the camera; recording without a camera track")
+                return
+            }
+            isWriting = true
+            preview.show(session: machinery.session)
+            return
+        }
+
+        stopPreview()
         guard Self.isAuthorized else {
             logger.info("Camera access not granted; recording without a camera track")
             return
         }
         let machinery = CameraMachinery()
-        guard machinery.start(writingTo: url) else {
+        guard machinery.startSession(deviceID: deviceID),
+              machinery.beginWriting(to: url)
+        else {
+            machinery.stopSession()
             logger.info("Could not start the camera; recording without a camera track")
             return
         }
         self.machinery = machinery
+        activeDeviceID = deviceID
+        isWriting = true
+        preview.show(session: machinery.session)
+    }
+
+    /// Stops writing frames for as long as the screen recording is paused, without
+    /// tearing the preview down. Resume starts the file clock again after the gap.
+    func pause() {
+        machinery?.pauseWriting()
+    }
+
+    func resume() {
+        machinery?.resumeWriting()
     }
 
     /// Stops, waits for the file to be finalised, and reports when the camera began.
     ///
-    /// Awaited rather than fired and forgotten: `AVCaptureMovieFileOutput` finishes writing
-    /// asynchronously, and a session package assembled before the camera file is closed
-    /// contains a movie nobody can open.
+    /// Awaited rather than fired and forgotten: the writer finishes asynchronously, and a
+    /// session package assembled before the camera file is closed contains a movie nobody
+    /// can open.
     ///
     /// The start time is the other half of the answer (docs/10 R0.5).
     ///
@@ -74,174 +127,68 @@ final class CameraFileRecorder {
     @discardableResult
     func finish() async -> (succeeded: Bool, startedAt: TimeInterval?) {
         guard let machinery else { return (false, nil) }
+        preview.hide()
+        isWriting = false
+        activeDeviceID = nil
         self.machinery = nil
         let startedAt = machinery.startedAt
         return await (machinery.finish(), startedAt)
     }
 
     func cancel() {
+        preview.hide()
+        isWriting = false
+        activeDeviceID = nil
         machinery?.cancel()
         machinery = nil
     }
-}
 
-/// The capture objects and the one queue that owns them.
-///
-/// `AVCaptureSession` carries no `Sendable` conformance and `startRunning` blocks, so it
-/// never leaves this type and every touch goes through `run` — the same documented pattern
-/// the live webcam overlay uses (docs/04 §8).
-///
-/// The recording delegate is a separate object rather than this one. `AVCaptureFileOutput`
-/// declares its delegate main-actor isolated, and conforming here would drag the whole type
-/// — capture session included — onto the main actor, which is exactly where a blocking
-/// `startRunning` must not be.
-private final nonisolated class CameraMachinery: @unchecked Sendable {
-    private let session = AVCaptureSession()
-    private let output = AVCaptureMovieFileOutput()
-    private let queue = DispatchQueue(label: "app.kadr.recording.camera-file")
-    private let logger = KadrLog.logger(.recording)
-    private let lock = NSLock()
-    private var completion: (@Sendable (Bool) -> Void)?
-    private var delegate: CameraRecordingDelegate?
-    /// When the first frame landed, as a mach uptime.
+    // MARK: - Preview
+
+    private func warmPreview(deviceID: String?, generation: Int) async {
+        if !Self.isAuthorized {
+            let granted = await Self.requestAccess()
+            guard granted else { return }
+        }
+        guard generation == previewGeneration else { return }
+        startPreview(deviceID: deviceID)
+    }
+
+    private func startPreview(deviceID: String?) {
+        guard !isWriting else {
+            if let machinery {
+                preview.show(session: machinery.session)
+            }
+            return
+        }
+        if let machinery, matches(deviceID) {
+            preview.show(session: machinery.session)
+            return
+        }
+        stopPreview()
+        let machinery = CameraMachinery()
+        guard machinery.startSession(deviceID: deviceID) else {
+            logger.info("Could not start the camera preview")
+            return
+        }
+        self.machinery = machinery
+        activeDeviceID = deviceID
+        preview.show(session: machinery.session)
+    }
+
+    /// Tears down a warm preview that never turned into a recording.
     ///
-    /// Written on the capture queue and read from the main actor, so it goes through the
-    /// same lock as everything else here.
-    private var firstFrameUptime: TimeInterval?
-
-    var startedAt: TimeInterval? {
-        lock.lock()
-        defer { lock.unlock() }
-        return firstFrameUptime
+    /// No-op while a file is being written: the recording owns the session until Stop or
+    /// Discard, and hiding the bubble must not close the device under it.
+    private func stopPreview() {
+        guard !isWriting else { return }
+        preview.hide()
+        machinery?.stopSession()
+        machinery = nil
+        activeDeviceID = nil
     }
 
-    func start(writingTo url: URL) -> Bool {
-        // 720p rather than the highest the camera offers: the bubble is a fraction of the
-        // frame, and a 4K webcam track costs more to encode than the screen it sits on.
-        session.sessionPreset = .hd1280x720
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input),
-              session.canAddOutput(output)
-        else {
-            return false
-        }
-        session.addInput(input)
-        session.addOutput(output)
-
-        let delegate = CameraRecordingDelegate(
-            onStart: { [weak self] in self?.noteFirstFrame() },
-            onFinish: { [weak self] error in self?.finished(with: error) }
-        )
-        self.delegate = delegate
-
-        run { session, output in
-            session.startRunning()
-            output.startRecording(to: url, recordingDelegate: delegate)
-        }
-        return true
-    }
-
-    func finish() async -> Bool {
-        await withCheckedContinuation { continuation in
-            lock.lock()
-            completion = { continuation.resume(returning: $0) }
-            lock.unlock()
-
-            run { session, output in
-                guard output.isRecording else {
-                    // Never started, so the delegate will not fire and the continuation
-                    // would be waiting for a callback that is not coming.
-                    session.stopRunning()
-                    self.complete(false)
-                    return
-                }
-                output.stopRecording()
-            }
-        }
-    }
-
-    func cancel() {
-        run { session, output in
-            if output.isRecording {
-                output.stopRecording()
-            }
-            session.stopRunning()
-        }
-        complete(false)
-    }
-
-    /// `didStartRecordingTo` fires when the file's first sample is written, which is the
-    /// moment the camera actually began — not the moment it was asked to.
-    private func noteFirstFrame() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard firstFrameUptime == nil else { return }
-        firstFrameUptime = ProcessInfo.processInfo.systemUptime
-    }
-
-    private func finished(with error: (any Error)?) {
-        run { session, _ in session.stopRunning() }
-        if let error {
-            logger.error("The camera track failed: \(error.localizedDescription, privacy: .public)")
-        }
-        complete(error == nil)
-    }
-
-    /// Resumes the waiter once, whichever path reaches it first.
-    private func complete(_ success: Bool) {
-        lock.lock()
-        let completion = completion
-        self.completion = nil
-        lock.unlock()
-        completion?(success)
-    }
-
-    /// Runs an operation against the capture objects on the queue that owns them.
-    private func run(_ operation: @escaping @Sendable (AVCaptureSession, AVCaptureMovieFileOutput) -> Void) {
-        let boxed = Box(session: session, output: output)
-        queue.async { operation(boxed.session, boxed.output) }
-    }
-
-    /// Carries the non-`Sendable` capture objects onto their own queue.
-    private struct Box: @unchecked Sendable {
-        let session: AVCaptureSession
-        let output: AVCaptureMovieFileOutput
-    }
-}
-
-private typealias RecordingDelegate = AVCaptureFileOutputRecordingDelegate
-
-/// Forwards the two delegate callbacks that matter, and nothing else.
-private final nonisolated class CameraRecordingDelegate: NSObject, RecordingDelegate, @unchecked Sendable {
-    private let onStart: @Sendable () -> Void
-    private let onFinish: @Sendable ((any Error)?) -> Void
-
-    init(
-        onStart: @escaping @Sendable () -> Void,
-        onFinish: @escaping @Sendable ((any Error)?) -> Void
-    ) {
-        self.onStart = onStart
-        self.onFinish = onFinish
-        super.init()
-    }
-
-    /// Fired when the file's first sample is written — the moment the camera actually
-    /// began, which is what the lip-sync offset is measured from (docs/10 R0.5).
-    nonisolated func fileOutput(
-        _ output: AVCaptureFileOutput,
-        didStartRecordingTo fileURL: URL,
-        from connections: [AVCaptureConnection]
-    ) {
-        onStart()
-    }
-
-    nonisolated func fileOutput(
-        _ output: AVCaptureFileOutput,
-        didFinishRecordingTo outputFileURL: URL,
-        from connections: [AVCaptureConnection],
-        error: (any Error)?
-    ) {
-        onFinish(error)
+    private func matches(_ deviceID: String?) -> Bool {
+        (activeDeviceID ?? "") == (deviceID ?? "")
     }
 }

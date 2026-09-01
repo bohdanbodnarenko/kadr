@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OverlayKit
 import RecordingCore
 import SettingsKit
 import Shared
@@ -34,8 +35,16 @@ extension RecordingCoordinator {
         let seconds = startedByAutomation ? 0 : settings.recordingCountdownSeconds
         state = .starting
         pendingTarget = target
-        countdown.run(seconds: seconds) { [weak self] in
+        lastTarget = target
+        countdownRemaining = seconds
+        presentHighlight(for: target)
+        countdown.onTick = { [weak self] remaining in
+            self?.countdownRemaining = remaining
+        }
+        countdown.run(seconds: seconds, placement: .center) { [weak self] in
             guard let self else { return }
+            countdownRemaining = 0
+            countdown.onTick = nil
             pendingTarget = nil
             // `.starting` was claimed when the countdown began, so a second hotkey press
             // could not start a second recording while the numbers were on screen. It stays
@@ -55,6 +64,8 @@ extension RecordingCoordinator {
     /// the remaining two seconds is time they spend looking at a number.
     func startCountdownNow() {
         guard let target = pendingTarget, countdown.isRunning else { return }
+        countdownRemaining = 0
+        countdown.onTick = nil
         countdown.cancel()
         pendingTarget = nil
         start(target: target, alreadyClaimed: true)
@@ -68,7 +79,12 @@ extension RecordingCoordinator {
     /// only a promise to begin, and the only thing to undo is the promise.
     func cancelCountdown() -> Bool {
         guard countdown.isRunning else { return false }
+        countdownRemaining = 0
+        countdown.onTick = nil
         countdown.cancel()
+        windowHighlightHole = nil
+        windowHighlightDisplayID = nil
+        areaHighlight.hide()
         pendingTarget = nil
         state = .idle
         return true

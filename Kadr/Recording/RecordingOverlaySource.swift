@@ -32,6 +32,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         var keystrokesOnlyWithModifiers = true
         var keystrokePosition: KeystrokePosition = .bottomCentre
         var showsWebcam = false
+        var webcamDeviceID: String?
         var webcamIsCircular = true
         /// Maps a screen point into the recorded area's own coordinates.
         /// Screen space in, recorded pixels out — typed, for the reason C1 records
@@ -78,7 +79,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             let webcam = WebcamCapture { [weak self] image in
                 self?.lock.withLock { self?.webcamFrame = image }
             }
-            webcam.start()
+            webcam.start(deviceID: configuration.webcamDeviceID)
             self.webcam = webcam
         }
     }
@@ -308,9 +309,11 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
         super.init()
     }
 
-    func start() {
+    func start(deviceID: String? = nil) {
         session.sessionPreset = .medium
-        guard let device = AVCaptureDevice.default(for: .video),
+        let device = RecordingDeviceCatalog.camera(withID: deviceID ?? "")
+            ?? AVCaptureDevice.default(for: .video)
+        guard let device,
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input)
         else {

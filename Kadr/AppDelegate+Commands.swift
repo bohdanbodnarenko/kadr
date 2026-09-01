@@ -60,7 +60,9 @@ extension AppDelegate {
     func refreshStatusItemIcon() {
         guard let recording = recordingStorage, recording.isRecording else {
             statusItemController?.showIdleIcon()
-            recordingControlBar.dismiss()
+            if !recordingControlBar.isShowingPicker {
+                recordingControlBar.dismiss()
+            }
             return
         }
         statusItemController?.showRecordingIcon(
@@ -91,6 +93,7 @@ extension AppDelegate {
         // exists rather than added as a step of its own).
         let preRoll: RecordingControlBar.PreRoll? = recordingStorage?.isCountingDown == true
             ? RecordingControlBar.PreRoll(
+                remaining: recordingStorage?.countdownRemaining ?? 0,
                 startNow: { [weak self] in self?.recordingStorage?.startCountdownNow() },
                 cancel: { [weak self] in self?.recording.cancel() }
             )
@@ -117,7 +120,8 @@ extension AppDelegate {
                     recording.pause()
                 }
             },
-            cancel: { [weak self] in self?.recording.cancel() }
+            cancel: { [weak self] in self?.recording.cancel() },
+            restart: { [weak self] in self?.recording.restart() }
         )
     }
 
@@ -151,9 +155,10 @@ extension AppDelegate {
     }
 
     func openHistory() {
-        history.showWindow { [weak self] record in
-            self?.areaCapture.reopenFromHistory(record)
-        }
+        history.showWindow(
+            reopen: { [weak self] record in self?.areaCapture.reopenFromHistory(record) },
+            openStudio: { [weak self] record in self?.areaCapture.openFromHistory(record) }
+        )
     }
 
     /// Debug builds get a submenu that drives CaptureCore directly (docs/06 M1).

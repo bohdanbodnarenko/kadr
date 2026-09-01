@@ -16,6 +16,26 @@ import UniformTypeIdentifiers
 /// at its length budget.
 @MainActor
 extension QuickAccessManager {
+    /// Opens a recording in the studio when a session still exists, otherwise the overlay.
+    func openFromHistory(_ record: HistoryRecord) {
+        guard let historyStore = history?.store else {
+            presentFromHistory(record)
+            return
+        }
+        let url = historyStore.fileURL(for: record)
+        guard let sessionStore = StudioSessionRecorder.store() else {
+            presentFromHistory(record)
+            return
+        }
+        switch HistoryOpenRouting.destination(kind: record.kind, fileURL: url, store: sessionStore) {
+        case let .studio(directory):
+            history?.markAccessed(record)
+            editor.open(directory)
+        case .overlay:
+            presentFromHistory(record)
+        }
+    }
+
     func actions(for item: QuickAccessItem) -> QuickAccessCardActions {
         var actions = QuickAccessCardActions()
         actions.copy = { [weak self] in self?.copy(item) }

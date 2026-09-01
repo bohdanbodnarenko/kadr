@@ -104,9 +104,12 @@ final class HistoryController {
         cache.purgeStrip()
     }
 
-    func showWindow(reopen: @escaping (HistoryRecord) -> Void) {
+    func showWindow(
+        reopen: @escaping (HistoryRecord) -> Void,
+        openStudio: @escaping (HistoryRecord) -> Void
+    ) {
         if window == nil {
-            window = HistoryWindowController(controller: self, reopen: reopen)
+            window = HistoryWindowController(controller: self, reopen: reopen, openStudio: openStudio)
         }
         window?.show()
     }
@@ -212,6 +215,18 @@ final class HistoryController {
     func markAccessed(_ record: HistoryRecord) {
         Task {
             try? await store?.markAccessed(id: record.id)
+        }
+    }
+
+    /// Updates the library name so search and the grid agree with a project title.
+    func rename(_ record: HistoryRecord, to filename: String) async {
+        await openIfNeeded()
+        try? await store?.rename(id: record.id, to: filename)
+        if let index = records.firstIndex(where: { $0.id == record.id }) {
+            records[index].originalFilename = filename
+        }
+        if let index = recent.firstIndex(where: { $0.id == record.id }) {
+            recent[index].originalFilename = filename
         }
     }
 
