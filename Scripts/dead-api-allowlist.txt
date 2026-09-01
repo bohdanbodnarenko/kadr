@@ -45,7 +45,7 @@ tiled
 # through a different control, so neither is a missing feature:
 #   `RedactionStyle.defaultPixelate` — the inspector's pixelate toggle derives the style
 #     from the current one rather than reaching for the named default.
-#   `StrokeStyle.widthPresets` — the inspector offers a width slider over `widthRange`
-#     instead of a preset picker. Worth revisiting as a control, not as dead code.
+#
+# `StrokeStyle.widthPresets` came off this list on 2026-09-01: the spec asks for those five
+# widths as a control and now there is one, so it has a caller.
 defaultPixelate
-widthPresets

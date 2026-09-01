@@ -344,53 +344,6 @@ public final class StudioDocumentModel {
         CGPoint(x: manifest.pixelSize.width / 2, y: manifest.pixelSize.height / 2)
     }
 
-    // MARK: - Clips
-
-    /// Splits the clip under the playhead.
-    public func splitAtPlayhead() {
-        change { $0.clips.split(atEdited: playhead) }
-    }
-
-    /// Removes the clip the playhead is in, if it is not the last one.
-    ///
-    /// The last clip stays: a timeline with nothing in it is not an edit, it is a deleted
-    /// recording, and deleting a recording is not something a trim button should do.
-    public func removeClipAtPlayhead() {
-        let clips = edit.clips.clips
-        guard clips.count > 1 else {
-            failure = "This is the only clip left. Delete the recording itself if that is what you meant."
-            return
-        }
-        guard let index = clipIndex(at: playhead) else { return }
-        change {
-            var remaining = $0.clips.clips
-            remaining.remove(at: index)
-            $0.clips = ClipTimeline(clips: remaining)
-        }
-        playhead = min(playhead, edit.duration)
-    }
-
-    /// Sets the speed of the clip under the playhead.
-    public func setSpeedAtPlayhead(_ speed: Double) {
-        guard let index = clipIndex(at: playhead) else { return }
-        let id = edit.clips.clips[index].id
-        change { $0.clips.setSpeed(speed, for: id) }
-        playhead = min(playhead, edit.duration)
-    }
-
-    /// Which clip contains an edited-time instant.
-    func clipIndex(at time: TimeInterval) -> Int? {
-        var elapsed: TimeInterval = 0
-        for (index, clip) in edit.clips.clips.enumerated() {
-            let next = elapsed + clip.editedDuration
-            if time < next || index == edit.clips.clips.count - 1 {
-                return index
-            }
-            elapsed = next
-        }
-        return nil
-    }
-
     // MARK: - Presets
 
     public func apply(_ preset: StudioPreset) {

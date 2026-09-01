@@ -158,6 +158,13 @@ public struct StudioRootView: View {
 
     private var clipButtons: some View {
         HStack(spacing: 8) {
+            Menu("Trim") {
+                Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
+                Button("Trim End to Playhead") { model.trimEndToPlayhead() }
+            }
+            .frame(width: 78)
+            .disabled(model.playhead <= 0 || model.playhead >= model.edit.duration)
+            .help("Drop everything before or after the playhead")
             Button("Split") { model.splitAtPlayhead() }
                 .keyboardShortcut("k", modifiers: .command)
                 .help("Cut the clip at the playhead (⌘K)")

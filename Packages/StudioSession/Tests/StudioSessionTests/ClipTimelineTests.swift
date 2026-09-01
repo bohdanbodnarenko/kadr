@@ -270,4 +270,66 @@ struct CameraBubbleTests {
         let bubble = try JSONDecoder().decode(CameraBubble.self, from: Data("{}".utf8))
         #expect(bubble == .standard)
     }
+
+    // MARK: - Trimming (docs/08 §2 item 12)
+
+    /// Dropping the dead air off the front is the commonest edit anybody makes to a screen
+    /// recording, and it was only reachable as split-then-delete-the-first-clip.
+    @Test("Trimming the start drops what came before the playhead")
+    func trimStartDropsTheHead() {
+        var timeline = ClipTimeline.whole(duration: 10)
+        timeline.trimStart(toEdited: 3)
+
+        #expect(abs(timeline.editedDuration - 7) < 0.0001)
+        // What was at 3 s is now at 0, and the footage it points at is unchanged.
+        #expect(abs((timeline.sourceTime(forEdited: 0) ?? -1) - 3) < 0.0001)
+    }
+
+    @Test("Trimming the end drops what came after the playhead")
+    func trimEndDropsTheTail() {
+        var timeline = ClipTimeline.whole(duration: 10)
+        timeline.trimEnd(toEdited: 4)
+
+        #expect(abs(timeline.editedDuration - 4) < 0.0001)
+        #expect(abs(timeline.sourceTime(forEdited: 0) ?? -1) < 0.0001)
+        #expect(timeline.sourceTime(forEdited: 5) == nil, "footage past the trim survived")
+    }
+
+    /// A trim at either end asks for something that is already true, or for the recording to
+    /// be deleted. Neither is a trim.
+    @Test("Trimming to an end of the recording changes nothing", arguments: [0.0, 10.0, -1.0, 99.0])
+    func trimAtTheEndsIsANoOp(time: TimeInterval) {
+        let original = ClipTimeline.whole(duration: 10)
+        var start = original
+        start.trimStart(toEdited: time)
+        var end = original
+        end.trimEnd(toEdited: time)
+
+        #expect(start == original)
+        #expect(end == original)
+    }
+
+    /// Trimming a timeline that has already been cut keeps the clips on the surviving side,
+    /// rather than collapsing them into one.
+    @Test("Trimming a cut timeline keeps the clips after the trim")
+    func trimKeepsLaterClips() {
+        var timeline = ClipTimeline.whole(duration: 12)
+        timeline.split(atEdited: 8)
+        #expect(timeline.clips.count == 2)
+
+        timeline.trimStart(toEdited: 2)
+        #expect(abs(timeline.editedDuration - 10) < 0.0001)
+        #expect(timeline.clips.count == 2, "the split at 8s was lost")
+    }
+
+    /// Speed survives a trim: a clip playing at 2× that loses its first second is still
+    /// playing at 2×.
+    @Test("Trimming keeps each clip's speed")
+    func trimKeepsSpeed() {
+        var timeline = ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 10, speed: 2)])
+        timeline.trimStart(toEdited: 1)
+
+        #expect(timeline.clips.allSatisfy { $0.speed == 2 })
+        #expect(abs(timeline.editedDuration - 4) < 0.0001)
+    }
 }

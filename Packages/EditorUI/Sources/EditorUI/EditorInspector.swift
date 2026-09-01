@@ -25,6 +25,10 @@ struct EditorInspector: View {
                             selected: model.styleMemory.stroke(for: tool).color,
                             onSelect: { model.applyColor($0) }
                         )
+                        EditorWidthPresets(
+                            selected: model.styleMemory.stroke(for: tool).width,
+                            onSelect: { model.applyStrokeWidth($0) }
+                        )
                         InspectorSlider(
                             title: "Width",
                             value: Binding(

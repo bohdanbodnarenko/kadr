@@ -178,6 +178,49 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
         }
     }
 
+    /// Drops everything before `time`, keeping the rest.
+    ///
+    /// Trimming the dead air off the front is the commonest edit anybody makes to a screen
+    /// recording — the seconds spent reaching for the mouse after pressing Record. It was
+    /// only reachable as split-then-delete-the-first-clip: two steps, in that order, with
+    /// the playhead in the right place for both.
+    ///
+    /// A no-op at either end rather than an error. Trimming the start to the start asks for
+    /// what is already true, and trimming it to the very end would delete the recording,
+    /// which is not what a trim is for.
+    public mutating func trimStart(toEdited time: TimeInterval) {
+        guard time > 0, time < editedDuration else { return }
+        split(atEdited: time)
+        var elapsed: TimeInterval = 0
+        var kept: [Clip] = []
+        for clip in clips {
+            if elapsed >= time - 0.0001 {
+                kept.append(clip)
+            }
+            elapsed += clip.editedDuration
+        }
+        if !kept.isEmpty {
+            clips = kept
+        }
+    }
+
+    /// Drops everything after `time`, keeping the rest.
+    public mutating func trimEnd(toEdited time: TimeInterval) {
+        guard time > 0, time < editedDuration else { return }
+        split(atEdited: time)
+        var elapsed: TimeInterval = 0
+        var kept: [Clip] = []
+        for clip in clips {
+            if elapsed < time - 0.0001 {
+                kept.append(clip)
+            }
+            elapsed += clip.editedDuration
+        }
+        if !kept.isEmpty {
+            clips = kept
+        }
+    }
+
     public mutating func remove(_ id: UUID) {
         clips.removeAll { $0.id == id }
     }
