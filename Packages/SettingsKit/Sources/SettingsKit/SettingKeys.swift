@@ -132,9 +132,13 @@ public enum SettingKeys {
     /// Show the seam review when the stitch is not sure (docs/03 §1.6 failure mode).
     public static let scrollReviewsSeams = SettingKey("scroll.reviewsSeams", default: true)
 
-    // Overlay pane (docs/03 §2, §8.3).
+    /// Overlay pane (docs/03 §2, §8.3).
     public static let overlayCorner = SettingKey("overlay.corner", default: OverlayCorner.bottomLeft)
-    public static let overlayCardWidth = SettingKey("overlay.cardWidth", default: 220)
+    // 200, down from 220. A card is a notification about something that already happened;
+    // at the old size it took a fifth of the height of a laptop screen for a thumbnail
+    // nobody inspects at that scale. Still adjustable in Settings for anyone who wants it
+    // bigger.
+    public static let overlayCardWidth = SettingKey("overlay.cardWidth", default: 200)
     public static let overlayTimeout = SettingKey("overlay.timeout", default: OverlayTimeout.never)
     /// Cards visible before older ones collapse behind the stack (docs/03 §2).
     public static let overlayMaxVisibleCards = SettingKey("overlay.maxVisibleCards", default: 5)

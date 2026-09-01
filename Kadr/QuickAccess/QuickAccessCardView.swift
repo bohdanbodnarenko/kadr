@@ -65,9 +65,13 @@ struct QuickAccessCardView: View {
     /// one (docs/07 LOW).
     @Environment(\.displayScale) private var displayScale
 
-    private static let thumbnailHeight: CGFloat = 120
-    private static let actionRowHeight: CGFloat = 36
-    private static let padding: CGFloat = 8
+    // Smaller than it was (140/36/8). A card is a notification about something that
+    // already happened, and this one occupied a fifth of the height of a laptop screen for
+    // a thumbnail nobody inspects at that size — what it needs to do is be recognisable and
+    // reachable, which 104 points manages.
+    private static let thumbnailHeight: CGFloat = 104
+    private static let actionRowHeight: CGFloat = 30
+    private static let padding: CGFloat = 7
 
     /// The panel needs its height before SwiftUI has laid anything out.
     static func height(forWidth width: CGFloat, item: QuickAccessItem) -> CGFloat {
@@ -152,6 +156,16 @@ struct QuickAccessCardView: View {
                 hoverOverlay
             }
         }
+        // Always in the same place, hover or not.
+        //
+        // There used to be one in the details row and another over the thumbnail, so the
+        // close did not disappear on hover — it *moved*, from the bottom of the card to the
+        // top corner, out from under a pointer already travelling towards it. A target that
+        // relocates as you reach for it is worse than one that is simply absent.
+        .overlay(alignment: .topTrailing) {
+            hideButton
+                .padding(6)
+        }
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Hover to see the actions, double-tap to open, or drag to another app")
     }
@@ -177,7 +191,6 @@ struct QuickAccessCardView: View {
                     .foregroundStyle(.secondary)
                     .help("Kept in the overlay only. Saved when you act on it.")
             }
-            hideButton
         }
         .frame(height: Self.actionRowHeight)
     }
@@ -217,10 +230,7 @@ struct QuickAccessCardView: View {
                 HStack(alignment: .top) {
                     corner(.topLeading)
                     Spacer()
-                    HStack(spacing: 4) {
-                        corner(.topTrailing)
-                        hideButton
-                    }
+                    corner(.topTrailing)
                 }
                 Spacer()
                 HStack {
@@ -234,14 +244,17 @@ struct QuickAccessCardView: View {
     }
 
     /// Hide, not delete. The file stays where the save policy put it (docs/03 §2).
+    ///
+    /// Sits over the thumbnail's top corner whether or not the card is hovered, so it is
+    /// always in the same place — and carries its own material, because it has to stay
+    /// legible over whatever the capture happens to be.
     private var hideButton: some View {
         Button(action: actions.dismiss) {
             Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .semibold))
-                .frame(width: 22, height: 22)
-                .background(.regularMaterial, in: Circle())
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 18, height: 18)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(CardCloseButtonStyle())
         .help("Hide — the file stays")
         .accessibilityLabel("Hide card")
     }
@@ -337,9 +350,9 @@ struct QuickAccessCardView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(CardActionButtonStyle())
         .disabled(!enabled)
         .help(enabled ? title : "\(title) — coming soon")
         .accessibilityLabel(title)
@@ -381,5 +394,62 @@ private struct ThumbnailImage: View {
                 ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
                 : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
         }
+    }
+}
+
+/// A card action that answers the pointer.
+///
+/// The action row was `.borderless`, which on macOS draws an icon and nothing else — no
+/// hover, no press, no hit area beyond the glyph. On a floating card that is a row of
+/// symbols the user cannot tell are buttons until one of them works. This gives each a
+/// target, a fill that arrives under the pointer, and a press that reads as a press.
+private struct CardActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.5))
+            .padding(3)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(fill(for: configuration)))
+            }
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
+            .onHover { isHovering = $0 && isEnabled }
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private func fill(for configuration: Configuration) -> Double {
+        guard isEnabled else { return 0 }
+        if configuration.isPressed {
+            return 0.22
+        }
+        return isHovering ? 0.12 : 0
+    }
+}
+
+/// The close, which has to read over any capture and answer the pointer.
+private struct CardCloseButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+            .background {
+                Circle()
+                    .fill(.regularMaterial)
+                    .overlay(Circle().fill(Color.primary.opacity(isHovering ? 0.14 : 0)))
+            }
+            .scaleEffect(configuration.isPressed ? 0.9 : (isHovering ? 1.08 : 1))
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
+            .onHover { isHovering = $0 }
+            .contentShape(Circle())
     }
 }
