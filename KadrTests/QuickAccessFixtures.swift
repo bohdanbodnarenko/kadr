@@ -70,6 +70,11 @@ func makeManager(
     store.removePersistentDomain(forName: suite)
     let settings = AppSettings(store: store)
     settings.saveFolderPath = saveFolder.path
+    // Past the first capture by default. The one-time tip pauses auto-dismiss while it is
+    // up — deliberately, so the card is not taken away from under its own explanation — and
+    // a harness that started before it would make every auto-close test a first-run test.
+    // `OverlayCoachTipTests` turns it back off and asserts that behaviour on purpose.
+    settings.hasSeenQuickAccessTip = true
 
     let output = CaptureOutput(
         settings: settings,

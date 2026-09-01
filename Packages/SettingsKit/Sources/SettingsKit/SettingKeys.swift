@@ -6,6 +6,12 @@ public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
     /// Whether the user has been through onboarding (docs/03 §8.2).
     public static let hasCompletedOnboarding = SettingKey("app.hasCompletedOnboarding", default: false)
+    /// Whether the one-time tip above the first capture card has been seen (docs/03 §2).
+    ///
+    /// Separate from onboarding, and deliberately: onboarding happens before the user has
+    /// captured anything, which is the wrong moment to explain a card they have never seen.
+    /// This one fires the first time there is something on screen to point at.
+    public static let hasSeenQuickAccessTip = SettingKey("overlay.hasSeenQuickAccessTip", default: false)
     /// Retired by schema 3 in favour of `afterCapture`, and kept only so the migration
     /// has something to read (docs/09 U2.2).
     public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)

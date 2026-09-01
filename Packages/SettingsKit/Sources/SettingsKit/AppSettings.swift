@@ -111,6 +111,11 @@ public final class AppSettings {
     }
 
     /// Whether the floating Stop/Pause bar appears while recording (docs/03 §1.8).
+    /// Whether the first-capture tip has been shown (docs/03 §2).
+    public var hasSeenQuickAccessTip: Bool {
+        didSet { store[SettingKeys.hasSeenQuickAccessTip] = hasSeenQuickAccessTip }
+    }
+
     public var recordingShowsControlBar: Bool {
         didSet { store[SettingKeys.recordingShowsControlBar] = recordingShowsControlBar }
     }
@@ -330,6 +335,7 @@ public final class AppSettings {
         recordsMicrophone = store[SettingKeys.recordsMicrophone]
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
+        hasSeenQuickAccessTip = store[SettingKeys.hasSeenQuickAccessTip]
         recordingShowsControlBar = store[SettingKeys.recordingShowsControlBar]
         recordingCountdownSeconds = store[SettingKeys.recordingCountdownSeconds]
         recordingShowsClicks = store[SettingKeys.recordingShowsClicks]

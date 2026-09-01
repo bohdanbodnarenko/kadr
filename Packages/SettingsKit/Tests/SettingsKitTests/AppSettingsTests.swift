@@ -309,4 +309,27 @@ struct DesktopHygieneSettingsTests {
         #expect(reloaded.captureWallpaper == .none)
         #expect(reloaded.capturePrecisionCrosshair == false)
     }
+
+    /// The first-capture tip fires once and then never again — a tip that reappears is a
+    /// tip that nags.
+    @Test("The first-capture tip is remembered as seen")
+    func firstCaptureTipIsRemembered() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        #expect(!settings.hasSeenQuickAccessTip, "the tip has to appear for a new user")
+
+        settings.hasSeenQuickAccessTip = true
+        #expect(AppSettings(store: store).hasSeenQuickAccessTip, "the tip would come back next launch")
+    }
+
+    /// Its own key rather than onboarding's. Onboarding runs before the user has captured
+    /// anything, which is the wrong moment to explain a card they have never seen.
+    @Test("The tip is tracked separately from onboarding")
+    func tipIsSeparateFromOnboarding() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        settings.hasCompletedOnboarding = true
+
+        #expect(!settings.hasSeenQuickAccessTip, "finishing onboarding silently consumed the card tip")
+    }
 }

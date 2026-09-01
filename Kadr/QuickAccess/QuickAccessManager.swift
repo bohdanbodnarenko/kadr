@@ -31,6 +31,9 @@ final class QuickAccessManager {
     let history: HistoryController?
     let logger = KadrLog.logger(.overlay)
 
+    /// The one-time tip over the first card, while it is up.
+    var coachTip: QuickAccessCoachTip?
+
     var panels: [(item: QuickAccessItem, panel: QuickAccessPanel)] = []
     /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
     var engagedItems: Set<UUID> = []
@@ -212,6 +215,7 @@ final class QuickAccessManager {
         panel.present(at: .zero)
         restack()
         scheduleAutoDismiss(for: item)
+        presentCoachTipIfNeeded(over: panel, item: item)
         logger.info("Quick Access card shown for \(item.filename, privacy: .public)")
     }
 
@@ -356,6 +360,7 @@ final class QuickAccessManager {
     /// Dismiss ≠ delete: the file stays where the policy put it (docs/03 §2).
     func dismiss(_ item: QuickAccessItem) {
         guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        dismissCoachTip(for: item)
         let entry = panels.remove(at: index)
         forgetTransientState(for: item)
         recordClosed(entry.item)
@@ -366,6 +371,7 @@ final class QuickAccessManager {
     /// Deletes the capture as well as the card.
     func delete(_ item: QuickAccessItem) {
         guard let index = panels.firstIndex(where: { $0.item.id == item.id }) else { return }
+        dismissCoachTip(for: item)
         let entry = panels.remove(at: index)
         forgetTransientState(for: item)
         entry.panel.dismiss()

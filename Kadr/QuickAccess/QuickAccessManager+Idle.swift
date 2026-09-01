@@ -41,8 +41,13 @@ extension QuickAccessManager {
     }
 
     /// Whether a timeout may take this card now. Engaged cards are not idle.
+    ///
+    /// Neither is one with its first-run tip open: taking the card away from under its own
+    /// explanation is the one outcome that teaches nothing. Paused rather than engaged —
+    /// engagement is permanent by design, and a first capture should still tidy itself away
+    /// once the user has read the tip and moved on.
     func isIdleForAutoDismiss(_ item: QuickAccessItem) -> Bool {
-        hoveredItemID != item.id && draggingItemID != item.id
+        hoveredItemID != item.id && draggingItemID != item.id && !isShowingCoachTip(for: item)
     }
 
     /// The user opened this capture (editor / studio / trim), so it stops being disposable.

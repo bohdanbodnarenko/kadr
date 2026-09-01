@@ -123,6 +123,10 @@ extension AppDelegate {
 
     /// Reopens onboarding, which is also how the user recovers a revoked grant.
     func showOnboarding() {
+        // Replaying the welcome re-arms the card tip too. Somebody asking to be shown the
+        // introduction again is asking about the whole app, and the one explanation that
+        // only appears over a real capture is the part they are most likely to have missed.
+        settings.hasSeenQuickAccessTip = false
         onboarding.show()
     }
 
