@@ -216,4 +216,37 @@ struct StudioPlaybackTests {
         #expect(StudioTimelineView.tickLabel(65) == "1:05")
         #expect(StudioTimelineView.tickLabel(600) == "10:00")
     }
+
+    /// Stretching the timeline has to buy finer ticks, not the same five labels further
+    /// apart — the whole reason to zoom is to see where inside a second you are.
+    @Test("Zooming in gives a finer ruler")
+    func zoomingGivesFinerTicks() {
+        let duration: TimeInterval = 600
+        let fit = StudioTimelineView.tickInterval(forDuration: duration, width: 800)
+        let zoomed = StudioTimelineView.tickInterval(forDuration: duration, width: 800 * 32)
+
+        #expect(zoomed < fit, "a 32× timeline got the same \(fit)s ticks")
+        #expect(zoomed > 0)
+    }
+
+    /// Below a second the label has to say which part of the second, or every tick in a
+    /// zoomed ruler reads the same.
+    @Test("Sub-second ticks show tenths")
+    func subSecondTicksShowTenths() {
+        #expect(StudioTimelineView.tickLabel(65.4, step: 0.5) == "1:05.4")
+        #expect(StudioTimelineView.tickLabel(65.4, step: 1) == "1:05")
+    }
+
+    /// A short recording must not get absurd ticks at any width.
+    @Test(
+        "Tick intervals stay sane at every zoom",
+        arguments: [(10.0, 800.0), (10.0, 48000.0), (3600.0, 800.0), (3600.0, 48000.0)]
+    )
+    func tickIntervalsStaySane(duration: TimeInterval, width: CGFloat) {
+        let step = StudioTimelineView.tickInterval(forDuration: duration, width: width)
+        #expect(step > 0)
+        #expect(step <= duration, "a \(duration)s recording got a \(step)s tick")
+        let spacing = CGFloat(step / duration) * width
+        #expect(spacing >= 40, "labels \(spacing)pt apart would collide")
+    }
 }
