@@ -200,6 +200,41 @@ struct EditorDraftingTests {
         #expect(model.selection == [target.id], "returning to Select keeps what was selected")
     }
 
+    /// Re-pressing the tool that is already armed clears too.
+    ///
+    /// It used to return early on an unchanged tool, so the shape drawn a moment ago stayed
+    /// selected while the user was lining up the next one — and a colour meant for the next
+    /// shape rewrote the previous one instead, which is the kind of thing that reads as the
+    /// editor having a mind of its own.
+    @Test("Re-picking the armed tool still clears the selection")
+    func rePickingTheArmedToolClears() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.selectTool(.arrow)
+        model.selection = [target.id]
+
+        model.selectTool(.arrow)
+        #expect(model.selection.isEmpty)
+        #expect(model.tool == .arrow)
+    }
+
+    /// Crop is a mode until Done (docs/03 §3), and Done is `selectTool(.select)` — so
+    /// leaving it must keep the crop rather than discard it.
+    @Test("Finishing a crop leaves the mode and keeps the crop")
+    func finishingCropKeepsIt() {
+        let model = makeModel([])
+        model.selectTool(.crop)
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerDragged(to: CGPoint(x: 90, y: 70))
+        model.pointerUp(at: CGPoint(x: 90, y: 70))
+        let cropped = model.document.crop
+        #expect(cropped != nil, "the drag did not produce a crop")
+
+        model.selectTool(.select)
+        #expect(model.tool == .select)
+        #expect(model.document.crop == cropped, "leaving crop mode threw the crop away")
+    }
+
     @Test("Every drawing tool produces its own kind of annotation", arguments: [
         (EditorTool.arrow, AnnotationTool.arrow),
         (.shape, .shape),

@@ -11,8 +11,12 @@ public extension EditorDocumentModel {
     /// tool's defaults rather than a leftover annotation. Returning to Select
     /// keeps whatever is selected, which is how you resume editing it.
     func selectTool(_ tool: EditorTool) {
-        guard self.tool != tool else { return }
         pendingTextEditID = nil
+        // Clearing runs even when the tool is unchanged (docs/03 §3: "picking a drawing
+        // tool from the toolbar clears the current selection"). The early return that used
+        // to guard this made re-pressing the armed tool a no-op, so the shape drawn a
+        // moment ago stayed selected while the user was lining up the next one — and any
+        // style change meant for the *next* shape rewrote the previous one instead.
         self.tool = tool
         if tool != .select {
             selection = []
