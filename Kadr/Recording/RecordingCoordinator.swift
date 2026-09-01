@@ -315,7 +315,8 @@ final class RecordingCoordinator {
         studio.start(
             recordsCamera: settings.recordingShowsWebcam,
             pointConverter: converter,
-            pointPixelScale: Self.pointPixelScale(for: target)
+            pointPixelScale: Self.pointPixelScale(for: target),
+            topInset: Self.topInset(for: target)
         )
         observeClock()
         observeGeometry()

@@ -60,6 +60,25 @@ extension RecordingCoordinator {
     /// `NSCursor` measures its size and its hotspot in points. This is the number that
     /// reconciles them, and it has to be captured now: by the time anybody opens the editor
     /// the display that was recorded may not even be attached.
+    /// The notch strip at the top of the recorded display, in recorded pixels (docs/08 §2).
+    ///
+    /// `safeAreaInsets.top` is the display's own account of the area beside the notch, so
+    /// this asks the one thing that knows rather than assuming a menu-bar height — which is
+    /// wrong on precisely the Macs that have a notch, since theirs is taller.
+    ///
+    /// Zero for a region recording: the strip is only meaningful when the recording starts
+    /// at the top of the display, and a region the user drew somewhere else has no notch in
+    /// it to remove.
+    static func topInset(for target: RecordingTarget) -> CGFloat {
+        guard case let .display(displayID) = target else { return 0 }
+        guard let screen = NSScreen.screens.first(where: {
+            ScreenDescriptor($0)?.displayID == displayID
+        }) else {
+            return 0
+        }
+        return screen.safeAreaInsets.top * screen.backingScaleFactor
+    }
+
     static func pointPixelScale(for target: RecordingTarget) -> CGFloat {
         let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
         let displayID: CGDirectDisplayID? = switch target {

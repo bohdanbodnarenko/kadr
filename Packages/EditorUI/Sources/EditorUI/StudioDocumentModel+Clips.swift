@@ -16,6 +16,31 @@ public extension StudioDocumentModel {
         change { $0.clips.split(atEdited: playhead) }
     }
 
+    /// Whether this recording has a notch strip that could be trimmed (docs/08 §2 item 12).
+    ///
+    /// Only for a recording that has not already been cropped: a second press would take
+    /// another strip off whatever the first one left, and "remove the notch" is a thing you
+    /// do once.
+    var canTrimNotch: Bool {
+        manifest.topInset > 0 && edit.cropRect == nil
+    }
+
+    /// Crops away the strip beside the notch.
+    ///
+    /// A full-screen recording on a notched MacBook includes the menu-bar strip with the
+    /// notch cut out of it, and no amount of framing hides that the video has a bite taken
+    /// out of the top. Screendrop removes it; this is the same idea, using the height the
+    /// display itself reported when the recording was made rather than a guessed menu-bar
+    /// height — which is wrong on exactly the Macs that have a notch.
+    func trimNotchStrip() {
+        let height = manifest.pixelSize.height
+        guard manifest.topInset > 0, height > 0 else { return }
+        let fraction = min(manifest.topInset / height, 0.5)
+        change {
+            $0.cropRect = CGRect(x: 0, y: fraction, width: 1, height: 1 - fraction)
+        }
+    }
+
     /// Drops everything before the playhead (docs/08 §2 item 12).
     ///
     /// The playhead moves to the new start, because the frame the user was looking at when

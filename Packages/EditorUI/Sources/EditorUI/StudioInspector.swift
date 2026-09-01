@@ -116,6 +116,13 @@ struct StudioInspector: View {
     /// (docs/10 R3.5).
     private var cropSection: some View {
         Section("Crop") {
+            if model.canTrimNotch {
+                Button("Remove the notch strip") { model.trimNotchStrip() }
+                Text("This display has a notch, so the top of the recording has a bite out "
+                    + "of it. This crops that strip away.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             InspectorSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
             // "Top", not "Bottom" (docs/11 S2). `cropRect` is normalised source space and
             // the renderer treats it as top-left throughout — `pixelCrop` hands the plan a

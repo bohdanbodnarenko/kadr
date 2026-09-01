@@ -23,6 +23,13 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
     public var hasBakedCursor: Bool
     /// Whether a camera stream was recorded alongside.
     public var hasCamera: Bool
+    /// The notch strip at the top of the recorded display, in recorded pixels (docs/08 §2).
+    ///
+    /// Zero on a display without one. Captured at record time because it cannot be worked
+    /// out afterwards: the answer belongs to a display that may not be attached by the time
+    /// anybody opens the editor, and guessing a menu-bar height gets it wrong on exactly the
+    /// Macs that have a notch — theirs is taller than everyone else's.
+    public var topInset: CGFloat
     /// How far into the recording the camera's first frame landed (docs/10 R0.5).
     ///
     /// A capture session takes a moment to hand over its first frame — a third of a second
@@ -40,7 +47,8 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
         duration: TimeInterval = 0,
         hasBakedCursor: Bool = false,
         hasCamera: Bool = false,
-        cameraStartOffset: TimeInterval = 0
+        cameraStartOffset: TimeInterval = 0,
+        topInset: CGFloat = 0
     ) {
         self.version = version
         self.pixelSize = pixelSize
@@ -50,10 +58,12 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
         self.hasBakedCursor = hasBakedCursor
         self.hasCamera = hasCamera
         self.cameraStartOffset = max(cameraStartOffset, 0)
+        self.topInset = max(topInset, 0)
     }
 
     private enum CodingKeys: String, CodingKey {
         case version, pixelSize, scale, frameRate, duration, hasBakedCursor, hasCamera, cameraStartOffset
+        case topInset
     }
 
     public init(from decoder: any Decoder) throws {
@@ -69,7 +79,11 @@ public struct CaptureManifest: Codable, Sendable, Hashable {
             // Sessions recorded before the offset was measured decode as zero, which is
             // the old behaviour exactly: aligned at the start and out by however long the
             // camera took to wake up.
-            cameraStartOffset: container.decodeIfPresent(TimeInterval.self, forKey: .cameraStartOffset) ?? 0
+            cameraStartOffset: container.decodeIfPresent(TimeInterval.self, forKey: .cameraStartOffset) ?? 0,
+            // Zero for a session recorded before this was captured, which is the honest
+            // answer: nobody knows what that display's notch was, and offering to trim a
+            // strip of unknown height would cut into the picture.
+            topInset: container.decodeIfPresent(CGFloat.self, forKey: .topInset) ?? 0
         )
     }
 }

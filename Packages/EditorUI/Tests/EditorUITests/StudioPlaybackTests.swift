@@ -19,16 +19,67 @@ struct StudioPlaybackTests {
         return url
     }
 
-    private func model(in folder: URL, duration: TimeInterval = 10) throws -> StudioDocumentModel {
+    private func model(
+        in folder: URL,
+        duration: TimeInterval = 10,
+        topInset: CGFloat = 0
+    ) throws -> StudioDocumentModel {
         let session = RecordingSession.create(in: folder, named: "session")
         try session.create()
         try Data("footage".utf8).write(to: session.screenURL)
         try SessionDocument(session: session).write(CaptureManifest(
             pixelSize: CGSize(width: 1920, height: 1080),
             duration: duration,
-            hasBakedCursor: true
+            hasBakedCursor: true,
+            topInset: topInset
         ))
         return try #require(StudioDocumentModel(session: session))
+    }
+
+    // MARK: - The notch strip (docs/08 §2 item 12)
+
+    /// A full-screen recording on a notched MacBook has a bite out of the top, and no
+    /// amount of framing hides it.
+    @Test("Trimming the notch crops exactly the strip the display reported")
+    func trimmingTheNotchCropsTheStrip() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        // 74 pixels of a 1080-pixel-tall recording: a 37-point strip at 2×.
+        let studio = try model(in: folder, topInset: 74)
+        #expect(studio.canTrimNotch)
+
+        studio.trimNotchStrip()
+        let crop = try #require(studio.edit.cropRect)
+        #expect(abs(crop.origin.y - 74.0 / 1080) < 0.0001)
+        #expect(abs(crop.height - (1 - 74.0 / 1080)) < 0.0001)
+        #expect(crop.origin.x == 0)
+        #expect(crop.width == 1)
+    }
+
+    /// Offered only where there is one. A display without a notch, or a session recorded
+    /// before the inset was captured, reports zero — and trimming a strip of unknown height
+    /// would cut into the picture.
+    @Test("A recording with no notch is not offered the trim")
+    func noNotchNoTrim() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        #expect(!studio.canTrimNotch)
+
+        studio.trimNotchStrip()
+        #expect(studio.edit.cropRect == nil, "a recording with no notch was cropped anyway")
+    }
+
+    /// Removing the notch is something you do once: a second press would take another strip
+    /// off whatever the first one left.
+    @Test("The trim is not offered again once the recording is cropped")
+    func trimIsOfferedOnce() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, topInset: 74)
+
+        studio.trimNotchStrip()
+        #expect(!studio.canTrimNotch)
     }
 
     // MARK: - Transport

@@ -46,7 +46,8 @@ final class StudioSessionRecorder {
     func start(
         recordsCamera: Bool,
         pointConverter: @escaping @Sendable (ScreenPoint) -> PixelPoint?,
-        pointPixelScale: CGFloat
+        pointPixelScale: CGFloat,
+        topInset: CGFloat = 0
     ) {
         guard session == nil else { return }
         guard let root = Self.root() else {
@@ -66,6 +67,7 @@ final class StudioSessionRecorder {
 
         self.session = session
         self.pointPixelScale = pointPixelScale
+        self.topInset = topInset
         startedAtUptime = ProcessInfo.processInfo.systemUptime
         firstFrameUptime = nil
         telemetry.start(pointConverter: pointConverter, journalURL: session.inputJournalURL)
@@ -99,6 +101,9 @@ final class StudioSessionRecorder {
 
     /// Pixels per point on the display being recorded.
     @ObservationIgnored private var pointPixelScale: CGFloat = 2
+
+    /// The notch strip at the top of that display, in recorded pixels.
+    @ObservationIgnored private var topInset: CGFloat = 0
 
     /// Uptime at the recording's first composited frame — the zero everything else is
     /// measured from (docs/11 S0.5).
@@ -136,7 +141,8 @@ final class StudioSessionRecorder {
                 // anybody opens the editor there is no way left to tell.
                 hasBakedCursor: result.options.showsCursor,
                 hasCamera: FileManager.default.fileExists(atPath: session.cameraURL.path),
-                cameraStartOffset: cameraOffset(firstFrameAt: cameraOutcome.startedAt)
+                cameraStartOffset: cameraOffset(firstFrameAt: cameraOutcome.startedAt),
+                topInset: topInset
             ))
         } catch {
             logger.error("Could not write the studio session: \(error.localizedDescription, privacy: .public)")
@@ -302,12 +308,17 @@ final class StudioSessionRecorder {
     /// a test has. What a test can check is everything after: that the footage is attached,
     /// that the manifest remembers what cannot be re-derived, and that a failure leaves
     /// nothing behind.
-    func startForTesting(in root: URL, pointPixelScale: CGFloat = 2) -> RecordingSession? {
+    func startForTesting(
+        in root: URL,
+        pointPixelScale: CGFloat = 2,
+        topInset: CGFloat = 0
+    ) -> RecordingSession? {
         guard session == nil else { return nil }
         let session = RecordingSession.create(in: root, named: Self.name())
         guard (try? session.create()) != nil else { return nil }
         self.session = session
         self.pointPixelScale = pointPixelScale
+        self.topInset = topInset
         startedAtUptime = ProcessInfo.processInfo.systemUptime
         firstFrameUptime = nil
         return session
