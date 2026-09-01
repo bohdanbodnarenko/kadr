@@ -18,15 +18,15 @@ import StudioSession
 @Observable
 final class RecordingCoordinator {
     @ObservationIgnored let engine = RecordingEngine()
-    @ObservationIgnored private let captureEngine: CaptureEngine
-    @ObservationIgnored private let permissions: PermissionCoordinator
+    @ObservationIgnored let captureEngine: CaptureEngine
+    @ObservationIgnored let permissions: PermissionCoordinator
     @ObservationIgnored let settings: AppSettings
-    @ObservationIgnored private let overlay: SelectionOverlayController
+    @ObservationIgnored let overlay: SelectionOverlayController
     @ObservationIgnored let hygiene: DesktopHygieneController?
     @ObservationIgnored let focus = FocusMode()
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
-    @ObservationIgnored private let overlaySource = RecordingOverlaySource()
+    @ObservationIgnored let overlaySource = RecordingOverlaySource()
     /// The sidecar that makes a recording editable in the studio afterwards (docs/09 U3.1).
     @ObservationIgnored let studio = StudioSessionRecorder()
     /// The script somebody reads from while recording (docs/08).

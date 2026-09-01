@@ -87,6 +87,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The floating Stop/Pause/Discard bar, built only while recording (docs/03 §1.8).
     let recordingControlBar = RecordingControlBar()
 
+    /// Record mode: pick a target and the options, then start (docs/03 §1.4).
+    ///
+    /// Built on first use like everything else here — an agent that never records never
+    /// constructs it.
+    lazy var recordSetup = RecordSetupHUD(settings: settings) { [weak self] target in
+        guard let self else { return }
+        switch target {
+        case .area: recording.beginRegionRecording()
+        case .window: recording.beginWindowRecording()
+        case .screen: recording.beginDisplayRecording()
+        }
+    }
+
     var recordingStorage: RecordingCoordinator?
     var recording: RecordingCoordinator {
         if let recordingStorage {

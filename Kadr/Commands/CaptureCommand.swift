@@ -20,6 +20,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// A command of its own as well as the toggle on the two record hotkeys, because the
     /// user who cannot remember which one they started with still needs a way out.
     case stopRecording
+    /// Opens record mode rather than starting a recording (docs/03 §1.4).
+    case recordSetup
     case freezeScreen
     case toggleDesktopIcons
 
@@ -36,6 +38,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .recordRegion: "Record Region…"
         case .recordDisplay: "Record Screen"
         case .stopRecording: "Stop Recording"
+        case .recordSetup: "Record…"
         case .freezeScreen: "Freeze Screen"
         case .toggleDesktopIcons: "Hide Desktop Icons"
         }

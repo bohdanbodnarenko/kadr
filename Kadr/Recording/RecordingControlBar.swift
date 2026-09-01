@@ -204,12 +204,10 @@ private struct RecordingControlBarView: View {
                 .tint(.red)
             Button("Cancel") { preRoll.cancel() }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.separator))
-        .shadow(radius: 10, y: 3)
-        .padding(6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(barBackground)
+        .padding(10)
         .fixedSize()
     }
 
@@ -248,29 +246,29 @@ private struct RecordingControlBarView: View {
             } label: {
                 Label("Stop", systemImage: "stop.fill")
                     .labelStyle(.titleAndIcon)
+                    .font(.callout.weight(.medium))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
             }
             .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
             .tint(.red)
             // No keyboard shortcut here on purpose: the panel never takes key status, so a
             // shortcut printed on it would be one that does nothing. Stopping from the
             // keyboard is a *global* hotkey (⌃⇧.), which works wherever the user is.
             .help("Stop and keep the recording (⌃⇧.)")
 
-            Button {
+            circleButton(
+                symbol: model.isPaused ? "play.fill" : "pause.fill",
+                help: model.isPaused ? "Resume" : "Pause"
+            ) {
                 model.togglePause()
-            } label: {
-                Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
-                    .frame(width: 14)
             }
-            .help(model.isPaused ? "Resume" : "Pause")
             .accessibilityLabel(model.isPaused ? "Resume recording" : "Pause recording")
 
-            Button {
+            circleButton(symbol: "trash", help: "Discard this recording") {
                 isConfirmingCancel = true
-            } label: {
-                Image(systemName: "trash")
             }
-            .help("Discard this recording")
             .accessibilityLabel("Discard recording")
             .confirmationDialog(
                 "Discard this recording?",
@@ -282,13 +280,61 @@ private struct RecordingControlBarView: View {
                 Text("What you have recorded so far will be deleted.")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.separator))
-        .shadow(radius: 10, y: 3)
-        .padding(6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(barBackground)
+        .padding(10)
         .fixedSize()
+        .animation(.snappy(duration: 0.22), value: model.isPaused)
+    }
+
+    /// A soft glass capsule rather than a bordered rectangle.
+    ///
+    /// The first version was material plus a hard separator stroke and a flat shadow, which
+    /// on a dark desktop reads as a grey box someone forgot to style. Three things fix that
+    /// and they are all standard macOS: the thin material rather than the regular one so the
+    /// desktop shows through, a hairline highlight along the top edge where the light would
+    /// fall, and a wide soft shadow instead of a tight dark one — the difference between
+    /// something resting above the screen and something stuck to it.
+    private var barBackground: some View {
+        Capsule()
+            .fill(.thinMaterial)
+            .overlay {
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.45),
+                                Color.white.opacity(0.08)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 0.8
+                    )
+            }
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
+            .shadow(color: .black.opacity(0.16), radius: 3, y: 1)
+    }
+
+    /// A quiet round button, sized so it can be hit without aiming.
+    ///
+    /// Bordered controls in a row of three read as a toolbar somebody bolted on; these are
+    /// the same shape as the bar they sit in and only show their edge on hover.
+    private func circleButton(
+        symbol: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 26, height: 26)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.borderless)
+        .background(Circle().fill(Color.primary.opacity(0.07)))
+        .help(help)
     }
 
     /// Red and steady while recording, amber while paused.

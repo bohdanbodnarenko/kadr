@@ -157,8 +157,24 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // A recording opens into the trim window; there is nothing to annotate on a movie,
-        // and Trim is what its card offers (docs/03 §1.8, docs/07 M8).
+        // A recording opens into the *studio* when there is a session beside it.
+        //
+        // This is the difference between opening a recording and opening a video file. A
+        // session carries the pointer telemetry, the camera track and the manifest — zooms,
+        // cuts, speed, reframe, the reconstructed cursor, the lot. Without this check every
+        // recording landed in the trim window instead: an `AVPlayerView` whose only edit is
+        // dragging the two ends in, which is a fraction of what had been recorded for it
+        // and reads as the studio not existing.
+        //
+        // Looked up by file identity rather than by path, so a recording the user has since
+        // moved or renamed still finds its session.
+        if TrimWindowController.handles(url), let session = studioSession(forFootageAt: url) {
+            openInStudio(session)
+            return
+        }
+
+        // A movie with no session behind it opens into the trim window; there is nothing to
+        // annotate on a plain video, and trimming is the honest offer (docs/03 §1.8).
         if TrimWindowController.handles(url) {
             openForTrimming(url)
             return
@@ -176,6 +192,24 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
             logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
             presentOpenFailure(for: url, error: error)
         }
+    }
+
+    /// The studio session whose footage this is, if one exists.
+    ///
+    /// The same lookup the agent's card does, repeated here because the editor is opened
+    /// from Finder and from the after-capture action as well as from a card — and a
+    /// recording should reach the studio however it was asked for.
+    private func studioSession(forFootageAt url: URL) -> RecordingSession? {
+        guard let support = try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else {
+            return nil
+        }
+        let root = RecordingSession.defaultRoot(applicationSupport: support)
+        return RecordingSessionStore(root: root).session(forFootageAt: url)
     }
 
     private func openInStudio(_ session: RecordingSession) {

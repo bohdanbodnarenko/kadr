@@ -24,24 +24,8 @@ extension AppDelegate {
         switch command {
         case .captureScrolling:
             scrollCapture.begin()
-        // The record hotkeys toggle (docs/03 §1.8). Pressing the shortcut you started with
-        // is the first thing anybody tries when they want to stop, and it used to be
-        // swallowed by the `!isRecording` guard — so the app looked like it had no way out
-        // at all. Three ways now: this, the floating bar, and the menu.
-        case .recordRegion:
-            if recording.isRecording {
-                recording.stop()
-            } else {
-                recording.beginRegionRecording()
-            }
-        case .recordDisplay:
-            if recording.isRecording {
-                recording.stop()
-            } else {
-                recording.beginDisplayRecording()
-            }
-        case .stopRecording:
-            recording.stop()
+        case .recordRegion, .recordDisplay, .stopRecording, .recordSetup:
+            performRecording(command)
         case .toggleDesktopIcons:
             desktopHygiene.toggleUserHide()
         default:
@@ -178,5 +162,27 @@ extension AppDelegate {
         #else
             return []
         #endif
+    }
+
+    /// The four recording commands, which all share one rule.
+    ///
+    /// Every one of them stops a running recording rather than doing its own thing (docs/03
+    /// §1.8). Pressing the shortcut you started with is the first thing anybody tries when
+    /// they want to stop, and it used to be swallowed by `beginRegionRecording`'s
+    /// `!isRecording` guard — so the app looked like it had no way out at all.
+    private func performRecording(_ command: CaptureCommand) {
+        if recording.isRecording, command != .stopRecording {
+            recording.stop()
+            return
+        }
+        switch command {
+        case .recordRegion: recording.beginRegionRecording()
+        case .recordDisplay: recording.beginDisplayRecording()
+        case .stopRecording: recording.stop()
+        // Opens the chooser rather than recording anything: the whole point of record mode
+        // is that nothing starts until the user says so.
+        case .recordSetup: recordSetup.toggle()
+        default: break
+        }
     }
 }
