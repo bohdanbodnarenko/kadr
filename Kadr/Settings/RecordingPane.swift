@@ -30,11 +30,13 @@ struct RecordingPane: View {
                     .disabled(settings.recordingCodec != .hevc)
                 }
             } footer: {
-                Text("HEVC is about half the size at the same quality and every Mac that "
-                    + "runs macOS 14 encodes it in hardware. HDR needs it: H.264 as Kadr "
-                    + "configures it cannot carry ten bits.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "HEVC is about half the size at the same quality and every Mac that "
+                        + "runs macOS 14 encodes it in hardware. HDR needs it: H.264 as Kadr "
+                        + "configures it cannot carry ten bits."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
             Section("Audio") {
@@ -47,12 +49,14 @@ struct RecordingPane: View {
                         .foregroundStyle(.secondary)
                 }
                 Toggle("Record in mono", isOn: $settings.recordsMono)
-                Text("System audio needs no driver — macOS captures it directly. The "
-                    + "microphone is recorded as a separate track so it can be dropped later. "
-                    + "Mono is smaller and what most screen recordings want. "
-                    + "Pick which microphone from the recording bar.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "System audio needs no driver — macOS captures it directly. The "
+                        + "microphone is recorded as a separate track so it can be dropped later. "
+                        + "Mono is smaller and what most screen recordings want. "
+                        + "Pick which microphone from the recording bar."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
             Section("Before recording") {
@@ -63,19 +67,33 @@ struct RecordingPane: View {
                     Text("5 seconds").tag(5)
                     Text("10 seconds").tag(10)
                 }
-                Text("Time to get into position before the recording starts. "
-                    + "Press the recording shortcut again to call it off.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Time to get into position before the recording starts. "
+                        + "Press the recording shortcut again to call it off."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
             Section("While recording") {
                 Toggle("Show the floating controls", isOn: $settings.recordingShowsControlBar)
-                Text("A compact bar for picking what to record, then Stop, Pause, Restart "
-                    + "and Discard while it runs. It never appears in the recording, and "
-                    + "you can drag it anywhere.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Picker("Layout", selection: chromeBinding) {
+                    Text(RecordingControlChrome.island.title).tag(RecordingControlChrome.island)
+                    Text(RecordingControlChrome.notch.title).tag(RecordingControlChrome.notch)
+                        .disabled(!RecordingNotchScreen.isAvailable)
+                }
+                .disabled(!settings.recordingShowsControlBar)
+                Text(
+                    "The floating island can be dragged anywhere. The notch layout grows "
+                        + "out of the MacBook camera cutout, like the Dynamic Island."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                if !RecordingNotchScreen.isAvailable {
+                    Text("This Mac has no camera notch, so only the floating island is available.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Overlays") {
@@ -116,11 +134,13 @@ struct RecordingPane: View {
                         Text("Keystroke size")
                     }
                 }
-                Text("Showing every keystroke also shows whatever gets typed into a "
-                    + "password field. Reading keys needs Accessibility permission, which "
-                    + "Kadr asks for the first time a recording starts with this on.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Showing every keystroke also shows whatever gets typed into a "
+                        + "password field. Reading keys needs Accessibility permission, which "
+                        + "Kadr asks for the first time a recording starts with this on."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
                 Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
                 if settings.recordingShowsWebcam {
                     Toggle("Circular webcam", isOn: $settings.recordingWebcamCircular)
@@ -141,34 +161,59 @@ struct RecordingPane: View {
             TeleprompterSection(settings: settings)
 
             Section("Studio") {
-                Toggle("Keep recordings editable in the studio", isOn: $settings.recordingCapturesStudioSession)
-                Text("Saves the pointer's path, clicks and shortcuts beside the recording so "
-                    + "it can be given smooth zooms and reconstructed clicks later. It is a "
-                    + "few kilobytes, and a recording made without it can never be given "
-                    + "them — the information is gone once the recording ends.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Toggle("Record without the pointer and draw it back", isOn: $settings.recordingReconstructsCursor)
-                    .disabled(!settings.recordingCapturesStudioSession)
-                Text("Makes zooms follow the pointer smoothly instead of dragging a "
-                    + "stuck-on cursor with them. The saved file has no pointer in it at "
-                    + "all until the studio puts one back, so leave this off for recordings "
-                    + "you send straight on.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Toggle(
+                    "Keep recordings editable in the studio",
+                    isOn: $settings.recordingCapturesStudioSession
+                )
+                Text(
+                    "Saves the pointer's path, clicks and shortcuts beside the recording so "
+                        + "it can be given smooth zooms and reconstructed clicks later. It is a "
+                        + "few kilobytes, and a recording made without it can never be given "
+                        + "them — the information is gone once the recording ends."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                Toggle(
+                    "Record without the pointer and draw it back",
+                    isOn: $settings.recordingReconstructsCursor
+                )
+                .disabled(!settings.recordingCapturesStudioSession)
+                Text(
+                    "Makes zooms follow the pointer smoothly instead of dragging a "
+                        + "stuck-on cursor with them. The saved file has no pointer in it at "
+                        + "all until the studio puts one back, so leave this off for recordings "
+                        + "you send straight on."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Reduce interruptions while recording", isOn: $settings.recordingEnablesFocus)
-                Toggle("Hide desktop icons while recording", isOn: $settings.hideDesktopDuringRecording)
+                Toggle(
+                    "Reduce interruptions while recording", isOn: $settings.recordingEnablesFocus
+                )
+                Toggle(
+                    "Hide desktop icons while recording", isOn: $settings.hideDesktopDuringRecording
+                )
             } footer: {
-                Text("Overlays are drawn into the recording itself, not onto the screen, so "
-                    + "nothing about them appears on other people's shared displays.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Overlays are drawn into the recording itself, not onto the screen, so "
+                        + "nothing about them appears on other people's shared displays."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
         }
         .settingsFormChrome()
+    }
+
+    private var chromeBinding: Binding<RecordingControlChrome> {
+        Binding(
+            get: {
+                RecordingNotchScreen.isAvailable ? settings.recordingControlChrome : .island
+            },
+            set: { settings.recordingControlChrome = $0 }
+        )
     }
 
     private var clickStyleBinding: Binding<Bool> {

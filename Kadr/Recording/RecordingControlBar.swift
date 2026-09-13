@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import OverlayKit
 import RecordingCore
 import SettingsKit
@@ -18,26 +19,31 @@ import SwiftUI
 /// being filmed. It registers with `CaptureExclusionRegistry`, so it never appears in the
 /// recording it controls.
 ///
-/// Destroyed when idle — no window, no view, no timer (PRD §8).
+/// Live session chrome is either the draggable floating island or a Dynamic Island-style
+/// strip on a MacBook camera notch, chosen in Recording settings. Destroyed when idle —
+/// no window, no view, no timer (PRD §8).
 @MainActor
 final class RecordingControlBar {
     private var panel: NonActivatingPanel?
     private var hosting: NSHostingView<RecordingControlBarView>?
     private let model = RecordingControlBarModel()
+    private var hideTask: Task<Void, Never>?
 
-    /// Where the user last dragged it, so it comes back where they put it.
+    /// Where the user last dragged the floating island, so it comes back where they put it.
     ///
     /// Screen-relative and re-clamped on show: a bar remembered on a display that has since
     /// been unplugged has to come back somewhere visible rather than off the desk.
     static var savedOrigin: CGPoint?
 
     private static let margin: CGFloat = 22
+    static let notchContentHeight: CGFloat = 38
+    private static let notchWindowSize = CGSize(width: 400, height: 52)
 
     var isShowing: Bool {
         panel != nil
     }
 
-    /// The bar's frame in screen space, so the teleprompter composer can sit above it.
+    /// The bar's frame in screen space, so the teleprompter composer can sit next to it.
     var screenFrame: NSRect? {
         panel?.frame
     }
@@ -46,10 +52,24 @@ final class RecordingControlBar {
         panel != nil && model.picker != nil && model.session == nil
     }
 
+    /// Notch layout is only for a live take (or its countdown) on a notched display.
+    static func shouldDockToNotch(
+        chrome: RecordingControlChrome,
+        screenHasNotch: Bool,
+        isLiveSession: Bool
+    ) -> Bool {
+        chrome == .notch && screenHasNotch && isLiveSession
+    }
+
     func showPicker(model picker: RecordSetupModel) {
+        hideTask?.cancel()
+        hideTask = nil
         model.picker = picker
         model.session = nil
         model.preRoll = nil
+        model.chrome = picker.settings.recordingControlChrome
+        model.docksToNotch = false
+        model.notchVisible = false
         present(key: true)
     }
 
@@ -59,11 +79,14 @@ final class RecordingControlBar {
     }
 
     func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
+        hideTask?.cancel()
+        hideTask = nil
         model.picker = nil
         model.apply(controls)
         model.settings = settings
         model.preRoll = preRoll
         model.session = true
+        applyChrome(settings: settings)
         present(key: false)
     }
 
@@ -75,6 +98,8 @@ final class RecordingControlBar {
         model.settings = settings
         model.preRoll = preRoll
         model.session = true
+        applyChrome(settings: settings)
+        syncWindowChrome()
         resizeToFittingSize()
     }
 
@@ -92,16 +117,27 @@ final class RecordingControlBar {
     }
 
     func dismiss() {
-        guard let panel else { return }
-        Self.savedOrigin = panel.frame.origin
-        CaptureExclusionRegistry.shared.unregister(panel)
-        panel.orderOut(nil)
-        panel.contentView = nil
-        self.panel = nil
-        hosting = nil
-        model.picker = nil
-        model.session = nil
-        model.preRoll = nil
+        hideTask?.cancel()
+        if model.docksToNotch, panel != nil {
+            model.notchVisible = false
+            hideTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled else { return }
+                self?.teardownPanel()
+            }
+            return
+        }
+        teardownPanel()
+    }
+
+    private func applyChrome(settings: AppSettings?) {
+        let chrome = settings?.recordingControlChrome ?? .island
+        model.chrome = chrome
+        model.docksToNotch = Self.shouldDockToNotch(
+            chrome: chrome,
+            screenHasNotch: RecordingNotchScreen.isAvailable,
+            isLiveSession: true
+        )
     }
 
     private func present(key: Bool) {
@@ -112,20 +148,26 @@ final class RecordingControlBar {
             } else {
                 panel.orderFrontRegardless()
             }
+            syncWindowChrome()
             resizeToFittingSize()
+            revealNotchIfNeeded()
             return
         }
 
         let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
-        hosting.sizingOptions = .intrinsicContentSize
-        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
+        hosting.frame = NSRect(origin: .zero, size: hostingSize)
 
-        let panel = NonActivatingPanel(contentRect: hosting.frame, level: .floating)
+        let panel = NonActivatingPanel(contentRect: hosting.frame, level: windowLevel)
         panel.contentView = hosting
-        panel.setFrame(frame(for: hosting.fittingSize), display: false)
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.isMovable = true
-        panel.isMovableByWindowBackground = true
+        panel.setFrame(frame(for: hostingSize), display: false)
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle
+        ]
+        applyMovability(to: panel)
         panel.becomesKeyOnlyIfNeeded = !key
         CaptureExclusionRegistry.shared.register(panel)
         if key {
@@ -136,10 +178,70 @@ final class RecordingControlBar {
         }
         self.panel = panel
         self.hosting = hosting
+        revealNotchIfNeeded()
+    }
+
+    private func teardownPanel() {
+        hideTask = nil
+        guard let panel else { return }
+        if !model.docksToNotch {
+            Self.savedOrigin = panel.frame.origin
+        }
+        CaptureExclusionRegistry.shared.unregister(panel)
+        panel.orderOut(nil)
+        panel.contentView = nil
+        self.panel = nil
+        hosting = nil
+        model.picker = nil
+        model.session = nil
+        model.preRoll = nil
+        model.docksToNotch = false
+        model.notchVisible = false
+    }
+
+    private func revealNotchIfNeeded() {
+        guard model.docksToNotch else {
+            model.notchVisible = false
+            return
+        }
+        Task { @MainActor in
+            model.notchVisible = true
+        }
+    }
+
+    private var windowLevel: NSWindow.Level {
+        model.docksToNotch
+            ? NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+            : .floating
+    }
+
+    private var hostingSize: CGSize {
+        if model.docksToNotch {
+            return Self.notchWindowSize
+        }
+        return hosting?.fittingSize ?? .zero
+    }
+
+    private func applyMovability(to panel: NonActivatingPanel) {
+        let movable = !model.docksToNotch
+        panel.isMovable = movable
+        panel.isMovableByWindowBackground = movable
+        panel.level = windowLevel
+        panel.ignoresMouseEvents = false
+    }
+
+    private func syncWindowChrome() {
+        guard let panel, let hosting else { return }
+        hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
+        applyMovability(to: panel)
     }
 
     private func resizeToFittingSize() {
         guard let panel, let hosting else { return }
+        if model.docksToNotch {
+            panel.setFrame(notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main), display: true)
+            return
+        }
         hosting.invalidateIntrinsicContentSize()
         let size = hosting.fittingSize
         guard size.width > 0, size.height > 0 else { return }
@@ -165,6 +267,9 @@ final class RecordingControlBar {
     /// Bottom-centre of the active screen by default — where a recording HUD is expected,
     /// and clear of the menu bar and most window chrome.
     private func frame(for size: CGSize) -> NSRect {
+        if model.docksToNotch {
+            return notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+        }
         let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .zero
         let origin = Self.savedOrigin ?? CGPoint(
             x: visible.midX - size.width / 2,
@@ -172,6 +277,17 @@ final class RecordingControlBar {
         )
         let x = min(max(origin.x, visible.minX + Self.margin), visible.maxX - size.width - Self.margin)
         let y = min(max(origin.y, visible.minY + Self.margin), visible.maxY - size.height - Self.margin)
+        return NSRect(x: x, y: y, width: size.width, height: size.height)
+    }
+
+    private func notchFrame(on screen: NSScreen?) -> NSRect {
+        let size = Self.notchWindowSize
+        guard let screen else {
+            return NSRect(origin: .zero, size: size)
+        }
+        // `frame`, not `visibleFrame`: the notch lives in the menu-bar strip.
+        let x = screen.frame.origin.x + (screen.frame.width - size.width) / 2
+        let y = screen.frame.origin.y + screen.frame.height - size.height
         return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 }
@@ -189,6 +305,9 @@ final class RecordingControlBarModel {
     var session: Bool?
     var preRoll: RecordingControlBar.PreRoll?
     var settings: AppSettings?
+    var chrome: RecordingControlChrome = .island
+    var docksToNotch = false
+    var notchVisible = false
 
     @ObservationIgnored var stop: () -> Void = {}
     @ObservationIgnored var togglePause: () -> Void = {}
@@ -213,7 +332,9 @@ struct RecordingControlBarView: View {
 
     var body: some View {
         Group {
-            if let picker = model.picker, model.session == nil {
+            if model.docksToNotch {
+                RecordingNotchIsland(model: model)
+            } else if let picker = model.picker, model.session == nil {
                 RecordSetupView(model: picker)
             } else if let preRoll = model.preRoll, let settings = model.settings {
                 RecordingPreRollBar(preRoll: preRoll, settings: settings)
@@ -223,6 +344,7 @@ struct RecordingControlBarView: View {
         }
         .animation(.snappy(duration: 0.22), value: model.session != nil)
         .animation(.snappy(duration: 0.22), value: model.preRoll != nil)
+        .animation(.snappy(duration: 0.22), value: model.docksToNotch)
     }
 
     private var liveBar: some View {

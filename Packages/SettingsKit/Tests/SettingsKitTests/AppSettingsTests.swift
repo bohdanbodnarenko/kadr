@@ -72,6 +72,7 @@ struct AppSettingsTests {
         #expect(settings.objectShadowsEnabled == true)
         #expect(settings.keepOriginalWhenAnnotating == true)
         #expect(settings.overlayReturnSaves == true)
+        #expect(settings.recordingControlChrome == .island)
         #expect(settings.saveFolderPath.isEmpty)
         #expect(settings.saveFolder == AppSettings.defaultSaveFolder)
     }
@@ -92,6 +93,7 @@ struct AppSettingsTests {
         settings.objectShadowsEnabled = false
         settings.keepOriginalWhenAnnotating = false
         settings.overlayReturnSaves = false
+        settings.recordingControlChrome = .notch
         settings.saveFolderPath = "/tmp/kadr-captures"
 
         let reloaded = AppSettings(store: store)
@@ -107,6 +109,7 @@ struct AppSettingsTests {
         #expect(reloaded.objectShadowsEnabled == false)
         #expect(reloaded.keepOriginalWhenAnnotating == false)
         #expect(reloaded.overlayReturnSaves == false)
+        #expect(reloaded.recordingControlChrome == .notch)
         #expect(reloaded.saveFolder.path == "/tmp/kadr-captures")
     }
 
@@ -122,6 +125,7 @@ struct AppSettingsTests {
         settings.recordsMono = true
         settings.askForSaveDestination = true
         settings.lockCanvasByDefault = true
+        settings.recordingControlChrome = .notch
         settings.resetToDefaults()
 
         #expect(settings.defaultAction == .copyToClipboard)
@@ -132,6 +136,7 @@ struct AppSettingsTests {
         #expect(settings.recordsMono == false)
         #expect(settings.askForSaveDestination == false)
         #expect(settings.lockCanvasByDefault == false)
+        #expect(settings.recordingControlChrome == .island)
         #expect(AppSettings(store: store).defaultAction == .copyToClipboard)
     }
 

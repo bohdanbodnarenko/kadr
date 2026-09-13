@@ -69,7 +69,8 @@ final class TeleprompterComposer {
         let y: CGFloat
         if let barFrame {
             x = barFrame.midX - size.width / 2
-            y = barFrame.maxY + 12
+            let placeBelow = barFrame.midY > visible.midY
+            y = placeBelow ? barFrame.minY - size.height - 12 : barFrame.maxY + 12
         } else {
             x = visible.midX - size.width / 2
             y = visible.minY + 90
