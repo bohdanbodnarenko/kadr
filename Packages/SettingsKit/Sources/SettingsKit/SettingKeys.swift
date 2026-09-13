@@ -52,6 +52,10 @@ public enum SettingKeys {
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
     /// Pull the selection onto the edges Kadr finds in the frozen screen (docs/06 M21).
     public static let captureSnapsToEdges = SettingKey("capture.snapsToEdges", default: true)
+    public static let captureSelectionAspect = SettingKey(
+        "capture.selectionAspect",
+        default: CaptureSelectionAspect.free
+    )
     /// Keep the display's HDR range in stills (macOS 15+, docs/06 M25). Standard by
     /// default: an HDR screenshot looks wrong in apps that do not understand one.
     public static let captureDynamicRange = SettingKey("capture.dynamicRange", default: DynamicRange.standard)
@@ -90,6 +94,10 @@ public enum SettingKeys {
     public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
     public static let recordingWebcamCircular = SettingKey("recording.webcamCircular", default: true)
     public static let recordingWebcamFillsFrame = SettingKey("recording.webcamFillsFrame", default: false)
+    public static let recordingWebcamCorner = SettingKey(
+        "recording.webcamCorner",
+        default: RecordingWebcamCorner.bottomTrailing
+    )
     public static let recordingWebcamSize = SettingKey("recording.webcamSize", default: 0.22)
     public static let recordingKeystrokePosition = SettingKey(
         "recording.keystrokePosition",

@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import Shared
 
@@ -159,6 +160,52 @@ public enum RecordingKeystrokePosition: String, CaseIterable, SettingValue {
         case .bottomCentre: "Bottom"
         case .bottomLeading: "Bottom Left"
         case .topCentre: "Top"
+        }
+    }
+}
+
+/// Corner for the baked-in webcam PiP while recording.
+public enum RecordingWebcamCorner: String, CaseIterable, SettingValue {
+    case bottomTrailing
+    case bottomLeading
+    case topTrailing
+    case topLeading
+
+    public var title: String {
+        switch self {
+        case .bottomTrailing: "Bottom Right"
+        case .bottomLeading: "Bottom Left"
+        case .topTrailing: "Top Right"
+        case .topLeading: "Top Left"
+        }
+    }
+}
+
+/// Aspect lock for area capture (CleanShot All-in-One).
+public enum CaptureSelectionAspect: String, CaseIterable, SettingValue {
+    case free
+    case square
+    case fourThree
+    case sixteenNine
+    case nineSixteen
+
+    public var title: String {
+        switch self {
+        case .free: "Free"
+        case .square: "Square"
+        case .fourThree: "4:3"
+        case .sixteenNine: "16:9"
+        case .nineSixteen: "9:16"
+        }
+    }
+
+    public var ratio: CGSize? {
+        switch self {
+        case .free: nil
+        case .square: CGSize(width: 1, height: 1)
+        case .fourThree: CGSize(width: 4, height: 3)
+        case .sixteenNine: CGSize(width: 16, height: 9)
+        case .nineSixteen: CGSize(width: 9, height: 16)
         }
     }
 }

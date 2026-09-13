@@ -167,6 +167,12 @@ public final class SelectionOverlayController {
     /// Whether the selection sticks to the edges in the frozen screen (docs/03 §8.3,
     /// docs/06 M21). The app sets this from Settings → Capture.
     public var snapsToEdges = true
+    /// Width:height lock for area drags, from Settings / All-in-One (docs/03 §1.1, CleanShot §5).
+    ///
+    /// Nil is freeform. ⇧ still forces a square on top of this.
+    public var lockedAspect: CGSize? {
+        didSet { applyLockedAspect() }
+    }
     /// How close an edge has to be before the selection takes it, in points.
     public var snapTolerance: CGFloat = 6
     /// The detection pass, so a second hotkey abandons the first one's work.
@@ -346,6 +352,7 @@ public final class SelectionOverlayController {
         panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
         panel.view.setSnapping(snapping[descriptor.displayID])
         panel.view.setPrecisionMode(isPrecisionMode)
+        panel.view.interaction.lockedAspect = lockedAspect
 
         panel.view.onPrecisionModeChanged = { [weak self] enabled in
             guard let self else { return }
@@ -397,6 +404,13 @@ public final class SelectionOverlayController {
             )))
         }
         return panel
+    }
+
+    private func applyLockedAspect() {
+        guard let windowSet else { return }
+        for panel in windowSet.windows.values {
+            panel.view.interaction.lockedAspect = lockedAspect
+        }
     }
 
     /// Only the display under the pointer draws a loupe and crosshair.

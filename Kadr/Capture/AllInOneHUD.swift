@@ -207,6 +207,7 @@ struct AllInOneView: View {
 
             RecordingBarDivider()
             timerMenu
+            aspectMenu
 
             RecordingBarCircleButton(symbol: "xmark", help: "Close (Esc)") {
                 model.cancel()
@@ -251,6 +252,37 @@ struct AllInOneView: View {
                 ? "\(model.settings.timerSeconds) seconds"
                 : "Off"
         )
+    }
+
+    private var aspectMenu: some View {
+        Menu {
+            ForEach(CaptureSelectionAspect.allCases, id: \.self) { aspect in
+                Button(aspect.title) {
+                    model.settings.captureSelectionAspect = aspect
+                }
+            }
+        } label: {
+            RecordingBarIcon(
+                symbol: model.settings.captureSelectionAspect == .free
+                    ? "aspectratio"
+                    : "lock.rectangle",
+                isOn: model.settings.captureSelectionAspect != .free
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .help(aspectHelp)
+        .accessibilityLabel("Aspect lock")
+        .accessibilityValue(model.settings.captureSelectionAspect.title)
+    }
+
+    private var aspectHelp: String {
+        let aspect = model.settings.captureSelectionAspect
+        if aspect == .free {
+            return "Aspect unlocked — ⇧-drag still squares the selection"
+        }
+        return "Aspect \(aspect.title) — click to change"
     }
 
     private var timerHelp: String {

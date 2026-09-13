@@ -96,9 +96,7 @@ struct FrameCompositor: Sendable {
         if let keystrokes = overlay.keystrokes, !keystrokes.isEmpty {
             drawKeystrokes(
                 keystrokes,
-                position: overlay.keystrokePosition,
-                appearance: overlay.keystrokeAppearance,
-                scale: overlay.keystrokeScale,
+                overlay: overlay,
                 in: context,
                 size: CGSize(width: width, height: height)
             )
@@ -106,9 +104,7 @@ struct FrameCompositor: Sendable {
         if let webcam = overlay.webcamFrame {
             drawWebcam(
                 webcam,
-                isCircular: overlay.webcamIsCircular,
-                sizeFraction: overlay.webcamSizeFraction,
-                fillsFrame: overlay.webcamFillsFrame,
+                overlay: overlay,
                 in: context,
                 size: CGSize(width: width, height: height)
             )
@@ -146,35 +142,36 @@ struct FrameCompositor: Sendable {
             context.setStrokeColor(colour)
             context.setLineWidth(4 * overlay.clickScale * (1 - CGFloat(click.progress) * 0.6))
             context.strokeEllipse(in: rect)
-        }
 
-        // A solid dot at the point itself, so a fast click is still visible when the ring
-        // has barely started.
-        context.setFillColor(CGColor(
-            srgbRed: overlay.clickRed,
-            green: overlay.clickGreen,
-            blue: overlay.clickBlue,
-            alpha: alpha * 0.5
-        ))
-        let dot = 6 * overlay.clickScale
-        context.fillEllipse(in: CGRect(
-            x: click.position.x - dot,
-            y: click.position.y - dot,
-            width: dot * 2,
-            height: dot * 2
-        ))
+            // A solid dot at the point itself, so a fast click is still visible when the
+            // ring has barely started.
+            context.setFillColor(CGColor(
+                srgbRed: overlay.clickRed,
+                green: overlay.clickGreen,
+                blue: overlay.clickBlue,
+                alpha: alpha * 0.5
+            ))
+            let dot = 6 * overlay.clickScale
+            context.fillEllipse(in: CGRect(
+                x: click.position.x - dot,
+                y: click.position.y - dot,
+                width: dot * 2,
+                height: dot * 2
+            ))
+        }
     }
 
     // MARK: - Keystrokes
 
     private func drawKeystrokes(
         _ text: String,
-        position: KeystrokePosition,
-        appearance: OverlayChromeAppearance,
-        scale: CGFloat,
+        overlay: RecordingOverlay,
         in context: CGContext,
         size: CGSize
     ) {
+        let scale = overlay.keystrokeScale
+        let position = overlay.keystrokePosition
+        let appearance = overlay.keystrokeAppearance
         let fontSize = max(20, size.height * 0.035) * scale
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
         let ink: CGColor = switch appearance {
@@ -252,34 +249,30 @@ struct FrameCompositor: Sendable {
 
     private func drawWebcam(
         _ image: CGImage,
-        isCircular: Bool,
-        sizeFraction: CGFloat,
-        fillsFrame: Bool,
+        overlay: RecordingOverlay,
         in context: CGContext,
         size: CGSize
     ) {
+        let isCircular = overlay.webcamIsCircular
+        let sizeFraction = overlay.webcamSizeFraction
+        let fillsFrame = overlay.webcamFillsFrame
+        let slot = overlay.webcamCorner
         let rect: CGRect
         if fillsFrame {
             rect = CGRect(origin: .zero, size: size)
         } else {
             let side = min(size.width, size.height) * sizeFraction
             let margin = size.height * 0.04
-            // Bottom-right, in the frame's top-left-origin space.
-            rect = CGRect(
-                x: size.width - side - margin,
-                y: size.height - side - margin,
-                width: side,
-                height: side
-            )
+            rect = Self.webcamRect(side: side, margin: margin, in: size, corner: slot)
         }
 
-        let corner = min(rect.width, rect.height) * 0.12
+        let cornerRadius = min(rect.width, rect.height) * 0.12
         let path = isCircular
             ? CGPath(ellipseIn: rect, transform: nil)
             : CGPath(
                 roundedRect: rect,
-                cornerWidth: fillsFrame ? min(24, corner) : corner,
-                cornerHeight: fillsFrame ? min(24, corner) : corner,
+                cornerWidth: fillsFrame ? min(24, cornerRadius) : cornerRadius,
+                cornerHeight: fillsFrame ? min(24, cornerRadius) : cornerRadius,
                 transform: nil
             )
         // Fill the frame rather than letterboxing it: a PiP with black bars looks broken.
@@ -307,5 +300,23 @@ struct FrameCompositor: Sendable {
         context.setStrokeColor(CGColor(gray: 1, alpha: fillsFrame ? 0 : 0.85))
         context.setLineWidth(max(2, min(rect.width, rect.height) * 0.02))
         context.strokePath()
+    }
+
+    /// Top-left origin, matching the flipped overlay context.
+    private static func webcamRect(
+        side: CGFloat,
+        margin: CGFloat,
+        in size: CGSize,
+        corner: OverlayCornerSlot
+    ) -> CGRect {
+        let x: CGFloat = switch corner {
+        case .topLeading, .bottomLeading: margin
+        case .topTrailing, .bottomTrailing: size.width - side - margin
+        }
+        let y: CGFloat = switch corner {
+        case .topLeading, .topTrailing: margin
+        case .bottomLeading, .bottomTrailing: size.height - side - margin
+        }
+        return CGRect(x: x, y: y, width: side, height: side)
     }
 }

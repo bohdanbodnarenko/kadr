@@ -125,6 +125,12 @@ struct RecordingPane: View {
                 if settings.recordingShowsWebcam {
                     Toggle("Circular webcam", isOn: $settings.recordingWebcamCircular)
                     Toggle("Fill the frame", isOn: $settings.recordingWebcamFillsFrame)
+                    Picker("Webcam position", selection: $settings.recordingWebcamCorner) {
+                        ForEach(RecordingWebcamCorner.allCases, id: \.self) { corner in
+                            Text(corner.title).tag(corner)
+                        }
+                    }
+                    .disabled(settings.recordingWebcamFillsFrame)
                     Slider(value: $settings.recordingWebcamSize, in: 0.08 ... 0.6) {
                         Text("Webcam size")
                     }
@@ -182,7 +188,7 @@ struct RecordingPane: View {
                 )
             },
             set: { color in
-                let resolved = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+                guard let resolved = NSColor(color).usingColorSpace(.sRGB) else { return }
                 settings.recordingClickRed = resolved.redComponent
                 settings.recordingClickGreen = resolved.greenComponent
                 settings.recordingClickBlue = resolved.blueComponent

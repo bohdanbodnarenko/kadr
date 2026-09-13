@@ -400,12 +400,16 @@ struct WindowBackdropSettingsTests {
         #expect(reloaded.windowBackdropImagePath == "/tmp/wall.png")
         #expect(reloaded.autoBeautifyPreset == .twitter)
 
+        reloaded.captureSelectionAspect = .sixteenNine
+        #expect(AppSettings(store: store).captureSelectionAspect == .sixteenNine)
+
         reloaded.resetToDefaults()
         #expect(reloaded.transparentWindowBackground)
         #expect(reloaded.windowBackdrop == .white)
         #expect(reloaded.windowBackdropPadding == 40)
         #expect(reloaded.windowBackdropImagePath.isEmpty)
         #expect(reloaded.autoBeautifyPreset == .off)
+        #expect(reloaded.captureSelectionAspect == .free)
     }
 }
 
@@ -417,6 +421,7 @@ struct RecordingOverlayAppearanceSettingsTests {
         let settings = AppSettings(store: makeStore())
         #expect(settings.recordingWebcamCircular)
         #expect(!settings.recordingWebcamFillsFrame)
+        #expect(settings.recordingWebcamCorner == .bottomTrailing)
         #expect(settings.recordingKeystrokePosition == .bottomCentre)
         #expect(settings.recordingKeystrokeAppearance == .dark)
         #expect(!settings.recordingClickFilled)
@@ -429,6 +434,7 @@ struct RecordingOverlayAppearanceSettingsTests {
         let settings = AppSettings(store: store)
         settings.recordingWebcamCircular = false
         settings.recordingWebcamFillsFrame = true
+        settings.recordingWebcamCorner = .topLeading
         settings.recordingKeystrokePosition = .topCentre
         settings.recordingKeystrokeAppearance = .light
         settings.recordingClickFilled = true
@@ -438,6 +444,7 @@ struct RecordingOverlayAppearanceSettingsTests {
         let reloaded = AppSettings(store: store)
         #expect(!reloaded.recordingWebcamCircular)
         #expect(reloaded.recordingWebcamFillsFrame)
+        #expect(reloaded.recordingWebcamCorner == .topLeading)
         #expect(reloaded.recordingKeystrokePosition == .topCentre)
         #expect(reloaded.recordingKeystrokeAppearance == .light)
         #expect(reloaded.recordingClickFilled)
@@ -447,6 +454,7 @@ struct RecordingOverlayAppearanceSettingsTests {
         reloaded.resetToDefaults()
         #expect(reloaded.recordingWebcamCircular)
         #expect(!reloaded.recordingWebcamFillsFrame)
+        #expect(reloaded.recordingWebcamCorner == .bottomTrailing)
         #expect(reloaded.recordingKeystrokePosition == .bottomCentre)
         #expect(reloaded.recordingKeystrokeAppearance == .dark)
         #expect(!reloaded.recordingClickFilled)

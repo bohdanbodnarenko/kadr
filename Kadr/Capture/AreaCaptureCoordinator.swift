@@ -209,14 +209,7 @@ final class AreaCaptureCoordinator {
                     []
                 }
 
-                // Set before presenting, so the detection pass the overlay kicks off is
-                // skipped entirely when the user has snapping off (docs/06 M21).
-                overlay.snapsToEdges = settings.captureSnapsToEdges
-                overlay.onColorPicked = { [weak self] pick in
-                    self?.deliver(pick)
-                }
-                let eyedropper = startsInEyedropperMode
-                startsInEyedropperMode = false
+                let eyedropper = armOverlay()
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     mode: mode,
@@ -229,15 +222,27 @@ final class AreaCaptureCoordinator {
                     self?.hygiene?.endCapture()
                     self?.finish(with: outcome, freezes: freezes)
                 }
-                overlay.onPrecisionModeChanged = { [weak self] enabled in
-                    self?.settings.capturePrecisionCrosshair = enabled
-                }
                 hygiene?.beginCapture()
             } catch {
                 signposter.endInterval("hotkeyToOverlay", interval)
                 handle(error)
             }
         }
+    }
+
+    /// Snapping, aspect lock and eyedropper callbacks, set before the overlay appears.
+    private func armOverlay() -> Bool {
+        overlay.snapsToEdges = settings.captureSnapsToEdges
+        overlay.lockedAspect = settings.captureSelectionAspect.ratio
+        overlay.onColorPicked = { [weak self] pick in
+            self?.deliver(pick)
+        }
+        overlay.onPrecisionModeChanged = { [weak self] enabled in
+            self?.settings.capturePrecisionCrosshair = enabled
+        }
+        let eyedropper = startsInEyedropperMode
+        startsInEyedropperMode = false
+        return eyedropper
     }
 
     /// Repeats the last region with no UI at all (docs/03 §1.1).

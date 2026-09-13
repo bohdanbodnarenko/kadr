@@ -51,6 +51,10 @@ final class CameraPreviewPanel {
         chrome.onScroll = { [weak self] delta in self?.resize(by: delta) }
         chrome.onToggleFullscreen = { [weak self] in self?.toggleFullscreen() }
         chrome.onToggleCircular = { [weak self] in self?.toggleCircular() }
+        chrome.setAccessibilityElement(true)
+        chrome.setAccessibilityRole(.image)
+        chrome.setAccessibilityLabel("Camera preview")
+        chrome.setAccessibilityHelp("Scroll to resize. Double-click to fill the screen. Right-click for shape.")
 
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.frame = chrome.bounds
@@ -72,7 +76,9 @@ final class CameraPreviewPanel {
 
     func hide() {
         guard let panel else { return }
-        Self.savedOrigin = panel.frame.origin
+        if !Self.fillsDisplay {
+            Self.savedOrigin = panel.frame.origin
+        }
         CaptureExclusionRegistry.shared.unregister(panel)
         panel.orderOut(nil)
         panel.contentView = nil
@@ -82,6 +88,9 @@ final class CameraPreviewPanel {
     }
 
     private func toggleFullscreen() {
+        if !Self.fillsDisplay, let panel {
+            Self.savedOrigin = panel.frame.origin
+        }
         Self.fillsDisplay.toggle()
         guard let panel else { return }
         panel.setFrame(currentFrame(), display: true)
@@ -100,7 +109,14 @@ final class CameraPreviewPanel {
             Self.maxDiameter
         )
         guard let panel else { return }
-        panel.setFrame(currentFrame(), display: true)
+        var frame = currentFrame()
+        if let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
+            frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+            frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+            Self.savedOrigin = frame.origin
+        }
+        panel.setFrame(frame, display: true)
+        chrome?.frame = CGRect(origin: .zero, size: frame.size)
         applyChrome()
     }
 
@@ -127,14 +143,16 @@ final class CameraPreviewPanel {
     }
 
     private func origin(for diameter: CGFloat) -> CGPoint {
-        if let saved = Self.savedOrigin {
-            return saved
-        }
         let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 800, height: 600)
-        return CGPoint(
+        let fallback = CGPoint(
             x: visible.maxX - diameter - Self.margin,
             y: visible.minY + Self.margin
+        )
+        let proposed = Self.savedOrigin ?? fallback
+        return CGPoint(
+            x: min(max(proposed.x, visible.minX), max(visible.minX, visible.maxX - diameter)),
+            y: min(max(proposed.y, visible.minY), max(visible.minY, visible.maxY - diameter))
         )
     }
 }
@@ -150,7 +168,10 @@ private final class CameraPreviewChromeView: NSView {
     }
 
     override func scrollWheel(with event: NSEvent) {
-        onScroll?(event.scrollingDeltaY)
+        let delta = event.hasPreciseScrollingDeltas
+            ? event.scrollingDeltaY
+            : event.scrollingDeltaY * 12
+        onScroll?(delta)
     }
 
     override func mouseDown(with event: NSEvent) {

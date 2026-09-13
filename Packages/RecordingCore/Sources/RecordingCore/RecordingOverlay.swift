@@ -17,6 +17,14 @@ public struct ClickPulse: Sendable, Hashable {
     }
 }
 
+/// Where the baked-in webcam sits.
+public enum OverlayCornerSlot: String, CaseIterable, Sendable {
+    case topLeading
+    case topTrailing
+    case bottomLeading
+    case bottomTrailing
+}
+
 /// Where the keystroke overlay sits.
 public enum KeystrokePosition: String, CaseIterable, Sendable {
     case bottomCentre
@@ -50,6 +58,7 @@ public struct RecordingOverlay: Sendable {
     /// Fraction of the short edge, matching the studio bubble's default.
     public var webcamSizeFraction: CGFloat
     public var webcamFillsFrame: Bool
+    public var webcamCorner: OverlayCornerSlot
     public var clickRed: CGFloat
     public var clickGreen: CGFloat
     public var clickBlue: CGFloat
@@ -66,6 +75,7 @@ public struct RecordingOverlay: Sendable {
         webcamIsCircular: Bool = true,
         webcamSizeFraction: CGFloat = 0.22,
         webcamFillsFrame: Bool = false,
+        webcamCorner: OverlayCornerSlot = .bottomTrailing,
         clickRed: CGFloat = 1,
         clickGreen: CGFloat = 0.25,
         clickBlue: CGFloat = 0.2,
@@ -81,6 +91,7 @@ public struct RecordingOverlay: Sendable {
         self.webcamIsCircular = webcamIsCircular
         self.webcamSizeFraction = webcamSizeFraction
         self.webcamFillsFrame = webcamFillsFrame
+        self.webcamCorner = webcamCorner
         self.clickRed = clickRed
         self.clickGreen = clickGreen
         self.clickBlue = clickBlue

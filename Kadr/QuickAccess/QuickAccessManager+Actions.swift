@@ -54,7 +54,7 @@ extension QuickAccessManager {
         actions.annotateAvailable = editor.isAvailable
         actions.exportGIF = { [weak self] in self?.exportGIF(item) }
         actions.recognizeText = { [weak self] in self?.recognizeText(item) }
-        actions.textAvailable = !item.isVideo
+        actions.textAvailable = true
         actions.trim = { [weak self] in self?.trim(item) }
         actions.setHovered = { [weak self] hovering in self?.setHovered(item, hovering: hovering) }
         actions.beginDrag = { [weak self] in self?.beginDrag(for: item) }
@@ -405,7 +405,6 @@ extension QuickAccessManager {
     /// Acting on a staged capture finalises it first, exactly like Copy or Pin: the user
     /// has done something with this screenshot, so it stops being disposable.
     func recognizeText(_ item: QuickAccessItem) {
-        guard !item.isVideo else { return }
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         recognizeText(at: url, on: overlayPanel?.screen)

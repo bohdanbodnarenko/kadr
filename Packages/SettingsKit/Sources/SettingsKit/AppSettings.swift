@@ -8,7 +8,7 @@ import Shared
 @MainActor
 @Observable
 public final class AppSettings {
-    @ObservationIgnored private let store: UserDefaults
+    @ObservationIgnored let store: UserDefaults
 
     public var hasCompletedOnboarding: Bool {
         didSet { store[SettingKeys.hasCompletedOnboarding] = hasCompletedOnboarding }
@@ -192,167 +192,6 @@ public final class AppSettings {
 
     public var recordingShowsWebcam: Bool {
         didSet { store[SettingKeys.recordingShowsWebcam] = recordingShowsWebcam }
-    }
-
-    public var recordingWebcamCircular: Bool {
-        get {
-            access(keyPath: \.recordingWebcamCircular)
-            return store[SettingKeys.recordingWebcamCircular]
-        }
-        set {
-            withMutation(keyPath: \.recordingWebcamCircular) {
-                store[SettingKeys.recordingWebcamCircular] = newValue
-            }
-        }
-    }
-
-    public var recordingWebcamFillsFrame: Bool {
-        get {
-            access(keyPath: \.recordingWebcamFillsFrame)
-            return store[SettingKeys.recordingWebcamFillsFrame]
-        }
-        set {
-            withMutation(keyPath: \.recordingWebcamFillsFrame) {
-                store[SettingKeys.recordingWebcamFillsFrame] = newValue
-            }
-        }
-    }
-
-    public var recordingWebcamSize: Double {
-        get {
-            access(keyPath: \.recordingWebcamSize)
-            return store[SettingKeys.recordingWebcamSize]
-        }
-        set {
-            withMutation(keyPath: \.recordingWebcamSize) {
-                store[SettingKeys.recordingWebcamSize] = min(max(newValue, 0.08), 0.6)
-            }
-        }
-    }
-
-    public var recordingKeystrokePosition: RecordingKeystrokePosition {
-        get {
-            access(keyPath: \.recordingKeystrokePosition)
-            return store[SettingKeys.recordingKeystrokePosition]
-        }
-        set {
-            withMutation(keyPath: \.recordingKeystrokePosition) {
-                store[SettingKeys.recordingKeystrokePosition] = newValue
-            }
-        }
-    }
-
-    public var recordingKeystrokeAppearance: OverlayChromeAppearance {
-        get {
-            access(keyPath: \.recordingKeystrokeAppearance)
-            return store[SettingKeys.recordingKeystrokeAppearance]
-        }
-        set {
-            withMutation(keyPath: \.recordingKeystrokeAppearance) {
-                store[SettingKeys.recordingKeystrokeAppearance] = newValue
-            }
-        }
-    }
-
-    public var recordingKeystrokeScale: Double {
-        get {
-            access(keyPath: \.recordingKeystrokeScale)
-            return store[SettingKeys.recordingKeystrokeScale]
-        }
-        set {
-            withMutation(keyPath: \.recordingKeystrokeScale) {
-                store[SettingKeys.recordingKeystrokeScale] = min(max(newValue, 0.6), 1.8)
-            }
-        }
-    }
-
-    public var recordingClickFilled: Bool {
-        get {
-            access(keyPath: \.recordingClickFilled)
-            return store[SettingKeys.recordingClickFilled]
-        }
-        set {
-            withMutation(keyPath: \.recordingClickFilled) {
-                store[SettingKeys.recordingClickFilled] = newValue
-            }
-        }
-    }
-
-    public var recordingClickScale: Double {
-        get {
-            access(keyPath: \.recordingClickScale)
-            return store[SettingKeys.recordingClickScale]
-        }
-        set {
-            withMutation(keyPath: \.recordingClickScale) {
-                store[SettingKeys.recordingClickScale] = min(max(newValue, 0.5), 4)
-            }
-        }
-    }
-
-    public var recordingClickRed: Double {
-        get {
-            access(keyPath: \.recordingClickRed)
-            return store[SettingKeys.recordingClickRed]
-        }
-        set {
-            withMutation(keyPath: \.recordingClickRed) {
-                store[SettingKeys.recordingClickRed] = min(max(newValue, 0), 1)
-            }
-        }
-    }
-
-    public var recordingClickGreen: Double {
-        get {
-            access(keyPath: \.recordingClickGreen)
-            return store[SettingKeys.recordingClickGreen]
-        }
-        set {
-            withMutation(keyPath: \.recordingClickGreen) {
-                store[SettingKeys.recordingClickGreen] = min(max(newValue, 0), 1)
-            }
-        }
-    }
-
-    public var recordingClickBlue: Double {
-        get {
-            access(keyPath: \.recordingClickBlue)
-            return store[SettingKeys.recordingClickBlue]
-        }
-        set {
-            withMutation(keyPath: \.recordingClickBlue) {
-                store[SettingKeys.recordingClickBlue] = min(max(newValue, 0), 1)
-            }
-        }
-    }
-
-    /// Which camera to record when the webcam is on. Empty is the system default.
-    ///
-    /// Computed so it does not grow the initializer: device ids are strings with no
-    /// defaulting logic beyond the key itself.
-    public var recordingCameraDeviceID: String {
-        get {
-            access(keyPath: \.recordingCameraDeviceID)
-            return store[SettingKeys.recordingCameraDeviceID]
-        }
-        set {
-            withMutation(keyPath: \.recordingCameraDeviceID) {
-                store[SettingKeys.recordingCameraDeviceID] = newValue
-            }
-        }
-    }
-
-    /// Which microphone to record when the mic is on. Empty is the system default.
-    public var recordingMicrophoneDeviceID: String {
-        get {
-            access(keyPath: \.recordingMicrophoneDeviceID)
-            return store[SettingKeys.recordingMicrophoneDeviceID]
-        }
-        set {
-            withMutation(keyPath: \.recordingMicrophoneDeviceID) {
-                store[SettingKeys.recordingMicrophoneDeviceID] = newValue
-            }
-        }
     }
 
     public var recordingCapturesStudioSession: Bool {
@@ -552,6 +391,7 @@ public final class AppSettings {
     }
 
     /// Every key is assigned from the store; splitting the list would hide a missed load.
+    // swiftlint:disable:next function_body_length
     public init(store: UserDefaults = .standard) {
         SettingsMigrator.migrate(store)
         self.store = store

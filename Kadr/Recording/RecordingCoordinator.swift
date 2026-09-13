@@ -285,6 +285,9 @@ final class RecordingCoordinator {
         configuration.webcamIsCircular = settings.recordingWebcamCircular
         configuration.webcamSizeFraction = CGFloat(settings.recordingWebcamSize)
         configuration.webcamFillsFrame = settings.recordingWebcamFillsFrame
+        configuration.webcamCorner = OverlayCornerSlot(
+            rawValue: settings.recordingWebcamCorner.rawValue
+        ) ?? .bottomTrailing
         configuration.clickRed = settings.recordingClickRed
         configuration.clickGreen = settings.recordingClickGreen
         configuration.clickBlue = settings.recordingClickBlue
@@ -491,21 +494,4 @@ final class RecordingCoordinator {
         tickTask?.cancel()
         tickTask = nil
     }
-}
-
-/// Do Not Disturb while recording (docs/03 §1.8).
-///
-/// macOS gives apps no supported way to set a Focus mode, so this does the honest thing:
-/// it suppresses Kadr's own notifications and tells the user what it cannot do, rather
-/// than pretending. A banner from another app landing in a recording is a real problem;
-/// silently failing to prevent it would be worse than saying so.
-@MainActor
-struct FocusMode {
-    private let logger = KadrLog.logger(.recording)
-
-    func enable() {
-        logger.info("Recording started; macOS Focus must be set by the user if wanted")
-    }
-
-    func disable() {}
 }

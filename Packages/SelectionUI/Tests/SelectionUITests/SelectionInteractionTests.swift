@@ -44,6 +44,29 @@ struct SelectionDragTests {
         #expect(selection.rect == expected)
     }
 
+    @Test("A locked 16:9 preset keeps that ratio without ⇧")
+    func lockedSixteenNinePreset() throws {
+        var selection = interaction()
+        selection.lockedAspect = CGSize(width: 16, height: 9)
+        selection.begin(at: CGPoint(x: 100, y: 100))
+        selection.drag(to: CGPoint(x: 260, y: 400))
+
+        let rect = try #require(selection.rect)
+        #expect(abs(rect.width / rect.height - 16 / 9) < 0.02)
+        #expect(rect.minX == 100)
+        #expect(rect.minY == 100)
+    }
+
+    @Test("⇧ still squares even when a preset is on")
+    func shiftOverridesAspectPreset() {
+        var selection = interaction()
+        selection.lockedAspect = CGSize(width: 16, height: 9)
+        selection.begin(at: CGPoint(x: 100, y: 100))
+        selection.drag(to: CGPoint(x: 300, y: 250), modifiers: .lockAspect)
+
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 200, height: 200))
+    }
+
     @Test("⌥ grows the rect around where the drag started")
     func optionDragsFromCentre() {
         var selection = interaction()

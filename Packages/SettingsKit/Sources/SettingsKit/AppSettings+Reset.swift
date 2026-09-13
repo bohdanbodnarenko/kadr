@@ -51,6 +51,7 @@ public extension AppSettings {
         scrollReviewsSeams = SettingKeys.scrollReviewsSeams.defaultValue
         capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
         captureSnapsToEdges = SettingKeys.captureSnapsToEdges.defaultValue
+        captureSelectionAspect = SettingKeys.captureSelectionAspect.defaultValue
         captureDynamicRange = SettingKeys.captureDynamicRange.defaultValue
     }
 
@@ -68,6 +69,7 @@ public extension AppSettings {
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
         recordingWebcamCircular = SettingKeys.recordingWebcamCircular.defaultValue
         recordingWebcamFillsFrame = SettingKeys.recordingWebcamFillsFrame.defaultValue
+        recordingWebcamCorner = SettingKeys.recordingWebcamCorner.defaultValue
         recordingWebcamSize = SettingKeys.recordingWebcamSize.defaultValue
         recordingKeystrokePosition = SettingKeys.recordingKeystrokePosition.defaultValue
         recordingKeystrokeAppearance = SettingKeys.recordingKeystrokeAppearance.defaultValue

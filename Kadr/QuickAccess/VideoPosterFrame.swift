@@ -10,11 +10,13 @@ import Shared
 /// rather than at zero, because the first frame of a screen recording is often the
 /// selection overlay fading out.
 enum VideoPosterFrame {
-    static func posterFrame(of url: URL, maxPixelSize: Int) async -> CGImage? {
+    static func posterFrame(of url: URL, maxPixelSize: Int? = nil) async -> CGImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
+        if let maxPixelSize {
+            generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
+        }
 
         let duration = await (try? asset.load(.duration)) ?? .zero
         let time = CMTimeGetSeconds(duration) > 1
@@ -22,6 +24,11 @@ enum VideoPosterFrame {
             : CMTime.zero
 
         return try? await generator.image(at: time).image
+    }
+
+    /// A still at the recording's native size, for OCR (CleanShot §3.7).
+    static func still(of url: URL) async -> CGImage? {
+        await posterFrame(of: url, maxPixelSize: nil)
     }
 
     /// The recording's pixel size, read from its video track.

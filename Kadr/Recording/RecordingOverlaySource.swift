@@ -38,6 +38,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         var webcamIsCircular = true
         var webcamSizeFraction: CGFloat = 0.22
         var webcamFillsFrame = false
+        var webcamCorner: OverlayCornerSlot = .bottomTrailing
         var clickRed: CGFloat = 1
         var clickGreen: CGFloat = 0.25
         var clickBlue: CGFloat = 0.2
@@ -165,6 +166,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
                 webcamIsCircular: configuration.webcamIsCircular,
                 webcamSizeFraction: configuration.webcamSizeFraction,
                 webcamFillsFrame: configuration.webcamFillsFrame,
+                webcamCorner: configuration.webcamCorner,
                 clickRed: configuration.clickRed,
                 clickGreen: configuration.clickGreen,
                 clickBlue: configuration.clickBlue,

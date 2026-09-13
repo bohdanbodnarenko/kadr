@@ -90,6 +90,19 @@ struct CapturePane: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Selection") {
+                Picker("Aspect lock", selection: $settings.captureSelectionAspect) {
+                    ForEach(CaptureSelectionAspect.allCases, id: \.self) { aspect in
+                        Text(aspect.title).tag(aspect)
+                    }
+                }
+                Text("Locks area capture to a ratio. ⇧-drag still forces a square. "
+                    + "The All-in-One strip has the same menu.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Scrolling Capture") {
                 Picker("Direction", selection: $settings.scrollAxis) {
                     ForEach(ScrollAxis.allCases, id: \.self) { axis in

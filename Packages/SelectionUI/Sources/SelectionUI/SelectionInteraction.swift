@@ -67,6 +67,12 @@ public struct SelectionInteraction: Equatable, Sendable {
     /// Until it arrives, dragging simply does not snap.
     public var snapping: SelectionSnapping?
 
+    /// Optional width:height lock applied even without ⇧ (All-in-One / Settings).
+    ///
+    /// ⇧ still forces a square, which is the documented modifier and the override when a
+    /// preset is on (docs/03 §1.1).
+    public var lockedAspect: CGSize?
+
     /// True while Space is held, which turns a drag into a move (docs/03 §1.1).
     public private(set) var isMovingSelection = false
     private var moveOrigin: CGPoint?
@@ -102,7 +108,9 @@ public struct SelectionInteraction: Equatable, Sendable {
 
         var corner = point
         if modifiers.contains(.lockAspect) {
-            corner = squared(from: anchor, towards: point)
+            corner = fitted(from: anchor, towards: point, aspect: CGSize(width: 1, height: 1))
+        } else if let lockedAspect {
+            corner = fitted(from: anchor, towards: point, aspect: lockedAspect)
         }
 
         let unclamped = if modifiers.contains(.fromCenter) {
@@ -128,7 +136,11 @@ public struct SelectionInteraction: Equatable, Sendable {
     /// ⌘ is the escape hatch: a snap that fights the user is worse than no snap, and a
     /// modifier they are already holding for other reasons would be the wrong choice.
     private func snapped(_ rect: CGRect, modifiers: SelectionModifiers) -> CGRect {
-        guard let snapping, !modifiers.contains(.freeform), !modifiers.contains(.lockAspect) else {
+        guard let snapping,
+              !modifiers.contains(.freeform),
+              !modifiers.contains(.lockAspect),
+              lockedAspect == nil
+        else {
             return rect
         }
         return snapping.snapped(rect).intersection(bounds)
@@ -252,12 +264,21 @@ public struct SelectionInteraction: Equatable, Sendable {
         return result.intersection(bounds)
     }
 
-    /// The corner that makes the drag square, keeping the direction the user is dragging.
-    private func squared(from anchor: CGPoint, towards point: CGPoint) -> CGPoint {
-        let side = max(abs(point.x - anchor.x), abs(point.y - anchor.y))
+    /// The far corner of an aspect-locked drag, keeping the direction the user is dragging.
+    private func fitted(from anchor: CGPoint, towards point: CGPoint, aspect: CGSize) -> CGPoint {
+        let ratio = max(aspect.width, 0.001) / max(aspect.height, 0.001)
+        let dx = point.x - anchor.x
+        let dy = point.y - anchor.y
+        var width = abs(dx)
+        var height = abs(dy)
+        if height < 0.001 || width / height > ratio {
+            height = width / ratio
+        } else {
+            width = height * ratio
+        }
         return CGPoint(
-            x: anchor.x + (point.x >= anchor.x ? side : -side),
-            y: anchor.y + (point.y >= anchor.y ? side : -side)
+            x: anchor.x + (dx >= 0 ? width : -width),
+            y: anchor.y + (dy >= 0 ? height : -height)
         )
     }
 }

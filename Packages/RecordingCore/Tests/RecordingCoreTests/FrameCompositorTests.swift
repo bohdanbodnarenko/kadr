@@ -139,6 +139,26 @@ struct FrameCompositorTests {
         #expect(low.red < 0x40)
     }
 
+    @Test("The webcam can sit in the top-left corner")
+    func webcamHonoursTopLeadingCorner() {
+        let buffer = makeBuffer()
+        FrameCompositor().draw(
+            RecordingOverlay(
+                webcamFrame: halfWhiteHalfBlack(),
+                webcamIsCircular: false,
+                webcamCorner: .topLeading
+            ),
+            into: buffer
+        )
+
+        let side = Int(Double(Self.height) * 0.22)
+        let margin = Int(Double(Self.height) * 0.04)
+        let x = margin + side / 2
+        let y = margin + side / 4
+        #expect(pixel(buffer, x: x, y: y).red > 0xC0)
+        #expect(pixel(buffer, x: Self.width - margin - side / 2, y: Self.height - margin - side / 2) == .untouched)
+    }
+
     @Test("A filled click paints the centre, not a hollow ring")
     func filledClickCoversTheCentre() {
         let buffer = makeBuffer()

@@ -50,10 +50,13 @@ final class TextRecognizer {
     /// Decoding happens here, at full resolution: OCR quality falls off quickly with
     /// downsampling, and this is a one-shot user action rather than anything on a hot path.
     func recognize(fileAt url: URL, preservingLineBreaks: Bool) async throws -> Recognition {
-        guard let image = Self.decode(url) else {
-            throw CocoaError(.fileReadCorruptFile)
+        if let image = Self.decode(url) {
+            return try await recognize(image, preservingLineBreaks: preservingLineBreaks)
         }
-        return try await recognize(image, preservingLineBreaks: preservingLineBreaks)
+        if let frame = await VideoPosterFrame.still(of: url) {
+            return try await recognize(frame, preservingLineBreaks: preservingLineBreaks)
+        }
+        throw CocoaError(.fileReadCorruptFile)
     }
 
     /// Puts recognised text on the clipboard. Returns whether there was anything to put.
