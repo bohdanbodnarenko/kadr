@@ -56,7 +56,7 @@ struct AdvancedPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
         .task { refresh() }
         .confirmationDialog(
             "Reset all settings to their defaults?",

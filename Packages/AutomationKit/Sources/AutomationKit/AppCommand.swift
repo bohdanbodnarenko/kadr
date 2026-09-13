@@ -115,7 +115,7 @@ public enum ToggleState: String, Codable, Sendable, CaseIterable, Hashable {
 }
 
 /// The Settings window's panes, addressable by name (docs/03 §8.4 `open-settings?tab=`).
-public enum SettingsTab: String, Codable, Sendable, CaseIterable, Hashable {
+public enum SettingsTab: String, Codable, Sendable, CaseIterable, Hashable, Identifiable {
     case general
     case overlay
     case capture
@@ -124,6 +124,10 @@ public enum SettingsTab: String, Codable, Sendable, CaseIterable, Hashable {
     case shortcuts
     case updates
     case advanced
+
+    public var id: Self {
+        self
+    }
 
     /// Accepts Kadr pane names and the CleanShot tab spellings a migrating script uses.
     public static func named(_ raw: String) -> SettingsTab? {

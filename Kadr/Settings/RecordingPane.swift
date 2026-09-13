@@ -168,7 +168,7 @@ struct RecordingPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 
     private var clickStyleBinding: Binding<Bool> {

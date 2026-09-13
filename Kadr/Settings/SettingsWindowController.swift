@@ -12,6 +12,9 @@ import SwiftUI
 /// and the whole view tree are allocated when the user opens Settings and gone by
 /// the time the window has closed, so the agent returns to its idle footprint
 /// (PRD §8). Debug builds assert on that rather than trusting it.
+///
+/// `.fullSizeContentView` is set at creation so macOS 26 can draw liquid-glass
+/// corners; a SwiftUI `Window` scene cannot set that style mask.
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let settings: AppSettings
@@ -24,6 +27,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// window really goes away on close.
     private(set) var window: NSWindow?
     private weak var hostingView: NSView?
+    private var navigation: SettingsNavigation?
 
     init(
         settings: AppSettings,
@@ -42,44 +46,58 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window != nil
     }
 
+    /// The pane currently shown, when the window is open.
+    var selectedTab: SettingsTab? {
+        navigation?.selectedTab
+    }
+
     /// - Parameter tab: which pane to land on, for `kadr open-settings --tab …`
     ///   (docs/03 §8.4). `nil` leaves the window wherever the user left it.
     func show(tab: SettingsTab? = nil) {
         // The user can flip the login item in System Settings behind our back.
         loginItem.refresh()
 
+        if let tab {
+            navigation?.selectedTab = tab
+        }
+
         if let window {
-            // A window that is already open cannot have its tab changed without rebuilding
-            // the SwiftUI tree, and rebuilding it would throw away whatever the user was
-            // typing. Bringing it forward is the honest thing to do.
             window.makeKeyAndOrderFront(nil)
             return
         }
 
-        let hosting = NSHostingView(
+        let navigation = SettingsNavigation(selectedTab: tab ?? .general)
+        self.navigation = navigation
+
+        let hosting = NSHostingController(
             rootView: SettingsView(
                 settings: settings,
                 loginItem: loginItem,
                 history: history,
-                selection: tab ?? .general
+                navigation: navigation
             )
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 540, height: 420),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 540),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "Kadr Settings"
-        window.contentView = hosting
+        window.title = "Settings"
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.toolbarStyle = .automatic
+        window.isMovableByWindowBackground = true
+        window.contentViewController = hosting
         window.delegate = self
+        window.minSize = NSSize(width: 620, height: 460)
         // AppKit would otherwise release the window out from under ARC on close.
         window.isReleasedWhenClosed = false
         window.center()
         window.setFrameAutosaveName("app.kadr.Kadr.settings")
 
         self.window = window
-        hostingView = hosting
+        hostingView = hosting.view
 
         // An .accessory app cannot make a window key on its own — docs/04 §3.1.
         juggler.beginRegularWindow()
@@ -99,8 +117,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
         window.delegate = nil
         // Drop the SwiftUI tree before the window goes, so nothing outlives the close.
+        window.contentViewController = nil
         window.contentView = nil
         self.window = nil
+        navigation = nil
 
         juggler.endRegularWindow()
         logger.info("Settings window closed")

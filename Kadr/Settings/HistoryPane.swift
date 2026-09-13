@@ -42,7 +42,7 @@ struct HistoryPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
         .onChange(of: settings.historyRetention) { _, _ in history?.applySettingsChange() }
         .onChange(of: settings.historySizeCap) { _, _ in history?.applySettingsChange() }
         .onChange(of: settings.historyIndexesText) { _, _ in history?.applySettingsChange() }

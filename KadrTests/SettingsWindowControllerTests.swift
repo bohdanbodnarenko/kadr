@@ -1,4 +1,5 @@
 import AppKit
+import AutomationKit
 import Foundation
 import OverlayKit
 import SettingsKit
@@ -98,6 +99,23 @@ struct SettingsWindowControllerTests {
 
         #expect(controller.window === first)
         #expect(app.activateCount == 1)
+
+        controller.close()
+        await settle()
+    }
+
+    @Test("open-settings --tab switches the pane on an already-open window")
+    func showUpdatesTabWithoutRebuilding() async {
+        let app = FakeApplication()
+        let controller = makeController(app)
+        controller.show(tab: .general)
+        let first = controller.window
+
+        controller.show(tab: .capture)
+
+        #expect(controller.window === first)
+        #expect(controller.selectedTab == .capture)
+        #expect(first?.styleMask.contains(.fullSizeContentView) == true)
 
         controller.close()
         await settle()

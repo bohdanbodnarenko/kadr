@@ -2,50 +2,254 @@ import AutomationKit
 import SettingsKit
 import SwiftUI
 
+/// Sidebar selection for the Settings window. Owned by `SettingsWindowController`
+/// so `kadr open-settings --tab` can change panes without rebuilding the tree.
+@MainActor
+@Observable
+final class SettingsNavigation {
+    var selectedTab: SettingsTab
+
+    init(selectedTab: SettingsTab) {
+        self.selectedTab = selectedTab
+    }
+}
+
 /// The Settings window's content (docs/03 §8.3).
 ///
-/// The tab selection is bound rather than left to `TabView` so `kadr open-settings
-/// --tab capture` can land on a pane (docs/03 §8.4).
+/// Sidebar + detail, not `TabView`: macOS 26 needs an `NSToolbar` (the back/forward
+/// items force one) and a split view so liquid-glass chrome can show through.
 struct SettingsView: View {
     let settings: AppSettings
     let loginItem: LoginItemController
     var history: HistoryController?
-    @State var selection: SettingsTab = .general
+    @Bindable var navigation: SettingsNavigation
+
+    @State private var navigationHistory: [SettingsTab] = []
+    @State private var historyIndex = 0
+    @State private var isHistoryNavigation = false
 
     var body: some View {
-        TabView(selection: $selection) {
-            GeneralPane(settings: settings, loginItem: loginItem)
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag(SettingsTab.general)
-
-            OverlayPane(settings: settings)
-                .tabItem { Label("Overlay", systemImage: "rectangle.stack") }
-                .tag(SettingsTab.overlay)
-
-            CapturePane(settings: settings)
-                .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
-                .tag(SettingsTab.capture)
-
-            RecordingPane(settings: settings)
-                .tabItem { Label("Recording", systemImage: "record.circle") }
-                .tag(SettingsTab.recording)
-
-            HistoryPane(settings: settings, history: history)
-                .tabItem { Label("History", systemImage: "clock") }
-                .tag(SettingsTab.history)
-
-            ShortcutsPane()
-                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
-                .tag(SettingsTab.shortcuts)
-
-            UpdatesPane(updater: .shared)
-                .tabItem { Label("Updates", systemImage: "arrow.down.circle") }
-                .tag(SettingsTab.updates)
-
-            AdvancedPane(settings: settings)
-                .tabItem { Label("Advanced", systemImage: "terminal") }
-                .tag(SettingsTab.advanced)
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            SettingsSidebarView(selectedTab: $navigation.selectedTab)
+                .frame(width: 200)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 200, max: 200)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
+            SettingsDetailView(
+                tab: navigation.selectedTab,
+                settings: settings,
+                loginItem: loginItem,
+                history: history
+            )
         }
-        .frame(width: 540, height: 420)
+        .navigationTitle("Settings")
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 660, minHeight: 540)
+        .toolbar {
+            ToolbarItemGroup(placement: .navigation) {
+                Button {
+                    goBack()
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(!canGoBack)
+                .help("Back")
+
+                Button {
+                    goForward()
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(!canGoForward)
+                .help("Forward")
+            }
+        }
+        .onAppear {
+            if navigationHistory.isEmpty {
+                navigationHistory = [navigation.selectedTab]
+            }
+        }
+        .onChange(of: navigation.selectedTab) { _, _ in
+            recordNavigation()
+        }
+    }
+
+    private var canGoBack: Bool {
+        historyIndex > 0
+    }
+
+    private var canGoForward: Bool {
+        historyIndex < navigationHistory.count - 1
+    }
+
+    private func goBack() {
+        guard canGoBack else { return }
+        isHistoryNavigation = true
+        historyIndex -= 1
+        navigation.selectedTab = navigationHistory[historyIndex]
+        Task { @MainActor in
+            isHistoryNavigation = false
+        }
+    }
+
+    private func goForward() {
+        guard canGoForward else { return }
+        isHistoryNavigation = true
+        historyIndex += 1
+        navigation.selectedTab = navigationHistory[historyIndex]
+        Task { @MainActor in
+            isHistoryNavigation = false
+        }
+    }
+
+    private func recordNavigation() {
+        guard !isHistoryNavigation else { return }
+        let tab = navigation.selectedTab
+        if navigationHistory.isEmpty {
+            navigationHistory = [tab]
+            historyIndex = 0
+            return
+        }
+        if navigationHistory[historyIndex] == tab {
+            return
+        }
+        if historyIndex < navigationHistory.count - 1 {
+            navigationHistory = Array(navigationHistory.prefix(historyIndex + 1))
+        }
+        navigationHistory.append(tab)
+        historyIndex = navigationHistory.count - 1
+    }
+}
+
+// MARK: - Sidebar
+
+private struct SettingsSidebarView: View {
+    @Binding var selectedTab: SettingsTab
+
+    private var selection: Binding<SettingsTab?> {
+        Binding(
+            get: { selectedTab },
+            set: {
+                if let tab = $0 {
+                    selectedTab = tab
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        List(selection: selection) {
+            ForEach(SettingsTab.allCases) { tab in
+                Label(tab.title, systemImage: tab.systemImage)
+                    .tag(tab)
+            }
+
+            SettingsSidebarFooter()
+        }
+        .listStyle(.sidebar)
+        .scrollEdgeEffectStyleSoftIfAvailable()
+        .navigationTitle("Settings")
+    }
+}
+
+private struct SettingsSidebarFooter: View {
+    private var versionText: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        return "Version \(version) (\(build))"
+    }
+
+    var body: some View {
+        Text(versionText)
+            .font(.footnote)
+            .foregroundStyle(.tertiary)
+            .fontDesign(.monospaced)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 0))
+    }
+}
+
+// MARK: - Detail
+
+private struct SettingsDetailView: View {
+    let tab: SettingsTab
+    let settings: AppSettings
+    let loginItem: LoginItemController
+    var history: HistoryController?
+
+    var body: some View {
+        Group {
+            switch tab {
+            case .general:
+                GeneralPane(settings: settings, loginItem: loginItem)
+            case .overlay:
+                OverlayPane(settings: settings)
+            case .capture:
+                CapturePane(settings: settings)
+            case .recording:
+                RecordingPane(settings: settings)
+            case .history:
+                HistoryPane(settings: settings, history: history)
+            case .shortcuts:
+                ShortcutsPane()
+            case .updates:
+                UpdatesPane(updater: .shared)
+            case .advanced:
+                AdvancedPane(settings: settings)
+            }
+        }
+        .navigationTitle(tab.title)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+// MARK: - Presentation
+
+extension SettingsTab {
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .overlay: "Overlay"
+        case .capture: "Capture"
+        case .recording: "Recording"
+        case .history: "History"
+        case .shortcuts: "Shortcuts"
+        case .updates: "Updates"
+        case .advanced: "Advanced"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape"
+        case .overlay: "rectangle.stack"
+        case .capture: "camera.viewfinder"
+        case .recording: "record.circle"
+        case .history: "clock"
+        case .shortcuts: "keyboard"
+        case .updates: "arrow.down.circle"
+        case .advanced: "terminal"
+        }
+    }
+}
+
+extension View {
+    /// Grouped form chrome that lets liquid-glass window material show through.
+    func settingsFormChrome() -> some View {
+        formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.top, 8, for: .scrollContent)
+    }
+
+    @ViewBuilder
+    func scrollEdgeEffectStyleSoftIfAvailable() -> some View {
+        if #available(macOS 26.0, *) {
+            scrollEdgeEffectStyle(.soft, for: .all)
+        } else {
+            self
+        }
     }
 }

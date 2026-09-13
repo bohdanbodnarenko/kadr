@@ -181,7 +181,7 @@ struct CapturePane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 
     private func chooseBackdropImage() {

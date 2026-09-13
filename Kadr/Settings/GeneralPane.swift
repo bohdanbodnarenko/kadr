@@ -81,7 +81,7 @@ struct GeneralPane: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 
     private var launchAtLoginBinding: Binding<Bool> {

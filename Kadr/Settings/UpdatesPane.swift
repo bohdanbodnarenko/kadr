@@ -44,6 +44,6 @@ struct UpdatesPane: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 }

@@ -19,6 +19,6 @@ struct ShortcutsPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 }

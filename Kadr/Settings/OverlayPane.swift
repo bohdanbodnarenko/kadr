@@ -84,6 +84,6 @@ struct OverlayPane: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+        .settingsFormChrome()
     }
 }
