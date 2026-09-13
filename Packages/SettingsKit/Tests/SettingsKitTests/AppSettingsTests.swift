@@ -408,3 +408,47 @@ struct WindowBackdropSettingsTests {
         #expect(reloaded.autoBeautifyPreset == .off)
     }
 }
+
+@MainActor
+@Suite("Recording overlay appearance")
+struct RecordingOverlayAppearanceSettingsTests {
+    @Test("Live overlay chrome is the CleanShot defaults")
+    func defaults() {
+        let settings = AppSettings(store: makeStore())
+        #expect(settings.recordingWebcamCircular)
+        #expect(!settings.recordingWebcamFillsFrame)
+        #expect(settings.recordingKeystrokePosition == .bottomCentre)
+        #expect(settings.recordingKeystrokeAppearance == .dark)
+        #expect(!settings.recordingClickFilled)
+        #expect(abs(settings.recordingClickRed - 1) < 0.001)
+    }
+
+    @Test("Live overlay chrome survives a reload and a reset")
+    func persistAndReset() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        settings.recordingWebcamCircular = false
+        settings.recordingWebcamFillsFrame = true
+        settings.recordingKeystrokePosition = .topCentre
+        settings.recordingKeystrokeAppearance = .light
+        settings.recordingClickFilled = true
+        settings.recordingClickScale = 2
+        settings.recordingClickGreen = 0.8
+
+        let reloaded = AppSettings(store: store)
+        #expect(!reloaded.recordingWebcamCircular)
+        #expect(reloaded.recordingWebcamFillsFrame)
+        #expect(reloaded.recordingKeystrokePosition == .topCentre)
+        #expect(reloaded.recordingKeystrokeAppearance == .light)
+        #expect(reloaded.recordingClickFilled)
+        #expect(abs(reloaded.recordingClickScale - 2) < 0.001)
+        #expect(abs(reloaded.recordingClickGreen - 0.8) < 0.001)
+
+        reloaded.resetToDefaults()
+        #expect(reloaded.recordingWebcamCircular)
+        #expect(!reloaded.recordingWebcamFillsFrame)
+        #expect(reloaded.recordingKeystrokePosition == .bottomCentre)
+        #expect(reloaded.recordingKeystrokeAppearance == .dark)
+        #expect(!reloaded.recordingClickFilled)
+    }
+}

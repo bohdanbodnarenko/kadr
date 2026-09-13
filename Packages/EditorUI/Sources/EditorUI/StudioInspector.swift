@@ -181,12 +181,18 @@ struct StudioInspector: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            Toggle("Fill the frame", isOn: Binding(
+                get: { model.edit.camera.isFullscreen },
+                set: { value in model.change { $0.camera.isFullscreen = value } }
+            ))
+            .help("Talking-head mode: the camera fills the export.")
             Picker("Corner", selection: Binding(
                 get: { model.edit.camera.placement },
                 set: { value in model.snapCamera(to: value) }
             )) {
                 ForEach(BubblePlacement.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            .disabled(model.edit.camera.isFullscreen)
             InspectorSlider(
                 title: "Size",
                 value: Binding(
@@ -198,6 +204,7 @@ struct StudioInspector: View {
                 range: 0.08 ... 0.6,
                 format: .percent
             )
+            .disabled(model.edit.camera.isFullscreen)
             InspectorSlider(
                 title: "Roundness",
                 value: Binding(

@@ -66,6 +66,17 @@ public extension AppSettings {
         recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
         recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
+        recordingWebcamCircular = SettingKeys.recordingWebcamCircular.defaultValue
+        recordingWebcamFillsFrame = SettingKeys.recordingWebcamFillsFrame.defaultValue
+        recordingWebcamSize = SettingKeys.recordingWebcamSize.defaultValue
+        recordingKeystrokePosition = SettingKeys.recordingKeystrokePosition.defaultValue
+        recordingKeystrokeAppearance = SettingKeys.recordingKeystrokeAppearance.defaultValue
+        recordingKeystrokeScale = SettingKeys.recordingKeystrokeScale.defaultValue
+        recordingClickFilled = SettingKeys.recordingClickFilled.defaultValue
+        recordingClickScale = SettingKeys.recordingClickScale.defaultValue
+        recordingClickRed = SettingKeys.recordingClickRed.defaultValue
+        recordingClickGreen = SettingKeys.recordingClickGreen.defaultValue
+        recordingClickBlue = SettingKeys.recordingClickBlue.defaultValue
         recordingCameraDeviceID = SettingKeys.recordingCameraDeviceID.defaultValue
         recordingMicrophoneDeviceID = SettingKeys.recordingMicrophoneDeviceID.defaultValue
         recordingCapturesStudioSession = SettingKeys.recordingCapturesStudioSession.defaultValue

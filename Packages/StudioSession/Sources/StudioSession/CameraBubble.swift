@@ -24,6 +24,9 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     /// corner picker works. A drag on the preview writes this so the bubble can sit
     /// anywhere, not only in nine slots.
     public var center: CGPoint?
+    /// Talking-head mode: the camera fills the export instead of sitting in a corner
+    /// (CleanShot's fullscreen webcam toggle).
+    public var isFullscreen: Bool
 
     public init(
         placement: BubblePlacement = .bottomTrailing,
@@ -31,7 +34,8 @@ public struct CameraBubble: Sendable, Hashable, Codable {
         marginFraction: Double = 0.03,
         roundness: Double = 1,
         isVisible: Bool = true,
-        center: CGPoint? = nil
+        center: CGPoint? = nil,
+        isFullscreen: Bool = false
     ) {
         self.placement = placement
         self.sizeFraction = min(max(sizeFraction, 0.05), 0.6)
@@ -39,6 +43,7 @@ public struct CameraBubble: Sendable, Hashable, Codable {
         self.roundness = min(max(roundness, 0), 1)
         self.isVisible = isVisible
         self.center = center.map(Self.clampedCenter)
+        self.isFullscreen = isFullscreen
     }
 
     /// A circle in the corner: the layout almost everybody wants.
@@ -46,10 +51,19 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     /// A rounded rectangle, for somebody who wants to see the whole frame.
     public static let rectangle = CameraBubble(sizeFraction: 0.26, roundness: 0.2)
     /// Filling the frame, for a talking-head recording.
-    public static let full = CameraBubble(placement: .centre, sizeFraction: 0.6, marginFraction: 0, roundness: 0)
+    public static let full = CameraBubble(
+        placement: .centre,
+        sizeFraction: 0.6,
+        marginFraction: 0,
+        roundness: 0,
+        isFullscreen: true
+    )
 
     /// The bubble's frame in a video of `size`.
     public func frame(in size: CGSize) -> CGRect {
+        if isFullscreen {
+            return CGRect(origin: .zero, size: size)
+        }
         let shortest = max(min(size.width, size.height), 1)
         let side = shortest * sizeFraction
         if let center {
@@ -82,6 +96,7 @@ public struct CameraBubble: Sendable, Hashable, Codable {
 
     /// Snaps back to a named corner and forgets a free position.
     public mutating func snap(to placement: BubblePlacement) {
+        isFullscreen = false
         self.placement = placement
         center = nil
     }
@@ -89,6 +104,7 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     /// Places the bubble by dragging, and updates `placement` so the corner picker
     /// follows the nearest slot.
     public mutating func move(toNormalizedCenter point: CGPoint) {
+        isFullscreen = false
         let clamped = Self.clampedCenter(point)
         center = clamped
         placement = BubblePlacement.nearest(to: clamped)
@@ -101,6 +117,7 @@ public struct CameraBubble: Sendable, Hashable, Codable {
         pinningTopLeading origin: CGPoint,
         in size: CGSize
     ) {
+        isFullscreen = false
         sizeFraction = min(max(value, 0.05), 0.6)
         let side = max(min(size.width, size.height), 1) * sizeFraction
         guard size.width > 0, size.height > 0 else { return }
@@ -123,7 +140,7 @@ public struct CameraBubble: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case placement, sizeFraction, marginFraction, roundness, isVisible, center
+        case placement, sizeFraction, marginFraction, roundness, isVisible, center, isFullscreen
     }
 
     public init(from decoder: any Decoder) throws {
@@ -135,7 +152,8 @@ public struct CameraBubble: Sendable, Hashable, Codable {
             marginFraction: container.decodeIfPresent(Double.self, forKey: .marginFraction) ?? 0.03,
             roundness: container.decodeIfPresent(Double.self, forKey: .roundness) ?? 1,
             isVisible: container.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true,
-            center: container.decodeIfPresent(CGPoint.self, forKey: .center)
+            center: container.decodeIfPresent(CGPoint.self, forKey: .center),
+            isFullscreen: container.decodeIfPresent(Bool.self, forKey: .isFullscreen) ?? false
         )
     }
 }

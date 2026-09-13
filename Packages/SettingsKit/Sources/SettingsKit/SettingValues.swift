@@ -145,3 +145,20 @@ public enum RecordingVideoCodec: String, CaseIterable, SettingValue {
         }
     }
 }
+
+extension OverlayChromeAppearance: SettingValue {}
+
+/// Where the live keystroke pill sits while recording (CleanShot §13.5).
+public enum RecordingKeystrokePosition: String, CaseIterable, SettingValue {
+    case bottomCentre
+    case bottomLeading
+    case topCentre
+
+    public var title: String {
+        switch self {
+        case .bottomCentre: "Bottom"
+        case .bottomLeading: "Bottom Left"
+        case .topCentre: "Top"
+        }
+    }
+}

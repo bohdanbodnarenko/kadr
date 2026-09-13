@@ -275,8 +275,21 @@ final class RecordingCoordinator {
         configuration.showsClicks = settings.recordingShowsClicks
         configuration.showsKeystrokes = settings.recordingShowsKeystrokes
         configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
+        configuration.keystrokePosition = KeystrokePosition(
+            rawValue: settings.recordingKeystrokePosition.rawValue
+        ) ?? .bottomCentre
+        configuration.keystrokeAppearance = settings.recordingKeystrokeAppearance
+        configuration.keystrokeScale = CGFloat(settings.recordingKeystrokeScale)
         configuration.showsWebcam = bakesWebcam
         configuration.webcamDeviceID = settings.recordingCameraDeviceID
+        configuration.webcamIsCircular = settings.recordingWebcamCircular
+        configuration.webcamSizeFraction = CGFloat(settings.recordingWebcamSize)
+        configuration.webcamFillsFrame = settings.recordingWebcamFillsFrame
+        configuration.clickRed = settings.recordingClickRed
+        configuration.clickGreen = settings.recordingClickGreen
+        configuration.clickBlue = settings.recordingClickBlue
+        configuration.clickScale = CGFloat(settings.recordingClickScale)
+        configuration.clickFilled = settings.recordingClickFilled
         configuration.pointConverter = Self.pointConverter(for: target)
 
         overlaySource.start(configuration: configuration)

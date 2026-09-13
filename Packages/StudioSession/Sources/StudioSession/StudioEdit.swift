@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Shared
 
 /// Everything the user decided about a recording (docs/09 U3.1, U3.4, U3.5).
 ///
@@ -40,6 +41,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     public var keystrokePlacement: OverlayPlacement
     /// Where burned-in speech captions sit on the recording card.
     public var captionPlacement: OverlayPlacement
+    /// Dark or light caption pill (CleanShot §13.5).
+    public var keystrokeAppearance: OverlayChromeAppearance
     /// How large shortcut captions are drawn, 1 being the default size.
     public var keystrokeScale: Double {
         didSet {
@@ -128,6 +131,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         highlightsSpokenWord: Bool = true,
         keystrokePlacement: OverlayPlacement = .bottom,
         captionPlacement: OverlayPlacement = .top,
+        keystrokeAppearance: OverlayChromeAppearance = .dark,
         keystrokeScale: Double = 1,
         captionScale: Double = 1,
         soundtrackFileName: String? = nil,
@@ -158,6 +162,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         self.highlightsSpokenWord = highlightsSpokenWord
         self.keystrokePlacement = keystrokePlacement
         self.captionPlacement = captionPlacement
+        self.keystrokeAppearance = keystrokeAppearance
         self.keystrokeScale = Self.clampedOverlayScale(keystrokeScale)
         self.captionScale = Self.clampedOverlayScale(captionScale)
         self.soundtrackFileName = soundtrackFileName
@@ -265,7 +270,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case version, clips, zooms, reframe, cropRect, camera, showsCursor, showsClicks, showsKeystrokes,
-             showsCaptions, highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeScale, captionScale,
+             showsCaptions, highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeAppearance,
+             keystrokeScale, captionScale,
              soundtrackFileName, soundtrackDisplayName, mutesAudio, mixesToMono,
              cursorScale, clickScale, clickColor, clickStyle,
              showsClickPress, cursorSmoothing, zoomStyle, motionBlur, canvas, showsZooms
@@ -295,6 +301,10 @@ public struct StudioEdit: Sendable, Hashable, Codable {
                 OverlayPlacement.self,
                 forKey: .captionPlacement
             ) ?? .top,
+            keystrokeAppearance: container.decodeIfPresent(
+                OverlayChromeAppearance.self,
+                forKey: .keystrokeAppearance
+            ) ?? .dark,
             keystrokeScale: container.decodeIfPresent(Double.self, forKey: .keystrokeScale) ?? 1,
             captionScale: container.decodeIfPresent(Double.self, forKey: .captionScale) ?? 1,
             soundtrackFileName: container.decodeIfPresent(String.self, forKey: .soundtrackFileName),

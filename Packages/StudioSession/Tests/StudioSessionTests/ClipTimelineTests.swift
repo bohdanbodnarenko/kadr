@@ -366,6 +366,29 @@ struct CameraBubbleTests {
         #expect(try JSONDecoder().decode(CameraBubble.self, from: data) == bubble)
     }
 
+    @Test("Fullscreen fills the export")
+    func fullscreenFillsTheFrame() {
+        #expect(CameraBubble.full.frame(in: size) == CGRect(origin: .zero, size: size))
+        var bubble = CameraBubble.standard
+        bubble.isFullscreen = true
+        #expect(bubble.frame(in: size) == CGRect(origin: .zero, size: size))
+    }
+
+    @Test("Dragging a fullscreen bubble returns it to a corner slot")
+    func moveLeavesFullscreen() {
+        var bubble = CameraBubble.full
+        bubble.move(toNormalizedCenter: CGPoint(x: 0.1, y: 0.1))
+        #expect(!bubble.isFullscreen)
+        #expect(bubble.frame(in: size).width < size.width)
+    }
+
+    @Test("An old bubble without the fullscreen flag still opens")
+    func fullscreenDefaultsAbsent() throws {
+        let json = #"{"placement":"bottomTrailing","sizeFraction":0.22}"#
+        let bubble = try JSONDecoder().decode(CameraBubble.self, from: Data(json.utf8))
+        #expect(!bubble.isFullscreen)
+    }
+
     // MARK: - Trimming (docs/08 §2 item 12)
 
     /// Dropping the dead air off the front is the commonest edit anybody makes to a screen

@@ -30,6 +30,7 @@ let package = Package(
             name: "StudioRenderTests",
             dependencies: [
                 "StudioRender",
+                .product(name: "Shared", package: "Shared"),
                 .product(name: "StudioSession", package: "StudioSession")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]

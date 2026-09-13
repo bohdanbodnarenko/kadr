@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreText
 import Foundation
+import Shared
 
 /// The keystroke and speech caption pill (docs/09 U3.2, docs/13 T2.2).
 enum CaptionCanvas {
@@ -8,6 +9,7 @@ enum CaptionCanvas {
         text: String,
         fontSize: CGFloat,
         opacity: Double,
+        appearance: OverlayChromeAppearance = .dark,
         activeIndex: Int? = nil,
         spokenCount: Int = 0
     ) -> CGImage? {
@@ -18,6 +20,7 @@ enum CaptionCanvas {
             text: text,
             font: font,
             opacity: opacity,
+            appearance: appearance,
             activeIndex: activeIndex,
             spokenCount: spokenCount
         )
@@ -29,7 +32,12 @@ enum CaptionCanvas {
 
         return BitmapCanvas.image(width: width, height: height) { context in
             let rect = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
-            context.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.65 * opacity)
+            switch appearance {
+            case .dark:
+                context.setFillColor(red: 0, green: 0, blue: 0, alpha: 0.65 * opacity)
+            case .light:
+                context.setFillColor(red: 1, green: 1, blue: 1, alpha: 0.86 * opacity)
+            }
             context.addPath(CGPath(
                 roundedRect: rect,
                 cornerWidth: rect.height / 2,
@@ -52,6 +60,7 @@ enum CaptionCanvas {
         text: String,
         font: CTFont,
         opacity: Double,
+        appearance: OverlayChromeAppearance = .dark,
         activeIndex: Int?,
         spokenCount: Int
     ) -> NSAttributedString {
@@ -62,7 +71,7 @@ enum CaptionCanvas {
         guard karaoke, words.count > 1 || activeIndex != nil else {
             return NSAttributedString(string: text, attributes: [
                 fontKey: font,
-                colorKey: Self.white(opacity)
+                colorKey: Self.ink(opacity, appearance: appearance)
             ])
         }
         let result = NSMutableAttributedString()
@@ -70,7 +79,7 @@ enum CaptionCanvas {
             if index > 0 {
                 result.append(NSAttributedString(string: " ", attributes: [
                     fontKey: font,
-                    colorKey: Self.white(opacity)
+                    colorKey: Self.ink(opacity, appearance: appearance)
                 ]))
             }
             result.append(NSAttributedString(string: word, attributes: [
@@ -79,7 +88,8 @@ enum CaptionCanvas {
                     index: index,
                     activeIndex: activeIndex,
                     spokenCount: spokenCount,
-                    opacity: opacity
+                    opacity: opacity,
+                    appearance: appearance
                 )
             ]))
         }
@@ -90,7 +100,8 @@ enum CaptionCanvas {
         index: Int,
         activeIndex: Int?,
         spokenCount: Int,
-        opacity: Double
+        opacity: Double,
+        appearance: OverlayChromeAppearance
     ) -> CGColor {
         if index == activeIndex {
             return CGColor(
@@ -101,12 +112,22 @@ enum CaptionCanvas {
             )
         }
         if index < spokenCount {
-            return white(opacity)
+            return ink(opacity, appearance: appearance)
         }
-        return CGColor(red: 1, green: 1, blue: 1, alpha: upcomingAlpha * opacity)
+        return CGColor(
+            red: appearance == .light ? 0.15 : 1,
+            green: appearance == .light ? 0.15 : 1,
+            blue: appearance == .light ? 0.18 : 1,
+            alpha: upcomingAlpha * opacity
+        )
     }
 
-    private static func white(_ opacity: Double) -> CGColor {
-        CGColor(red: 1, green: 1, blue: 1, alpha: opacity)
+    private static func ink(_ opacity: Double, appearance: OverlayChromeAppearance) -> CGColor {
+        switch appearance {
+        case .dark:
+            CGColor(red: 1, green: 1, blue: 1, alpha: opacity)
+        case .light:
+            CGColor(red: 0.08, green: 0.08, blue: 0.1, alpha: opacity)
+        }
     }
 }

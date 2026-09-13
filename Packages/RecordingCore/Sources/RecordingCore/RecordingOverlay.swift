@@ -42,22 +42,50 @@ public struct RecordingOverlay: Sendable {
     /// The keys shown right now, already formatted — "⌘⇧4" or "Hello".
     public var keystrokes: String?
     public var keystrokePosition: KeystrokePosition
+    public var keystrokeAppearance: OverlayChromeAppearance
+    public var keystrokeScale: CGFloat
     /// The webcam picture to inset, already the right way round.
     public var webcamFrame: CGImage?
     public var webcamIsCircular: Bool
+    /// Fraction of the short edge, matching the studio bubble's default.
+    public var webcamSizeFraction: CGFloat
+    public var webcamFillsFrame: Bool
+    public var clickRed: CGFloat
+    public var clickGreen: CGFloat
+    public var clickBlue: CGFloat
+    public var clickScale: CGFloat
+    public var clickFilled: Bool
 
     public init(
         clicks: [ClickPulse] = [],
         keystrokes: String? = nil,
         keystrokePosition: KeystrokePosition = .bottomCentre,
+        keystrokeAppearance: OverlayChromeAppearance = .dark,
+        keystrokeScale: CGFloat = 1,
         webcamFrame: CGImage? = nil,
-        webcamIsCircular: Bool = true
+        webcamIsCircular: Bool = true,
+        webcamSizeFraction: CGFloat = 0.22,
+        webcamFillsFrame: Bool = false,
+        clickRed: CGFloat = 1,
+        clickGreen: CGFloat = 0.25,
+        clickBlue: CGFloat = 0.2,
+        clickScale: CGFloat = 1,
+        clickFilled: Bool = false
     ) {
         self.clicks = clicks
         self.keystrokes = keystrokes
         self.keystrokePosition = keystrokePosition
+        self.keystrokeAppearance = keystrokeAppearance
+        self.keystrokeScale = keystrokeScale
         self.webcamFrame = webcamFrame
         self.webcamIsCircular = webcamIsCircular
+        self.webcamSizeFraction = webcamSizeFraction
+        self.webcamFillsFrame = webcamFillsFrame
+        self.clickRed = clickRed
+        self.clickGreen = clickGreen
+        self.clickBlue = clickBlue
+        self.clickScale = max(clickScale, 0.2)
+        self.clickFilled = clickFilled
     }
 
     public var isEmpty: Bool {

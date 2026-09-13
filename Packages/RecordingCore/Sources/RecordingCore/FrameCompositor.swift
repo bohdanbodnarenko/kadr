@@ -91,12 +91,14 @@ struct FrameCompositor: Sendable {
         context.scaleBy(x: 1, y: -1)
 
         for click in overlay.clicks {
-            drawClick(click, in: context)
+            drawClick(click, in: context, overlay: overlay)
         }
         if let keystrokes = overlay.keystrokes, !keystrokes.isEmpty {
             drawKeystrokes(
                 keystrokes,
                 position: overlay.keystrokePosition,
+                appearance: overlay.keystrokeAppearance,
+                scale: overlay.keystrokeScale,
                 in: context,
                 size: CGSize(width: width, height: height)
             )
@@ -105,6 +107,8 @@ struct FrameCompositor: Sendable {
             drawWebcam(
                 webcam,
                 isCircular: overlay.webcamIsCircular,
+                sizeFraction: overlay.webcamSizeFraction,
+                fillsFrame: overlay.webcamFillsFrame,
                 in: context,
                 size: CGSize(width: width, height: height)
             )
@@ -115,14 +119,19 @@ struct FrameCompositor: Sendable {
 
     /// A ring that expands and fades, which reads as a click without hiding what was
     /// clicked (docs/03 §1.8).
-    private func drawClick(_ click: ClickPulse, in context: CGContext) {
-        let maximumRadius: CGFloat = 44
-        let radius = 10 + maximumRadius * CGFloat(click.progress)
+    private func drawClick(_ click: ClickPulse, in context: CGContext, overlay: RecordingOverlay) {
+        let maximumRadius: CGFloat = 44 * overlay.clickScale
+        let radius = (10 + maximumRadius * CGFloat(click.progress))
         let alpha = 1 - click.progress
 
         let colour = click.isRightClick
             ? CGColor(srgbRed: 1, green: 0.7, blue: 0.1, alpha: alpha * 0.9)
-            : CGColor(srgbRed: 1, green: 0.25, blue: 0.2, alpha: alpha * 0.9)
+            : CGColor(
+                srgbRed: overlay.clickRed,
+                green: overlay.clickGreen,
+                blue: overlay.clickBlue,
+                alpha: alpha * 0.9
+            )
 
         let rect = CGRect(
             x: click.position.x - radius,
@@ -130,18 +139,29 @@ struct FrameCompositor: Sendable {
             width: radius * 2,
             height: radius * 2
         )
-        context.setStrokeColor(colour)
-        context.setLineWidth(4 * (1 - CGFloat(click.progress) * 0.6))
-        context.strokeEllipse(in: rect)
+        if overlay.clickFilled {
+            context.setFillColor(colour)
+            context.fillEllipse(in: rect)
+        } else {
+            context.setStrokeColor(colour)
+            context.setLineWidth(4 * overlay.clickScale * (1 - CGFloat(click.progress) * 0.6))
+            context.strokeEllipse(in: rect)
+        }
 
         // A solid dot at the point itself, so a fast click is still visible when the ring
         // has barely started.
-        context.setFillColor(CGColor(srgbRed: 1, green: 0.25, blue: 0.2, alpha: alpha * 0.5))
+        context.setFillColor(CGColor(
+            srgbRed: overlay.clickRed,
+            green: overlay.clickGreen,
+            blue: overlay.clickBlue,
+            alpha: alpha * 0.5
+        ))
+        let dot = 6 * overlay.clickScale
         context.fillEllipse(in: CGRect(
-            x: click.position.x - 6,
-            y: click.position.y - 6,
-            width: 12,
-            height: 12
+            x: click.position.x - dot,
+            y: click.position.y - dot,
+            width: dot * 2,
+            height: dot * 2
         ))
     }
 
@@ -150,14 +170,20 @@ struct FrameCompositor: Sendable {
     private func drawKeystrokes(
         _ text: String,
         position: KeystrokePosition,
+        appearance: OverlayChromeAppearance,
+        scale: CGFloat,
         in context: CGContext,
         size: CGSize
     ) {
-        let fontSize = max(20, size.height * 0.035)
+        let fontSize = max(20, size.height * 0.035) * scale
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+        let ink: CGColor = switch appearance {
+        case .dark: CGColor(gray: 1, alpha: 1)
+        case .light: CGColor(gray: 0.08, alpha: 1)
+        }
         let attributed = NSAttributedString(string: text, attributes: [
             .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1)
+            .init(kCTForegroundColorAttributeName as String): ink
         ])
         let line = CTLineCreateWithAttributedString(attributed)
         let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
@@ -180,7 +206,12 @@ struct FrameCompositor: Sendable {
         }
 
         let pill = CGRect(origin: origin, size: CGSize(width: pillWidth, height: pillHeight))
-        context.setFillColor(CGColor(gray: 0, alpha: 0.72))
+        switch appearance {
+        case .dark:
+            context.setFillColor(CGColor(gray: 0, alpha: 0.72))
+        case .light:
+            context.setFillColor(CGColor(gray: 1, alpha: 0.86))
+        }
         context.addPath(CGPath(
             roundedRect: pill,
             cornerWidth: pillHeight / 2,
@@ -222,22 +253,35 @@ struct FrameCompositor: Sendable {
     private func drawWebcam(
         _ image: CGImage,
         isCircular: Bool,
+        sizeFraction: CGFloat,
+        fillsFrame: Bool,
         in context: CGContext,
         size: CGSize
     ) {
-        let side = min(size.width, size.height) * 0.22
-        let margin = size.height * 0.04
-        // Bottom-right, in the frame's top-left-origin space.
-        let rect = CGRect(
-            x: size.width - side - margin,
-            y: size.height - side - margin,
-            width: side,
-            height: side
-        )
+        let rect: CGRect
+        if fillsFrame {
+            rect = CGRect(origin: .zero, size: size)
+        } else {
+            let side = min(size.width, size.height) * sizeFraction
+            let margin = size.height * 0.04
+            // Bottom-right, in the frame's top-left-origin space.
+            rect = CGRect(
+                x: size.width - side - margin,
+                y: size.height - side - margin,
+                width: side,
+                height: side
+            )
+        }
 
+        let corner = min(rect.width, rect.height) * 0.12
         let path = isCircular
             ? CGPath(ellipseIn: rect, transform: nil)
-            : CGPath(roundedRect: rect, cornerWidth: side * 0.12, cornerHeight: side * 0.12, transform: nil)
+            : CGPath(
+                roundedRect: rect,
+                cornerWidth: fillsFrame ? min(24, corner) : corner,
+                cornerHeight: fillsFrame ? min(24, corner) : corner,
+                transform: nil
+            )
         // Fill the frame rather than letterboxing it: a PiP with black bars looks broken.
         let aspect = CGFloat(image.width) / CGFloat(image.height)
         let drawRect = aspect > 1
@@ -260,8 +304,8 @@ struct FrameCompositor: Sendable {
         }
 
         context.addPath(path)
-        context.setStrokeColor(CGColor(gray: 1, alpha: 0.85))
-        context.setLineWidth(max(2, side * 0.02))
+        context.setStrokeColor(CGColor(gray: 1, alpha: fillsFrame ? 0 : 0.85))
+        context.setLineWidth(max(2, min(rect.width, rect.height) * 0.02))
         context.strokePath()
     }
 }

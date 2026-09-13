@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Shared
 import StudioSession
 import Testing
 @testable import StudioRender
@@ -50,6 +51,23 @@ struct CaptionCanvasTests {
         #expect(goldPixels(in: off) == 0)
     }
 
+    @Test("A light caption pill is brighter than a dark one")
+    func lightThemeIsBrighter() throws {
+        let dark = try #require(CaptionCanvas.image(
+            text: "⌘⇧4",
+            fontSize: 28,
+            opacity: 1,
+            appearance: .dark
+        ))
+        let light = try #require(CaptionCanvas.image(
+            text: "⌘⇧4",
+            fontSize: 28,
+            opacity: 1,
+            appearance: .light
+        ))
+        #expect(meanLuma(in: light) > meanLuma(in: dark))
+    }
+
     /// Gold is high red and green, low blue — white text and the dark pill are not.
     private func goldPixels(in image: CGImage) -> Int {
         let width = image.width
@@ -74,5 +92,28 @@ struct CaptionCanvasTests {
             count += 1
         }
         return count
+    }
+
+    private func meanLuma(in image: CGImage) -> Double {
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 0
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        var total = 0
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            total += Int(pixels[index]) + Int(pixels[index + 1]) + Int(pixels[index + 2])
+        }
+        return Double(total) / Double(width * height)
     }
 }

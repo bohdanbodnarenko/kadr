@@ -31,9 +31,18 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         var showsKeystrokes = false
         var keystrokesOnlyWithModifiers = true
         var keystrokePosition: KeystrokePosition = .bottomCentre
+        var keystrokeAppearance: OverlayChromeAppearance = .dark
+        var keystrokeScale: CGFloat = 1
         var showsWebcam = false
         var webcamDeviceID: String?
         var webcamIsCircular = true
+        var webcamSizeFraction: CGFloat = 0.22
+        var webcamFillsFrame = false
+        var clickRed: CGFloat = 1
+        var clickGreen: CGFloat = 0.25
+        var clickBlue: CGFloat = 0.2
+        var clickScale: CGFloat = 1
+        var clickFilled = false
         /// Maps a screen point into the recorded area's own coordinates.
         /// Screen space in, recorded pixels out — typed, for the reason C1 records
         /// (docs/11 S0.1).
@@ -150,8 +159,17 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
                 clicks: pulses,
                 keystrokes: text,
                 keystrokePosition: configuration.keystrokePosition,
+                keystrokeAppearance: configuration.keystrokeAppearance,
+                keystrokeScale: configuration.keystrokeScale,
                 webcamFrame: webcamFrame,
-                webcamIsCircular: configuration.webcamIsCircular
+                webcamIsCircular: configuration.webcamIsCircular,
+                webcamSizeFraction: configuration.webcamSizeFraction,
+                webcamFillsFrame: configuration.webcamFillsFrame,
+                clickRed: configuration.clickRed,
+                clickGreen: configuration.clickGreen,
+                clickBlue: configuration.clickBlue,
+                clickScale: configuration.clickScale,
+                clickFilled: configuration.clickFilled
             )
         }
     }

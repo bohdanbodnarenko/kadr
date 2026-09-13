@@ -89,7 +89,12 @@ extension StudioFrameComposer {
         // number it always was. After a Presenter canvas the card is the frame that matters.
         let reference = min(plan.cardRect.width, plan.cardRect.height)
         let fontSize = max(reference * 0.035 * edit.keystrokeScale, 12)
-        guard let image = CaptionCanvas.image(text: text, fontSize: fontSize, opacity: opacity) else {
+        guard let image = CaptionCanvas.image(
+            text: text,
+            fontSize: fontSize,
+            opacity: opacity,
+            appearance: edit.keystrokeAppearance
+        ) else {
             return nil
         }
         return (image, overlayFrame(for: image, placing: edit.keystrokePlacement, marginFraction: 0.06))

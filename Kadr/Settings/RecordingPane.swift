@@ -1,3 +1,4 @@
+import AppKit
 import RecordingCore
 import SettingsKit
 import Shared
@@ -80,18 +81,55 @@ struct RecordingPane: View {
             Section("Overlays") {
                 Toggle("Show the pointer", isOn: $settings.recordingShowsCursor)
                 Toggle("Highlight clicks", isOn: $settings.recordingShowsClicks)
+                if settings.recordingShowsClicks {
+                    Picker("Click style", selection: clickStyleBinding) {
+                        Text("Outline").tag(false)
+                        Text("Filled").tag(true)
+                    }
+                    Slider(value: $settings.recordingClickScale, in: 0.5 ... 2.5) {
+                        Text("Click size")
+                    }
+                    ColorPicker(
+                        "Click colour",
+                        selection: clickColorBinding,
+                        supportsOpacity: false
+                    )
+                }
                 Toggle("Show pressed keys", isOn: $settings.recordingShowsKeystrokes)
                 Toggle(
                     "Only show keys pressed with \u{2318}, \u{2325} or \u{2303}",
                     isOn: $settings.recordingKeystrokesShortcutsOnly
                 )
                 .disabled(!settings.recordingShowsKeystrokes)
+                if settings.recordingShowsKeystrokes {
+                    Picker("Keystroke position", selection: $settings.recordingKeystrokePosition) {
+                        ForEach(RecordingKeystrokePosition.allCases, id: \.self) { position in
+                            Text(position.title).tag(position)
+                        }
+                    }
+                    Picker("Keystroke theme", selection: $settings.recordingKeystrokeAppearance) {
+                        ForEach(OverlayChromeAppearance.allCases, id: \.self) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                    Slider(value: $settings.recordingKeystrokeScale, in: 0.6 ... 1.8) {
+                        Text("Keystroke size")
+                    }
+                }
                 Text("Showing every keystroke also shows whatever gets typed into a "
                     + "password field. Reading keys needs Accessibility permission, which "
                     + "Kadr asks for the first time a recording starts with this on.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
+                if settings.recordingShowsWebcam {
+                    Toggle("Circular webcam", isOn: $settings.recordingWebcamCircular)
+                    Toggle("Fill the frame", isOn: $settings.recordingWebcamFillsFrame)
+                    Slider(value: $settings.recordingWebcamSize, in: 0.08 ... 0.6) {
+                        Text("Webcam size")
+                    }
+                    .disabled(settings.recordingWebcamFillsFrame)
+                }
             }
 
             TeleprompterSection(settings: settings)
@@ -125,5 +163,30 @@ struct RecordingPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var clickStyleBinding: Binding<Bool> {
+        Binding(
+            get: { settings.recordingClickFilled },
+            set: { settings.recordingClickFilled = $0 }
+        )
+    }
+
+    private var clickColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                Color(
+                    red: settings.recordingClickRed,
+                    green: settings.recordingClickGreen,
+                    blue: settings.recordingClickBlue
+                )
+            },
+            set: { color in
+                let resolved = NSColor(color).usingColorSpace(.sRGB) ?? NSColor(color)
+                settings.recordingClickRed = resolved.redComponent
+                settings.recordingClickGreen = resolved.greenComponent
+                settings.recordingClickBlue = resolved.blueComponent
+            }
+        )
     }
 }

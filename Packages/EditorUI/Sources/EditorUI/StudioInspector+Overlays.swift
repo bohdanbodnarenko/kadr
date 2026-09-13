@@ -1,3 +1,4 @@
+import Shared
 import StudioSession
 import SwiftUI
 
@@ -135,6 +136,12 @@ extension StudioInspector {
                 range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
                 format: .multiplier
             )
+            Picker("Theme", selection: Binding(
+                get: { model.edit.keystrokeAppearance },
+                set: { value in model.change { $0.keystrokeAppearance = value } }
+            )) {
+                ForEach(OverlayChromeAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
         }
     }
 }

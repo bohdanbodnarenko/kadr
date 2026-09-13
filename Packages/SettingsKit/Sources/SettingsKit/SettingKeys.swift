@@ -88,6 +88,23 @@ public enum SettingKeys {
         default: true
     )
     public static let recordingShowsWebcam = SettingKey("recording.showsWebcam", default: false)
+    public static let recordingWebcamCircular = SettingKey("recording.webcamCircular", default: true)
+    public static let recordingWebcamFillsFrame = SettingKey("recording.webcamFillsFrame", default: false)
+    public static let recordingWebcamSize = SettingKey("recording.webcamSize", default: 0.22)
+    public static let recordingKeystrokePosition = SettingKey(
+        "recording.keystrokePosition",
+        default: RecordingKeystrokePosition.bottomCentre
+    )
+    public static let recordingKeystrokeAppearance = SettingKey(
+        "recording.keystrokeAppearance",
+        default: OverlayChromeAppearance.dark
+    )
+    public static let recordingKeystrokeScale = SettingKey("recording.keystrokeScale", default: 1.0)
+    public static let recordingClickFilled = SettingKey("recording.clickFilled", default: false)
+    public static let recordingClickScale = SettingKey("recording.clickScale", default: 1.0)
+    public static let recordingClickRed = SettingKey("recording.clickRed", default: 1.0)
+    public static let recordingClickGreen = SettingKey("recording.clickGreen", default: 0.25)
+    public static let recordingClickBlue = SettingKey("recording.clickBlue", default: 0.2)
     /// Which camera to record. Empty means the system default, once the webcam is on.
     public static let recordingCameraDeviceID = SettingKey("recording.cameraDeviceID", default: "")
     /// Which microphone to record. Empty means the system default, once the mic is on.

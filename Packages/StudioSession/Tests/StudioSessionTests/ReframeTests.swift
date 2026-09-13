@@ -213,6 +213,7 @@ struct StudioEditTests {
         #expect(edit.zoomStyle == .smooth)
         #expect(edit.cursorSmoothing == .smooth)
         #expect(edit.motionBlur == 0.5)
+        #expect(edit.keystrokeAppearance == .dark)
         #expect(!edit.mutesAudio)
         #expect(!edit.mixesToMono)
     }
@@ -403,6 +404,7 @@ struct StudioEditTests {
         edit.captionPlacement = .bottomTrailing
         edit.keystrokeScale = 1.4
         edit.captionScale = 0.8
+        edit.keystrokeAppearance = .light
         edit.soundtrackFileName = "soundtrack.m4a"
         edit.soundtrackDisplayName = "Voice"
         edit.cursorSmoothing = .natural

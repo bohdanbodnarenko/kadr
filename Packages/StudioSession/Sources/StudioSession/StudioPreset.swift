@@ -1,4 +1,5 @@
 import Foundation
+import Shared
 
 /// A named studio look (docs/09 U3.5).
 ///
@@ -20,6 +21,7 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
     public var highlightsSpokenWord: Bool
     public var keystrokePlacement: OverlayPlacement
     public var captionPlacement: OverlayPlacement
+    public var keystrokeAppearance: OverlayChromeAppearance
     public var keystrokeScale: Double
     public var captionScale: Double
     public var cursorScale: Double
@@ -44,6 +46,7 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         highlightsSpokenWord: Bool = true,
         keystrokePlacement: OverlayPlacement = .bottom,
         captionPlacement: OverlayPlacement = .top,
+        keystrokeAppearance: OverlayChromeAppearance = .dark,
         keystrokeScale: Double = 1,
         captionScale: Double = 1,
         cursorScale: Double = 1,
@@ -67,6 +70,7 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         self.highlightsSpokenWord = highlightsSpokenWord
         self.keystrokePlacement = keystrokePlacement
         self.captionPlacement = captionPlacement
+        self.keystrokeAppearance = keystrokeAppearance
         self.keystrokeScale = StudioEdit.clampedOverlayScale(keystrokeScale)
         self.captionScale = StudioEdit.clampedOverlayScale(captionScale)
         self.cursorScale = StudioEdit.clampedCursorScale(cursorScale)
@@ -98,6 +102,7 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
             highlightsSpokenWord: edit.highlightsSpokenWord,
             keystrokePlacement: edit.keystrokePlacement,
             captionPlacement: edit.captionPlacement,
+            keystrokeAppearance: edit.keystrokeAppearance,
             keystrokeScale: edit.keystrokeScale,
             captionScale: edit.captionScale,
             cursorScale: edit.cursorScale,
@@ -123,6 +128,7 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         updated.highlightsSpokenWord = highlightsSpokenWord
         updated.keystrokePlacement = keystrokePlacement
         updated.captionPlacement = captionPlacement
+        updated.keystrokeAppearance = keystrokeAppearance
         updated.keystrokeScale = keystrokeScale
         updated.captionScale = captionScale
         updated.cursorScale = cursorScale
@@ -162,7 +168,8 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, version, reframe, camera, showsCursor, showsClicks, showsKeystrokes,
-             highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeScale, captionScale,
+             highlightsSpokenWord, keystrokePlacement, captionPlacement, keystrokeAppearance,
+             keystrokeScale, captionScale,
              cursorScale, clickScale, clickColor, clickStyle, showsClickPress, cursorSmoothing,
              zoomStyle, motionBlur, canvas
     }
@@ -187,6 +194,10 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
                 OverlayPlacement.self,
                 forKey: .captionPlacement
             ) ?? .top,
+            keystrokeAppearance: container.decodeIfPresent(
+                OverlayChromeAppearance.self,
+                forKey: .keystrokeAppearance
+            ) ?? .dark,
             keystrokeScale: container.decodeIfPresent(Double.self, forKey: .keystrokeScale) ?? 1,
             captionScale: container.decodeIfPresent(Double.self, forKey: .captionScale) ?? 1,
             cursorScale: container.decodeIfPresent(Double.self, forKey: .cursorScale) ?? 1,

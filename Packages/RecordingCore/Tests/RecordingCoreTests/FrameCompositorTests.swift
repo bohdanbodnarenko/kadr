@@ -139,6 +139,35 @@ struct FrameCompositorTests {
         #expect(low.red < 0x40)
     }
 
+    @Test("A filled click paints the centre, not a hollow ring")
+    func filledClickCoversTheCentre() {
+        let buffer = makeBuffer()
+        let overlay = RecordingOverlay(
+            clicks: [ClickPulse(position: CGPoint(x: 100, y: 60), progress: 0.4)],
+            clickFilled: true
+        )
+        FrameCompositor().draw(overlay, into: buffer)
+        let centre = pixel(buffer, x: 100, y: 60)
+        #expect(centre.red > 0x80)
+    }
+
+    @Test("A fullscreen webcam covers the middle of the frame")
+    func fullscreenWebcamCoversTheCentre() {
+        let buffer = makeBuffer()
+        FrameCompositor().draw(
+            RecordingOverlay(
+                webcamFrame: halfWhiteHalfBlack(),
+                webcamIsCircular: false,
+                webcamFillsFrame: true
+            ),
+            into: buffer
+        )
+        let top = pixel(buffer, x: Self.width / 2, y: Self.height / 4)
+        let low = pixel(buffer, x: Self.width / 2, y: Self.height * 3 / 4)
+        #expect(top.red > 0xC0)
+        #expect(low.red < 0x40)
+    }
+
     /// A source image whose top half is white and bottom half black.
     private func halfWhiteHalfBlack() -> CGImage {
         let size = 64
