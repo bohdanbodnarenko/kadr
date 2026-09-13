@@ -55,6 +55,59 @@ struct CaptureOutputPolicyTests {
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
+    @Test("Ask-where-to-save stages instead of writing silently")
+    func promptSaveStages() throws {
+        let save = temporaryDirectory("save")
+        let stage = temporaryDirectory("stage")
+        let harness = makeManager(saveFolder: save, stagingFolder: stage)
+        harness.settings.afterCapture[.screenshot] = [.overlay, .save, .promptSave]
+
+        let result = try #require(harness.output.deliver(makeCapture()))
+
+        #expect(result.isStaged)
+        #expect(result.fileURL?.deletingLastPathComponent().path == stage.path)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: save.path).isEmpty)
+    }
+
+    @Test("Save without asking writes to the folder immediately")
+    func silentSaveDoesNotStage() throws {
+        let save = temporaryDirectory("save")
+        let stage = temporaryDirectory("stage")
+        let harness = makeManager(saveFolder: save, stagingFolder: stage)
+        harness.settings.afterCapture[.screenshot] = [.overlay, .save]
+
+        let result = try #require(harness.output.deliver(makeCapture()))
+
+        #expect(!result.isStaged)
+        #expect(result.fileURL?.deletingLastPathComponent().path == save.path)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: stage.path).isEmpty)
+    }
+
+    @Test("Moving a staged capture to a picked path unstages it")
+    func moveCaptureToPickedPath() throws {
+        let save = temporaryDirectory("save")
+        let stage = temporaryDirectory("stage")
+        let picked = temporaryDirectory("picked")
+        let harness = makeManager(saveFolder: save, stagingFolder: stage)
+        harness.settings.defaultAction = .overlayOnly
+
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+        let item = try #require(harness.manager.items.first)
+        #expect(item.isStaged)
+
+        let destination = picked.appendingPathComponent("named.png")
+        let moved = try #require(harness.manager.moveCapture(item, to: destination))
+
+        #expect(moved == destination)
+        #expect(harness.manager.items.first?.isStaged == false)
+        #expect(harness.manager.items.first?.fileURL == destination)
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+        #expect(FileManager.default.fileExists(atPath: item.fileURL.path) == false)
+        harness.manager.dismissAll()
+    }
+
     /// H5: "deleted" has to mean deleted, including the library's own copy.
     @Test("Deleting a card removes the capture from the library too")
     func deleteRemovesTheLibraryCopy() async throws {

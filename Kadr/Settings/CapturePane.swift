@@ -1,6 +1,8 @@
+import AppKit
 import SettingsKit
 import Shared
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Capture settings (docs/03 §8.3): cursor, window shadow and background, self-timer.
 ///
@@ -32,9 +34,53 @@ struct CapturePane: View {
             Section("Window capture") {
                 Toggle("Include the window's shadow", isOn: $settings.windowShadow)
                 Toggle("Keep the window's transparency", isOn: $settings.transparentWindowBackground)
+                if !settings.transparentWindowBackground {
+                    Picker("Background", selection: $settings.windowBackdrop) {
+                        ForEach(WindowBackdrop.allCases, id: \.self) { backdrop in
+                            Text(backdrop.title).tag(backdrop)
+                        }
+                    }
+                    Stepper(
+                        "Padding: \(settings.windowBackdropPadding) pt",
+                        value: $settings.windowBackdropPadding,
+                        in: 0 ... 200,
+                        step: 10
+                    )
+                    if settings.windowBackdrop == .custom {
+                        Button("Choose image…") { chooseBackdropImage() }
+                        if !settings.windowBackdropImagePath.isEmpty {
+                            Text(URL(fileURLWithPath: settings.windowBackdropImagePath).lastPathComponent)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Text("Hold ⌥ when picking a window to invert the shadow setting for one capture.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("Beautify") {
+                Picker("Beautify new screenshots", selection: $settings.autoBeautifyPreset) {
+                    ForEach(AutoBeautifyPreset.allCases, id: \.self) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                Text("Hold Shift when you press the capture hotkey to skip it for that shot. "
+                    + "Window fills stay editable in the editor.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section {
+                Toggle("Crop the notch from fullscreen screenshots", isOn: $settings.cropNotchFromFullscreen)
+                Text("On a notched MacBook, a fullscreen app’s screenshot includes a black "
+                    + "strip around the camera. This cuts that strip off. Area captures "
+                    + "and windowed shots are left alone.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Capture Text") {
@@ -45,6 +91,13 @@ struct CapturePane: View {
             }
 
             Section("Scrolling Capture") {
+                Picker("Direction", selection: $settings.scrollAxis) {
+                    ForEach(ScrollAxis.allCases, id: \.self) { axis in
+                        Text(axis.title).tag(axis)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 Toggle("Let Kadr do the scrolling", isOn: $settings.scrollAutoScroll)
                 Text("Off, you scroll the page yourself and Kadr grabs frames as you go — "
                     + "which needs no permission beyond Screen Recording. On, Kadr sends "
@@ -116,5 +169,16 @@ struct CapturePane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func chooseBackdropImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image]
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.windowBackdropImagePath = url.path
     }
 }

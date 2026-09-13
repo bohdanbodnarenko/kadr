@@ -5,14 +5,19 @@ import Shared
 import Testing
 @testable import MediaExport
 
-private func makeImage(width: Int = 40, height: Int = 20, opaque: Bool = false) -> CGImage {
+private func makeImage(
+    width: Int = 40,
+    height: Int = 20,
+    opaque: Bool = false,
+    space: CGColorSpace? = nil
+) -> CGImage {
     guard let context = CGContext(
         data: nil,
         width: width,
         height: height,
         bitsPerComponent: 8,
         bytesPerRow: 0,
-        space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+        space: space ?? CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
         bitmapInfo: (opaque ? CGImageAlphaInfo.noneSkipLast : .premultipliedLast).rawValue
     ) else {
         fatalError("Could not create a test bitmap context")
@@ -98,6 +103,33 @@ struct ImageEncoderTests {
     func qualityClamped() {
         #expect(EncodingOptions(quality: 5).quality == 1)
         #expect(EncodingOptions(quality: -1).quality == 0)
+    }
+
+    @Test("Convert-to-sRGB retags a Display P3 capture")
+    func convertsP3ToSRGB() throws {
+        let p3 = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+        let image = makeImage(space: p3)
+        let data = try encoder.encode(image, options: EncodingOptions(convertToSRGB: true))
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let decoded = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(decoded.colorSpace?.name == CGColorSpace.sRGB)
+    }
+
+    @Test("Leaving convert-to-sRGB off keeps a P3 profile")
+    func keepsP3WhenOff() throws {
+        let p3 = try #require(CGColorSpace(name: CGColorSpace.displayP3))
+        let image = makeImage(space: p3)
+        let data = try encoder.encode(image, options: EncodingOptions())
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let decoded = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(decoded.colorSpace?.name == CGColorSpace.displayP3)
+    }
+
+    @Test("An already-sRGB capture is not redrawn")
+    func sRGBIsANoOp() {
+        let image = makeImage()
+        let converted = encoder.convertToSRGB(image)
+        #expect(converted.colorSpace?.name == image.colorSpace?.name)
     }
 
     @Test("macOS cannot write WebP, so asking for it fails loudly rather than silently")
@@ -189,6 +221,18 @@ struct CaptureFileWriterTests {
             options: EncodingOptions(format: format)
         )
         #expect(url.pathExtension == format.fileExtension)
+    }
+
+    @Test("Writing to a picked path overwrites the file that was there")
+    func writeToExactURLOverwrites() throws {
+        let directory = temporaryDirectory()
+        let url = directory.appendingPathComponent("chosen.png")
+        try Data("old".utf8).write(to: url)
+
+        try writer.write(makeImage(), to: url, options: EncodingOptions(format: .png))
+
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        #expect(try Data(contentsOf: url) != Data("old".utf8))
     }
 }
 

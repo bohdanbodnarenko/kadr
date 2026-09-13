@@ -182,6 +182,8 @@ final class RecordingControlBar {
 final class RecordingControlBarModel {
     var elapsedText = "0:00"
     var isPaused = false
+    var audioLevel: Float = 0
+    var microphoneIsSilent = false
     var picker: RecordSetupModel?
     /// Non-nil once a recording (or its countdown) owns the bar.
     var session: Bool?
@@ -196,6 +198,8 @@ final class RecordingControlBarModel {
     func apply(_ controls: RecordingControls) {
         elapsedText = controls.elapsedText
         isPaused = controls.isPaused
+        audioLevel = controls.audioLevel
+        microphoneIsSilent = controls.microphoneIsSilent
         stop = controls.stop
         togglePause = controls.togglePause
         cancel = controls.cancel
@@ -229,6 +233,16 @@ struct RecordingControlBarView: View {
                 .foregroundStyle(.primary)
                 .frame(minWidth: 56, alignment: .leading)
                 .accessibilityLabel("Recording time")
+
+            RecordingAudioMeter(level: model.audioLevel)
+
+            if model.microphoneIsSilent {
+                Text("Mic silent")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .help("The microphone is on but nothing is reaching it. Check mute and the input.")
+                    .accessibilityLabel("Microphone is silent")
+            }
 
             RecordingBarDivider()
 
@@ -276,6 +290,7 @@ struct RecordingControlBarView: View {
         .padding(10)
         .fixedSize()
         .animation(.snappy(duration: 0.22), value: model.isPaused)
+        .animation(.snappy(duration: 0.22), value: model.microphoneIsSilent)
     }
 
     /// Red and steady while recording, amber while paused.

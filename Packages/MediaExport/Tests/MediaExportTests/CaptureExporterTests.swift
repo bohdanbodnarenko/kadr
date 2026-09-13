@@ -152,6 +152,28 @@ struct CaptureExporterTests {
         #expect(secondFinal.lastPathComponent == "shot (2).png")
     }
 
+    @Test("Finalising to a picked path replaces rather than suffixing")
+    func finalizeToPickedPath() throws {
+        let save = temporaryDirectory("save")
+        let stage = temporaryDirectory("stage")
+        let exporter = exporter(staging: stage)
+        let staged = try exporter.export(
+            makeImage(),
+            policy: ExportPolicy(copiesToClipboard: false, savesToFolder: false, staging: true),
+            saveFolder: save,
+            template: FilenameTemplate("shot")
+        )
+        let stagedURL = try #require(staged.fileURL)
+        let destination = save.appendingPathComponent("chosen.png")
+        try Data("already there".utf8).write(to: destination)
+
+        let final = try exporter.finalizeStaged(stagedURL, to: destination)
+
+        #expect(final == destination)
+        #expect(FileManager.default.fileExists(atPath: stagedURL.path) == false)
+        #expect(try Data(contentsOf: destination) != Data("already there".utf8))
+    }
+
     @Test("An unwritable format fails instead of producing an empty file")
     func unwritableFormat() {
         let save = temporaryDirectory("save")

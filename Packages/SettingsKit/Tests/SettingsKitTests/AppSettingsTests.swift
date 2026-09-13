@@ -18,6 +18,8 @@ struct SettingKeyTests {
         let store = makeStore()
         #expect(store[SettingKeys.filenameTemplate] == "{app}-{date}-{time}")
         #expect(store[SettingKeys.downscaleRetinaCaptures] == false)
+        #expect(store[SettingKeys.convertExportsToSRGB] == false)
+        #expect(store[SettingKeys.cropNotchFromFullscreen] == true)
         #expect(store[SettingKeys.imageFormat] == .png)
         #expect(store.hasValue(for: SettingKeys.filenameTemplate) == false)
     }
@@ -62,6 +64,14 @@ struct AppSettingsTests {
         #expect(settings.filenameTemplate == "{app}-{date}-{time}")
         #expect(settings.imageFormat == .png)
         #expect(settings.downscaleRetinaCaptures == false)
+        #expect(settings.convertExportsToSRGB == false)
+        #expect(settings.cropNotchFromFullscreen == true)
+        #expect(settings.recordsMono == false)
+        #expect(settings.askForSaveDestination == false)
+        #expect(settings.lockCanvasByDefault == false)
+        #expect(settings.objectShadowsEnabled == true)
+        #expect(settings.keepOriginalWhenAnnotating == true)
+        #expect(settings.overlayReturnSaves == true)
         #expect(settings.saveFolderPath.isEmpty)
         #expect(settings.saveFolder == AppSettings.defaultSaveFolder)
     }
@@ -74,6 +84,14 @@ struct AppSettingsTests {
         settings.filenameTemplate = "{app}"
         settings.imageFormat = .webp
         settings.downscaleRetinaCaptures = true
+        settings.convertExportsToSRGB = true
+        settings.cropNotchFromFullscreen = false
+        settings.recordsMono = true
+        settings.askForSaveDestination = true
+        settings.lockCanvasByDefault = true
+        settings.objectShadowsEnabled = false
+        settings.keepOriginalWhenAnnotating = false
+        settings.overlayReturnSaves = false
         settings.saveFolderPath = "/tmp/kadr-captures"
 
         let reloaded = AppSettings(store: store)
@@ -81,6 +99,14 @@ struct AppSettingsTests {
         #expect(reloaded.filenameTemplate == "{app}")
         #expect(reloaded.imageFormat == .webp)
         #expect(reloaded.downscaleRetinaCaptures == true)
+        #expect(reloaded.convertExportsToSRGB == true)
+        #expect(reloaded.cropNotchFromFullscreen == false)
+        #expect(reloaded.recordsMono == true)
+        #expect(reloaded.askForSaveDestination == true)
+        #expect(reloaded.lockCanvasByDefault == true)
+        #expect(reloaded.objectShadowsEnabled == false)
+        #expect(reloaded.keepOriginalWhenAnnotating == false)
+        #expect(reloaded.overlayReturnSaves == false)
         #expect(reloaded.saveFolder.path == "/tmp/kadr-captures")
     }
 
@@ -91,11 +117,21 @@ struct AppSettingsTests {
         settings.defaultAction = .saveToFolder
         settings.filenameTemplate = "x"
         settings.downscaleRetinaCaptures = true
+        settings.convertExportsToSRGB = true
+        settings.cropNotchFromFullscreen = false
+        settings.recordsMono = true
+        settings.askForSaveDestination = true
+        settings.lockCanvasByDefault = true
         settings.resetToDefaults()
 
         #expect(settings.defaultAction == .copyToClipboard)
         #expect(settings.filenameTemplate == "{app}-{date}-{time}")
         #expect(settings.downscaleRetinaCaptures == false)
+        #expect(settings.convertExportsToSRGB == false)
+        #expect(settings.cropNotchFromFullscreen == true)
+        #expect(settings.recordsMono == false)
+        #expect(settings.askForSaveDestination == false)
+        #expect(settings.lockCanvasByDefault == false)
         #expect(AppSettings(store: store).defaultAction == .copyToClipboard)
     }
 
@@ -331,5 +367,44 @@ struct DesktopHygieneSettingsTests {
         settings.hasCompletedOnboarding = true
 
         #expect(!settings.hasSeenQuickAccessTip, "finishing onboarding silently consumed the card tip")
+    }
+}
+
+@MainActor
+@Suite("Window capture backdrop")
+struct WindowBackdropSettingsTests {
+    @Test("A window stays transparent until the user picks a fill")
+    func defaults() {
+        let settings = AppSettings(store: makeStore())
+        #expect(settings.transparentWindowBackground)
+        #expect(settings.autoBeautifyPreset == .off)
+        #expect(settings.windowBackdrop == .white)
+        #expect(settings.windowBackdropPadding == 40)
+        #expect(settings.windowBackdropImagePath.isEmpty)
+    }
+
+    @Test("The fill survives a reload and a reset")
+    func persistAndReset() {
+        let store = makeStore()
+        let settings = AppSettings(store: store)
+        settings.transparentWindowBackground = false
+        settings.windowBackdrop = .desktop
+        settings.windowBackdropPadding = 80
+        settings.windowBackdropImagePath = "/tmp/wall.png"
+        settings.autoBeautifyPreset = .twitter
+
+        let reloaded = AppSettings(store: store)
+        #expect(!reloaded.transparentWindowBackground)
+        #expect(reloaded.windowBackdrop == .desktop)
+        #expect(reloaded.windowBackdropPadding == 80)
+        #expect(reloaded.windowBackdropImagePath == "/tmp/wall.png")
+        #expect(reloaded.autoBeautifyPreset == .twitter)
+
+        reloaded.resetToDefaults()
+        #expect(reloaded.transparentWindowBackground)
+        #expect(reloaded.windowBackdrop == .white)
+        #expect(reloaded.windowBackdropPadding == 40)
+        #expect(reloaded.windowBackdropImagePath.isEmpty)
+        #expect(reloaded.autoBeautifyPreset == .off)
     }
 }

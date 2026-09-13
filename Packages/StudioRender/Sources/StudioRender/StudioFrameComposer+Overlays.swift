@@ -32,19 +32,31 @@ extension StudioFrameComposer {
         let side = Int((radius * 2 + stroke * 2).rounded(.up))
         return BitmapCanvas.image(width: side, height: side) { context in
             let centre = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
-            context.setStrokeColor(
-                red: edit.clickColor.red,
-                green: edit.clickColor.green,
-                blue: edit.clickColor.blue,
-                alpha: opacity
-            )
-            context.setLineWidth(stroke)
-            context.strokeEllipse(in: CGRect(
+            let rect = CGRect(
                 x: centre.x - radius,
                 y: centre.y - radius,
                 width: radius * 2,
                 height: radius * 2
-            ))
+            )
+            switch edit.clickStyle {
+            case .filled:
+                context.setFillColor(
+                    red: edit.clickColor.red,
+                    green: edit.clickColor.green,
+                    blue: edit.clickColor.blue,
+                    alpha: opacity
+                )
+                context.fillEllipse(in: rect)
+            case .outline:
+                context.setStrokeColor(
+                    red: edit.clickColor.red,
+                    green: edit.clickColor.green,
+                    blue: edit.clickColor.blue,
+                    alpha: opacity
+                )
+                context.setLineWidth(stroke)
+                context.strokeEllipse(in: rect)
+            }
         }
     }
 

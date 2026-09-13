@@ -39,14 +39,14 @@ public struct StudioRenderPlan: Sendable {
     /// - Parameters:
     ///   - edit: the edit being rendered.
     ///   - sourceSize: the recording's pixel size.
-    ///   - spring: shared with the cursor reconstruction so the camera and the pointer
-    ///     settle together rather than one chasing the other.
+    ///   - spring: the camera's easing. Defaults to the edit's zoom style, which is
+    ///     independent of how the pointer is smoothed (CleanShot §14.3).
     ///   - pointer: edited-time pointer samples, in source pixels. Used only by cues
     ///     whose anchor follows the pointer.
     public init(
         edit: StudioEdit,
         sourceSize: CGSize,
-        spring: MotionSpring = MotionSpring(),
+        spring: MotionSpring? = nil,
         maxLongestEdge: Int? = nil,
         pointer: [PointerSample] = []
     ) {
@@ -91,7 +91,7 @@ public struct StudioRenderPlan: Sendable {
             cues: replanned,
             size: crop.size,
             duration: edit.duration,
-            spring: spring,
+            spring: spring ?? MotionSpring(edit.zoomStyle),
             pointer: localPointer
         )
     }

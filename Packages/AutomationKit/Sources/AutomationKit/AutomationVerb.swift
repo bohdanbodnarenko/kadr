@@ -13,13 +13,22 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
     case captureText = "capture-text"
     case pickColor = "pick-color"
     case captureScrolling = "capture-scrolling"
+    case allInOne = "all-in-one"
+    case selfTimer = "self-timer"
     case recordScreen = "record-screen"
     case recordRegion = "record-region"
+    case recordGif = "record-gif"
     case stopRecording = "stop-recording"
     case pin
     case annotate
     case addToHistory = "add-to-history"
+    case addQuickAccessOverlay = "add-quick-access-overlay"
+    case openFromClipboard = "open-from-clipboard"
     case closeAllPins = "close-all-pins"
+    case closeAllOverlays = "close-all-overlays"
+    case saveAllOverlays = "save-all-overlays"
+    case hideOverlays = "hide-overlays"
+    case hidePins = "hide-pins"
     case restoreRecentlyClosed = "restore-recently-closed"
     case toggleDesktopIcons = "toggle-desktop-icons"
     case freezeScreen = "freeze-screen"
@@ -37,13 +46,22 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
         case .captureText: "Select an area and recognise the text in it."
         case .pickColor: "Open the loupe as a colour picker."
         case .captureScrolling: "Capture a scrolling region and stitch it."
+        case .allInOne: "Open the All-in-One capture HUD."
+        case .selfTimer: "Count down, then capture an area."
         case .recordScreen: "Start recording a display."
         case .recordRegion: "Select a region and start recording it."
+        case .recordGif: "Record a region, then export it as a GIF."
         case .stopRecording: "Stop the recording in progress."
         case .pin: "Pin an image file on top of every window."
         case .annotate: "Open an image file in the editor."
         case .addToHistory: "Add a file to Kadr's capture library."
+        case .addQuickAccessOverlay: "Show a file as a Quick Access card."
+        case .openFromClipboard: "Open the clipboard image or movie as a Quick Access card."
         case .closeAllPins: "Close every pinned screenshot."
+        case .closeAllOverlays: "Dismiss every Quick Access card."
+        case .saveAllOverlays: "Save every Quick Access card."
+        case .hideOverlays: "Hide overlay cards so they miss the next capture."
+        case .hidePins: "Hide or show every pinned screenshot."
         case .restoreRecentlyClosed: "Bring back the last dismissed overlay card."
         case .toggleDesktopIcons: "Hide or show the desktop icons."
         case .freezeScreen: "Freeze the displays so moving UI can be inspected."
@@ -57,21 +75,26 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
     /// silently ignored typo — a script that misspells `action` should be told so.
     public var parameters: [AutomationParameter] {
         switch self {
-        case .captureArea, .captureWindow, .captureFullscreen, .capturePreviousArea, .captureScrolling:
-            [.action, .x, .y, .width, .height, .delay, .cursor]
+        case .captureArea, .captureWindow, .captureFullscreen, .capturePreviousArea,
+             .allInOne, .selfTimer:
+            [.action, .x, .y, .width, .height, .delay, .cursor, .display]
+        case .captureScrolling:
+            [.action, .x, .y, .width, .height, .delay, .cursor, .display, .start, .autoScroll]
         case .captureText:
-            [.x, .y, .width, .height, .delay]
+            [.x, .y, .width, .height, .delay, .linebreaks, .display, .path]
         case .pickColor:
             []
-        case .recordScreen, .recordRegion:
-            [.fps, .x, .y, .width, .height, .microphone, .systemAudio]
-        case .pin, .annotate, .addToHistory:
+        case .recordScreen, .recordRegion, .recordGif:
+            [.fps, .x, .y, .width, .height, .microphone, .systemAudio, .display]
+        case .pin, .annotate, .addToHistory, .addQuickAccessOverlay:
             [.path]
         case .toggleDesktopIcons:
             [.state]
         case .openSettings:
             [.tab]
-        case .stopRecording, .closeAllPins, .restoreRecentlyClosed, .freezeScreen, .openHistory, .version:
+        case .stopRecording, .closeAllPins, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
+             .hidePins, .restoreRecentlyClosed, .freezeScreen, .openHistory, .openFromClipboard,
+             .version:
             []
         }
     }
@@ -114,19 +137,18 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
         "float": .pin,
         "close-all-floating-screenshots": .closeAllPins,
         "close-floating-screenshots": .closeAllPins,
+        "hide-floating-screenshots": .hidePins,
+        "toggle-floating-screenshots": .hidePins,
         // The annotate window.
         "open-annotate": .annotate,
         "annotate-file": .annotate,
-        // Timed and all-in-one captures both begin as an area selection here; the delay
-        // comes from Settings unless the caller passes one.
-        "self-timer": .captureArea,
-        "all-in-one": .captureArea,
-        // Kadr records video and exports GIF from the overlay card, so the GIF verb
-        // starts the same recording.
-        "record-gif": .recordScreen,
+        // Overlay cards.
+        "add-overlay": .addQuickAccessOverlay,
+        "open-from-pasteboard": .openFromClipboard,
+        "save-all": .saveAllOverlays,
+        "hide-quick-access-overlay": .hideOverlays,
         "stop-capture": .stopRecording,
         "toggle-desktop": .toggleDesktopIcons,
-        "hide-desktop-icons": .toggleDesktopIcons,
         "open-preferences": .openSettings,
         "restore-recently-closed-window": .restoreRecentlyClosed
     ]
@@ -147,6 +169,10 @@ public enum AutomationParameter: String, CaseIterable, Sendable, Hashable {
     case path
     case state
     case tab
+    case linebreaks
+    case display
+    case start
+    case autoScroll = "autoscroll"
 
     /// Alternative spellings, kept small and obvious. `w`/`h` because the doc's own URL
     /// examples use them, `filepath` because that is CleanShot's name for it.
@@ -158,6 +184,7 @@ public enum AutomationParameter: String, CaseIterable, Sendable, Hashable {
         case .fps: ["framerate", "frame-rate"]
         case .delay: ["timer", "seconds"]
         case .systemAudio: ["audio"]
+        case .linebreaks: ["line-breaks"]
         default: []
         }
     }

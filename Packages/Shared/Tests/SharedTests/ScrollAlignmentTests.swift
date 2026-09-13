@@ -7,6 +7,7 @@ import Testing
 struct ScrollAlignmentTests {
     private let width = 200
     private let height = 400
+    private let horizontalWidth = 400
 
     /// A stable pseudo-random level, so a test page renders the same everywhere.
     private func level(row: Int, column: Int) -> UInt8 {
@@ -84,6 +85,44 @@ struct ScrollAlignmentTests {
     func mismatchedHeights() {
         let short = RowProfile(height: 0, values: [])
         #expect(ScrollAligner.align(previous: short, current: profile(scroll: 0)).confidence == 0)
+    }
+
+    @Test("A page that scrolled horizontally reports how far", arguments: [1, 17, 120, 260])
+    func findsTheHorizontalOffset(scroll: Int) {
+        let alignment = ColumnAligner.align(
+            previous: horizontalProfile(scroll: 0),
+            current: horizontalProfile(scroll: scroll)
+        )
+        #expect(alignment.offset == scroll)
+        #expect(alignment.confidence > ColumnAligner.confidenceThreshold)
+    }
+
+    @Test("A horizontal profile is one small vector per column")
+    func horizontalProfileShape() {
+        let profile = horizontalProfile(scroll: 0)
+        #expect(profile.width == horizontalWidth)
+        #expect(profile.values.count == horizontalWidth * ColumnProfile.bucketCount)
+    }
+
+    private func horizontalProfile(scroll: Int, leading: Int = 0, trailing: Int = 0) -> ColumnProfile {
+        var pixels = [UInt8](repeating: 0, count: horizontalWidth * height)
+        for y in 0 ..< height {
+            for x in 0 ..< horizontalWidth {
+                let isChrome = x < leading || x >= horizontalWidth - trailing
+                pixels[y * horizontalWidth + x] = isChrome
+                    ? level(row: y, column: -1 - x)
+                    : level(row: y, column: scroll + x - leading)
+            }
+        }
+        return pixels.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return ColumnProfile(width: 0, values: []) }
+            return ColumnProfile(
+                grayscale: base,
+                width: horizontalWidth,
+                height: height,
+                bytesPerRow: horizontalWidth
+            )
+        }
     }
 
     @Test("A profile is one small vector per row")

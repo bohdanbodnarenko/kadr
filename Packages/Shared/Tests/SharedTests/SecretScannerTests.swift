@@ -166,6 +166,23 @@ struct SecretScannerTests {
         let json = Data(#"{"lines":[],"codes":[]}"#.utf8)
         let analysis = try JSONDecoder().decode(VisionAnalysis.self, from: json)
         #expect(analysis.candidates.isEmpty)
+        #expect(analysis.words.isEmpty)
+    }
+
+    @Test("Word boxes win over line boxes for the highlighter")
+    func highlightBoxesPreferWords() {
+        let analysis = VisionAnalysis(
+            lines: [RecognizedLine(
+                text: "Hello world",
+                confidence: 1,
+                boundingBox: CGRect(x: 0, y: 0, width: 1, height: 1)
+            )],
+            words: [RecognizedWord(text: "Hello", boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.2, height: 0.1))]
+        )
+        let boxes = analysis.highlightBoxes(in: CGSize(width: 100, height: 100))
+        #expect(boxes.count == 1)
+        #expect(abs(boxes[0].minX - 8) < 0.01)
+        #expect(abs(boxes[0].width - 24) < 0.01)
     }
 
     private static func looselyContains(_ haystack: String, _ needle: String) -> Bool {

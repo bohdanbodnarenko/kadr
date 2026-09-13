@@ -36,8 +36,8 @@ struct EditorToolbar: View {
                 Image(systemName: "sidebar.right")
             }
             .buttonStyle(.borderless)
-            .keyboardShortcut("i", modifiers: .command)
-            .help(isInspectorPresented ? "Hide Inspector (⌘I)" : "Show Inspector (⌘I)")
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .help(isInspectorPresented ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
             .accessibilityLabel(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
         }
         .padding(.horizontal, 12)
@@ -105,7 +105,7 @@ struct EditorToolbar: View {
         HStack(spacing: 8) {
             toolGroup([.select])
             toolGroup([.arrow, .shape, .line, .freehand, .highlighter, .text])
-            toolGroup([.redaction, .counter, .crop, .measure])
+            toolGroup([.redaction, .spotlight, .counter, .sticker, .crop, .measure])
         }
     }
 
@@ -153,6 +153,41 @@ struct EditorToolbar: View {
             .disabled(!model.canRedo)
             .keyboardShortcut("z", modifiers: [.command, .shift])
             .help("Redo")
+
+            Divider().frame(height: 14)
+
+            Button {
+                model.isCanvasLocked.toggle()
+            } label: {
+                Image(systemName: model.isCanvasLocked ? "lock.fill" : "lock.open")
+            }
+            .help(model.isCanvasLocked ? "Unlock objects (⇧⌘L)" : "Lock objects in place while drawing (⇧⌘L)")
+            .accessibilityLabel(model.isCanvasLocked ? "Unlock objects" : "Lock objects")
+
+            Button {
+                model.rotateClockwise()
+            } label: {
+                Image(systemName: "rotate.right")
+            }
+            .help("Rotate 90° Clockwise")
+            .accessibilityLabel("Rotate 90 degrees clockwise")
+
+            Button {
+                model.flipHorizontal()
+            } label: {
+                Image(systemName: "flip.horizontal")
+            }
+            .help("Flip Horizontal")
+            .accessibilityLabel("Flip horizontal")
+
+            Button {
+                model.flipVertical()
+            } label: {
+                Image(systemName: "flip.horizontal")
+                    .rotationEffect(.degrees(90))
+            }
+            .help("Flip Vertical")
+            .accessibilityLabel("Flip vertical")
         }
         .buttonStyle(.borderless)
     }
@@ -165,16 +200,36 @@ struct EditorToolbar: View {
             .keyboardShortcut("c", modifiers: .command)
 
             Menu {
+                Button("Copy Flattened Image") {
+                    onExport(.copyFlattened)
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 Button("Copy Without Annotations") {
                     onExport(.copyWithoutAnnotations)
                 }
                 Divider()
+                Button("Insert Image…") {
+                    onExport(.insertImage)
+                }
+                .keyboardShortcut("i", modifiers: .command)
+                Button("Pin") {
+                    onExport(.pin)
+                }
+                Button("Share…") {
+                    onExport(.share)
+                }
+                Button("Print…") {
+                    onExport(.print)
+                }
+                Divider()
+                Button("Save As…") {
+                    onExport(.saveAs)
+                }
                 // A project keeps the annotations editable rather than flattening them,
                 // which is the whole point of the `.kadr` format (docs/04 §6).
                 Button("Save Project…") {
                     onExport(.saveProject)
                 }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -184,7 +239,6 @@ struct EditorToolbar: View {
             Button("Save") {
                 onExport(.save)
             }
-            .keyboardShortcut("s", modifiers: .command)
             .buttonStyle(.borderedProminent)
         }
     }

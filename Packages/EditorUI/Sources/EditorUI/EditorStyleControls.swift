@@ -1,55 +1,101 @@
 import AnnotationModel
+import AppKit
 import SwiftUI
 
 /// One-click colour, the way CleanShot and Screendrop lay out style.
 struct EditorSwatchStrip: View {
     let selected: AnnotationColor
     let onSelect: (AnnotationColor) -> Void
+    var defaults: UserDefaults = .standard
+
+    @State private var palette = EditorUserPalette()
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(AnnotationColor.annotationSwatches.enumerated()), id: \.offset) { _, colour in
-                Button {
-                    onSelect(colour)
-                } label: {
-                    Circle()
-                        .fill(Color(colour))
-                        .frame(width: 18, height: 18)
-                        .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    isSelected(colour) ? Color.accentColor : Color.primary.opacity(0.15),
-                                    lineWidth: isSelected(colour) ? 2 : 1
-                                )
-                        }
-                        .overlay {
-                            if colour == .white {
-                                Circle().strokeBorder(Color.primary.opacity(0.35), lineWidth: 0.5)
-                            }
-                        }
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach(Array(AnnotationColor.annotationSwatches.enumerated()), id: \.offset) { _, colour in
+                    swatch(colour, removable: false)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Colour")
-                .accessibilityAddTraits(isSelected(colour) ? .isSelected : [])
+
+                ColorPicker(
+                    "Custom colour",
+                    selection: Binding(
+                        get: { Color(selected) },
+                        set: { onSelect(AnnotationColor($0)) }
+                    ),
+                    supportsOpacity: false
+                )
+                .labelsHidden()
+                .frame(width: 28, height: 22)
             }
 
-            ColorPicker(
-                "Custom colour",
-                selection: Binding(
-                    get: { Color(selected) },
-                    set: { onSelect(AnnotationColor($0)) }
-                ),
-                supportsOpacity: false
-            )
-            .labelsHidden()
-            .frame(width: 28, height: 22)
+            HStack(spacing: 6) {
+                ForEach(Array(palette.colors.enumerated()), id: \.offset) { _, colour in
+                    swatch(colour, removable: true)
+                }
+                Button {
+                    addSelectedToPalette()
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .disabled(!palette.canAdd(selected))
+                .help("Save colour to palette")
+                .accessibilityLabel("Save colour to palette")
+            }
+        }
+        .onAppear {
+            palette = EditorUserPalette.load(from: defaults)
         }
     }
 
+    private func swatch(_ colour: AnnotationColor, removable: Bool) -> some View {
+        Button {
+            if removable, NSEvent.modifierFlags.contains(.option) {
+                removeFromPalette(colour)
+            } else {
+                onSelect(colour)
+            }
+        } label: {
+            Circle()
+                .fill(Color(colour))
+                .frame(width: 18, height: 18)
+                .overlay {
+                    Circle()
+                        .strokeBorder(
+                            isSelected(colour) ? Color.accentColor : Color.primary.opacity(0.15),
+                            lineWidth: isSelected(colour) ? 2 : 1
+                        )
+                }
+                .overlay {
+                    if colour == .white {
+                        Circle().strokeBorder(Color.primary.opacity(0.35), lineWidth: 0.5)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .help(removable ? "Option-click to remove" : "Colour")
+        .accessibilityLabel("Colour")
+        .accessibilityAddTraits(isSelected(colour) ? .isSelected : [])
+    }
+
+    private func addSelectedToPalette() {
+        var next = palette
+        guard next.add(selected) else { return }
+        next.save(to: defaults)
+        palette = next
+    }
+
+    private func removeFromPalette(_ colour: AnnotationColor) {
+        var next = palette
+        next.remove(colour)
+        next.save(to: defaults)
+        palette = next
+    }
+
     private func isSelected(_ colour: AnnotationColor) -> Bool {
-        abs(colour.red - selected.red) < 0.02
-            && abs(colour.green - selected.green) < 0.02
-            && abs(colour.blue - selected.blue) < 0.02
+        colour.isClose(to: selected)
     }
 }
 

@@ -109,7 +109,7 @@ extension AnnotationLayerFactory {
         layer.masksToBounds = spec.cornerRadius > 0
         layer.cornerRadius = spec.cornerRadius
         layer.opacity = Float(spec.opacity)
-        if spec.hasShadow {
+        if ObjectShadowPolicy.drawsShadow(for: spec) {
             layer.shadowColor = CGColor(gray: 0, alpha: 1)
             layer.shadowOpacity = 0.35
             layer.shadowRadius = ImageRendering.shadowRadius(spec)

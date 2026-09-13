@@ -11,9 +11,11 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
     case highlighter
     case text
     case redaction
+    case spotlight
     case counter
     case crop
     case measure
+    case sticker
 
     /// The annotation this tool draws, or `nil` for select.
     public var annotation: AnnotationTool? {
@@ -26,14 +28,19 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .highlighter: .highlighter
         case .text: .text
         case .redaction: .redaction
+        case .spotlight: .spotlight
         case .counter: .counter
         case .crop: .crop
         case .measure: .measure
+        case .sticker: .image
         }
     }
 
     public var title: String {
-        annotation?.title ?? "Select"
+        switch self {
+        case .sticker: "Sticker"
+        default: annotation?.title ?? "Select"
+        }
     }
 
     /// SF Symbol for the toolbar.
@@ -47,9 +54,11 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .highlighter: "highlighter"
         case .text: "textformat"
         case .redaction: "drop.fill"
+        case .spotlight: "circle.lefthalf.filled"
         case .counter: "1.circle.fill"
         case .crop: "crop"
         case .measure: "ruler"
+        case .sticker: "face.smiling"
         }
     }
 
@@ -64,15 +73,17 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .highlighter: "h"
         case .text: "t"
         case .redaction: "b"
+        case .spotlight: "s"
         case .counter: "c"
         case .crop: "k"
         case .measure: "m"
+        case .sticker: "e"
         }
     }
 
     /// Tools that place a fixed-size annotation with a single click rather than a drag.
     public var isClickToPlace: Bool {
-        self == .counter
+        self == .counter || self == .sticker
     }
 
     /// Whether finishing a stroke should put the pointer back on Select.
@@ -83,9 +94,9 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
     /// pencil stroke is rarely the last, and Crop is a mode rather than a stroke.
     public var returnsToSelectAfterUse: Bool {
         switch self {
-        case .arrow, .shape, .line, .text, .redaction:
+        case .arrow, .shape, .line, .text, .redaction, .spotlight:
             true
-        case .select, .freehand, .highlighter, .counter, .crop, .measure:
+        case .select, .freehand, .highlighter, .counter, .crop, .measure, .sticker:
             false
         }
     }

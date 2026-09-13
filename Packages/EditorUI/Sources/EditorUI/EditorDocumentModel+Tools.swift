@@ -43,14 +43,26 @@ public extension EditorDocumentModel {
 
     /// Counters are placed with a click, and auto-increment (docs/03 §3).
     internal func place(_ annotationTool: AnnotationTool, at point: CGPoint) {
-        guard annotationTool == .counter else { return }
-        let command = AnnotationCommand.counter(CounterSpec(
-            number: document.nextCounterNumber,
-            center: point
-        ))
-        document.add(command)
-        document.selection = [command.id]
-        // The tool stays armed: a numbered badge is one of a sequence.
+        switch annotationTool {
+        case .counter:
+            let command = AnnotationCommand.counter(CounterSpec(
+                number: document.nextCounterNumber,
+                center: point
+            ))
+            document.add(command)
+            document.selection = [command.id]
+        case .image:
+            placeSticker(at: point)
+        default:
+            break
+        }
+    }
+
+    func placeSticker(at point: CGPoint) {
+        guard let rendered = EmojiSticker.png(emoji: stickerEmoji, scale: document.baseImage.scale) else {
+            return
+        }
+        _ = insertImage(pngData: rendered.data, pixelSize: rendered.pixelSize, at: point)
     }
 
     /// Hands the pointer back to Select after a one-shot tool lands.

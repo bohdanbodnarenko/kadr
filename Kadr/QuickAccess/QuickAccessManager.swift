@@ -50,14 +50,16 @@ final class QuickAccessManager {
     /// Whether the cards are collapsed to the peek tab (docs/03 §2).
     var isPeeking = false
 
-    /// The one panel the whole stack lives in. Created with the first card, torn down with
-    /// the last, so an agent with nothing to show owns no windows (CLAUDE.md rule 2).
+    /// Whether the stack is ordered out so it does not appear in the next capture.
+    @ObservationIgnored var areHidden = false
     @ObservationIgnored var overlayPanel: QuickAccessOverlayPanel?
     /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
     @ObservationIgnored var engagedItems: Set<UUID> = []
     /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
     @ObservationIgnored var editorExitObserver: (any NSObjectProtocol)?
     @ObservationIgnored var dismissTasks: [UUID: Task<Void, Never>] = [:]
+    /// Cascades multi-card dismiss so each reflow animates (CleanShot §6.3 / 4.7.5).
+    @ObservationIgnored private var dismissCascadeTask: Task<Void, Never>?
     /// The card the pointer is over. Hover pauses auto-dismiss; it does not claim the card.
     ///
     /// Not observed: the card tracks its own hover, so publishing this would redraw the
@@ -72,6 +74,8 @@ final class QuickAccessManager {
 
     static let cardSpacing: CGFloat = 12
     static let screenMargin: CGFloat = 16
+    /// Matches `QuickAccessStackView`'s reflow guard so each card finishes sliding before the next leaves.
+    static let dismissCascadeInterval: Duration = .milliseconds(340)
 
     /// The stack's identity, for the animation that reflows it.
     var itemIDs: [UUID] {
@@ -102,6 +106,7 @@ final class QuickAccessManager {
             fileURL: fileURL,
             isStaged: result.isStaged,
             pixelSize: capture.metadata.pixelSize,
+            scale: capture.metadata.scale,
             capturedAt: capture.metadata.capturedAt,
             displayID: capture.metadata.displayID,
             applicationName: capture.metadata.frontmostApp?.name
@@ -113,8 +118,9 @@ final class QuickAccessManager {
     /// Shows a card for a finished recording (docs/03 §1.8).
     ///
     /// A recording is already a file on disk, so unlike a capture there is nothing to
-    /// export first — the card points straight at it.
-    func showRecording(at fileURL: URL) {
+    /// export first — the card points straight at it. Dedicated GIF capture (`exportGIF`)
+    /// encodes after stop and presents the GIF as well (CleanShot §13.6).
+    func showRecording(at fileURL: URL, exportGIF: Bool = false) {
         Task { [weak self] in
             // Reading the track's size is asynchronous, so the card appears as soon as
             // the size is known rather than blocking the stop button on it.
@@ -130,6 +136,9 @@ final class QuickAccessManager {
             )
             self?.present(item)
             self?.ingestRecording(item)
+            if exportGIF {
+                self?.exportGIF(item, confirm: false)
+            }
         }
     }
 
@@ -206,27 +215,58 @@ final class QuickAccessManager {
 
     /// Dismisses every card without deleting anything.
     func dismissAll() {
-        for item in items {
-            recordClosed(item)
+        dismissCardsSequentially(Array(items), finalizeBeforeDismiss: false)
+    }
+
+    /// Removes several cards one at a time so the stack reflow animates instead of jumping.
+    ///
+    /// When the stack is tucked into the peek tab there is nothing to animate, so every
+    /// card goes immediately. `saveAll()` passes `finalizeBeforeDismiss: true`.
+    func dismissCardsSequentially(_ pending: [QuickAccessItem], finalizeBeforeDismiss: Bool) {
+        dismissCascadeTask?.cancel()
+        guard !pending.isEmpty else { return }
+
+        if isPeeking {
+            for item in pending where items.contains(where: { $0.id == item.id }) {
+                if finalizeBeforeDismiss {
+                    finalizeIfStaged(item)
+                }
+                dismiss(item)
+            }
+            areHidden = false
+            return
         }
-        items.removeAll()
-        dismissTasks.values.forEach { $0.cancel() }
-        dismissTasks.removeAll()
-        engagedItems.removeAll()
+
         hoveredItemID = nil
-        draggingItemID = nil
         stopHoverKeyMonitor()
-        isPeeking = false
-        stopWatchingForEditorExit()
-        teardownOverlay()
+
+        dismissCascadeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for item in pending {
+                guard !Task.isCancelled else { return }
+                guard self.items.contains(where: { $0.id == item.id }) else { continue }
+                if finalizeBeforeDismiss {
+                    self.finalizeIfStaged(item)
+                }
+                self.dismiss(item)
+                guard !self.items.isEmpty else { break }
+                try? await Task.sleep(for: Self.dismissCascadeInterval)
+            }
+            self.areHidden = false
+            self.dismissCascadeTask = nil
+        }
     }
 
     // MARK: - Presenting
 
     func present(_ item: QuickAccessItem) {
-        // A new capture should be seen, even if the stack was tucked into the peek tab.
+        // A new capture should be seen, even if the stack was tucked into the peek tab
+        // or temporarily hidden for the next shot.
         if isPeeking {
             setPeeking(false)
+        }
+        if areHidden {
+            setHidden(false)
         }
         items.insert(item, at: 0)
         restack()
@@ -242,7 +282,7 @@ final class QuickAccessManager {
     /// the menu bar (docs/03 §2 accept list) — the panel covers exactly that, and SwiftUI
     /// arranges the column inside it.
     func restack() {
-        guard !items.isEmpty, let screen = targetScreen() else { return }
+        guard !areHidden, !items.isEmpty, let screen = targetScreen() else { return }
         overlayPanelIfNeeded().present(on: screen)
     }
 
@@ -345,11 +385,6 @@ final class QuickAccessManager {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    func save(_ item: QuickAccessItem) {
-        finalizeIfStaged(item)
-        dismiss(item)
-    }
-
     /// Dragging a card out counts as acting on it, so a staged file becomes a real one
     /// and the card goes if the user asked for that (docs/03 §2).
     /// The receiver asked for the file: finalise it and hand back where it now lives.
@@ -379,7 +414,9 @@ final class QuickAccessManager {
     /// The first thing a user does with a staged capture finalises it (docs/03 §2).
     func finalizeIfStaged(_ item: QuickAccessItem) {
         guard item.isStaged, let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        guard let moved = output.finalizeStaged(item.fileURL) else { return }
+        let original = item.fileURL
+        guard let moved = output.finalizeStaged(original) else { return }
+        CaptureProject.move(from: original, to: moved)
         items[index].fileURL = moved
         items[index].isStaged = false
     }
@@ -406,6 +443,7 @@ final class QuickAccessManager {
         // trash, because afterwards there is nothing to hash.
         history?.deleteFromLibrary(matching: removed.fileURL)
         // Deleted means gone, so it is not offered for restore.
+        CaptureProject.trash(alongside: removed.fileURL)
         try? FileManager.default.trashItem(at: removed.fileURL, resultingItemURL: nil)
         logger.info("Deleted \(removed.filename, privacy: .public)")
         finishRemoval()

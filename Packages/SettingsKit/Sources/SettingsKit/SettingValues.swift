@@ -46,6 +46,15 @@ extension DynamicRange: SettingValue {}
 /// (docs/04 §2, docs/09 U2.4).
 extension CompressedImageFormat: SettingValue {}
 
+extension ScrollAxis: SettingValue {
+    public var title: String {
+        switch self {
+        case .vertical: "Vertical"
+        case .horizontal: "Horizontal"
+        }
+    }
+}
+
 /// What a self-timer counts down before capturing (docs/03 §1.5).
 public enum SelfTimer: Int, CaseIterable, Sendable {
     case off = 0

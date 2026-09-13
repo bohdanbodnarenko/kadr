@@ -63,8 +63,13 @@ public struct StudioAudioExporter: Sendable {
         clips: ClipTimeline,
         soundtrack: URL?,
         to destination: URL,
-        format: Format
+        format: Format,
+        mutesAudio: Bool = false,
+        mixesToMono: Bool = false
     ) async throws {
+        if mutesAudio {
+            throw ExportError.noAudioTrack
+        }
         try Task.checkCancellation()
         let composition = try await ClipCompositionBuilder().composition(
             for: clips,
@@ -75,11 +80,31 @@ public struct StudioAudioExporter: Sendable {
         guard !tracks.isEmpty else { throw ExportError.noAudioTrack }
 
         try? FileManager.default.removeItem(at: destination)
+        let channels = mixesToMono ? 1 : 2
         switch format {
         case .m4a:
-            try await exportM4A(composition, to: destination)
+            if mixesToMono {
+                try await exportCompressed(
+                    composition,
+                    tracks: tracks,
+                    to: destination,
+                    using: AudioWrite(
+                        readerSettings: Self.pcmSettings(channels: channels),
+                        writerSettings: Self.aacSettings(channels: channels),
+                        fileType: .m4a
+                    )
+                )
+            } else {
+                try await exportM4A(composition, to: destination)
+            }
         case .wav:
-            try await exportWAV(composition, tracks: tracks, to: destination)
+            let pcm = Self.pcmSettings(channels: channels)
+            try await exportCompressed(
+                composition,
+                tracks: tracks,
+                to: destination,
+                using: AudioWrite(readerSettings: pcm, writerSettings: pcm, fileType: .wav)
+            )
         }
     }
 
@@ -112,38 +137,54 @@ public struct StudioAudioExporter: Sendable {
         }
     }
 
-    private func exportWAV(
+    private struct AudioWrite {
+        var readerSettings: [String: Any]
+        var writerSettings: [String: Any]
+        var fileType: AVFileType
+    }
+
+    private func exportCompressed(
         _ composition: AVMutableComposition,
         tracks: [AVAssetTrack],
-        to destination: URL
+        to destination: URL,
+        using spec: AudioWrite
     ) async throws {
         let reader = try AVAssetReader(asset: composition)
-        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: Self.pcmSettings)
+        let output = AVAssetReaderAudioMixOutput(audioTracks: tracks, audioSettings: spec.readerSettings)
         output.alwaysCopiesSampleData = false
         guard reader.canAdd(output) else {
             throw ExportError.writingFailed("Could not read the soundtrack as PCM.")
         }
         reader.add(output)
 
-        let writer = try AVAssetWriter(outputURL: destination, fileType: .wav)
-        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: Self.pcmSettings)
+        let writer = try AVAssetWriter(outputURL: destination, fileType: spec.fileType)
+        let input = AVAssetWriterInput(mediaType: .audio, outputSettings: spec.writerSettings)
         input.expectsMediaDataInRealTime = false
         guard writer.canAdd(input) else {
-            throw ExportError.writingFailed("Could not start a WAV writer.")
+            throw ExportError.writingFailed("Could not start an audio writer.")
         }
         writer.add(input)
         try await pump(output, from: reader, into: input, writer: writer, destination: destination)
     }
 
-    private static var pcmSettings: [String: Any] {
+    private static func pcmSettings(channels: Int) -> [String: Any] {
         [
             AVFormatIDKey: kAudioFormatLinearPCM,
             AVSampleRateKey: 48000,
-            AVNumberOfChannelsKey: 2,
+            AVNumberOfChannelsKey: channels,
             AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false,
             AVLinearPCMIsNonInterleaved: false
+        ]
+    }
+
+    private static func aacSettings(channels: Int) -> [String: Any] {
+        [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 48000,
+            AVNumberOfChannelsKey: channels,
+            AVEncoderBitRateKey: channels == 1 ? 96_000 : 128_000
         ]
     }
 

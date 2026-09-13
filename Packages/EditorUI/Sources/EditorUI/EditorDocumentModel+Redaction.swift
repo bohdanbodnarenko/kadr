@@ -18,6 +18,8 @@ public extension EditorDocumentModel {
         isFindingRedactions = false
         isRedactionReviewActive = true
         recognizedLines = analysis.lines
+        recognizedWords = analysis.words
+        highlightBoxes = analysis.highlightBoxes(in: document.baseImage.size)
         redactionCandidates = analysis.candidates
         redactionAssistError = nil
         if !redactionQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

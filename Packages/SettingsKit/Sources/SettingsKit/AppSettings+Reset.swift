@@ -9,6 +9,13 @@ import Foundation
 public extension AppSettings {
     /// Restores every key to its default. Used by Settings → Advanced → Reset (docs/03 §8.3).
     func resetToDefaults() {
+        resetGeneral()
+        resetCapture()
+        resetRecording()
+        resetChrome()
+    }
+
+    private func resetGeneral() {
         defaultAction = SettingKeys.defaultAction.defaultValue
         afterCapture = SettingKeys.afterCapture.defaultValue
         compressionTargetBytes = SettingKeys.compressionTargetBytes.defaultValue
@@ -18,14 +25,41 @@ public extension AppSettings {
         filenameTemplate = SettingKeys.filenameTemplate.defaultValue
         imageFormat = SettingKeys.imageFormat.defaultValue
         downscaleRetinaCaptures = SettingKeys.downscaleRetinaCaptures.defaultValue
+        convertExportsToSRGB = SettingKeys.convertExportsToSRGB.defaultValue
+        askForSaveDestination = SettingKeys.askForSaveDestination.defaultValue
+    }
+
+    private func resetCapture() {
         includesCursor = SettingKeys.includesCursor.defaultValue
         windowShadow = SettingKeys.windowShadow.defaultValue
         transparentWindowBackground = SettingKeys.transparentWindowBackground.defaultValue
+        windowBackdrop = SettingKeys.windowBackdrop.defaultValue
+        windowBackdropImagePath = SettingKeys.windowBackdropImagePath.defaultValue
+        windowBackdropPadding = SettingKeys.windowBackdropPadding.defaultValue
+        autoBeautifyPreset = SettingKeys.autoBeautifyPreset.defaultValue
+        cropNotchFromFullscreen = SettingKeys.cropNotchFromFullscreen.defaultValue
+        lockCanvasByDefault = SettingKeys.lockCanvasByDefault.defaultValue
+        objectShadowsEnabled = SettingKeys.objectShadowsEnabled.defaultValue
+        keepOriginalWhenAnnotating = SettingKeys.keepOriginalWhenAnnotating.defaultValue
         ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
+        selfTimer = SettingKeys.selfTimer.defaultValue
+        customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
+        scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
+        scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
+        scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue
+        scrollAxis = SettingKeys.scrollAxis.defaultValue
+        scrollReviewsSeams = SettingKeys.scrollReviewsSeams.defaultValue
+        capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
+        captureSnapsToEdges = SettingKeys.captureSnapsToEdges.defaultValue
+        captureDynamicRange = SettingKeys.captureDynamicRange.defaultValue
+    }
+
+    private func resetRecording() {
         recordingFrameRate = SettingKeys.recordingFrameRate.defaultValue
         recordingCodec = SettingKeys.recordingCodec.defaultValue
         recordsSystemAudio = SettingKeys.recordsSystemAudio.defaultValue
         recordsMicrophone = SettingKeys.recordsMicrophone.defaultValue
+        recordsMono = SettingKeys.recordsMono.defaultValue
         recordingShowsCursor = SettingKeys.recordingShowsCursor.defaultValue
         recordingEnablesFocus = SettingKeys.recordingEnablesFocus.defaultValue
         recordingShowsClicks = SettingKeys.recordingShowsClicks.defaultValue
@@ -36,6 +70,7 @@ public extension AppSettings {
         recordingMicrophoneDeviceID = SettingKeys.recordingMicrophoneDeviceID.defaultValue
         recordingCapturesStudioSession = SettingKeys.recordingCapturesStudioSession.defaultValue
         recordingReconstructsCursor = SettingKeys.recordingReconstructsCursor.defaultValue
+        recordingDynamicRange = SettingKeys.recordingDynamicRange.defaultValue
         teleprompterEnabled = SettingKeys.teleprompterEnabled.defaultValue
         teleprompterScript = SettingKeys.teleprompterScript.defaultValue
         teleprompterWordsPerMinute = SettingKeys.teleprompterWordsPerMinute.defaultValue
@@ -43,18 +78,17 @@ public extension AppSettings {
         teleprompterMirrored = SettingKeys.teleprompterMirrored.defaultValue
         teleprompterFollowsSpeech = SettingKeys.teleprompterFollowsSpeech.defaultValue
         teleprompterFrame = SettingKeys.teleprompterFrame.defaultValue
-        scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
-        scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
-        scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue
-        scrollReviewsSeams = SettingKeys.scrollReviewsSeams.defaultValue
-        selfTimer = SettingKeys.selfTimer.defaultValue
-        customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
+    }
+
+    private func resetChrome() {
         overlayCorner = SettingKeys.overlayCorner.defaultValue
         overlayCardWidth = SettingKeys.overlayCardWidth.defaultValue
         overlayTimeout = SettingKeys.overlayTimeout.defaultValue
         overlayMaxVisibleCards = SettingKeys.overlayMaxVisibleCards.defaultValue
         overlayOnPrimaryDisplay = SettingKeys.overlayOnPrimaryDisplay.defaultValue
         overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
+        overlayReturnSaves = SettingKeys.overlayReturnSaves.defaultValue
+        lastAllInOneMode = SettingKeys.lastAllInOneMode.defaultValue
         historyRetention = SettingKeys.historyRetention.defaultValue
         historySizeCap = SettingKeys.historySizeCap.defaultValue
         historyIndexesText = SettingKeys.historyIndexesText.defaultValue
@@ -63,9 +97,5 @@ public extension AppSettings {
         hideDesktopDuringRecording = SettingKeys.hideDesktopDuringRecording.defaultValue
         captureWallpaper = SettingKeys.captureWallpaper.defaultValue
         captureWallpaperImagePath = SettingKeys.captureWallpaperImagePath.defaultValue
-        capturePrecisionCrosshair = SettingKeys.capturePrecisionCrosshair.defaultValue
-        captureSnapsToEdges = SettingKeys.captureSnapsToEdges.defaultValue
-        captureDynamicRange = SettingKeys.captureDynamicRange.defaultValue
-        recordingDynamicRange = SettingKeys.recordingDynamicRange.defaultValue
     }
 }

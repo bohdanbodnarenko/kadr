@@ -89,15 +89,13 @@ extension QuickAccessManager {
     func startHoverKeyMonitorIfNeeded() {
         guard hoverKeyMonitor == nil else { return }
         hoverKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let keyCode = event.keyCode
             MainActor.assumeIsolated {
-                _ = self?.handleHoverKey(keyCode)
+                _ = self?.handleHoverKey(event, canStealCommandKeys: false)
             }
         }
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let keyCode = event.keyCode
             let consumed = MainActor.assumeIsolated {
-                self?.handleHoverKey(keyCode) ?? false
+                self?.handleHoverKey(event, canStealCommandKeys: true) ?? false
             }
             return consumed ? nil : event
         }
@@ -119,9 +117,12 @@ extension QuickAccessManager {
         }
     }
 
-    /// ⌫ deletes, Esc hides, Space looks. Only while a card is hovered, so the front app
-    /// keeps its keys the rest of the time (docs/03 §2).
-    func handleHoverKey(_ keyCode: UInt16) -> Bool {
+    /// ⌫ deletes, Esc hides, Space looks. ⌘C / ⌘S / ⌘E / ⌘P / ⌘W copy, save, annotate,
+    /// pin, and close, but only from the local monitor — a global one cannot swallow those
+    /// keys, and doing the action *and* letting the front app handle them would be two
+    /// saves for one press (docs/03 §2, CleanShot §6.2 / §22.2).
+    func handleHoverKey(_ event: NSEvent, canStealCommandKeys: Bool) -> Bool {
+        let keyCode = event.keyCode
         // Esc closes Quick Look before it closes anything else — the panel is what the user
         // is looking at, so it is what "escape" means while it is up. Handled before the
         // hover lookup, because opening Quick Look tucks the cards away and nothing is
@@ -133,6 +134,9 @@ extension QuickAccessManager {
               let item = items.first(where: { $0.id == hoveredItemID })
         else {
             return false
+        }
+        if canStealCommandKeys, handleHoverCommandKey(event, item: item) {
+            return true
         }
         switch keyCode {
         case 51, 117:
@@ -146,6 +150,49 @@ extension QuickAccessManager {
             // disposable — the same rule as opening the editor.
             noteEngagement(with: item)
             quickLook.show(item.fileURL)
+            return true
+        case 36, 76:
+            // Return / keypad Enter — save and close (CleanShot §6.2). Quick Look keeps
+            // Return for itself while the panel is up.
+            guard settings.overlayReturnSaves, !QuickLookPresenter.isShowing else { return false }
+            save(item)
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Overlay action keys that would steal from the front app if a global monitor ran them.
+    ///
+    /// CleanShot §22.2: ⌘C copy, ⌘S save, ⌘E annotate (trim, for a recording), ⌘P pin,
+    /// ⌘W close. Upload is out of scope.
+    func handleHoverCommandKey(_ event: NSEvent, item: QuickAccessItem) -> Bool {
+        guard event.modifierFlags.contains(.command),
+              !event.modifierFlags.contains(.shift),
+              !event.modifierFlags.contains(.option)
+        else {
+            return false
+        }
+        switch event.keyCode {
+        case 8:
+            copy(item)
+            return true
+        case 1:
+            save(item)
+            return true
+        case 14:
+            if item.isVideo {
+                trim(item)
+            } else {
+                annotate(item)
+            }
+            return true
+        case 35:
+            guard !item.isVideo else { return false }
+            pin(item)
+            return true
+        case 13:
+            dismiss(item)
             return true
         default:
             return false

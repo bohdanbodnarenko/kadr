@@ -19,6 +19,7 @@ struct GrayscaleFrame {
 
     let pixels: [UInt8]
     let profile: RowProfile
+    let columnProfile: ColumnProfile
 
     init?(contentsOf url: URL) {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -73,6 +74,10 @@ struct GrayscaleFrame {
         profile = pixels.withUnsafeBufferPointer { buffer in
             guard let base = buffer.baseAddress else { return RowProfile(height: 0, values: []) }
             return RowProfile(grayscale: base, width: width, height: height, bytesPerRow: width)
+        }
+        columnProfile = pixels.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return ColumnProfile(width: 0, values: []) }
+            return ColumnProfile(grayscale: base, width: width, height: height, bytesPerRow: width)
         }
     }
 }

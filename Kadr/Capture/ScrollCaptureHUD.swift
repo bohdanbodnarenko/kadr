@@ -1,5 +1,6 @@
 import AppKit
 import OverlayKit
+import SettingsKit
 import Shared
 import SwiftUI
 
@@ -11,20 +12,23 @@ import SwiftUI
 @MainActor
 final class ScrollCaptureHUD {
     private let coordinator: ScrollCaptureCoordinator
+    private let settings: AppSettings
     private let anchor: ScreenRect
     private var panel: NonActivatingPanel?
 
     private static let width: CGFloat = 240
     private static let margin: CGFloat = 16
 
-    init(coordinator: ScrollCaptureCoordinator, near anchor: ScreenRect) {
+    init(coordinator: ScrollCaptureCoordinator, settings: AppSettings, near anchor: ScreenRect) {
         self.coordinator = coordinator
+        self.settings = settings
         self.anchor = anchor
     }
 
     func present() {
         let view = ScrollCaptureHUDView(
             coordinator: coordinator,
+            settings: settings,
             stop: { [weak self] in self?.coordinator.stop() },
             cancel: { [weak self] in self?.coordinator.cancel() }
         )
@@ -78,6 +82,7 @@ final class ScrollCaptureHUD {
 /// The HUD's content: the growing strip, the frame count, and the way out (docs/03 §1.6).
 struct ScrollCaptureHUDView: View {
     let coordinator: ScrollCaptureCoordinator
+    @Bindable var settings: AppSettings
     let stop: () -> Void
     let cancel: () -> Void
     var isStitching = false
@@ -85,6 +90,14 @@ struct ScrollCaptureHUDView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+
+            Picker("Direction", selection: $settings.scrollAxis) {
+                ForEach(ScrollAxis.allCases, id: \.self) { axis in
+                    Text(axis.title).tag(axis)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(coordinator.frameCount > 0 || isStitching)
 
             if let preview = coordinator.preview {
                 Image(decorative: preview, scale: 2)
@@ -119,7 +132,7 @@ struct ScrollCaptureHUDView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrow.down.doc")
+            Image(systemName: settings.scrollAxis == .vertical ? "arrow.down.doc" : "arrow.right.doc")
             Text(isStitching ? "Stitching…" : "Scrolling Capture")
                 .font(.headline)
             Spacer()
@@ -134,6 +147,7 @@ struct ScrollCaptureHUDView: View {
     }
 
     private var status: String {
+        let direction = settings.scrollAxis == .vertical ? "Scroll" : "Scroll sideways"
         if isStitching {
             return "Joining \(coordinator.frameCount) frames into one page."
         }
@@ -141,6 +155,6 @@ struct ScrollCaptureHUDView: View {
             return "Kadr is scrolling. It stops on its own when the page runs out. "
                 + "\(coordinator.frameCount) frames so far."
         }
-        return "Scroll the content, then press Stop. \(coordinator.frameCount) frames so far."
+        return "\(direction) the content, then press Stop. \(coordinator.frameCount) frames so far."
     }
 }

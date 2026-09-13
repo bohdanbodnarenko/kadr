@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import HistoryKit
+import ImageIO
 import MediaExport
 import os
 import OverlayKit
@@ -38,8 +39,11 @@ extension QuickAccessManager {
 
     func actions(for item: QuickAccessItem) -> QuickAccessCardActions {
         var actions = QuickAccessCardActions()
-        actions.copy = { [weak self] in self?.copy(item) }
+        actions.copy = { [weak self] in
+            self?.copy(item, keepOverlay: NSEvent.modifierFlags.contains(.option))
+        }
         actions.save = { [weak self] in self?.save(item) }
+        actions.saveAs = { [weak self] in self?.saveAs(item) }
         actions.delete = { [weak self] in self?.delete(item) }
         actions.dismiss = { [weak self] in self?.dismiss(item) }
         actions.resolveForDrag = { [weak self] in self?.resolveForDrag(item) }
@@ -56,6 +60,10 @@ extension QuickAccessManager {
         actions.beginDrag = { [weak self] in self?.beginDrag(for: item) }
         actions.peek = { [weak self] in self?.setPeeking(true) }
         actions.compress = { [weak self] in self?.compress(item) }
+        actions.rotate = { [weak self] in self?.transform(item, .rotateClockwise) }
+        actions.flipHorizontal = { [weak self] in self?.transform(item, .flipHorizontal) }
+        actions.flipVertical = { [weak self] in self?.transform(item, .flipVertical) }
+        actions.scaleRetina = { [weak self] in self?.scaleRetina(item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
         actions.studio = { [weak self] in self?.openStudio(item) }
         // Asked once, when the card is built, rather than on every redraw: it is a
@@ -77,11 +85,16 @@ extension QuickAccessManager {
         openInEditor(session.directory)
     }
 
-    /// Turns a recording into a GIF, asking first if it is going to be large (docs/03 §1.8).
+    func exportGIF(_ item: QuickAccessItem) {
+        exportGIF(item, confirm: true)
+    }
+
+    /// Turns a recording into a GIF. Dedicated GIF capture skips the confirm unless
+    /// the encoder had to clip the take (docs/03 §1.8, CleanShot §13.6).
     ///
     /// The encode happens in the helper process, so the agent never holds a single frame
     /// of it (docs/04 §1).
-    func exportGIF(_ item: QuickAccessItem) {
+    func exportGIF(_ item: QuickAccessItem, confirm: Bool) {
         let destination = item.fileURL.deletingPathExtension().appendingPathExtension("gif")
         Task { [weak self] in
             guard let self else { return }
@@ -93,15 +106,19 @@ extension QuickAccessManager {
                     destinationPath: destination.path,
                     estimateOnly: true
                 ))
-                guard confirmExport(estimate) else { return }
+                if confirm || estimate.isClipped {
+                    guard confirmExport(estimate) else { return }
+                }
 
                 let result = try await vision.encodeGIF(GIFRequest(
                     sourcePath: item.fileURL.path,
                     destinationPath: destination.path
                 ))
                 guard let path = result.path else { return }
-                logger.info("Exported \(URL(fileURLWithPath: path).lastPathComponent, privacy: .public)")
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                let gifURL = URL(fileURLWithPath: path)
+                logger.info("Exported \(gifURL.lastPathComponent, privacy: .public)")
+                presentExternalFile(at: gifURL)
+                NSWorkspace.shared.activateFileViewerSelecting([gifURL])
             } catch {
                 logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -132,9 +149,19 @@ extension QuickAccessManager {
     }
 
     func copy(_ item: QuickAccessItem) {
+        copy(item, keepOverlay: false)
+    }
+
+    /// Copies the capture. Option keeps the card even when a timeout would take it
+    /// (CleanShot §6.2). Copy never dismisses on its own — docs/03 §2 leaves that to Save
+    /// and drag — but Option claims the card so auto-close cannot steal it.
+    func copy(_ item: QuickAccessItem, keepOverlay: Bool) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         copyFile(at: url, isVideo: item.isVideo)
+        if keepOverlay {
+            noteEngagement(with: item)
+        }
     }
 
     /// Pinning counts as acting on a staged capture, so it is finalised first — a pin
@@ -175,7 +202,8 @@ extension QuickAccessManager {
         // a build with no editor embedded, or a failure — left the stack in the peek tab
         // with nothing to come back from. The tab reads "1 Screenshot" and stays: the only
         // thing that expands it again is the editor process terminating, and none started.
-        editor.open(url) { [weak self] opened in
+        // A sibling `.kadr` keeps window backdrops and auto-beautify editable (docs/03 §1.2).
+        editor.open(CaptureProject.editorURL(for: url)) { [weak self] opened in
             guard let self, opened, !items.isEmpty else { return }
             setPeeking(true)
         }
@@ -201,6 +229,96 @@ extension QuickAccessManager {
         openInEditor(finalized(url))
     }
 
+    /// Saves every visible card to the save folder and dismisses them (CleanShot §6.3).
+    ///
+    /// Bulk save is always silent: asking once per card would be worse than not saving at
+    /// all. A snapshot of `items` is taken first so dismissals during the loop cannot skip
+    /// cards still waiting to be saved.
+    func saveAll() {
+        dismissCardsSequentially(Array(items), finalizeBeforeDismiss: true)
+    }
+
+    /// Hides the cards without dismissing them, so they do not appear in the next capture
+    /// (CleanShot §6.3). A new capture brings them back.
+    func toggleHidden() {
+        setHidden(!areHidden)
+    }
+
+    func setHidden(_ hidden: Bool) {
+        guard hidden != areHidden else { return }
+        areHidden = hidden
+        if hidden {
+            overlayPanel?.orderOut(nil)
+        } else {
+            restack()
+        }
+    }
+
+    /// Puts an existing file on the overlay, for `add-quick-access-overlay` (CleanShot §20.7).
+    @discardableResult
+    func presentExternalFile(at url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        let isVideo = UTType(filenameExtension: url.pathExtension)?.conforms(to: .movie) == true
+        present(QuickAccessItem(
+            fileURL: url,
+            isStaged: false,
+            pixelSize: Self.pixelSize(of: url) ?? PixelSize(width: 0, height: 0),
+            scale: Self.scale(of: url),
+            capturedAt: Date(),
+            displayID: nil,
+            isVideo: isVideo,
+            historyKind: isVideo ? .video : .image,
+            displayName: url.lastPathComponent
+        ))
+        return true
+    }
+
+    /// Opens whatever is on the clipboard as a card, or in the editor for a project.
+    ///
+    /// Images and movies both count: CleanShot 4.6 opens an MP4 copied onto the
+    /// pasteboard the same way as a still.
+    @discardableResult
+    func presentFromClipboard() -> Bool {
+        let pasteboard = NSPasteboard.general
+        if let url = ClipboardMedia.fileURL(from: pasteboard) {
+            return presentExternalFile(at: url)
+        }
+        guard let image = NSImage(pasteboard: pasteboard),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:])
+        else {
+            return false
+        }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kadr-clipboard-\(UUID().uuidString).png")
+        do {
+            try png.write(to: destination, options: .atomic)
+        } catch {
+            logger.error("Could not write the clipboard image: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+        return presentExternalFile(at: destination)
+    }
+
+    /// Pixel size from ImageIO headers, so a card for an external file does not decode it.
+    static func pixelSize(of url: URL) -> PixelSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else {
+            return nil
+        }
+        return PixelSize(width: width, height: height)
+    }
+
+    /// DPI tag → backing scale, so an external file can still offer Scale Retina to 1×.
+    static func scale(of url: URL) -> DisplayScale {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return .oneToOne }
+        return ImageTransformer.scale(of: source)
+    }
+
     /// The permanent home of a file automation named, finalising it if it is staged.
     ///
     /// `kadr pin --path …` and `kadr annotate --path …` take a path, not a card, so they
@@ -215,6 +333,7 @@ extension QuickAccessManager {
             return items.first { $0.id == item.id }?.fileURL ?? url
         }
         guard output.isStaged(url), let moved = output.finalizeStaged(url) else { return url }
+        CaptureProject.move(from: url, to: moved)
         return moved
     }
 

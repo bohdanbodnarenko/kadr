@@ -49,6 +49,8 @@ struct OverlayPlacementTests {
         #expect(edit.keystrokePlacement == .bottom)
         #expect(edit.captionPlacement == .top)
         #expect(edit.soundtrackFileName == nil)
+        #expect(!edit.mutesAudio)
+        #expect(!edit.mixesToMono)
         #expect(edit.keystrokeScale == 1)
         #expect(edit.captionScale == 1)
         #expect(edit.highlightsSpokenWord)

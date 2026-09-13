@@ -29,6 +29,7 @@ public actor ScrollCaptureSession {
     public private(set) var framePaths: [URL] = []
     public private(set) var pixelSize = PixelSize(width: 0, height: 0)
     private var isCapturing = false
+    private var captureAxis: ScrollAxis = .vertical
     private var excludedWindowIDs: Set<CGWindowID> = []
 
     /// Called on the main actor as each frame lands, for the growing-strip preview and the
@@ -45,8 +46,9 @@ public actor ScrollCaptureSession {
     public struct ScrollFrameNote: Sendable {
         public let index: Int
         public let url: URL
-        /// A small grayscale summary, cheap enough to align live (docs/04 §4.4).
-        public let profile: RowProfile
+        public let axis: ScrollAxis
+        public let rowProfile: RowProfile
+        public let columnProfile: ColumnProfile
     }
 
     public var frameCount: Int {
@@ -57,6 +59,7 @@ public actor ScrollCaptureSession {
     public func start(
         region: DisplayRect,
         on displayID: CGDirectDisplayID,
+        axis: ScrollAxis = .vertical,
         frameRate: Int = 8,
         onFrame: @escaping @Sendable (ScrollFrameNote) -> Void
     ) async throws {
@@ -91,6 +94,7 @@ public actor ScrollCaptureSession {
 
         self.directory = directory
         self.onFrame = onFrame
+        captureAxis = axis
         pixelSize = PixelSize(width: pixels.width, height: pixels.height)
         framePaths = []
 
@@ -197,13 +201,24 @@ public actor ScrollCaptureSession {
         guard CGImageDestinationFinalize(sink) else { return }
 
         framePaths.append(url)
-        guard let onFrame, let profile = Self.profile(of: image) else { return }
-        onFrame(ScrollFrameNote(index: index, url: url, profile: profile))
+        guard let onFrame, let profiles = Self.profiles(of: image) else { return }
+        onFrame(ScrollFrameNote(
+            index: index,
+            url: url,
+            axis: captureAxis,
+            rowProfile: profiles.row,
+            columnProfile: profiles.column
+        ))
     }
 
-    /// The row summary the caller aligns against, built here so the frame itself never
+    private struct FrameProfiles {
+        let row: RowProfile
+        let column: ColumnProfile
+    }
+
+    /// The summaries the caller aligns against, built here so the frame itself never
     /// leaves this actor.
-    private static func profile(of image: CGImage) -> RowProfile? {
+    private static func profiles(of image: CGImage) -> FrameProfiles? {
         let width = image.width
         let height = image.height
         var gray = [UInt8](repeating: 0, count: width * height)
@@ -222,9 +237,11 @@ public actor ScrollCaptureSession {
         }
         guard made else { return nil }
         return gray.withUnsafeBufferPointer { buffer in
-            buffer.baseAddress.map {
-                RowProfile(grayscale: $0, width: width, height: height, bytesPerRow: width)
-            }
+            guard let base = buffer.baseAddress else { return nil }
+            return FrameProfiles(
+                row: RowProfile(grayscale: base, width: width, height: height, bytesPerRow: width),
+                column: ColumnProfile(grayscale: base, width: width, height: height, bytesPerRow: width)
+            )
         }
     }
 }

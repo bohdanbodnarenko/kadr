@@ -51,12 +51,12 @@ struct ScrollCaptureTests {
         strip.begin(frameSize: frameSize)
         #expect(strip.image == nil)
 
-        strip.append(frameAt: url, band: 0 ..< 600, frameHeight: 600)
+        strip.append(frameAt: url, band: 0 ..< 600, frameExtent: 600)
         let first = try #require(strip.image)
         #expect(first.width == ScrollPreviewStrip.width)
         #expect(first.height == 300, "a 600 px frame at 400 px wide is half height in a 200 px strip")
 
-        strip.append(frameAt: url, band: 400 ..< 600, frameHeight: 600)
+        strip.append(frameAt: url, band: 400 ..< 600, frameExtent: 600)
         let second = try #require(strip.image)
         #expect(second.height == 400)
     }
@@ -74,10 +74,32 @@ struct ScrollCaptureTests {
         let strip = ScrollPreviewStrip()
         strip.begin(frameSize: frameSize)
         for _ in 0 ..< 40 {
-            strip.append(frameAt: url, band: 0 ..< 400, frameHeight: 400)
+            strip.append(frameAt: url, band: 0 ..< 400, frameExtent: 400)
         }
         let image = try #require(strip.image)
         #expect(image.height <= ScrollPreviewStrip.maximumHeight)
+    }
+
+    @Test("The horizontal preview strip grows with each band")
+    func horizontalPreviewStripGrows() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-strip-h-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let frameSize = PixelSize(width: 600, height: 400)
+        let url = try write(frame: frameSize, to: directory.appendingPathComponent("frame.png"))
+
+        let strip = ScrollPreviewStrip()
+        strip.begin(frameSize: frameSize, axis: .horizontal)
+        strip.append(frameAt: url, band: 0 ..< 600, frameExtent: 600)
+        let first = try #require(strip.image)
+        #expect(first.height == ScrollPreviewStrip.fixedExtent)
+        #expect(first.width == 300)
+
+        strip.append(frameAt: url, band: 400 ..< 600, frameExtent: 600)
+        let second = try #require(strip.image)
+        #expect(second.width == 400)
     }
 
     @Test("Settle detection calls a still page settled and a moving one not")

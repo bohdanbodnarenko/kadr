@@ -158,6 +158,9 @@ struct CardLayoutTests {
         #expect(!CardAction.recognizeText.applies(to: .recording))
         #expect(CardAction.copy.applies(to: .screenshot))
         #expect(CardAction.copy.applies(to: .recording))
+        #expect(CardAction.saveAs.applies(to: .screenshot))
+        #expect(CardAction.saveAs.applies(to: .recording))
+        #expect(CardAction.saveAs != .save)
     }
 
     @Test("The palette offers what is applicable and not yet placed")

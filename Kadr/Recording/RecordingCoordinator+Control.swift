@@ -88,10 +88,12 @@ extension RecordingCoordinator {
             guard let self else { return }
             do {
                 let result = try await engine.stop(savingTo: destination)
+                let exportGIF = wantsGIFExport
                 state = .idle
                 elapsed = 0
                 overrides = .none
                 startedByAutomation = false
+                wantsGIFExport = false
                 logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
 
                 // The card goes up before the session is assembled. Linking the footage and
@@ -99,7 +101,7 @@ extension RecordingCoordinator {
                 // put a delay between stopping and seeing the recording that the recording
                 // itself does not have.
                 report(.file(result.fileURL))
-                onFinished?(result)
+                onFinished?(result, exportGIF)
                 if let session = await studio.finish(with: result) {
                     onStudioSessionReady?(session, result)
                 }
@@ -109,6 +111,7 @@ extension RecordingCoordinator {
                 elapsed = 0
                 overrides = .none
                 startedByAutomation = false
+                wantsGIFExport = false
                 studio.cancel()
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
                 report(.failed(error.localizedDescription))
@@ -139,6 +142,7 @@ extension RecordingCoordinator {
             self?.elapsed = 0
             self?.overrides = .none
             self?.startedByAutomation = false
+            self?.wantsGIFExport = false
             self?.report(.cancelled)
             self?.finishTerminationIfNeeded()
         }
@@ -183,6 +187,7 @@ extension RecordingCoordinator {
         elapsed = 0
         overrides = .none
         startedByAutomation = false
+        wantsGIFExport = false
         state = .idle
     }
 

@@ -79,6 +79,8 @@ public enum AnnotationHitTesting {
             spec.rect.standardized
         case let .redaction(spec):
             spec.rect.standardized
+        case let .spotlight(spec):
+            spec.rect.standardized
         case let .counter(spec):
             CGRect(
                 x: spec.center.x - spec.radius,
@@ -105,6 +107,8 @@ public enum AnnotationHitTesting {
         case let .text(spec):
             spec.rect.contains(point)
         case let .redaction(spec):
+            spec.rect.contains(point)
+        case let .spotlight(spec):
             spec.rect.contains(point)
         case let .image(spec):
             spec.rect.contains(point)

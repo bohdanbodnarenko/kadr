@@ -29,6 +29,16 @@ public enum SettingKeys {
     public static let filenameTemplate = SettingKey("general.filenameTemplate", default: "{app}-{date}-{time}")
     public static let imageFormat = SettingKey("general.imageFormat", default: ImageFormat.png)
     public static let downscaleRetinaCaptures = SettingKey("general.downscaleRetinaCaptures", default: false)
+    /// Convert exports to sRGB so colours match in browsers (CleanShot §8.5 / §23.4).
+    public static let convertExportsToSRGB = SettingKey("general.convertExportsToSRGB", default: false)
+    /// Crop the MacBook notch strip from fullscreen stills (CleanShot 4.6).
+    public static let cropNotchFromFullscreen = SettingKey("capture.cropNotchFromFullscreen", default: true)
+    /// Start the annotate editor with objects locked (CleanShot §8.1 / §21).
+    public static let lockCanvasByDefault = SettingKey("annotate.lockCanvasByDefault", default: false)
+    /// Draw drop shadows behind inserted images (CleanShot §8.2 / §21).
+    public static let objectShadowsEnabled = SettingKey("annotate.objectShadowsEnabled", default: true)
+    /// Save flattened exports beside the original instead of replacing it (CleanShot §7).
+    public static let keepOriginalWhenAnnotating = SettingKey("annotate.keepOriginalWhenAnnotating", default: true)
 
     // Capture pane (docs/03 §8.3).
     public static let includesCursor = SettingKey("capture.includesCursor", default: false)
@@ -51,6 +61,10 @@ public enum SettingKeys {
     public static let recordingCodec = SettingKey("recording.codec", default: RecordingVideoCodec.hevc)
     public static let recordsSystemAudio = SettingKey("recording.systemAudio", default: true)
     public static let recordsMicrophone = SettingKey("recording.microphone", default: false)
+    /// Mix recorded audio down to one channel (CleanShot §13.3).
+    public static let recordsMono = SettingKey("recording.mono", default: false)
+    /// Overlay Save shows a save panel rather than writing to the folder (CleanShot §6.2).
+    public static let askForSaveDestination = SettingKey("general.askForSaveDestination", default: false)
     public static let recordingShowsCursor = SettingKey("recording.showsCursor", default: true)
     /// Turn on Do Not Disturb while recording, so notifications stay out of the file.
     public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
@@ -133,6 +147,8 @@ public enum SettingKeys {
     public static let scrollStepPoints = SettingKey("scroll.stepPoints", default: 120)
     /// Frames a second while the user scrolls.
     public static let scrollFrameRate = SettingKey("scroll.frameRate", default: 8)
+    /// Vertical or horizontal scrolling (CleanShot §4.8).
+    public static let scrollAxis = SettingKey("scroll.axis", default: ScrollAxis.vertical)
     /// Show the seam review when the stitch is not sure (docs/03 §1.6 failure mode).
     public static let scrollReviewsSeams = SettingKey("scroll.reviewsSeams", default: true)
 
@@ -150,6 +166,10 @@ public enum SettingKeys {
     public static let overlayOnPrimaryDisplay = SettingKey("overlay.onPrimaryDisplay", default: false)
     /// Remove the card when its file is dragged out (docs/03 §2).
     public static let overlayDismissOnDrag = SettingKey("overlay.dismissOnDrag", default: true)
+    /// Return saves the hovered card and dismisses it (CleanShot §6.2).
+    public static let overlayReturnSaves = SettingKey("overlay.returnSaves", default: true)
+    /// Last mode picked in the All-in-One HUD, so Return re-arms it (docs/03 §1.4).
+    public static let lastAllInOneMode = SettingKey("capture.lastAllInOneMode", default: "area")
 
     // History pane (docs/03 §5, §8.3).
     public static let historyRetention = SettingKey("history.retention", default: HistoryRetention.forever)

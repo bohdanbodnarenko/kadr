@@ -6,6 +6,7 @@ import Shared
 extension KeyboardShortcuts.Name {
     // Defaults deliberately avoid ⇧⌘3/4/5, which belong to the system screenshot UI —
     // Kadr should sit alongside it, not silently fail to register over the top of it.
+    static let allInOne = Self("allInOne", initial: .init(.one, modifiers: [.control, .shift]))
     static let captureArea = Self("captureArea", initial: .init(.a, modifiers: [.control, .shift]))
     static let captureWindow = Self("captureWindow", initial: .init(.w, modifiers: [.control, .shift]))
     static let captureFullscreen = Self("captureFullscreen", initial: .init(.f, modifiers: [.control, .shift]))
@@ -13,6 +14,15 @@ extension KeyboardShortcuts.Name {
     static let capturePreviousArea = Self("capturePreviousArea", initial: .init(.r, modifiers: [.control, .shift]))
     static let captureScrolling = Self("captureScrolling", initial: .init(.s, modifiers: [.control, .shift]))
     static let pickColor = Self("pickColor", initial: .init(.p, modifiers: [.control, .shift]))
+    static let captureAreaAndCopy = Self(
+        "captureAreaAndCopy",
+        initial: .init(.c, modifiers: [.control, .option, .shift])
+    )
+    static let captureAreaAndSave = Self(
+        "captureAreaAndSave",
+        initial: .init(.four, modifiers: [.control, .option, .shift])
+    )
+    static let selfTimer = Self("selfTimer", initial: .init(.eight, modifiers: [.control, .shift]))
     static let recordRegion = Self("recordRegion", initial: .init(.five, modifiers: [.control, .shift]))
     static let recordDisplay = Self("recordDisplay", initial: .init(.six, modifiers: [.control, .shift]))
     // Period, because it is the "stop" key everywhere else on the Mac — ⌘. has cancelled
@@ -22,11 +32,22 @@ extension KeyboardShortcuts.Name {
     static let recordSetup = Self("recordSetup", initial: .init(.r, modifiers: [.control, .shift, .option]))
     static let freezeScreen = Self("freezeScreen", initial: .init(.z, modifiers: [.control, .shift]))
     static let toggleDesktopIcons = Self("toggleDesktopIcons", initial: .init(.h, modifiers: [.control, .shift]))
+    static let closeAllOverlays = Self(
+        "closeAllOverlays",
+        initial: .init(.w, modifiers: [.control, .option, .shift])
+    )
+    static let saveAllOverlays = Self(
+        "saveAllOverlays",
+        initial: .init(.a, modifiers: [.control, .option, .shift])
+    )
+    static let hideOverlays = Self("hideOverlays", initial: .init(.o, modifiers: [.control, .shift]))
+    static let hidePins = Self("hidePins", initial: .init(.u, modifiers: [.control, .shift]))
 }
 
 extension CaptureCommand {
     var shortcutName: KeyboardShortcuts.Name {
         switch self {
+        case .allInOne: .allInOne
         case .captureArea: .captureArea
         case .captureWindow: .captureWindow
         case .captureFullscreen: .captureFullscreen
@@ -34,12 +55,19 @@ extension CaptureCommand {
         case .capturePreviousArea: .capturePreviousArea
         case .captureScrolling: .captureScrolling
         case .pickColor: .pickColor
+        case .captureAreaAndCopy: .captureAreaAndCopy
+        case .captureAreaAndSave: .captureAreaAndSave
+        case .selfTimer: .selfTimer
         case .recordRegion: .recordRegion
         case .recordDisplay: .recordDisplay
         case .stopRecording: .stopRecording
         case .recordSetup: .recordSetup
         case .freezeScreen: .freezeScreen
         case .toggleDesktopIcons: .toggleDesktopIcons
+        case .closeAllOverlays: .closeAllOverlays
+        case .saveAllOverlays: .saveAllOverlays
+        case .hideOverlays: .hideOverlays
+        case .hidePins: .hidePins
         }
     }
 }

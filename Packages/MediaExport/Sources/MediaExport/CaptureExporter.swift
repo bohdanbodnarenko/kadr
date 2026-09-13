@@ -118,6 +118,12 @@ public struct CaptureExporter: Sendable {
         try staging.finalize(url, into: folder)
     }
 
+    /// Moves a staged capture to a path the user picked (CleanShot §6.2).
+    @discardableResult
+    public func finalizeStaged(_ url: URL, to destination: URL) throws -> URL {
+        try staging.finalize(url, to: destination)
+    }
+
     /// Whether this file is still sitting in staging (docs/07 M11).
     public func isStaged(_ url: URL) -> Bool {
         staging.contains(url)

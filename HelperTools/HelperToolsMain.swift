@@ -159,6 +159,7 @@ final class VisionService: NSObject, VisionServiceProtocol, @unchecked Sendable 
                 let response = try stitcher.stitch(
                     frames: frames,
                     to: URL(fileURLWithPath: request.destinationPath),
+                    axis: request.axis,
                     memoryMappedThreshold: request.memoryMappedThreshold
                 )
                 try reply(JSONEncoder().encode(response), nil)

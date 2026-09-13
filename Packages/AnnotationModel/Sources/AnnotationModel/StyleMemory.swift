@@ -12,6 +12,8 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     private var shapeKind: ShapeKind
     private var textStyle: TextStyle
     private var redactionStyle: RedactionStyle
+    private var spotlightDimOpacity: CGFloat?
+    private var spotlightCornerRadius: CGFloat?
     /// Optional on the wire, not in the API: a synthesized `Decodable` throws on a
     /// missing key for a non-optional property, so a memory encoded before this existed
     /// would fail to decode. Optional storage makes adding a remembered choice a
@@ -76,6 +78,16 @@ public struct StyleMemory: Codable, Hashable, Sendable {
         set { redactionStyle = newValue }
     }
 
+    public var lastSpotlightDimOpacity: CGFloat {
+        get { spotlightDimOpacity ?? SpotlightSpec.defaultDimOpacity }
+        set { spotlightDimOpacity = SpotlightSpec.clampedDim(newValue) }
+    }
+
+    public var lastSpotlightCornerRadius: CGFloat {
+        get { spotlightCornerRadius ?? SpotlightSpec.defaultCornerRadius }
+        set { spotlightCornerRadius = SpotlightSpec.clampedCorner(newValue) }
+    }
+
     /// Whether the measure tool draws a box or a distance (docs/06 M21). Remembered like
     /// every other per-tool choice, so a session spent measuring boxes stays that way.
     /// Nil until the user picks one, so the default can change without rewriting anyone's
@@ -101,7 +113,7 @@ public struct StyleMemory: Codable, Hashable, Sendable {
         case .freehand: StrokeStyle(width: 3)
         // A measurement is a thin line whose job is to be precise, not loud.
         case .measure: StrokeStyle(color: .annotationRed, width: 2)
-        case .counter, .text, .redaction, .crop, .beautify, .camera, .progressiveBlur,
+        case .counter, .text, .redaction, .spotlight, .crop, .beautify, .camera, .progressiveBlur,
              .watermark, .subjectLift, .image: StrokeStyle()
         case .arrow, .shape, .line: StrokeStyle()
         }

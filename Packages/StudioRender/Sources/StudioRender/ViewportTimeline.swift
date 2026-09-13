@@ -60,7 +60,8 @@ public struct ViewportTimeline: Sendable {
     ///   - cues: the zooms, in edited time.
     ///   - size: the recorded area.
     ///   - duration: the edited recording's length.
-    ///   - spring: shared with the cursor reconstruction.
+    ///   - spring: how snappy the camera is. The plan supplies the edit's zoom style;
+    ///     the cursor uses its own spring so the two looks stay independent.
     ///   - pointer: edited-time samples, used only by cues whose anchor follows the pointer.
     public init(
         cues: [ZoomCue],
@@ -248,8 +249,13 @@ public struct MotionBlurPlan: Sendable, Hashable {
         }
     }
 
-    /// The plan for a frame, given whether the camera is moving.
-    public static func plan(isMoving: Bool, quality: Int = 4) -> MotionBlurPlan {
-        isMoving ? MotionBlurPlan(sampleCount: max(quality, 2)) : .none
+    /// The plan for a frame, given whether the camera is moving and how hard to smear
+    /// (CleanShot §14.5). Intensity 0.5 is four samples at a 180° shutter — the look the
+    /// studio shipped with before the slider existed.
+    public static func plan(isMoving: Bool, intensity: Double = 0.5) -> MotionBlurPlan {
+        let amount = min(max(intensity, 0), 1)
+        guard isMoving, amount > 0.02 else { return .none }
+        let samples = max(2, Int((amount * 8).rounded()))
+        return MotionBlurPlan(sampleCount: samples, shutterFraction: 0.25 + amount * 0.35)
     }
 }

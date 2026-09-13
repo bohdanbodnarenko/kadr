@@ -15,6 +15,17 @@ public enum ImageFormat: String, CaseIterable, Sendable {
         rawValue
     }
 
+    /// The format a filename's extension names, if it is one Kadr writes.
+    public init?(fileExtension: String) {
+        switch fileExtension.lowercased() {
+        case "png": self = .png
+        case "jpg", "jpeg": self = .jpeg
+        case "heic", "heif": self = .heic
+        case "webp": self = .webp
+        default: return nil
+        }
+    }
+
     public var title: String {
         switch self {
         case .png: "PNG"

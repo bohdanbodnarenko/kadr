@@ -31,7 +31,11 @@ public extension EditorDocumentModel {
         )
         guard !rect.isEmpty else { return nil }
 
-        let spec = ImageSpec(pngData: pngData, rect: rect)
+        let spec = ImageSpec(
+            pngData: pngData,
+            rect: rect,
+            hasShadow: EditorCanvasPreferences.objectShadowsEnabled()
+        )
         let command = AnnotationCommand.image(spec)
         document.add(command)
         document.selection = [command.id]

@@ -141,6 +141,17 @@ struct CaptureOutput {
         }
     }
 
+    /// Moves a staged capture to a path the user picked (CleanShot §6.2).
+    @discardableResult
+    func finalizeStaged(_ url: URL, to destination: URL) -> URL? {
+        do {
+            return try exporter.finalizeStaged(url, to: destination)
+        } catch {
+            logger.error("Could not save to the chosen path: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Whether this path is a staged capture, which the 24-hour sweep will delete.
     func isStaged(_ url: URL) -> Bool {
         exporter.isStaged(url)
@@ -221,10 +232,11 @@ struct CaptureOutput {
         // of saving: a capture nobody asked to save waits in the staging area and is
         // finalised on the first thing the user does with it (docs/03 §2).
         let actions = settings.afterCaptureActions(for: .screenshot)
+        let savesSilently = actions.contains(.save) && !actions.contains(.promptSave)
         return ExportPolicy(
             copiesToClipboard: actions.contains(.copy),
-            savesToFolder: actions.contains(.save),
-            staging: !actions.contains(.save)
+            savesToFolder: savesSilently,
+            staging: !savesSilently
         )
     }
 
@@ -249,7 +261,8 @@ struct CaptureOutput {
         return EncodingOptions(
             format: format,
             scale: capture.metadata.scale,
-            downscaleToOneToOne: settings.downscaleRetinaCaptures
+            downscaleToOneToOne: settings.downscaleRetinaCaptures,
+            convertToSRGB: settings.convertExportsToSRGB
         )
     }
 

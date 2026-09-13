@@ -32,12 +32,20 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var showsRecordingIcon = false
     private let history: HistoryController?
     private let reopenFromHistory: (HistoryRecord) -> Void
-    private let canRestore: () -> Bool
+    /// Overlay-menu items live in `StatusItemController+Overlay.swift`, so these
+    /// cannot be `private` — that is file-scoped.
+    let canRestore: () -> Bool
     private let openHistory: () -> Void
     /// How many recordings a crash left mid-edit, and how to reopen them (docs/09 U3.1).
-    private let unfinishedRecordings: () -> Int
-    private let recoverRecordings: () -> Void
+    let unfinishedRecordings: () -> Int
+    let recoverRecordings: () -> Void
     private let desktopIconsHidden: () -> Bool
+    let overlayCardCount: () -> Int
+    let overlaysAreHidden: () -> Bool
+    let pinCount: () -> Int
+    let pinsAreHidden: () -> Bool
+    /// Images dropped on the menu-bar icon open in the editor (docs/03 §8.1).
+    var openDroppedFile: ((URL) -> Void)?
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
@@ -56,7 +64,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         openHistory: @escaping () -> Void = {},
         unfinishedRecordings: @escaping () -> Int = { 0 },
         recoverRecordings: @escaping () -> Void = {},
-        desktopIconsHidden: @escaping () -> Bool = { false }
+        desktopIconsHidden: @escaping () -> Bool = { false },
+        overlayCardCount: @escaping () -> Int = { 0 },
+        overlaysAreHidden: @escaping () -> Bool = { false },
+        pinCount: @escaping () -> Int = { 0 },
+        pinsAreHidden: @escaping () -> Bool = { false }
     ) {
         self.perform = perform
         self.openSettings = openSettings
@@ -75,17 +87,31 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.unfinishedRecordings = unfinishedRecordings
         self.recoverRecordings = recoverRecordings
         self.desktopIconsHidden = desktopIconsHidden
+        self.overlayCardCount = overlayCardCount
+        self.overlaysAreHidden = overlaysAreHidden
+        self.pinCount = pinCount
+        self.pinsAreHidden = pinsAreHidden
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
         statusItem.button?.toolTip = "Kadr"
         statusItem.behavior = .terminationOnRemoval
         showIdleIcon()
+        attachDropTarget()
 
         // Items are built in menuNeedsUpdate, so launch pays for an empty menu only.
         menu.autoenablesItems = false
         menu.delegate = self
         attachIdleMenu()
+    }
+
+    /// Drop a still or `.kadr` on the icon to annotate it (docs/03 §8.1).
+    private func attachDropTarget() {
+        guard let button = statusItem.button else { return }
+        let drop = StatusItemDropView(frame: button.bounds)
+        drop.autoresizingMask = [.width, .height]
+        drop.onDrop = { [weak self] url in self?.openDroppedFile?(url) }
+        button.addSubview(drop)
     }
 
     // MARK: - Icon states (docs/03 §8.1)
@@ -123,11 +149,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         attachRecordingClick()
     }
 
-    /// Idle: the menu opens on a click, like every other extra.
+    /// Idle: Option-click opens All-in-One; otherwise the menu opens (docs/03 §8.1).
     private func attachIdleMenu() {
-        statusItem.menu = menu
-        statusItem.button?.target = nil
-        statusItem.button?.action = nil
+        statusItem.menu = nil
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(didClickIdleStatusItem)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     /// Recording: a click stops, because that is the only thing the user is likely to want
@@ -137,6 +164,26 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.target = self
         statusItem.button?.action = #selector(didClickStatusItem)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc
+    private func didClickIdleStatusItem() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            popIdleMenu()
+            return
+        }
+        if event?.modifierFlags.contains(.option) == true {
+            perform(.allInOne)
+            return
+        }
+        popIdleMenu()
+    }
+
+    private func popIdleMenu() {
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        attachIdleMenu()
     }
 
     @objc
@@ -279,62 +326,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
-    /// Commands over the surfaces a capture produces (docs/03 §2, §4).
-    private func addOverlayItems(to menu: NSMenu) {
-        menu.addItem(.separator())
-
-        let restoreItem = NSMenuItem(
-            title: "Restore Recently Closed",
-            action: #selector(didSelectRestore),
-            keyEquivalent: "t"
-        )
-        restoreItem.keyEquivalentModifierMask = [.command, .shift]
-        restoreItem.target = self
-        restoreItem.isEnabled = canRestore()
-        menu.addItem(restoreItem)
-
-        let historyItem = NSMenuItem(
-            title: "History…",
-            action: #selector(didSelectHistory),
-            keyEquivalent: ""
-        )
-        historyItem.target = self
-        menu.addItem(historyItem)
-
-        let closePinsItem = NSMenuItem(
-            title: "Close All Pins",
-            action: #selector(didSelectCloseAllPins),
-            keyEquivalent: ""
-        )
-        closePinsItem.target = self
-        menu.addItem(closePinsItem)
-
-        addRecoveryItem(to: menu)
-    }
-
-    /// Offers to reopen recordings a crash left mid-edit (docs/09 U3.1).
-    ///
-    /// Absent rather than disabled when there are none, which is the opposite of the rule
-    /// the rest of this menu follows — and deliberately so. A permanently visible "Recover"
-    /// invites somebody to wonder what went wrong every time they open the menu, and the
-    /// answer is almost always nothing. It appears when there is something to recover and
-    /// disappears once there is not.
-    private func addRecoveryItem(to menu: NSMenu) {
-        let count = unfinishedRecordings()
-        guard count > 0 else { return }
-
-        let title = count == 1
-            ? "Recover Unfinished Recording…"
-            : "Recover \(count) Unfinished Recordings…"
-        let item = NSMenuItem(title: title, action: #selector(didSelectRecover), keyEquivalent: "")
-        item.target = self
-        menu.addItem(item)
-    }
-
-    @objc private func didSelectRecover() {
-        recoverRecordings()
-    }
-
     private func addApplicationItems(to menu: NSMenu) {
         let extras = additionalItems()
         if !extras.isEmpty {
@@ -381,7 +372,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     // MARK: - Actions
 
     @objc
-    private func didSelectCapture(_ sender: NSMenuItem) {
+    func didSelectCapture(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
               let command = CaptureCommand(rawValue: rawValue)
         else { return }
@@ -389,17 +380,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc
-    private func didSelectRestore() {
+    func didSelectRestore() {
         restoreRecentlyClosed()
     }
 
     @objc
-    private func didSelectHistory() {
+    func didSelectHistory() {
         openHistory()
     }
 
     @objc
-    private func didSelectCloseAllPins() {
+    func didSelectCloseAllPins() {
         closeAllPins()
     }
 
@@ -458,4 +449,8 @@ struct RecordingControls {
     let togglePause: () -> Void
     let cancel: () -> Void
     var restart: () -> Void = {}
+    /// 0…1 loudness for the control-bar meter (CleanShot §13.3).
+    var audioLevel: Float = 0
+    /// True when the microphone is on but has not picked up anything this take.
+    var microphoneIsSilent: Bool = false
 }

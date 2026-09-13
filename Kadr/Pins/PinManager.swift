@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import os
+import OverlayKit
 import Shared
 
 /// Owns every pinned screenshot (docs/03 §4).
@@ -11,11 +12,20 @@ import Shared
 final class PinManager {
     private var pins: [PinPanel] = []
     private let logger = KadrLog.logger(.overlay)
+    private let store: PinStore?
+    private var isRestoring = false
+    private var areHidden = false
 
     /// Where the next pin lands, so a run of pins cascades instead of stacking exactly.
     private var cascadeStep = 0
     private static let cascadeOffset: CGFloat = 24
     private static let cascadeWrap = 8
+
+    private var pendingRestore: PinRecord?
+
+    init(store: PinStore? = PinStore.applicationSupport()) {
+        self.store = store
+    }
 
     var count: Int {
         pins.count
@@ -23,6 +33,10 @@ final class PinManager {
 
     var isEmpty: Bool {
         pins.isEmpty
+    }
+
+    var isHidden: Bool {
+        areHidden
     }
 
     var fileURLs: [URL] {
@@ -53,15 +67,76 @@ final class PinManager {
             guard let panel else { return }
             self?.close(panel)
         }
+        panel.onGeometryChanged = { [weak self] in
+            self?.persist()
+        }
 
-        panel.present(at: nextOrigin(for: panel, on: screen))
+        if let record = pendingRestore {
+            panel.applyPersistedState(
+                frame: record.frame,
+                alpha: record.alpha,
+                clickThrough: record.clickThrough
+            )
+            panel.orderFrontRegardless()
+        } else {
+            panel.present(at: nextOrigin(for: panel, on: screen))
+        }
+
+        if areHidden {
+            setHidden(false)
+        }
+
         pins.append(panel)
-        // Bound to a local: a log message is an autoclosure, so a property reference in
-        // it would need an explicit `self.` that SwiftFormat strips again.
         let total = pins.count
         let name = fileURL.lastPathComponent
         logger.info("Pinned \(name, privacy: .public); \(total, privacy: .public) pin(s) open")
+        persist()
         return true
+    }
+
+    /// Reopens pins that were showing when Kadr last quit (docs/03 §4 P2).
+    func restore(
+        copy: @escaping (URL) -> Void,
+        save: @escaping (URL) -> Void,
+        annotate: @escaping (URL) -> Void,
+        copyText: @escaping (URL) -> Void
+    ) {
+        guard let store else { return }
+        isRestoring = true
+        defer {
+            isRestoring = false
+            persist()
+        }
+        for record in store.load() {
+            let url = URL(fileURLWithPath: record.path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            pendingRestore = record
+            _ = pin(
+                url,
+                copy: copy,
+                save: save,
+                annotate: annotate,
+                copyText: copyText
+            )
+            pendingRestore = nil
+        }
+    }
+
+    /// Hide / show every pin without closing them (CleanShot §11, §22.4).
+    func toggleHidden() {
+        setHidden(!areHidden)
+    }
+
+    func setHidden(_ hidden: Bool) {
+        guard hidden != areHidden else { return }
+        areHidden = hidden
+        for panel in pins {
+            if hidden {
+                panel.hideForStack()
+            } else {
+                panel.revealFromStack()
+            }
+        }
     }
 
     /// The "Close all pins" global command (docs/03 §4).
@@ -71,11 +146,26 @@ final class PinManager {
         }
         pins.removeAll()
         cascadeStep = 0
+        areHidden = false
+        persist()
     }
 
     private func close(_ panel: PinPanel) {
         guard let index = pins.firstIndex(where: { $0 === panel }) else { return }
         pins.remove(at: index).dismiss()
+        persist()
+    }
+
+    private func persist() {
+        guard !isRestoring, let store else { return }
+        store.save(pins.map { panel in
+            PinRecord(
+                path: panel.fileURL.path,
+                frame: panel.frame,
+                alpha: Double(panel.alphaValue),
+                clickThrough: panel.clickThroughEnabled
+            )
+        })
     }
 
     /// Cascades pins down and right from the centre so a burst of them stays reachable.

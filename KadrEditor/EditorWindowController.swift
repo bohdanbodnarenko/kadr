@@ -3,7 +3,6 @@ import AnnotationRender
 import AppKit
 import EditorUI
 import ImageIO
-import MediaExport
 import os
 import Shared
 import SwiftUI
@@ -23,21 +22,21 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         }
     }
 
-    private let fileURL: URL
-    private let baseImage: CGImage
+    let fileURL: URL
+    let baseImage: CGImage
     /// The immutable capture, encoded once at open so autosave does not re-PNG a 5K
     /// image every 1.5 s (docs/10 R2.6).
-    private let cachedBasePNG: Data
-    private let model: EditorDocumentModel
-    private let renderer = AnnotationExportRenderer()
-    private let logger = KadrLog.logger(.app)
-    private let vision = VisionClient()
+    let cachedBasePNG: Data
+    let model: EditorDocumentModel
+    let renderer = AnnotationExportRenderer()
+    let logger = KadrLog.logger(.app)
+    let vision = VisionClient()
 
-    private var window: NSWindow?
+    var window: NSWindow?
     private var hostingView: NSView?
 
     /// Keeps a recoverable copy while the user works (docs/07 M7).
-    private let autosave = EditorAutosave()
+    let autosave = EditorAutosave()
     private var autosaveTask: Task<Void, Never>?
     /// True once the user has been asked about closing, so the second close goes through.
     private var isClosingConfirmed = false
@@ -78,6 +77,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 baseImage: BaseImageReference(size: size, scale: scale)
             ))
         }
+        model.isCanvasLocked = EditorCanvasPreferences.lockCanvasByDefault()
         super.init()
     }
 
@@ -111,7 +111,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 ?? CGRect(origin: .zero, size: CGSize(width: 1440, height: 900))
             window.setFrame(
                 EditorWindowGeometry.preferredFrame(
-                    canvasSize: model.document.canvasRect.size,
+                    canvasSize: model.document.orientedCanvasSize,
                     on: screen
                 ),
                 display: false
@@ -241,181 +241,45 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
 
     // MARK: - Export
 
-    private func export(_ action: EditorRootView.ExportAction) {
-        if action == .saveProject {
+    func export(_ action: EditorRootView.ExportAction) {
+        switch action {
+        case .saveProject:
             saveProject()
-            return
+        case .insertImage:
+            insertImageFromOpenPanel()
+        case .insertFromClipboard:
+            insertImageFromClipboard()
+        case .copy, .copyFlattened, .copyWithoutAnnotations, .save, .saveAs, .print, .pin, .share:
+            exportRendered(action)
         }
+    }
+
+    func exportRendered(_ action: EditorRootView.ExportAction) {
         do {
             let image = try renderer.render(
                 baseImage: baseImage,
                 document: model.document,
-                includeAnnotations: action != .copyWithoutAnnotations
+                includeAnnotations: action != .copyWithoutAnnotations,
+                exportScale: model.exportScale
             )
             switch action {
-            case .copy, .copyWithoutAnnotations:
+            case .copy, .copyFlattened, .copyWithoutAnnotations:
                 copyToClipboard(image)
             case .save:
                 try save(image)
-            case .saveProject:
-                // Handled above; the project path does not render a flattened image.
+            case .saveAs:
+                saveAs(image)
+            case .print:
+                printImage(image)
+            case .pin:
+                pinImage(image)
+            case .share:
+                shareImage(image)
+            case .saveProject, .insertImage, .insertFromClipboard:
                 break
             }
         } catch {
             logger.error("Export failed: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// Writes a re-editable `.kadr` beside the capture, and tells the agent about it.
-    ///
-    /// The agent owns the library, so the project is added to History through the URL
-    /// scheme rather than by this process reaching into the store (docs/03 §8.4,
-    /// docs/06 M24). If the agent is not running the file is still written — the save is
-    /// the promise, the library entry is the convenience.
-    private func saveProject() {
-        let destination = fileURL
-            .deletingPathExtension()
-            .appendingPathExtension(KadrDocumentFile.fileExtension)
-        do {
-            try KadrDocumentFile.write(
-                KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG),
-                to: destination
-            )
-            logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
-            // The work is durable now, so the prompt on close has nothing to ask about and
-            // the recovery copy has nothing to protect.
-            model.markSaved()
-            autosave.discard(for: fileURL)
-            addToLibrary(destination)
-            NSWorkspace.shared.activateFileViewerSelecting([destination])
-        } catch {
-            logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func addToLibrary(_ url: URL) {
-        var components = URLComponents()
-        components.scheme = "kadr"
-        components.host = "add-to-history"
-        components.queryItems = [URLQueryItem(name: "path", value: url.path)]
-        guard let target = components.url else { return }
-        NSWorkspace.shared.open(target)
-    }
-
-    private func copyToClipboard(_ image: CGImage) {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else { return }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else { return }
-
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setData(data as Data, forType: .png)
-        logger.info("Copied the flattened capture")
-    }
-
-    private func save(_ image: CGImage) throws {
-        let writer = CaptureFileWriter()
-        let directory = fileURL.deletingLastPathComponent()
-        let name = fileURL.deletingPathExtension().lastPathComponent
-
-        let url = try writer.write(
-            image,
-            to: directory,
-            template: FilenameTemplate("\(name) annotated"),
-            options: EncodingOptions(scale: DisplayScale(model.document.baseImage.scale))
-        )
-        logger.info("Saved \(url.lastPathComponent, privacy: .public)")
-        model.markSaved()
-        autosave.discard(for: fileURL)
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    // MARK: - Reading
-
-    private static func decodeImage(from data: Data) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return CGImageSourceCreateImageAtIndex(source, 0, nil)
-    }
-
-    /// Recovers the capture's scale from its DPI tag, defaulting to 1 for images that
-    /// carry none.
-    private static func scale(of source: CGImageSource) -> CGFloat {
-        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let dpi = properties[kCGImagePropertyDPIWidth] as? Double, dpi > 0
-        else { return 1 }
-        return max(1, CGFloat((dpi / 72).rounded()))
-    }
-
-    func analyzeForRedaction(_ image: CGImage) async throws -> VisionAnalysis {
-        try await vision.analyze(
-            image,
-            options: TextRecognitionOptions(
-                detectsCodes: false,
-                includeRedactionCandidates: true
-            )
-        )
-    }
-
-    /// Asks the helper to segment the subject and hands back the mask (docs/06 M23).
-    ///
-    /// The base image is written to a scratch PNG rather than the capture file being
-    /// passed straight through: a `.kadr` project's base image lives inside a zip, and a
-    /// mask has to match the pixels the document is actually built on.
-    func liftSubject() async throws -> Data? {
-        let scratch = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-lift-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: scratch) }
-
-        let source = scratch.appendingPathComponent("base.png")
-        try Self.writePNG(baseImage, to: source)
-
-        let response = try await vision.subjectMask(SubjectMaskRequest(
-            sourcePath: source.path,
-            destinationPath: scratch.appendingPathComponent("mask.png").path
-        ))
-        // Let go so the helper can start its idle countdown and give the model back
-        // (docs/04 §1).
-        vision.disconnect()
-
-        guard let maskPath = response.maskPath else { return nil }
-        return try Data(contentsOf: URL(fileURLWithPath: maskPath))
-    }
-
-    private static func pngData(of image: CGImage) throws -> Data {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
-        }
-        return data as Data
-    }
-
-    private static func writePNG(_ image: CGImage, to url: URL) throws {
-        guard let destination = CGImageDestinationCreateWithURL(
-            url as CFURL,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw OpenError.unreadableImage(url)
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw OpenError.unreadableImage(url)
         }
     }
 }

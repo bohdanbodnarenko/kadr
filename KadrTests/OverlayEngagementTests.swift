@@ -326,4 +326,146 @@ struct OverlayEngagementTests {
         #expect(!harness.manager.hasUnsavedItems)
         #expect(harness.manager.finalizeAllStaged() == 0)
     }
+
+    @Test("Option+Copy claims the card so auto-close cannot take it (CleanShot §6.2)")
+    func optionCopyKeepsTheCard() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        #expect(!harness.manager.isEngaged(item))
+
+        harness.manager.copy(item, keepOverlay: true)
+        #expect(harness.manager.isEngaged(item))
+
+        harness.manager.autoDismissIfIdle(item)
+        #expect(harness.manager.items.contains { $0.id == item.id })
+        harness.manager.dismissAll()
+    }
+
+    @Test("Copy without Option leaves the card disposable")
+    func copyDoesNotEngage() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.copy(item)
+        #expect(!harness.manager.isEngaged(item))
+        harness.manager.dismissAll()
+    }
+
+    // MARK: - Hover keys
+
+    private func keyDown(_ keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: modifiers,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "",
+            charactersIgnoringModifiers: "",
+            isARepeat: false,
+            keyCode: keyCode
+        ))
+    }
+
+    @Test("Esc hides the hovered card without deleting it")
+    func hoverEscDismisses() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(53), canStealCommandKeys: true))
+        #expect(harness.manager.items.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
+    }
+
+    @Test("Return from the local monitor saves and dismisses")
+    func hoverReturnSaves() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(36), canStealCommandKeys: true))
+        #expect(harness.manager.items.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
+    }
+
+    @Test("Return does nothing when the setting is off")
+    func hoverReturnRespectsSetting() throws {
+        let harness = makeHarness()
+        harness.settings.overlayReturnSaves = false
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(!harness.manager.handleHoverKey(try keyDown(36), canStealCommandKeys: true))
+        #expect(harness.manager.items.contains { $0.id == item.id })
+        harness.manager.dismissAll()
+    }
+
+    @Test("⌘S from the local monitor saves and dismisses")
+    func hoverCommandSSaves() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(1, modifiers: .command), canStealCommandKeys: true))
+        #expect(harness.manager.items.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
+    }
+
+    @Test("⌘S from the global monitor is ignored so the front app keeps it")
+    func hoverCommandSIsLocalOnly() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(!harness.manager.handleHoverKey(try keyDown(1, modifiers: .command), canStealCommandKeys: false))
+        #expect(harness.manager.items.contains { $0.id == item.id })
+        harness.manager.dismissAll()
+    }
+
+    @Test("⌘C from the local monitor copies")
+    func hoverCommandCCopies() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(8, modifiers: .command), canStealCommandKeys: true))
+        #expect(harness.manager.items.first?.isStaged == false)
+        harness.manager.dismissAll()
+    }
+
+    @Test("⌘P from the local monitor pins")
+    func hoverCommandPPins() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(35, modifiers: .command), canStealCommandKeys: true))
+        #expect(harness.manager.pins.count == 1)
+        harness.manager.pins.closeAll()
+        harness.manager.dismissAll()
+    }
+
+    @Test("⌘E from the local monitor opens annotate")
+    func hoverCommandEAnnotates() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.editor = EditorLauncher(editorURL: nil)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(14, modifiers: .command), canStealCommandKeys: true))
+        #expect(harness.manager.isEngaged(item))
+        harness.manager.dismissAll()
+    }
+
+    @Test("⌘W from the local monitor dismisses without deleting")
+    func hoverCommandWDismisses() throws {
+        let harness = makeHarness()
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+
+        #expect(harness.manager.handleHoverKey(try keyDown(13, modifiers: .command), canStealCommandKeys: true))
+        #expect(harness.manager.items.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
+    }
 }

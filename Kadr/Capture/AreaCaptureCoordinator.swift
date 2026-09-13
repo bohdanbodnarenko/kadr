@@ -16,16 +16,22 @@ import Shared
 /// half-finished.
 @MainActor
 final class AreaCaptureCoordinator {
-    private let engine: CaptureEngine
+    /// Internal, not private: silent display captures live in
+    /// `AreaCaptureCoordinator+Direct.swift`, and `private` is file-scoped.
+    let engine: CaptureEngine
     /// Internal, not private: the failure path lives in
     /// `AreaCaptureCoordinator+Delivery.swift`, and `private` is file-scoped.
     let permissions: PermissionCoordinator
-    private let overlay: SelectionOverlayController
+    /// Internal, not private: freeze-then-capture lives in `+Direct.swift`.
+    let overlay: SelectionOverlayController
     /// Internal, not private: delivery reads the after-capture matrix, and `private` is
     /// file-scoped.
     let settings: AppSettings
-    private let timer = CaptureCountdown()
-    private let vision = TextRecognizer()
+    /// Internal, not private: silent display captures live in
+    /// `AreaCaptureCoordinator+Direct.swift`, and `private` is file-scoped.
+    let timer = CaptureCountdown()
+    /// Internal, not private: file OCR lives in `AreaCaptureCoordinator+OCR.swift`.
+    let vision = TextRecognizer()
     let recovery = PermissionRecovery()
     private var pickerSession: ContentSharingPickerSession?
     /// Internal, not private: the colour-pick half lives in
@@ -38,21 +44,35 @@ final class AreaCaptureCoordinator {
     /// `AreaCaptureCoordinator+Overlay.swift`, and `private` is file-scoped.
     let quickAccess: QuickAccessManager
     let pins = PinManager()
-    private let hygiene: DesktopHygieneController?
+    /// Internal, not private: silent display captures live in
+    /// `AreaCaptureCoordinator+Direct.swift`, and `private` is file-scoped.
+    let hygiene: DesktopHygieneController?
     let logger = KadrLog.logger(.capture)
     private let signposter = KadrLog.signposter(.capture)
 
-    private var inFlight: Task<Void, Never>?
+    /// Internal, not private: silent display captures live in
+    /// `AreaCaptureCoordinator+Direct.swift`, and `private` is file-scoped.
+    var inFlight: Task<Void, Never>?
 
     /// The last committed region, for "capture previous area" (docs/03 §1.1).
-    private var lastRegion: (rect: DisplayRect, displayID: CGDirectDisplayID)?
+    /// Internal: freeze-inspect crops this rect in `+Direct.swift`.
+    var lastRegion: (rect: DisplayRect, displayID: CGDirectDisplayID)?
 
     /// The app that was in front when the hotkey fired.
     ///
     /// Sampled then, not at capture time: by the time the overlay is up the frontmost app
     /// is Kadr, which makes a useless `{app}` in the filename.
-    private var frontmostAtHotkey: AppIdentity?
-    private var purpose: SelectionPurpose = .capture
+    var frontmostAtHotkey: AppIdentity?
+    /// Internal, not private: freeze-then-fullscreen lives in `+Direct.swift`.
+    var purpose: SelectionPurpose = .capture
+    /// Whether Shift was held when this capture started, which skips auto-beautify
+    /// without fighting the overlay's aspect-lock (CleanShot §9).
+    var skipAutoBeautify = false
+
+    func rememberBeautifySkip() {
+        skipAutoBeautify = NSEvent.modifierFlags.contains(.shift)
+    }
+
     /// Whether the next overlay opens as a colour picker (docs/03 §3 P3, docs/06 M22).
     var startsInEyedropperMode = false
 
@@ -86,12 +106,12 @@ final class AreaCaptureCoordinator {
 
     /// How long this capture waits: the automation's `delay=` if it gave one, otherwise
     /// the user's self-timer (docs/03 §1.5, §8.4).
-    private var timerSeconds: Int {
+    var timerSeconds: Int {
         automation.overrides.delaySeconds ?? settings.timerSeconds
     }
 
     /// Whether to draw the pointer, honouring an automation override (docs/03 §8.4).
-    private var includesCursor: Bool {
+    var includesCursor: Bool {
         automation.overrides.includesCursor ?? settings.includesCursor
     }
 
@@ -103,20 +123,38 @@ final class AreaCaptureCoordinator {
 
     /// Freezes every display and puts the selection overlay up.
     func beginAreaCapture() {
+        rememberBeautifySkip()
         beginOverlayCapture(mode: .area)
     }
 
-    /// The P1 freeze as its own command: freeze to inspect, then capture as usual (docs/03 §7).
+    /// Countdown first, then the overlay, so hover menus can be staged (docs/03 §1.5).
+    ///
+    /// Area capture otherwise freezes immediately, which is the right default for a
+    /// screenshot but the wrong one for a self-timer: the thing you wanted in the shot
+    /// is still being arranged. Uses the configured delay, or 3 seconds when the timer
+    /// is off — a dedicated Self-Timer command that waited zero seconds would be a
+    /// quieter Capture Area.
+    func beginSelfTimedAreaCapture() {
+        rememberBeautifySkip()
+        let seconds = timerSeconds > 0 ? timerSeconds : SelfTimer.threeSeconds.seconds
+        inFlight?.cancel()
+        timer.run(seconds: seconds) { [weak self] in
+            self?.beginOverlayCapture(mode: .area)
+        }
+    }
+
+    /// Freeze to inspect moving UI, then capture from those frames (docs/03 §7).
     func toggleFreezeScreen() {
         if overlay.isPresented {
             cancel()
             return
         }
-        beginOverlayCapture(mode: .area)
+        beginOverlayCapture(mode: .area, purpose: .inspect)
     }
 
     /// Freezes every display and opens window-pick mode (docs/03 §1.2).
     func beginWindowCapture() {
+        rememberBeautifySkip()
         beginOverlayCapture(mode: .window)
     }
 
@@ -126,39 +164,12 @@ final class AreaCaptureCoordinator {
         beginOverlayCapture(mode: .area, purpose: .recognizeText)
     }
 
-    /// Captures every display with no overlay at all (docs/03 §1.3).
-    func captureAllDisplays() {
-        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
-            self?.captureWithSystemPicker()
-        }) else { return }
-        inFlight?.cancel()
-        let seconds = timerSeconds
-        timer.run(seconds: seconds) { [weak self] in
-            guard let self else { return }
-            inFlight = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    await engine.setDynamicRange(settings.captureDynamicRange)
-                    // Before the pixels, not after: hiding the icons or swapping the
-                    // wallpaper afterwards leaves them in the shot and restarts the Finder
-                    // for nothing (docs/07 H3).
-                    await hygiene?.beginCaptureAndSettle()
-                    await CaptureExclusionPush.into(engine)
-                    let captures = try await engine.captureAllDisplays(
-                        includesCursor: includesCursor
-                    )
-                    permissions.noteCaptureSuccess()
-                    await deliverAll(captures)
-                    hygiene?.endCapture()
-                } catch {
-                    hygiene?.endCapture()
-                    handle(error)
-                }
-            }
-        }
-    }
-
     func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
+        // Freeze inspect is already the area overlay; a second Capture Area must not
+        // re-photograph the screen and lose the hover menu (docs/03 §7).
+        if overlay.isPresented, self.purpose == .inspect, mode == .area, purpose == .capture {
+            return
+        }
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
@@ -235,13 +246,14 @@ final class AreaCaptureCoordinator {
     /// The rect arrives in AppKit's screen space because that is what a user reads off a
     /// window's frame; it is flipped into CoreGraphics' display space and matched to the
     /// display it lands on here, so nothing downstream has to guess (CLAUDE.md rule 6).
-    func captureRegion(_ screenRect: ScreenRect) {
+    func captureRegion(_ screenRect: ScreenRect, purpose: SelectionPurpose = .capture) {
+        rememberBeautifySkip()
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
         inFlight?.cancel()
         frontmostAtHotkey = Self.currentFrontmostApp()
-        purpose = .capture
+        self.purpose = purpose
 
         let global = screenRect.inDisplaySpace(.current)
         guard let displayID = DisplayLookup.display(containing: global) else {
@@ -257,6 +269,8 @@ final class AreaCaptureCoordinator {
     }
 
     func capturePreviousArea() {
+        rememberBeautifySkip()
+        if captureHeldFreezeCroppingLastRegion() { return }
         guard let lastRegion else {
             logger.info("No previous area to capture yet")
             return
@@ -299,7 +313,9 @@ final class AreaCaptureCoordinator {
         let shadow = selection.togglesShadow ? !settings.windowShadow : settings.windowShadow
         let options = WindowCaptureOptions(
             includesShadow: shadow,
-            transparentBackground: settings.transparentWindowBackground,
+            // Always keep the window's alpha so a solid or wallpaper fill can show
+            // through rounded corners (docs/03 §1.2). Opaque is applied afterwards.
+            transparentBackground: true,
             includesCursor: includesCursor
         )
 
@@ -308,9 +324,14 @@ final class AreaCaptureCoordinator {
             inFlight = Task { [weak self] in
                 guard let self else { return }
                 do {
-                    let capture = try await engine.captureWindow(selection.window.id, options: options)
+                    let captured = try await engine.captureWindow(selection.window.id, options: options)
                     permissions.noteCaptureSuccess()
-                    await deliver(capture)
+                    let presented = WindowBackdropApplier.apply(captured, settings: settings)
+                    let spec = WindowBackdropApplier.beautifySpec(
+                        settings: settings,
+                        displayID: captured.metadata.displayID
+                    ) ?? autoBeautifySpec()
+                    await deliver(presented, editableOriginal: captured, beautify: spec)
                 } catch {
                     handle(error)
                 }
@@ -385,7 +406,8 @@ final class AreaCaptureCoordinator {
             do {
                 let recognition = try await vision.recognize(
                     image,
-                    preservingLineBreaks: settings.ocrPreservesLineBreaks
+                    preservingLineBreaks: automation.overrides.preservesLineBreaks
+                        ?? settings.ocrPreservesLineBreaks
                 )
                 vision.copyToClipboard(recognition)
                 let characters = recognition.text.count
@@ -437,6 +459,7 @@ final class AreaCaptureCoordinator {
     /// Captures through `SCContentSharingPicker`, which needs no permission at all
     /// (docs/04 §4.1) — the way to stay useful before, or without, a TCC grant.
     func captureWithSystemPicker() {
+        rememberBeautifySkip()
         let session = ContentSharingPickerSession()
         pickerSession = session
         inFlight = Task { [weak self] in

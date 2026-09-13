@@ -22,14 +22,16 @@ public enum AnnotationLayerFactory {
         for command: AnnotationCommand,
         contentsScale: CGFloat,
         imageScale: CGFloat = 1,
-        baseImage: CGImage? = nil
+        baseImage: CGImage? = nil,
+        canvasRect: CGRect? = nil
     ) -> CALayer? {
         let layer = strokeShapeLayer(for: command)
             ?? contentLayer(
                 for: command,
                 contentsScale: contentsScale,
                 imageScale: imageScale,
-                baseImage: baseImage
+                baseImage: baseImage,
+                canvasRect: canvasRect
             )
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
@@ -53,12 +55,15 @@ public enum AnnotationLayerFactory {
         for command: AnnotationCommand,
         contentsScale: CGFloat,
         imageScale: CGFloat,
-        baseImage: CGImage?
+        baseImage: CGImage?,
+        canvasRect: CGRect?
     ) -> CALayer? {
         switch command {
         case let .text(spec): textLayer(spec, contentsScale: contentsScale)
         case let .counter(spec): counterLayer(spec, contentsScale: contentsScale)
         case let .redaction(spec): redactionPreviewLayer(spec, baseImage: baseImage, imageScale: imageScale)
+        case let .spotlight(spec):
+            spotlightLayer(spec, canvasRect: resolvedCanvas(canvasRect, baseImage: baseImage, imageScale: imageScale))
         case let .measure(spec): measureLayer(spec, contentsScale: contentsScale, imageScale: imageScale)
         case let .image(spec): imageLayer(spec)
         // The crop and the beautify backdrop are chrome around the canvas, not objects
@@ -75,7 +80,8 @@ public enum AnnotationLayerFactory {
         _ layer: CALayer,
         for command: AnnotationCommand,
         imageScale: CGFloat = 1,
-        baseImage: CGImage? = nil
+        baseImage: CGImage? = nil,
+        canvasRect: CGRect? = nil
     ) {
         switch command {
         case let .arrow(spec):
@@ -89,7 +95,13 @@ public enum AnnotationLayerFactory {
         case let .highlighter(spec):
             applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
         default:
-            updateContentLayer(layer, for: command, imageScale: imageScale, baseImage: baseImage)
+            updateContentLayer(
+                layer,
+                for: command,
+                imageScale: imageScale,
+                baseImage: baseImage,
+                canvasRect: canvasRect
+            )
         }
     }
 
@@ -98,7 +110,8 @@ public enum AnnotationLayerFactory {
         _ layer: CALayer,
         for command: AnnotationCommand,
         imageScale: CGFloat,
-        baseImage: CGImage?
+        baseImage: CGImage?,
+        canvasRect: CGRect?
     ) {
         switch command {
         case let .text(spec):
@@ -108,6 +121,12 @@ public enum AnnotationLayerFactory {
             layer.frame = counterFrame(spec)
         case let .redaction(spec):
             applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
+        case let .spotlight(spec):
+            applySpotlight(
+                to: layer,
+                spec: spec,
+                canvasRect: resolvedCanvas(canvasRect, baseImage: baseImage, imageScale: imageScale)
+            )
         case let .measure(spec):
             updateMeasureLayer(layer, spec: spec, imageScale: imageScale)
         case let .image(spec):

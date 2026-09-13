@@ -9,6 +9,8 @@ import Foundation
 public enum CardAction: String, CaseIterable, Sendable, Codable {
     case copy
     case save
+    /// Always asks where the file should land (CleanShot §6.2).
+    case saveAs
     case annotate
     case pin
     case recognizeText
@@ -24,6 +26,7 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
         switch self {
         case .copy: "Copy"
         case .save: "Save"
+        case .saveAs: "Save As"
         case .annotate: "Annotate"
         case .pin: "Pin"
         case .recognizeText: "Copy Text"
@@ -40,6 +43,7 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
         switch self {
         case .copy: "doc.on.doc"
         case .save: "square.and.arrow.down"
+        case .saveAs: "square.and.arrow.down.on.square"
         case .annotate: "pencil.tip.crop.circle"
         case .pin: "pin"
         case .recognizeText: "text.viewfinder"

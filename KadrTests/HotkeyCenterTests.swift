@@ -70,6 +70,7 @@ struct CaptureCommandTests {
     @Test("The menu lists the capture actions from docs/03 §8.1")
     func menuCommands() {
         #expect(CaptureCommand.menuCommands == [
+            .allInOne,
             .captureArea,
             .captureWindow,
             .captureFullscreen,
@@ -80,5 +81,21 @@ struct CaptureCommandTests {
         #expect(CaptureCommand.menuCommands.allSatisfy { !$0.title.isEmpty })
         // Repeating the last region is a hotkey, not a menu item (docs/03 §8.1).
         #expect(!CaptureCommand.menuCommands.contains(.capturePreviousArea))
+        #expect(!CaptureCommand.menuCommands.contains(.captureAreaAndCopy))
+    }
+
+    @Test("Utility commands include the self-timer")
+    func utilityCommandsIncludeSelfTimer() {
+        #expect(CaptureCommand.utilityCommands.contains(.selfTimer))
+        #expect(CaptureCommand.utilityCommands.contains(.freezeScreen))
+    }
+
+    @Test("Overlay commands cover close, save and hide")
+    func overlayCommands() {
+        #expect(CaptureCommand.overlayCommands == [
+            .saveAllOverlays,
+            .closeAllOverlays,
+            .hideOverlays
+        ])
     }
 }

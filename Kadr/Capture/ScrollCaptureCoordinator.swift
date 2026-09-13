@@ -48,7 +48,8 @@ final class ScrollCaptureCoordinator {
     @ObservationIgnored private let strip = ScrollPreviewStrip()
     @ObservationIgnored private var hud: ScrollCaptureHUD?
     @ObservationIgnored private var autoScrollTask: Task<Void, Never>?
-    @ObservationIgnored private var lastProfile: RowProfile?
+    @ObservationIgnored private var lastRowProfile: RowProfile?
+    @ObservationIgnored private var lastColumnProfile: ColumnProfile?
     @ObservationIgnored private var sticky = StickyBands.none
     @ObservationIgnored private var stickyResolved = false
     @ObservationIgnored private var region: (rect: DisplayRect, display: DisplayGeometry)?
@@ -67,6 +68,7 @@ final class ScrollCaptureCoordinator {
     /// had abandoned. The stitch carries the token it started with and drops everything
     /// if it no longer matches (docs/07 M5).
     @ObservationIgnored private var sessionToken = 0
+    @ObservationIgnored private var overrides: ScrollingOverrides = .none
 
     init(
         captureEngine: CaptureEngine,
@@ -89,15 +91,21 @@ final class ScrollCaptureCoordinator {
     // MARK: - Starting
 
     /// Arms the next scrolling capture with a place to report its result.
-    func arm(completion: ((CaptureOutcome) -> Void)?) {
+    func arm(overrides: ScrollingOverrides = .none, completion: ((CaptureOutcome) -> Void)?) {
         report(.cancelled)
+        self.overrides = overrides
         automationCompletion = completion
     }
 
     private func report(_ outcome: CaptureOutcome) {
         guard let automationCompletion else { return }
         self.automationCompletion = nil
+        overrides = .none
         automationCompletion(outcome)
+    }
+
+    private var usesAutoScroll: Bool {
+        overrides.autoScroll ?? settings.scrollAutoScroll
     }
 
     /// Picks the region to scroll through, then starts grabbing frames.
@@ -130,10 +138,29 @@ final class ScrollCaptureCoordinator {
         }
     }
 
+    /// Starts scrolling a named rectangle with no overlay (docs/03 §8.4 `display=`).
+    func begin(region screenRect: ScreenRect) {
+        guard state == .idle else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+        let global = screenRect.inDisplaySpace(.current)
+        guard let displayID = DisplayLookup.display(containing: global) else {
+            report(.failed("That region is not on any display."))
+            return
+        }
+        let geometry = DisplayGeometry(
+            displayID: displayID,
+            frame: DisplayRect(cgRect: CGDisplayBounds(displayID)),
+            scale: NSScreen.screens.compactMap(ScreenDescriptor.init)
+                .first { $0.displayID == displayID }?.scale ?? .oneToOne
+        )
+        start(region: global, display: geometry)
+    }
+
     private func start(region rect: DisplayRect, display: DisplayGeometry) {
         sessionToken += 1
         region = (rect, display)
-        lastProfile = nil
+        lastRowProfile = nil
+        lastColumnProfile = nil
         sticky = .none
         stickyResolved = false
         frameCount = 0
@@ -146,16 +173,17 @@ final class ScrollCaptureCoordinator {
                 try await session.start(
                     region: rect,
                     on: display.displayID,
+                    axis: settings.scrollAxis,
                     frameRate: settings.scrollFrameRate
                 ) { note in
                     Task { @MainActor [weak self] in
                         self?.received(note)
                     }
                 }
-                await strip.begin(frameSize: session.pixelSize)
+                await strip.begin(frameSize: session.pixelSize, axis: settings.scrollAxis)
                 state = .capturing
                 showHUD(over: rect, on: display)
-                if settings.scrollAutoScroll {
+                if usesAutoScroll {
                     startAutoScroll(in: rect, on: display)
                 }
                 logger.info("Scrolling capture started")
@@ -185,33 +213,80 @@ final class ScrollCaptureCoordinator {
     private func received(_ note: ScrollCaptureSession.ScrollFrameNote) {
         frameCount = note.index + 1
 
-        defer { lastProfile = note.profile }
-        guard let previous = lastProfile else {
-            // The first frame is the whole of what is on screen.
-            strip.append(frameAt: note.url, band: 0 ..< note.profile.height, frameHeight: note.profile.height)
+        switch settings.scrollAxis {
+        case .vertical:
+            receivedVertical(note)
+        case .horizontal:
+            receivedHorizontal(note)
+        }
+    }
+
+    private func receivedVertical(_ note: ScrollCaptureSession.ScrollFrameNote) {
+        defer { lastRowProfile = note.rowProfile }
+        guard let previous = lastRowProfile else {
+            strip.append(
+                frameAt: note.url,
+                band: 0 ..< note.rowProfile.height,
+                frameExtent: note.rowProfile.height
+            )
             preview = strip.image
             return
         }
 
-        var alignment = ScrollAligner.align(previous: previous, current: note.profile, sticky: sticky)
+        var alignment = ScrollAligner.align(previous: previous, current: note.rowProfile, sticky: sticky)
         if !stickyResolved, alignment.offset > 0 {
             stickyResolved = true
             sticky = ScrollAligner.stickyBands(
                 previous: previous,
-                current: note.profile,
+                current: note.rowProfile,
                 offset: alignment.offset
             )
             if sticky != .none {
-                alignment = ScrollAligner.align(previous: previous, current: note.profile, sticky: sticky)
+                alignment = ScrollAligner.align(previous: previous, current: note.rowProfile, sticky: sticky)
             }
         }
 
         guard alignment.offset > 0 else { return }
-        let bottom = note.profile.height - sticky.footer
+        let bottom = note.rowProfile.height - sticky.footer
         strip.append(
             frameAt: note.url,
             band: max(0, bottom - alignment.offset) ..< bottom,
-            frameHeight: note.profile.height
+            frameExtent: note.rowProfile.height
+        )
+        preview = strip.image
+    }
+
+    private func receivedHorizontal(_ note: ScrollCaptureSession.ScrollFrameNote) {
+        defer { lastColumnProfile = note.columnProfile }
+        guard let previous = lastColumnProfile else {
+            strip.append(
+                frameAt: note.url,
+                band: 0 ..< note.columnProfile.width,
+                frameExtent: note.columnProfile.width
+            )
+            preview = strip.image
+            return
+        }
+
+        var alignment = ColumnAligner.align(previous: previous, current: note.columnProfile, sticky: sticky)
+        if !stickyResolved, alignment.offset > 0 {
+            stickyResolved = true
+            sticky = ColumnAligner.stickyBands(
+                previous: previous,
+                current: note.columnProfile,
+                offset: alignment.offset
+            )
+            if sticky != .none {
+                alignment = ColumnAligner.align(previous: previous, current: note.columnProfile, sticky: sticky)
+            }
+        }
+
+        guard alignment.offset > 0 else { return }
+        let trailing = note.columnProfile.width - sticky.footer
+        strip.append(
+            frameAt: note.url,
+            band: max(0, trailing - alignment.offset) ..< trailing,
+            frameExtent: note.columnProfile.width
         )
         preview = strip.image
     }
@@ -234,18 +309,31 @@ final class ScrollCaptureCoordinator {
 
         autoScrollTask = Task { [weak self] in
             guard let self else { return }
-            var detector = ScrollSettleDetector()
+            var detector = ScrollSettleDetector(axis: settings.scrollAxis)
             for _ in 0 ..< configuration.maximumSteps {
                 if Task.isCancelled {
                     return
                 }
-                scroller.step(at: centre, configuration: configuration)
+                switch settings.scrollAxis {
+                case .vertical:
+                    scroller.step(at: centre, configuration: configuration)
+                case .horizontal:
+                    scroller.stepHorizontally(at: centre, configuration: configuration)
+                }
                 try? await Task.sleep(for: .milliseconds(configuration.settleMilliseconds))
                 if Task.isCancelled {
                     return
                 }
-                guard let profile = lastProfile else { continue }
-                if detector.settled(with: profile) {
+                let settled: Bool
+                switch settings.scrollAxis {
+                case .vertical:
+                    guard let profile = lastRowProfile else { continue }
+                    settled = detector.settled(with: profile)
+                case .horizontal:
+                    guard let profile = lastColumnProfile else { continue }
+                    settled = detector.settled(with: profile)
+                }
+                if settled {
                     logger.info("Auto-scroll settled; the page has run out")
                     break
                 }
@@ -328,7 +416,8 @@ final class ScrollCaptureCoordinator {
             let response = try await vision.stitchScroll(ScrollStitchRequest(
                 framePaths: frames.map(\.path),
                 destinationPath: destination.path,
-                excludedFrames: excluded
+                excludedFrames: excluded,
+                axis: settings.scrollAxis
             ))
             vision.disconnect()
 
@@ -400,6 +489,7 @@ final class ScrollCaptureCoordinator {
     private func showHUD(over rect: DisplayRect, on display: DisplayGeometry) {
         let hud = ScrollCaptureHUD(
             coordinator: self,
+            settings: settings,
             near: rect.inScreenSpace(GlobalCoordinateSpace.current)
         )
         hud.present()

@@ -103,6 +103,19 @@ struct StudioAudioEditTests {
         #expect(!studio.hasImportedSoundtrack)
     }
 
+    @Test("Mute is off until the user asks")
+    func muteDefaultsOff() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        #expect(!studio.edit.mutesAudio)
+        #expect(!studio.edit.mixesToMono)
+        studio.change { $0.mutesAudio = true }
+        studio.change { $0.mixesToMono = true }
+        #expect(studio.edit.mutesAudio)
+        #expect(studio.edit.mixesToMono)
+    }
+
     @Test("A recording with no soundtrack stays silent in the preview")
     func placeholderFootageHasNoPreviewAudio() async throws {
         let folder = scratch()

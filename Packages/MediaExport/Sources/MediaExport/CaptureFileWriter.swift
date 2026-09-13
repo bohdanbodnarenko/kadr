@@ -81,6 +81,37 @@ public struct CaptureFileWriter: Sendable {
         throw ExportError.writeFailed("Could not claim a filename in \(directory.path)")
     }
 
+    /// Encodes and writes to a path the user picked (CleanShot §8.5).
+    ///
+    /// The save panel has already confirmed a replace, so this overwrites rather than
+    /// picking a free name — a Save As that refused the path the user just confirmed
+    /// would look broken.
+    public func write(_ image: CGImage, to url: URL, options: EncodingOptions = EncodingOptions()) throws {
+        let data = try encoder.encode(image, options: options)
+        let directory = url.deletingLastPathComponent()
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            throw ExportError.writeFailed(error.localizedDescription)
+        }
+        let temporary = directory.appendingPathComponent(".kadr-write-\(UUID().uuidString)")
+        do {
+            try data.write(to: temporary, options: .atomic)
+        } catch {
+            throw ExportError.writeFailed(error.localizedDescription)
+        }
+        defer { try? fileManager.removeItem(at: temporary) }
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
+        }
+        do {
+            try fileManager.moveItem(at: temporary, to: url)
+        } catch {
+            throw ExportError.writeFailed(error.localizedDescription)
+        }
+        logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+    }
+
     /// How many times a lost filename race is retried before giving up. Generous: every
     /// retry means another capture landed in the same millisecond.
     private static let collisionRetries = 16

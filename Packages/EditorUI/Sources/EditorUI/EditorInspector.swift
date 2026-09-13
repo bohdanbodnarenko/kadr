@@ -18,9 +18,9 @@ struct EditorInspector: View {
 
     var body: some View {
         Form {
-            if let tool, tool != .crop {
+            if let tool, tool != .crop, tool != .image {
                 Section(tool.title) {
-                    if tool != .counter, tool != .redaction {
+                    if tool != .counter, tool != .redaction, tool != .spotlight {
                         EditorSwatchStrip(
                             selected: model.styleMemory.stroke(for: tool).color,
                             onSelect: { model.applyColor($0) }
@@ -45,6 +45,7 @@ struct EditorInspector: View {
                     case .arrow: arrowOptions
                     case .shape: shapeOptions
                     case .redaction: redactionOptions
+                    case .spotlight: spotlightOptions
                     case .text: textOptions
                     case .measure: measureOptions
                     default: EmptyView()
@@ -73,11 +74,18 @@ struct EditorInspector: View {
                 }
             }
 
+            if model.tool == .sticker {
+                Section("Sticker") {
+                    EmojiStickerPicker(selected: $model.stickerEmoji)
+                }
+            }
+
             if model.tool == .crop {
                 EditorCropInspector(model: model)
             }
 
             EditorStylePresetInspector(model: model)
+            EditorResizeInspector(model: model)
             EditorBeautifyInspector(model: model)
             EditorCameraInspector(model: model)
             EditorBlurInspector(model: model)
@@ -243,6 +251,44 @@ struct EditorInspector: View {
             return spec.style
         }
         return model.styleMemory.lastRedactionStyle
+    }
+
+    @ViewBuilder
+    private var spotlightOptions: some View {
+        InspectorSlider(
+            title: "Dim",
+            value: Binding(
+                get: { Double(inspectedSpotlight.dimOpacity) },
+                set: { model.applySpotlightDimOpacity(CGFloat($0)) }
+            ),
+            range: Double(SpotlightSpec.dimOpacityRange.lowerBound)
+                ... Double(SpotlightSpec.dimOpacityRange.upperBound),
+            format: .percent,
+            onEditingEnded: { model.endInspectorStyleEdit() }
+        )
+        InspectorSlider(
+            title: "Corners",
+            value: Binding(
+                get: { Double(inspectedSpotlight.cornerRadius) },
+                set: { model.applySpotlightCornerRadius(CGFloat($0)) }
+            ),
+            range: Double(SpotlightSpec.cornerRadiusRange.lowerBound)
+                ... Double(SpotlightSpec.cornerRadiusRange.upperBound),
+            format: .points,
+            onEditingEnded: { model.endInspectorStyleEdit() }
+        )
+    }
+
+    /// The spotlight the inspector is editing: the selection's, or the armed tool's memory.
+    private var inspectedSpotlight: SpotlightSpec {
+        if let id = model.selection.first, case let .spotlight(spec)? = model.document.command(id) {
+            return spec
+        }
+        return SpotlightSpec(
+            rect: .zero,
+            dimOpacity: model.styleMemory.lastSpotlightDimOpacity,
+            cornerRadius: model.styleMemory.lastSpotlightCornerRadius
+        )
     }
 
     /// The measure tool's one choice, plus what the tool actually does (docs/06 M21).

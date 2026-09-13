@@ -144,7 +144,12 @@ struct QuickAccessStackView: View {
                 actions: manager.actions(for: item),
                 width: CGFloat(manager.settings.overlayCardWidth),
                 layout: manager.settings.cardLayout,
-                suppressHoverChrome: isReflowing
+                suppressHoverChrome: isReflowing,
+                showsNewestIndicator: QuickAccessStackLayout.showsNewestIndicator(
+                    for: item.id,
+                    in: manager.items
+                ),
+                showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item)
             )
             .transition(
                 .move(edge: QuickAccessStackLayout.slideEdge(for: corner))

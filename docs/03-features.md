@@ -35,7 +35,7 @@ Options (in settings and via ⌥ modifier at click time):
 
 ### 1.3 Fullscreen / display capture (P1)
 
-Hotkey captures all displays (one file per display, or stitched — setting), or a chosen display via the All-in-One HUD. Silent (no overlay), instant, cursor optionally included.
+Hotkey captures all displays (one file per display, or stitched — setting), or a chosen display via the All-in-One HUD. Silent (no overlay), instant, cursor optionally included. On a notched MacBook, fullscreen stills of an app that covers the display drop the camera strip (setting, on by default).
 
 ### 1.4 All-in-One capture HUD (P2)
 
@@ -49,8 +49,8 @@ One hotkey opens a compact control strip (like ⇧⌘5 / CleanShot All-in-One): 
 
 The hardest feature; ship in two tiers:
 
-- **Tier 1 — assisted:** user selects region → presses Start → scrolls the target content themselves at any pace → frames are grabbed continuously (SCStream at low fps) → on Stop, frames are stitched by feature-matching overlap (vertical first). Progress preview shows the growing strip. Works in any app, no Accessibility permission.
-- **Tier 2 — auto-scroll:** we synthesize scroll events (CGEvent) into the target window until content stops changing or user stops. Requires Accessibility permission (asked only when first used, with an explainer). Per-app quirks (momentum scrolling, lazy-loading pages) handled by settle-detection between scroll steps.
+- **Tier 1 — assisted:** user selects region → presses Start → scrolls the target content themselves at any pace (vertically or horizontally; CleanShot §4.8) → frames are grabbed continuously (SCStream at low fps) → on Stop, frames are stitched by feature-matching overlap. Progress preview shows the growing strip. Works in any app, no Accessibility permission.
+- **Tier 2 — auto-scroll:** we synthesize scroll events (CGEvent) into the target window until content stops changing or user stops. Requires Accessibility permission (asked only when first used, with an explainer). Per-app quirks (momentum scrolling, lazy-loading pages) handled by settle-detection between scroll steps. Direction is chosen in Settings or the capture HUD before the first frame lands.
 
 Output goes to the editor scrolled-canvas mode. Failure mode: if stitching confidence is low, show seams and offer "keep anyway / retry / export frames".
 
@@ -68,7 +68,7 @@ Details: language auto-detect (`automaticallyDetectsLanguage`), accurate mode; p
 
 **Flow:** hotkey/HUD → region/window/display selection (same overlay grammar as stills) → control strip appears (mic toggle + input picker, system-audio toggle, camera toggle, countdown setting) → Record → menu-bar icon becomes a red timer (click = stop; menu = pause/cancel); optional floating stop button. On stop → overlay thumbnail with "Trim / Save / Copy / GIF / Delete".
 
-Technical envelope: SCStream capture at native resolution, 60 fps default (configurable 24/30/60); HEVC (hardware) default with H.264 option for compatibility; mic as separate track (P2, macOS 15 in-SCK mic when available, AVCaptureSession fallback on 14); system audio via SCK `capturesAudio` (no driver); pause/resume; auto-DND during recording (Focus API); click highlighting (circle pulse on clicks, rendered into the stream via overlay compositing); cursor show/hide; keystroke overlay (P2, rendered from a CGEventTap *only while recording*, permission-gated, showing ⌘-combos or all keys).
+Technical envelope: SCStream capture at native resolution, 60 fps default (configurable 24/30/60); HEVC (hardware) default with H.264 option for compatibility; mic as separate track (P2, macOS 15 in-SCK mic when available, AVCaptureSession fallback on 14); system audio via SCK `capturesAudio` (no driver); optional mono mixdown of each audio track; pause/resume; auto-DND during recording (Focus API); click highlighting (circle pulse on clicks, rendered into the stream via overlay compositing); cursor show/hide; keystroke overlay (P2, rendered from a CGEventTap *only while recording*, permission-gated, showing ⌘-combos or all keys). The floating control bar shows an audio-level meter from the buffers being written, and a "Mic silent" notice if the microphone is on but nothing has reached it after a couple of seconds.
 
 **GIF export:** trim first, then encode ≤ 50 fps, palette-optimized (gifski-quality target), size estimate shown before export.
 
@@ -85,6 +85,8 @@ On-device only. Transcription runs in the XPC helper so Speech.framework never l
 **Transcript.** Persisted as `transcript.json` in the `.kadrrec` package, keyed on the audio's content hash. Reopening reuses it. A panel beside the timeline: click a word to seek, select a sentence to cut it, search by text. Two-track recordings are labelled "You said" / "The app said". Chapter marks from long pauses.
 
 **Captions.** Optional burned-in captions in the studio's existing caption style; SRT and VTT written beside an export when a transcript exists.
+
+**Audio in the studio.** Mute silences preview and export. Mix to mono downmixes stereo on export (and on an audio-only export), matching the record-time mono option.
 
 **Language.** A picker; changing engine or model rewrites an unsupported choice rather than failing later. On macOS 14/15, if on-device dictation is missing, the inspector points at System Settings ▸ Keyboard ▸ Dictation instead of showing a Tidy button that can never work.
 
@@ -104,11 +106,11 @@ On-device only. Transcription runs in the XPC helper so Speech.framework never l
 
 Per-card interactions:
 - **Drag out** → real file promise drag (works into Slack/Mail/Finder/browsers). Dragging out removes the card (setting).
-- Single click → expand action row: **Copy · Save · Annotate · Pin · OCR · Share sheet · Delete**. Double-click → open editor directly.
-- Hover shows filename, dimensions, size, the card's corner actions, and a close (×) that **hides the card without deleting**. ⌫ deletes; Esc hides; swipe toward the docked edge dismisses; swipe toward the screen edge tucks the stack into a peek tab.
-- Auto-dismiss timer (default off/∞; options 5/10/30 s). Hovering or dragging **pauses** the timer and retries shortly after the pointer leaves; opening the editor, studio, or trim **keeps that card** until the user hides it. **Dismiss ≠ delete**: files still land per save policy; "Restore recently closed" (menu + hotkey) brings the last N back.
+- Single click → expand action row: **Copy · Save · Save As · Annotate · Pin · OCR · Share sheet · Delete** (Save As is opt-in via Overlay ▸ Card layout; it always opens a save panel). Double-click → open editor directly. Auto-saved cards (not staged) show a **Trash** button on hover beside Hide (CleanShot §6.2). Context menu: Rotate 90°, Flip Horizontal, Flip Vertical, Scale Retina to 1× (CleanShot §6.2 / §8.2).
+- Hover shows filename, dimensions, size, the card's corner actions, and a close (×) that **hides the card without deleting**. ⌫ deletes; Esc hides; **Return** saves and closes (configurable in Overlay settings); Space Quick Looks; while the pointer is over a card, ⌘C copies, ⌘S saves, ⌘E annotates (trim for a recording), ⌘P pins, and ⌘W closes (local monitor only, so the front app keeps those keys otherwise). Swipe toward the docked edge dismisses; swipe toward the screen edge tucks the stack into a peek tab.
+- Auto-dismiss timer (default off/∞; options 5/10/30 s). Hovering or dragging **pauses** the timer and retries shortly after the pointer leaves; opening the editor, studio, or trim **keeps that card** until the user hides it. **Dismiss ≠ delete**: files still land per save policy; "Restore recently closed" (menu + hotkey) brings the last N back. When several cards stack, the newest shows a small accent dot (CleanShot §6.3). **Save All** and **Close all** (menu, hotkey, peek-tab ×) dismiss cards **one at a time** so the stack reflow animates instead of jumping (CleanShot §6.3 / 4.7.5).
 - Opening the editor tucks the stack into a **peek tab** (count + ×) in the same corner. Click the tab to bring the cards back even while the editor is still open; × dismisses every card. A new capture expands the stack so the new card is seen.
-- Default action on capture is configurable: copy to clipboard, save to folder, both, or overlay-only (file goes to history staging and is finalized on first action — keeps Desktop clean).
+- Default action on capture is configurable: copy to clipboard, save to folder, both, overlay-only (file goes to history staging and is finalized on first action — keeps Desktop clean), or **ask where to save** (a save panel as soon as the capture lands; the file stays staged until the panel confirms). Overlay Save can also ask every time (General → Ask where to save from the overlay). **Save As** on a card always asks, even when silent save is on (CleanShot §6.2).
 
 **Accept:** overlay never takes key focus from the frontmost app; drag-out delivers a correctly named file (no `Untitled` / tmp names); stacking never overlaps the Dock; VoiceOver can reach every action.
 
@@ -125,20 +127,23 @@ Opens in **its own process** (see doc 04) as a normal resizable window; multiple
 - **Arrow** — straight + curved (drag midpoint); 3 head styles; smart default color (auto red/contrasting).
 - **Shapes** — rect, rounded rect, ellipse, line; fill/stroke/none; stroke width via the inspector slider (presets 2/4/6/10/16 sit in the 1–32 pt range); fill opacity when filled.
 - **Freehand pencil** with smoothing; **Highlighter** (multiply-blend stroke).
-- **Text** — inline editing, 5 style presets + custom (font/size/weight/color/background pill). A click places a box and opens the editor; a click on existing text edits it.
+- **Text** — inline editing, 7 style presets + custom (font/size/weight/color/background pill). A click places a box and opens the editor; a click on existing text edits it.
 - **Blur / Pixelate** — rectangular region; pixelate uses randomized displacement (defeats de-pixelation of predictable grids); irreversible at export (actually re-rendered from blurred pixels, not an overlay that can be removed from the PNG — security-reviewed).
 - **Counter badges** — auto-incrementing numbered circles; drag to reorder renumbers.
-- **Crop** — non-destructive; aspect presets; expand-canvas allowed (for padding).
+- **Crop** — non-destructive; aspect presets; expand-canvas allowed (for padding). Expanded padding is filled from the capture's edge colour at export, not hard-coded white.
+- **Lock objects** — toolbar lock or ⇧⌘L keeps existing annotations from moving while you draw (CleanShot §8.1). Settings ▸ General can turn this on by default for new editor sessions.
+- **Object shadows** — Settings ▸ General can disable drop shadows on inserted images (CleanShot §8.2 / §21).
+- **Tool size** — `` ` `` / `+` (or `-`) changes the armed tool's stroke width, or text size for the text tool (CleanShot §8.2).
 - **Tool hand-off:** after a one-shot tool lands (arrow, shape, line, text once the in-place editor commits, blur/pixelate), the pointer returns to Select so the new annotation can be moved immediately. Pencil, highlighter, and counters stay armed — a numbered badge is one of a sequence. Crop is a mode until **Done**. Picking a drawing tool from the toolbar clears the current selection.
 - Style system: last-used style per tool remembered; per-tool color/size in a floating inspector; global theme colors.
 - **Canvas drawing:** annotation tools apply to the whole canvas, including beautify padding around the screenshot — not only the capture itself. Coordinates stay image-relative so a crop still makes sense; the padding is just more of that plane.
 - **Inspector sliders:** every numeric control is a scrub track with the label inside it and a typed value field to the right (suffixes: "45%", "12 px", "30°", "1.5×"). Clicking the track sets the value at that position; hover reveals ticks; signed ranges (tilt, pan, roll) detent on zero. Arrow keys step one displayed unit.
 
-**P2 additions:** Spotlight (dim outside a region), Smart Highlighter (Vision word-boxes snap), sticker/emoji, image insert (multi-image composition), background/beautify panel (padding, gradient/solid/image backdrop, corner radius, shadow, aspect presets, auto-balance), resize/downscale export panel, rotate/flip.
+**P2 additions:** Spotlight (dim outside a region), Smart Highlighter (Vision word-boxes snap), sticker/emoji, image insert (multi-image composition), background/beautify panel (padding, gradient/solid/image backdrop, corner radius, shadow, aspect presets, auto-balance), resize/downscale export panel, rotate / flip horizontal / flip vertical (CleanShot §8.2).
 
 **P3 additions:** auto-redaction assistant (pre-runs OCR + patterns for emails, phone numbers, API-key shapes, credit cards; highlights candidates; one click blurs all), background removal (subject lift), measurement overlay & pixel ruler, OKLCH/APCA color picker eyedropper, `.kadr` re-editable project file (zip: base PNG + JSON command list).
 
-**Export:** ⌘C copy flattened; ⌘S save (format per settings); drag-out from title-bar proxy; "Copy without annotations" alt-action.
+**Export:** ⌘C copy flattened; ⌘S save next to the original when **Keep the original file** is on (General ▸ Annotate), or overwrite the capture when it is off (CleanShot §7); ⌘⇧S Save As (format picker: PNG / JPEG / HEIC / `.kadr`); ⌘⌥S Save Project; File ▸ Print (⌘P, tall scrolling captures paginate across sheets); drag-out from title-bar proxy; "Copy without annotations" alt-action. The toolbar Save button is the silent write (CleanShot's ⌥+Save).
 
 **Accept:** 60 fps object dragging on a 5K capture; undo depth ≥ 100; blur regions unrecoverable in exported files; editor process exits fully when last window closes (RAM returns to agent baseline).
 
@@ -195,7 +200,7 @@ Template-style icon; states: idle / capture armed / recording (red + timer). Lef
 First launch: 3 screens max. (1) What it does + hotkey cheatsheet; (2) **Screen Recording permission** — explains TCC honestly, deep-links System Settings, live-detects grant, warns about macOS 15 monthly re-confirmation so it never surprises; (3) defaults choice: clipboard-first vs file-first, save folder, launch-at-login opt-in. Total < 2 min; every screen skippable.
 
 ### 8.3 Settings (P1, grows)
-Panes: General (login item, default action, save folder, filename template `{app}-{date}-{time}`, format, Retina downscale), Shortcuts (recorder UI for every command), Overlay (corner, size, timeout, stacking), Capture (cursor, shadow, freeze, snapping), Recording (P2), History (P2), Advanced (URL scheme/CLI install, reset). Settings window is a normal app-style window (works around LSUIElement focus quirks per doc 04).
+Panes: General (login item, default action, save folder, optional ask-where-to-save from the overlay, filename template `{app}-{date}-{time}`, format, Retina downscale, optional convert-to-sRGB on save), Shortcuts (recorder UI for every command), Overlay (corner, size, timeout, stacking), Capture (cursor, shadow, freeze, snapping, auto-crop notch), Recording (P2), History (P2), Advanced (URL scheme/CLI install, reset). Settings window is a normal app-style window (works around LSUIElement focus quirks per doc 04).
 
 ### 8.4 Automation (P2)
 - URL scheme: `kadr://capture-area?action=copy|save|annotate|pin&x=&y=&w=&h=`, `capture-window`, `capture-fullscreen`, `capture-text`, `record-screen?fps=`, `pin?filepath=`, `toggle-desktop-icons`, `open-history`, `open-settings?tab=` … (CleanShot-verb alias table for Raycast migration).
@@ -210,7 +215,7 @@ Panes: General (login item, default action, save folder, filename template `{app
 - **Multi-display:** every feature correct on mixed-DPI, mixed-refresh, hot-plugged displays; Spaces & full-screen apps respected (`.canJoinAllSpaces`, `.fullScreenAuxiliary`).
 - **Accessibility:** full keyboard operation of overlay/editor; VoiceOver labels on all controls; reduced-motion honored (no slide animations); contrast-safe default annotation colors.
 - **Interruptions:** display sleep/lock/log-out during recording finalizes the file safely; TCC revocation mid-use degrades with a clear re-grant prompt, never a crash.
-- **Files:** atomic writes; never overwrite (auto-increment); filename template engine; correct EXIF/DPI metadata (144 dpi tag on Retina, color profile embedded).
+- **Files:** atomic writes; never overwrite (auto-increment); filename template engine; correct EXIF/DPI metadata (144 dpi tag on Retina, color profile embedded). Optional convert-to-sRGB on save so browsers match this Mac; off by default so a P3 capture keeps its profile.
 - **No data exfiltration surface:** agent binary links no networking beyond Sparkle; hard rule enforced by module layering (doc 04) + a CI check that greps the agent's linked frameworks.
 
 ## 10. Feature ↔ competitor traceability

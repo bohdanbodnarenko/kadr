@@ -49,6 +49,8 @@ public struct StudioRenderer: Sendable {
         public var includeAudio: Bool
         /// Caps the longest output edge, in pixels. Nil leaves the edit's own size.
         public var maxLongestEdge: Int?
+        /// 1 mixes stereo down; 2 keeps the recording's channels (CleanShot §14.8).
+        public var audioChannelCount: Int
 
         public init(
             codec: AVVideoCodecType = .hevc,
@@ -57,7 +59,8 @@ public struct StudioRenderer: Sendable {
             bitRateMultiplier: Double = 1,
             fileType: AVFileType = .mov,
             includeAudio: Bool = true,
-            maxLongestEdge: Int? = nil
+            maxLongestEdge: Int? = nil,
+            audioChannelCount: Int = 2
         ) {
             self.codec = codec
             self.frameRate = frameRate
@@ -66,6 +69,16 @@ public struct StudioRenderer: Sendable {
             self.fileType = fileType
             self.includeAudio = includeAudio
             self.maxLongestEdge = maxLongestEdge
+            self.audioChannelCount = audioChannelCount == 1 ? 1 : 2
+        }
+
+        var aacSettings: [String: Any] {
+            [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey: audioChannelCount,
+                AVSampleRateKey: 48000,
+                AVEncoderBitRateKey: audioChannelCount == 1 ? 96_000 : 128_000
+            ]
         }
     }
 
@@ -125,7 +138,8 @@ public struct StudioRenderer: Sendable {
                     bitRateMultiplier: options.bitRateMultiplier,
                     fileType: options.fileType,
                     includeAudio: options.includeAudio,
-                    maxLongestEdge: options.maxLongestEdge
+                    maxLongestEdge: options.maxLongestEdge,
+                    audioChannelCount: options.audioChannelCount
                 )
             } ?? options,
             progress: progress
@@ -190,6 +204,13 @@ public struct StudioRenderer: Sendable {
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> Output {
         let edit = source.edit
+        var options = options
+        if edit.mutesAudio {
+            options.includeAudio = false
+        }
+        if edit.mixesToMono {
+            options.audioChannelCount = 1
+        }
         let state = try await Preparation(
             screen: source.screen,
             camera: source.camera,
@@ -270,7 +291,8 @@ public struct StudioRenderer: Sendable {
                     screen: screen,
                     camera: camera,
                     cameraStartOffset: cameraStartOffset,
-                    soundtrack: soundtrack
+                    soundtrack: soundtrack,
+                    includeAudio: options.includeAudio
                 )
             } catch {
                 throw RenderError.noVideoTrack

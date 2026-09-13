@@ -6,7 +6,7 @@ import Shared
 import SwiftUI
 
 /// General settings (docs/03 §8.3): login item, default action, save folder,
-/// filename template, format, Retina downscale.
+/// optional ask-where-to-save, filename template, format, Retina downscale, optional sRGB conversion.
 struct GeneralPane: View {
     @Bindable var settings: AppSettings
     let loginItem: LoginItemController
@@ -39,6 +39,12 @@ struct GeneralPane: View {
                         Button("Choose…", action: chooseSaveFolder)
                     }
                 }
+                Toggle("Ask where to save from the overlay", isOn: $settings.askForSaveDestination)
+                Text("Save on a card shows a folder picker instead of writing to this folder. "
+                    + "After-capture “Ask where to save” does the same the moment a capture lands.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {
@@ -56,6 +62,23 @@ struct GeneralPane: View {
                 }
 
                 Toggle("Save Retina captures at 1×", isOn: $settings.downscaleRetinaCaptures)
+                Toggle("Convert to sRGB when saving", isOn: $settings.convertExportsToSRGB)
+                Text("Off keeps a wide-gamut capture in Display P3. On converts so "
+                    + "browsers and Windows apps show the same colours as this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section("Annotate") {
+                Toggle("Lock objects when the editor opens", isOn: $settings.lockCanvasByDefault)
+                Toggle("Object shadows on inserted images", isOn: $settings.objectShadowsEnabled)
+                Toggle("Keep the original file when saving annotations", isOn: $settings.keepOriginalWhenAnnotating)
+                Text("Keeps existing annotations from moving while you draw. You can still "
+                    + "toggle lock in the editor toolbar or with ⇧⌘L.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)

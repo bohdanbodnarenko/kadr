@@ -20,12 +20,21 @@ public struct EditorRootView: View {
     @State private var showsCopiedToast = false
 
     /// What the toolbar's export controls ask for.
-    public enum ExportAction: Sendable {
+    public enum ExportAction: Equatable, Sendable {
         case copy
+        /// Flattened image, even when annotations are selected (CleanShot ⌘⇧C).
+        case copyFlattened
         case copyWithoutAnnotations
         case save
+        /// Flattened image to a path the user picks (CleanShot §8.5).
+        case saveAs
         /// Write a re-editable `.kadr` rather than a flattened image (docs/06 M24).
         case saveProject
+        case print
+        case pin
+        case share
+        case insertImage
+        case insertFromClipboard
     }
 
     public init(
@@ -85,6 +94,11 @@ public struct EditorRootView: View {
         .animation(.snappy(duration: 0.2), value: showsCopiedToast)
         .frame(minWidth: 720, minHeight: 480)
         .background(zoomKeyCommands)
+        .onChange(of: model.tool) { _, tool in
+            if tool == .highlighter {
+                Task { await prepareSmartHighlighter() }
+            }
+        }
     }
 
     private var workspace: some View {
@@ -140,6 +154,22 @@ public struct EditorRootView: View {
                 .keyboardShortcut("a", modifiers: .command)
             Button("Duplicate") { model.duplicateSelection() }
                 .keyboardShortcut("d", modifiers: .command)
+            Button("Paste") { pasteAnnotations() }
+                .keyboardShortcut("v", modifiers: .command)
+            Button("Copy Flattened") { handleExport(.copyFlattened) }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+            Button("Print") { handleExport(.print) }
+                .keyboardShortcut("p", modifiers: .command)
+            Button("Lock Objects") { model.isCanvasLocked.toggle() }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+            Button("Increase Tool Size") { model.adjustToolSize(by: 1) }
+                .keyboardShortcut("=", modifiers: .shift)
+            Button("Decrease Tool Size") { model.adjustToolSize(by: -1) }
+                .keyboardShortcut("`", modifiers: [])
+            Button("Insert Image") { handleExport(.insertImage) }
+                .keyboardShortcut("i", modifiers: .command)
+            Button("Insert from Clipboard") { handleExport(.insertFromClipboard) }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
         }
         .opacity(0)
         .frame(width: 0, height: 0)
@@ -147,13 +177,37 @@ public struct EditorRootView: View {
     }
 
     private func handleExport(_ action: ExportAction) {
+        if action == .copy, copyAnnotationsIfSelected() {
+            showsCopiedToast = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(1400))
+                showsCopiedToast = false
+            }
+            return
+        }
         onExport(action)
-        guard action == .copy || action == .copyWithoutAnnotations else { return }
+        guard action == .copy || action == .copyFlattened || action == .copyWithoutAnnotations else {
+            return
+        }
         showsCopiedToast = true
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(1400))
             showsCopiedToast = false
         }
+    }
+
+    /// ⌘C copies selected annotations rather than flattening the capture (CleanShot 4.4).
+    @discardableResult
+    private func copyAnnotationsIfSelected() -> Bool {
+        guard let data = model.encodedSelection() else { return false }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setData(data, forType: .kadrAnnotations)
+        return true
+    }
+
+    private func pasteAnnotations() {
+        guard let data = NSPasteboard.general.data(forType: .kadrAnnotations) else { return }
+        _ = model.pasteEncoded(data)
     }
 
     private func runAutoRedact() async {
@@ -198,4 +252,28 @@ public struct EditorRootView: View {
         model.stageQueryMatches()
         model.reopenRedactionReview()
     }
+
+    /// OCR for the smart highlighter, without opening the redaction review strip.
+    private func prepareSmartHighlighter() async {
+        guard let redactionAssist else { return }
+        guard model.highlightBoxes.isEmpty else { return }
+        if !model.recognizedLines.isEmpty {
+            model.loadHighlightLayout(from: VisionAnalysis(
+                lines: model.recognizedLines,
+                words: model.recognizedWords
+            ))
+            return
+        }
+        do {
+            let analysis = try await redactionAssist.analyzeForRedaction(baseImage)
+            model.loadHighlightLayout(from: analysis)
+        } catch {
+            // Freehand still works when the helper cannot read the capture.
+        }
+    }
+}
+
+extension NSPasteboard.PasteboardType {
+    /// Annotation objects copied from the editor (CleanShot 4.4).
+    static let kadrAnnotations = NSPasteboard.PasteboardType("app.kadr.annotations.json")
 }

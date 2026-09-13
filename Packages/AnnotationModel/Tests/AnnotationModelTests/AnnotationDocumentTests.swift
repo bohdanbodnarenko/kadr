@@ -372,6 +372,35 @@ struct CounterRenumberingTests {
         #expect(document.nextCounterNumber == 2)
     }
 
+    @Test("Rotate is one undo step and does not rewrite annotations")
+    func rotateIsUndoableChrome() {
+        let mark = shape()
+        var document = makeDocument([mark])
+        document.rotateClockwise()
+
+        #expect(document.orientation.quarterTurnsCW == 1)
+        #expect(document.commands == [mark])
+        #expect(document.orientedCanvasSize == CGSize(width: 600, height: 800))
+
+        #expect(document.canUndo)
+        document.undo()
+        #expect(document.orientation.isIdentity)
+        #expect(document.canRedo)
+        document.redo()
+        #expect(document.orientation.quarterTurnsCW == 1)
+    }
+
+    @Test("A saved document reopens with its current orientation")
+    func orientationSurvivesJSON() throws {
+        var document = makeDocument()
+        document.rotateClockwise()
+        document.flipHorizontal()
+        let data = try JSONEncoder().encode(document)
+        let decoded = try JSONDecoder().decode(AnnotationDocument.self, from: data)
+        #expect(decoded.orientation == document.orientation)
+        #expect(decoded.baseImage.orientation.isIdentity)
+    }
+
     private func counterNumbers(_ document: AnnotationDocument) -> [Int] {
         document.commands.compactMap { command in
             if case let .counter(spec) = command {

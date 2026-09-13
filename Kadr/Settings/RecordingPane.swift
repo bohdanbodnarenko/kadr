@@ -45,8 +45,10 @@ struct RecordingPane: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+                Toggle("Record in mono", isOn: $settings.recordsMono)
                 Text("System audio needs no driver — macOS captures it directly. The "
                     + "microphone is recorded as a separate track so it can be dropped later. "
+                    + "Mono is smaller and what most screen recordings want. "
                     + "Pick which microphone from the recording bar.")
                     .font(.callout)
                     .foregroundStyle(.secondary)

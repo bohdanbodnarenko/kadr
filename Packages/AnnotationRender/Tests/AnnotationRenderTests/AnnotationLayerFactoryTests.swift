@@ -14,7 +14,8 @@ struct AnnotationLayerFactoryTests {
         .highlighter(HighlighterSpec(points: [.zero, CGPoint(x: 5, y: 5)])),
         .text(TextSpec(string: "x", rect: CGRect(x: 0, y: 0, width: 20, height: 20))),
         .counter(CounterSpec(center: CGPoint(x: 10, y: 10))),
-        .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20)))
+        .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))),
+        .spotlight(SpotlightSpec(rect: CGRect(x: 10, y: 10, width: 80, height: 60)))
     ])
     func makesLayers(command: AnnotationCommand) throws {
         let layer = try #require(AnnotationLayerFactory.makeLayer(for: command, contentsScale: 2))

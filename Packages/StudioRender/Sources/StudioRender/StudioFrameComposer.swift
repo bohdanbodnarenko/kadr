@@ -62,7 +62,7 @@ public struct StudioFrameComposer: Sendable {
         // have come from a Retina machine than not. `CaptureManifest` decodes the same
         // default for the same reason.
         pointPixelScale: CGFloat = 2,
-        spring: MotionSpring = MotionSpring(),
+        spring: MotionSpring? = nil,
         wallpaper: CGImage? = nil
     ) {
         self.plan = plan
@@ -75,7 +75,7 @@ public struct StudioFrameComposer: Sendable {
         // preview and the export agree by construction rather than by both remembering.
         self.telemetry = telemetry.rebased(to: edit.clips)
         frameDuration = 1.0 / Double(max(frameRate, 1))
-        reconstruction = CursorReconstruction(spring: spring)
+        reconstruction = CursorReconstruction(spring: spring ?? MotionSpring(edit.cursorSmoothing))
         cursorPath = reconstruction.path(for: self.telemetry, duration: plan.duration)
         // Decoded once. A cursor PNG is a few hundred bytes and there are rarely more than
         // a dozen of them, but decoding one per frame is a decode per frame.
@@ -116,7 +116,7 @@ public struct StudioFrameComposer: Sendable {
 
     /// The source frame cropped and scaled to the viewport, with motion blur if it is moving.
     private func viewport(at time: TimeInterval, source: CIImage) -> CIImage {
-        let blur = MotionBlurPlan.plan(isMoving: plan.isMoving(at: time))
+        let blur = MotionBlurPlan.plan(isMoving: plan.isMoving(at: time), intensity: edit.motionBlur)
         guard blur.isBlurring else {
             return sample(at: time, source: source)
         }
@@ -247,7 +247,12 @@ public struct StudioFrameComposer: Sendable {
         // own pixels-per-point on the belief that it arrived in pixels, which moved an
         // I-beam's tip up and to the left of the text it was pointing at. Size and hotspot
         // share a unit, so the only conversion either needs is the one applied to both.
-        let drawn = pointPixelScale * scale * min(
+        let press: CGFloat = if edit.showsClickPress, let progress = cursor.clickProgress {
+            ClickRippleMetrics.pressScale(at: progress)
+        } else {
+            1
+        }
+        let drawn = pointPixelScale * scale * press * min(
             max(edit.cursorScale, StudioEdit.minimumCursorScale),
             StudioEdit.maximumCursorScale
         )

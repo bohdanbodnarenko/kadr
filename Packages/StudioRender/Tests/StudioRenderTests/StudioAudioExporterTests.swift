@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreMedia
 import Foundation
 import StudioSession
 import Testing
@@ -51,6 +52,49 @@ struct StudioAudioExporterTests {
         #expect(FileManager.default.fileExists(atPath: destination.path))
         let tracks = try await AVURLAsset(url: destination).loadTracks(withMediaType: .audio)
         #expect(!tracks.isEmpty)
+    }
+
+    @Test("Mute refuses to export a soundtrack")
+    func muteExportsNothing() async {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let wav = folder.appendingPathComponent("voice.wav")
+        try? writeSilentWav(seconds: 1, to: wav)
+        await #expect(throws: StudioAudioExporter.ExportError.noAudioTrack) {
+            try await StudioAudioExporter().export(
+                screen: folder.appendingPathComponent("missing.mov"),
+                clips: .whole(duration: 1),
+                soundtrack: wav,
+                to: folder.appendingPathComponent("out.m4a"),
+                format: .m4a,
+                mutesAudio: true
+            )
+        }
+    }
+
+    @Test("Mix to mono writes a one-channel WAV")
+    func mixToMonoWritesOneChannel() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await StudioMediaFixtures.makeMovie(seconds: 1, in: folder)
+        let wav = folder.appendingPathComponent("voice.wav")
+        try writeSilentWav(seconds: 1, to: wav)
+        let destination = folder.appendingPathComponent("out.wav")
+
+        try await StudioAudioExporter().export(
+            screen: movie,
+            clips: .whole(duration: 1),
+            soundtrack: wav,
+            to: destination,
+            format: .wav,
+            mixesToMono: true
+        )
+        let tracks = try await AVURLAsset(url: destination).loadTracks(withMediaType: .audio)
+        let track = try #require(tracks.first)
+        let descriptions = try await track.load(.formatDescriptions)
+        let description = try #require(descriptions.first)
+        let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(description)
+        #expect(asbd?.pointee.mChannelsPerFrame == 1)
     }
 
     private func writeSilentWav(seconds: Double, to url: URL) throws {

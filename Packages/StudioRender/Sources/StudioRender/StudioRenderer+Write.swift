@@ -45,7 +45,7 @@ extension StudioRenderer {
             }
         }
 
-        let reader = try makeReader(state, includeAudio: options.includeAudio)
+        let reader = try makeReader(state, options: options)
         open.reader = reader
         let writer = try makeWriter(destination: destination, size: plan.outputSize, options: options, state: state)
         open.writer = writer
@@ -177,7 +177,7 @@ extension StudioRenderer {
         let audio: AVAssetReaderTrackOutput?
     }
 
-    private func makeReader(_ state: RenderState, includeAudio: Bool) throws -> ReaderBundle {
+    private func makeReader(_ state: RenderState, options: Options) throws -> ReaderBundle {
         let reader: AVAssetReader
         do {
             reader = try AVAssetReader(asset: state.composition)
@@ -205,9 +205,14 @@ extension StudioRenderer {
         }
 
         var audio: AVAssetReaderTrackOutput?
-        if includeAudio, let track = state.audioTrack {
+        if options.includeAudio, let track = state.audioTrack {
             let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
-                AVFormatIDKey: kAudioFormatLinearPCM
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVNumberOfChannelsKey: options.audioChannelCount,
+                AVSampleRateKey: 48000,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsNonInterleaved: false
             ])
             if reader.canAdd(output) {
                 reader.add(output)
@@ -263,12 +268,7 @@ extension StudioRenderer {
 
         var audio: AVAssetWriterInput?
         if options.includeAudio, state.audioTrack != nil {
-            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVNumberOfChannelsKey: 2,
-                AVSampleRateKey: 48000,
-                AVEncoderBitRateKey: 128_000
-            ])
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: options.aacSettings)
             input.expectsMediaDataInRealTime = false
             if writer.canAdd(input) {
                 writer.add(input)

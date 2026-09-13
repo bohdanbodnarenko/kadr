@@ -59,6 +59,8 @@ public struct RecordingOptions: Sendable, Hashable {
     public var excludesOwnAudio: Bool
     /// Keep the display's HDR range (macOS 15+, docs/04 §4.3, docs/06 M25).
     public var dynamicRange: DynamicRange
+    /// Mix each audio track down to one channel (CleanShot §13.3).
+    public var recordsMono: Bool
 
     public init(
         frameRate: RecordingFrameRate = .sixty,
@@ -68,7 +70,8 @@ public struct RecordingOptions: Sendable, Hashable {
         microphoneDeviceID: String? = nil,
         showsCursor: Bool = true,
         excludesOwnAudio: Bool = true,
-        dynamicRange: DynamicRange = .standard
+        dynamicRange: DynamicRange = .standard,
+        recordsMono: Bool = false
     ) {
         self.frameRate = frameRate
         self.codec = codec
@@ -81,6 +84,7 @@ public struct RecordingOptions: Sendable, Hashable {
         // Resolved here rather than at the call site, so a recording started on macOS 14
         // with the setting on records standard rather than failing.
         self.dynamicRange = dynamicRange.resolved
+        self.recordsMono = recordsMono
     }
 
     /// HDR needs a codec that can carry ten bits; H.264 as Kadr configures it cannot.
@@ -152,8 +156,8 @@ public struct RecordingOptions: Sendable, Hashable {
         [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 48000,
-            AVNumberOfChannelsKey: 2,
-            AVEncoderBitRateKey: 128_000
+            AVNumberOfChannelsKey: recordsMono ? 1 : 2,
+            AVEncoderBitRateKey: recordsMono ? 96_000 : 128_000
         ]
     }
 }

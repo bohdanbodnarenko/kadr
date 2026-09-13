@@ -236,6 +236,16 @@ struct ClickRippleMetricsTests {
         #expect(ClickRippleMetrics.captionOpacity(elapsed: 99) == 0)
         #expect(ClickRippleMetrics.captionOpacity(elapsed: -1) == 0)
     }
+
+    @Test("A press is deepest at the click and recovered by the time the ripple fades")
+    func pressScaleDipsThenRecovers() {
+        #expect(ClickRippleMetrics.pressScale(at: 0) == 0.88)
+        #expect(ClickRippleMetrics.pressScale(at: 1) == 1)
+        #expect(ClickRippleMetrics.pressScale(at: 0) < ClickRippleMetrics.pressScale(at: 0.5))
+        #expect(ClickRippleMetrics.pressScale(at: 0.5) < ClickRippleMetrics.pressScale(at: 1))
+        #expect(ClickRippleMetrics.pressScale(at: -1) == ClickRippleMetrics.pressScale(at: 0))
+        #expect(ClickRippleMetrics.pressScale(at: 9) == 1)
+    }
 }
 
 /// The spring both the cursor and the camera use (docs/09 U3.2, U3.3).
@@ -274,6 +284,15 @@ struct MotionSpringTests {
             return position
         }
         #expect(distanceAfterHalfASecond(stiffness: 30) > distanceAfterHalfASecond(stiffness: 5))
+    }
+
+    @Test("The studio's Smooth look is today's spring")
+    func smoothingMapsOntoStiffness() {
+        #expect(MotionSpring(CursorSmoothing.smooth).stiffness == MotionSpring().stiffness)
+        #expect(MotionSpring(CursorSmoothing.natural).stiffness > MotionSpring(CursorSmoothing.smooth).stiffness)
+        #expect(MotionSpring(CursorSmoothing.off).stiffness > MotionSpring(CursorSmoothing.natural).stiffness)
+        #expect(MotionSpring(ZoomAnimationStyle.smooth).stiffness == MotionSpring().stiffness)
+        #expect(MotionSpring(ZoomAnimationStyle.dynamic).stiffness > MotionSpring(ZoomAnimationStyle.smooth).stiffness)
     }
 
     @Test("A zero-length step changes nothing")

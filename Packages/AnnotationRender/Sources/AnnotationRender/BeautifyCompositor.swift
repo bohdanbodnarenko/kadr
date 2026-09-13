@@ -101,7 +101,7 @@ enum BeautifyCompositor {
         context.saveGState()
         context.translateBy(x: imageOrigin.x - content.minX, y: imageOrigin.y - content.minY)
         if document.crop?.canExpandCanvas == true {
-            context.setFillColor(CGColor(gray: 1, alpha: 1))
+            context.setFillColor(ExpandCanvasFill.color(around: contents.source))
             context.fill(content)
         }
         context.draw(contents.source, in: document.baseImage.bounds)

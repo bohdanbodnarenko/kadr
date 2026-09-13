@@ -119,4 +119,15 @@ struct EditorCompositionTests {
         model.deleteSelection()
         #expect(insertedImages(in: model).isEmpty)
     }
+
+    @Test("The sticker tool places an emoji image on click")
+    func stickerPlacesEmoji() {
+        let model = makeModel()
+        model.selectTool(.sticker)
+        model.stickerEmoji = "🔥"
+        model.pointerDown(at: CGPoint(x: 200, y: 150))
+        #expect(insertedImages(in: model).count == 1)
+        #expect(model.tool == .sticker)
+        #expect(model.selectedImage != nil)
+    }
 }

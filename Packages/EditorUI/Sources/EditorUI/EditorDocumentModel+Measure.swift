@@ -137,6 +137,9 @@ extension EditorDocumentModel {
         case var .redaction(spec):
             spec.rect = move(spec.rect)
             return .redaction(spec)
+        case var .spotlight(spec):
+            spec.rect = move(spec.rect)
+            return .spotlight(spec)
         case var .crop(spec):
             spec.rect = move(spec.rect)
             return .crop(spec)

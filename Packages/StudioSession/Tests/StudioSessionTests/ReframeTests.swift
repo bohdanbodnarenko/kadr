@@ -169,6 +169,13 @@ struct StudioEditTests {
         #expect(edit.showsCursor)
         #expect(edit.showsZooms)
         #expect(edit.cursorScale == 1)
+        #expect(edit.cursorSmoothing == .smooth)
+        #expect(abs(edit.motionBlur - 0.5) < 0.0001)
+        #expect(edit.clickStyle == .outline)
+        #expect(edit.showsClickPress)
+        #expect(edit.zoomStyle == .smooth)
+        #expect(!edit.mutesAudio)
+        #expect(!edit.mixesToMono)
     }
 
     @Test("A free crop is applied before the aspect reframe")
@@ -201,6 +208,13 @@ struct StudioEditTests {
         #expect(edit.cursorScale == 1)
         #expect(edit.clickScale == 1)
         #expect(edit.clickColor == .white)
+        #expect(edit.clickStyle == .outline)
+        #expect(edit.showsClickPress)
+        #expect(edit.zoomStyle == .smooth)
+        #expect(edit.cursorSmoothing == .smooth)
+        #expect(edit.motionBlur == 0.5)
+        #expect(!edit.mutesAudio)
+        #expect(!edit.mixesToMono)
     }
 
     @Test("Absurd pointer sizes are clamped")
@@ -217,6 +231,32 @@ struct StudioEditTests {
         #expect(edit.clickScale == StudioEdit.maximumCursorScale)
         edit.clickScale = 0
         #expect(edit.clickScale == StudioEdit.minimumCursorScale)
+    }
+
+    @Test("Motion blur is clamped to a fraction")
+    func motionBlurIsClamped() {
+        var edit = StudioEdit(motionBlur: 9)
+        #expect(edit.motionBlur == 1)
+        edit.motionBlur = -1
+        #expect(edit.motionBlur == 0)
+    }
+
+    @Test("A look carries pointer motion and ripple style")
+    func presetCarriesCursorLook() {
+        var edit = StudioEdit.untouched(duration: 8)
+        edit.cursorSmoothing = .natural
+        edit.motionBlur = 0.2
+        edit.clickStyle = .filled
+        edit.showsClickPress = false
+        edit.zoomStyle = .dynamic
+        let preset = StudioPreset(name: "Soft", capturing: edit)
+        let applied = preset.applied(to: .untouched(duration: 8))
+        #expect(applied.cursorSmoothing == .natural)
+        #expect(abs(applied.motionBlur - 0.2) < 0.0001)
+        #expect(applied.clickStyle == .filled)
+        #expect(!applied.showsClickPress)
+        #expect(applied.zoomStyle == .dynamic)
+        #expect(preset.matches(applied))
     }
 
     @Test("Absurd caption sizes are clamped")
@@ -365,6 +405,11 @@ struct StudioEditTests {
         edit.captionScale = 0.8
         edit.soundtrackFileName = "soundtrack.m4a"
         edit.soundtrackDisplayName = "Voice"
+        edit.cursorSmoothing = .natural
+        edit.motionBlur = 0.8
+        edit.clickStyle = .filled
+        edit.showsClickPress = false
+        edit.zoomStyle = .dynamic
 
         let data = try JSONEncoder().encode(edit)
         #expect(try JSONDecoder().decode(StudioEdit.self, from: data) == edit)

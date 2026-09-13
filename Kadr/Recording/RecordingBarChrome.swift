@@ -81,3 +81,21 @@ struct RecordingBarFilledCircleButton: View {
         .help(help)
     }
 }
+
+/// Live loudness while recording (CleanShot §13.3). No animation of its own — the
+/// control bar already refreshes from the sample buffers.
+struct RecordingAudioMeter: View {
+    var level: Float
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0 ..< 5, id: \.self) { index in
+                Capsule()
+                    .fill(level > Float(index) / 5 ? Color.green : Color.primary.opacity(0.18))
+                    .frame(width: 3, height: 6 + CGFloat(index) * 2.5)
+            }
+        }
+        .accessibilityLabel("Audio level")
+        .accessibilityValue("\(Int((level * 100).rounded())) percent")
+    }
+}

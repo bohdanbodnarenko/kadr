@@ -214,7 +214,7 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
     }
 }
 
-/// One of the five text presets from docs/03 §3, or a custom style.
+/// One of the text presets from docs/03 §3, or a custom style.
 public struct TextStyle: Codable, Hashable, Sendable {
     public var fontName: String
     public var fontSize: CGFloat
@@ -237,12 +237,25 @@ public struct TextStyle: Codable, Hashable, Sendable {
         self.backgroundColor = backgroundColor
     }
 
-    /// The five presets the inspector offers (docs/03 §3).
+    /// The inspector presets (docs/03 §3, CleanShot §8.2).
     public static let presets: [(name: String, style: TextStyle)] = [
         ("Callout", TextStyle()),
         ("Heading", TextStyle(fontSize: 40, color: .black)),
         ("Body", TextStyle(fontSize: 18, isBold: false, color: .black)),
         ("Badge", TextStyle(fontSize: 20, color: .white, backgroundColor: .annotationRed)),
-        ("Caption", TextStyle(fontSize: 14, isBold: false, color: .white, backgroundColor: .black))
+        ("Caption", TextStyle(fontSize: 14, isBold: false, color: .white, backgroundColor: .black)),
+        ("Highlight", TextStyle(
+            fontSize: 22,
+            isBold: false,
+            color: .black,
+            backgroundColor: AnnotationColor(red: 1, green: 0.92, blue: 0.23)
+        )),
+        ("Code", TextStyle(
+            fontName: "Menlo",
+            fontSize: 16,
+            isBold: false,
+            color: .black,
+            backgroundColor: AnnotationColor(red: 0.94, green: 0.94, blue: 0.94)
+        ))
     ]
 }

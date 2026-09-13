@@ -90,6 +90,16 @@ public extension AnnotationCommand {
         return .redaction(spec)
     }
 
+    func applying(spotlightDimOpacity: CGFloat) -> AnnotationCommand {
+        guard case let .spotlight(spec) = self else { return self }
+        return .spotlight(spec.withDimOpacity(spotlightDimOpacity))
+    }
+
+    func applying(spotlightCornerRadius: CGFloat) -> AnnotationCommand {
+        guard case let .spotlight(spec) = self else { return self }
+        return .spotlight(spec.withCornerRadius(spotlightCornerRadius))
+    }
+
     // swiftlint:disable cyclomatic_complexity
     // Exempt around the declaration rather than on the line above it: a `//` between a doc
     // comment and what it documents orphans the doc comment, which is a different lint rule
@@ -132,6 +142,9 @@ public extension AnnotationCommand {
         case var .redaction(spec):
             spec.id = newID
             return .redaction(spec)
+        case var .spotlight(spec):
+            spec.id = newID
+            return .spotlight(spec)
         case var .counter(spec):
             spec.id = newID
             return .counter(spec)

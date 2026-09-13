@@ -31,12 +31,14 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
     /// Open a recording in the studio, where its cuts, zooms and camera are edited
     /// (docs/09 U3). A recording with no studio session opens for trimming instead.
     public static let openEditor = AfterCaptureActions(rawValue: 1 << 5)
+    /// Prompt for a folder and name instead of writing silently (CleanShot §6.2 / §7).
+    public static let promptSave = AfterCaptureActions(rawValue: 1 << 6)
 
     public static let none: AfterCaptureActions = []
 
     /// Every action, in the order the settings pane lists them.
     public static let allCases: [AfterCaptureActions] = [
-        .overlay, .copy, .save, .annotate, .pin, .openEditor
+        .overlay, .copy, .save, .promptSave, .annotate, .pin, .openEditor
     ]
 
     public var title: String {
@@ -44,6 +46,7 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
         case .overlay: "Show a card"
         case .copy: "Copy to the clipboard"
         case .save: "Save to the folder"
+        case .promptSave: "Ask where to save"
         case .annotate: "Open for annotation"
         case .pin: "Pin to the screen"
         case .openEditor: "Open in the studio"

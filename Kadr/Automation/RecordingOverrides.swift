@@ -9,20 +9,28 @@ struct RecordingOverrides: Sendable, Equatable {
     var frameRate: Int?
     var recordsMicrophone: Bool?
     var recordsSystemAudio: Bool?
+    var exportAsGIF: Bool
 
     static let none = RecordingOverrides()
 
-    init(frameRate: Int? = nil, recordsMicrophone: Bool? = nil, recordsSystemAudio: Bool? = nil) {
+    init(
+        frameRate: Int? = nil,
+        recordsMicrophone: Bool? = nil,
+        recordsSystemAudio: Bool? = nil,
+        exportAsGIF: Bool = false
+    ) {
         self.frameRate = frameRate
         self.recordsMicrophone = recordsMicrophone
         self.recordsSystemAudio = recordsSystemAudio
+        self.exportAsGIF = exportAsGIF
     }
 
     init(_ options: RecordOptions) {
         self.init(
             frameRate: options.frameRate,
             recordsMicrophone: options.recordsMicrophone,
-            recordsSystemAudio: options.recordsSystemAudio
+            recordsSystemAudio: options.recordsSystemAudio,
+            exportAsGIF: options.exportAsGIF == true
         )
     }
 }

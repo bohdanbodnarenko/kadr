@@ -88,6 +88,15 @@ struct KadrDocumentFileTests {
         #expect(restored.baseImagePNG == fakePNG)
     }
 
+    @Test("A rotated document reopens already rotated")
+    func orientationIsSerialised() throws {
+        var contents = makeContents()
+        contents.document.rotateClockwise()
+        let restored = try KadrDocumentFile.contents(of: KadrDocumentFile.data(for: contents))
+        #expect(restored.document.orientation.quarterTurnsCW == 1)
+        #expect(restored.document.commands == contents.document.commands)
+    }
+
     @Test("A restored document starts with a clean history rather than someone else's")
     func historyIsNotSerialised() throws {
         var contents = makeContents()

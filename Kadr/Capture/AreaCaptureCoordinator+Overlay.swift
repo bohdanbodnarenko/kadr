@@ -1,7 +1,9 @@
 import AppKit
 import Foundation
 import HistoryKit
+import OverlayKit
 import Shared
+import UniformTypeIdentifiers
 
 /// What the coordinator hands to the Quick Access Overlay and the pins (docs/03 §2, §4).
 ///
@@ -40,9 +42,74 @@ extension AreaCaptureCoordinator {
         quickAccess.annotateFile(at: url)
     }
 
+    /// Puts an existing file on the overlay (CleanShot `add-quick-access-overlay`).
+    @discardableResult
+    func presentExternalFile(at url: URL) -> Bool {
+        quickAccess.presentExternalFile(at: url)
+    }
+
+    /// Opens the clipboard as a Quick Access card (CleanShot `open-from-clipboard`).
+    @discardableResult
+    func presentFromClipboard() -> Bool {
+        quickAccess.presentFromClipboard()
+    }
+
+    /// Pins a file chosen from an open panel, for `kadr pin` with no path.
+    @discardableResult
+    func pinFromOpenPanel() -> URL? {
+        ActivationJuggler.shared.beginRegularWindow()
+        defer { ActivationJuggler.shared.endRegularWindow() }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.image]
+        panel.prompt = "Pin"
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return pinFile(at: url) ? url : nil
+    }
+
     /// The "Close all pins" global command (docs/03 §4).
     func closeAllPins() {
         pins.closeAll()
+    }
+
+    func togglePinsHidden() {
+        pins.toggleHidden()
+    }
+
+    var pinsAreHidden: Bool {
+        pins.isHidden
+    }
+
+    /// Reopens pins that were showing when Kadr last quit (docs/03 §4 P2).
+    func restorePersistedPins() {
+        pins.restore(
+            copy: { [weak self] url in self?.quickAccess.copyFile(at: url) },
+            save: { [weak self] url in self?.quickAccess.revealInFinder(url) },
+            annotate: { [weak self] url in self?.quickAccess.openInEditor(url) },
+            copyText: { [weak self] url in self?.quickAccess.recognizeText(at: url) }
+        )
+    }
+
+    func closeAllOverlays() {
+        quickAccess.dismissAll()
+    }
+
+    func saveAllOverlays() {
+        quickAccess.saveAll()
+    }
+
+    func toggleOverlaysHidden() {
+        quickAccess.toggleHidden()
+    }
+
+    var overlaysAreHidden: Bool {
+        quickAccess.areHidden
+    }
+
+    var overlayCardCount: Int {
+        quickAccess.items.count
     }
 
     var pinCount: Int {
@@ -55,7 +122,7 @@ extension AreaCaptureCoordinator {
     }
 
     /// Puts a finished recording into the Quick Access Overlay (docs/03 §1.8).
-    func showRecording(at fileURL: URL) {
-        quickAccess.showRecording(at: fileURL)
+    func showRecording(at fileURL: URL, exportGIF: Bool = false) {
+        quickAccess.showRecording(at: fileURL, exportGIF: exportGIF)
     }
 }

@@ -170,6 +170,18 @@ struct ToggleDesktopIconsIntent: AppIntent {
     }
 }
 
+struct OpenAllInOneIntent: AppIntent {
+    static let title: LocalizedStringResource = "All-in-One"
+    static let description = IntentDescription("Open Kadr's All-in-One capture HUD.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        _ = try await run(.allInOne(.none))
+        return .result()
+    }
+}
+
 struct OpenHistoryIntent: AppIntent {
     static let title: LocalizedStringResource = "Open History"
     static let description = IntentDescription("Open Kadr's capture library.")

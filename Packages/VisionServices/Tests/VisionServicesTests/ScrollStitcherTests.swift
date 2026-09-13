@@ -79,6 +79,29 @@ struct ScrollStitcherTests {
         }
     }
 
+    @Test("A horizontal page stitches back into the page it came from")
+    func horizontalGoldenCase() throws {
+        let fixture = HorizontalScrollFixture.timeline
+        let directory = workingDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let frames = try fixture.writeFrames(to: directory)
+        let destination = directory.appendingPathComponent("stitched.png")
+        let response = try ScrollStitcher().stitch(
+            frames: frames,
+            to: destination,
+            axis: .horizontal
+        )
+
+        let golden = fixture.golden()
+        #expect(response.pixelSize == PixelSize(width: golden.width, height: golden.height))
+
+        let stitched = try #require(loadImage(destination))
+        let difference = try #require(compare(stitched, golden))
+        #expect(difference.maximum == 0)
+        #expect(difference.differing == 0)
+    }
+
     @Test("Chrome that does not scroll is kept once, not repeated")
     func stickyChromeIsFoundAndKeptOnce() throws {
         let directory = workingDirectory()

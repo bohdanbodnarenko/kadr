@@ -1,5 +1,6 @@
 import AnnotationModel
 import CoreGraphics
+import Foundation
 import Testing
 @testable import EditorUI
 
@@ -80,6 +81,36 @@ struct EditorStyleTests {
         #expect(copy.rect.origin.y == original.rect.origin.y + 16)
     }
 
+    @Test("Paste inserts a new-identity copy of encoded annotations")
+    func pasteEncodedInsertsCopy() throws {
+        let model = makeModel()
+        model.tool = .shape
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 40, y: 30))
+        model.pointerUp(at: CGPoint(x: 40, y: 30))
+
+        let data = try #require(model.encodedSelection())
+        #expect(model.pasteEncoded(data))
+        #expect(model.document.commands.count == 2)
+        #expect(model.encodedSelection() != nil)
+
+        guard case let .shape(original) = model.document.commands[0],
+              case let .shape(copy) = model.document.commands[1]
+        else {
+            Issue.record("expected two shapes")
+            return
+        }
+        #expect(copy.id != original.id)
+        #expect(copy.rect.origin.x == original.rect.origin.x + 16)
+    }
+
+    @Test("Copy with nothing selected encodes nothing")
+    func emptySelectionDoesNotEncode() {
+        let model = makeModel()
+        #expect(model.encodedSelection() == nil)
+        #expect(!model.pasteEncoded(Data("[]".utf8)))
+    }
+
     @Test("A highlighter keeps its translucency when recolored")
     func highlighterKeepsAlpha() throws {
         let model = makeModel()
@@ -152,6 +183,32 @@ struct EditorStyleTests {
         guard case let .shape(restored) = try #require(model.document.commands.first) else { return }
         #expect(restored.stroke.width == originalWidth)
         #expect(!model.document.isGestureOpen)
+    }
+
+    @Test("Plus and minus keys change the armed tool's stroke width")
+    func toolSizeKeysAdjustStroke() throws {
+        let model = makeModel()
+        model.tool = .arrow
+        let before = model.styleMemory.stroke(for: .arrow).width
+
+        model.adjustToolSize(by: 1)
+        #expect(model.styleMemory.stroke(for: .arrow).width == before + 2)
+
+        model.adjustToolSize(by: -1)
+        #expect(model.styleMemory.stroke(for: .arrow).width == before)
+    }
+
+    @Test("Plus and minus keys change the text tool's font size")
+    func toolSizeKeysAdjustText() {
+        let model = makeModel()
+        model.tool = .text
+        let before = model.styleMemory.lastTextStyle.fontSize
+
+        model.adjustToolSize(by: 1)
+        #expect(model.styleMemory.lastTextStyle.fontSize == before + 2)
+
+        model.adjustToolSize(by: -1)
+        #expect(model.styleMemory.lastTextStyle.fontSize == before)
     }
 
     @Test("Changing blur vs pixelate updates the selected redaction")

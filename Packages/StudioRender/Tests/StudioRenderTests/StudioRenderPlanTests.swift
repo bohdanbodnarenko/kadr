@@ -249,6 +249,22 @@ struct StudioRenderPlanTests {
         #expect(Int(plan.outputSize.height) % 2 == 0)
     }
 
+    /// Smooth vs Dynamic is a camera look, not the pointer's (CleanShot §14.3).
+    @Test("A dynamic zoom has arrived further than a smooth one at the same moment")
+    func zoomStyleMovesTheCamera() {
+        let cue = ZoomCue(start: 0, duration: 2, magnification: 2)
+        var smooth = edit(zooms: [cue], duration: 4)
+        smooth.zoomStyle = .smooth
+        var dynamic = smooth
+        dynamic.zoomStyle = .dynamic
+        let earlySmooth = StudioRenderPlan(edit: smooth, sourceSize: size)
+            .viewports.viewport(at: 0.12).magnification
+        let earlyDynamic = StudioRenderPlan(edit: dynamic, sourceSize: size)
+            .viewports.viewport(at: 0.12).magnification
+        #expect(earlyDynamic > earlySmooth)
+        #expect(earlySmooth > 1)
+    }
+
     @Test("An identity canvas still maps a point onto itself")
     func identityCardFillsTheFrame() {
         let plan = StudioRenderPlan(edit: edit(), sourceSize: size)

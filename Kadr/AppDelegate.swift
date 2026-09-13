@@ -117,6 +117,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     )
 
+    /// All-in-One capture HUD (docs/03 §1.4). Built on first use.
+    lazy var allInOne = AllInOneHUD(
+        settings: settings,
+        perform: { [weak self] mode in self?.performAllInOne(mode) }
+    )
+
     var recordingStorage: RecordingCoordinator?
     var recording: RecordingCoordinator {
         if let recordingStorage {
@@ -129,8 +135,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hygiene: desktopHygiene,
             camera: cameraRecorder
         )
-        created.onFinished = { [weak self] result in
-            self?.areaCapture.showRecording(at: result.fileURL)
+        created.onFinished = { [weak self] result, exportGIF in
+            self?.areaCapture.showRecording(at: result.fileURL, exportGIF: exportGIF)
         }
         created.onStudioSessionReady = { [weak self] session, _ in
             guard let self else { return }
@@ -154,7 +160,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hygiene: desktopHygiene,
         openSettings: { [weak self] tab in self?.settingsWindowController.show(tab: tab) },
         openHistory: { [weak self] in self?.openHistory() },
-        addToHistory: { [weak self] url in self?.addToHistory(url) ?? false }
+        addToHistory: { [weak self] url in self?.addToHistory(url) ?? false },
+        openAllInOne: { [weak self] in self?.allInOne.present() }
     )
     private var automationListener: AutomationListener?
 
@@ -212,6 +219,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func attachStatusItemDrop() {
+        statusItemController?.openDroppedFile = { [weak self] url in
+            self?.areaCapture.quickAccess.openInEditor(url)
+        }
+    }
+
     private func beginLaunchInterval() {
         launchStartedAt = .now
         launchInterval = signposter.beginInterval("launchToHotkeyArmed")
@@ -240,8 +253,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openHistory: { [weak self] in self?.openHistory() },
             unfinishedRecordings: { StudioSessionRecorder.unfinishedCount() },
             recoverRecordings: { [weak self] in self?.recoverUnfinishedRecordings() },
-            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
+            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
+            overlayCardCount: { [weak self] in self?.areaCaptureStorage?.overlayCardCount ?? 0 },
+            overlaysAreHidden: { [weak self] in self?.areaCaptureStorage?.overlaysAreHidden ?? false },
+            pinCount: { [weak self] in self?.areaCaptureStorage?.pinCount ?? 0 },
+            pinsAreHidden: { [weak self] in self?.areaCaptureStorage?.pinsAreHidden ?? false }
         )
+        attachStatusItemDrop()
         endStatusItemInterval()
 
         hotkeyCenter = HotkeyCenter(perform: { [weak self] command in self?.perform(command) })
@@ -273,6 +291,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
         history.start()
+
+        // Pins from the last session, after History so a capture that was only in the
+        // library is still on disk (docs/03 §4 P2). Skip constructing the capture layer
+        // when nothing was pinned — idle RAM stays the empty-agent budget.
+        if PinStore.applicationSupport()?.hasRecords == true {
+            areaCapture.restorePersistedPins()
+        }
 
         // Re-hide icons if the user left them hidden, and restore a wallpaper that
         // outlived a crash mid-capture (docs/03 §7).

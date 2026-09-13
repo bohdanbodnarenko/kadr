@@ -62,9 +62,16 @@ private func footprintBytes() -> Int {
 @MainActor
 @Suite("Pinned screenshots", .serialized)
 struct PinManagerTests {
+    private func makeManager() -> (PinManager, URL) {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-pins-\(UUID().uuidString).json")
+        return (PinManager(store: PinStore(fileURL: storeURL)), storeURL)
+    }
+
     @Test("Pinning shows a window and closing all takes them away")
     func pinAndCloseAll() throws {
-        let manager = PinManager()
+        let (manager, storeURL) = makeManager()
+        defer { try? FileManager.default.removeItem(at: storeURL) }
         let url = try writeCapture(width: 400, height: 300)
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -77,7 +84,8 @@ struct PinManagerTests {
 
     @Test("A file that is not an image cannot be pinned")
     func refusesNonImages() throws {
-        let manager = PinManager()
+        let (manager, storeURL) = makeManager()
+        defer { try? FileManager.default.removeItem(at: storeURL) }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-not-an-image-\(UUID().uuidString).txt")
         try Data("hello".utf8).write(to: url)
@@ -89,7 +97,8 @@ struct PinManagerTests {
 
     @Test("Pins cascade instead of landing exactly on top of each other")
     func pinsCascade() throws {
-        let manager = PinManager()
+        let (manager, storeURL) = makeManager()
+        defer { try? FileManager.default.removeItem(at: storeURL) }
         let url = try writeCapture(width: 400, height: 300)
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -114,8 +123,11 @@ struct PinManagerTests {
         let url = try writeCapture()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let manager = PinManager()
-        defer { manager.closeAll() }
+        let (manager, storeURL) = makeManager()
+        defer {
+            manager.closeAll()
+            try? FileManager.default.removeItem(at: storeURL)
+        }
 
         // Pin one first, so framework warm-up is not counted against the budget.
         manager.pin(url, copy: { _ in }, save: { _ in })
@@ -131,5 +143,67 @@ struct PinManagerTests {
             added < 40 * 1024 * 1024,
             "20 pins added \(added / 1024 / 1024) MB, over the 40 MB budget in doc 03 §4"
         )
+    }
+
+    @Test("Closing a pin forgets it, so a relaunch does not bring it back")
+    func persistAndRestore() throws {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-pins-\(UUID().uuidString).json")
+        let store = PinStore(fileURL: storeURL)
+        let url = try writeCapture(width: 400, height: 300)
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: storeURL)
+        }
+
+        let writer = PinManager(store: store)
+        #expect(writer.pin(url, copy: { _ in }, save: { _ in }))
+        let saved = store.load()
+        #expect(saved.count == 1)
+        writer.closeAll()
+        #expect(store.load().isEmpty)
+
+        store.save(saved)
+        let reader = PinManager(store: store)
+        reader.restore(copy: { _ in }, save: { _ in }, annotate: { _ in }, copyText: { _ in })
+        #expect(reader.count == 1)
+        reader.closeAll()
+        #expect(store.load().isEmpty)
+    }
+
+    @Test("Hide makes pins invisible without closing them")
+    func hideDoesNotClose() throws {
+        let (manager, storeURL) = makeManager()
+        defer {
+            manager.closeAll()
+            try? FileManager.default.removeItem(at: storeURL)
+        }
+        let url = try writeCapture(width: 400, height: 300)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(manager.pin(url, copy: { _ in }, save: { _ in }))
+        manager.toggleHidden()
+        #expect(manager.isHidden)
+        #expect(manager.count == 1)
+        #expect(NSApp.windows.filter { $0 is PinPanel }.allSatisfy { !$0.isVisible })
+        manager.toggleHidden()
+        #expect(!manager.isHidden)
+        #expect(NSApp.windows.contains { $0 is PinPanel && $0.isVisible })
+    }
+
+    @Test("Middle-click closes a pin (CleanShot §11, §22.4)")
+    func middleClickCloses() throws {
+        let (manager, storeURL) = makeManager()
+        defer {
+            manager.closeAll()
+            try? FileManager.default.removeItem(at: storeURL)
+        }
+        let url = try writeCapture(width: 400, height: 300)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(manager.pin(url, copy: { _ in }, save: { _ in }))
+        let panel = try #require(NSApp.windows.compactMap { $0 as? PinPanel }.first)
+        panel.closeFromMiddleClick()
+        #expect(manager.isEmpty)
     }
 }

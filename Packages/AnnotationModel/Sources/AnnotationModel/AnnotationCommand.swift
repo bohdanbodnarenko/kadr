@@ -306,6 +306,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     case highlighter(HighlighterSpec)
     case text(TextSpec)
     case redaction(RedactionSpec)
+    case spotlight(SpotlightSpec)
     case counter(CounterSpec)
     case crop(CropSpec)
     case beautify(BeautifySpec)
@@ -325,6 +326,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case let .highlighter(spec): spec.id
         case let .text(spec): spec.id
         case let .redaction(spec): spec.id
+        case let .spotlight(spec): spec.id
         case let .counter(spec): spec.id
         case let .crop(spec): spec.id
         case let .beautify(spec): spec.id
@@ -347,6 +349,7 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
         case .highlighter: .highlighter
         case .text: .text
         case .redaction: .redaction
+        case .spotlight: .spotlight
         case .counter: .counter
         case .crop: .crop
         case .beautify: .beautify
@@ -383,6 +386,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
     case highlighter
     case text
     case redaction
+    case spotlight
     case counter
     case crop
     case beautify
@@ -402,6 +406,7 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
         case .highlighter: "Highlighter"
         case .text: "Text"
         case .redaction: "Blur"
+        case .spotlight: "Spotlight"
         case .counter: "Counter"
         case .crop: "Crop"
         case .beautify: "Beautify"

@@ -23,6 +23,10 @@ public extension EditorDocumentModel {
             return
         }
 
+        if beginSmartHighlight(at: point, modifiers: modifiers) {
+            return
+        }
+
         guard let annotationTool = tool.annotation else {
             if beginResizeIfHandle(
                 at: point,
@@ -55,6 +59,10 @@ public extension EditorDocumentModel {
 
     func pointerDragged(to point: CGPoint, modifiers: EditorModifiers = []) {
         guard let origin = dragOrigin else { return }
+
+        if continueSmartHighlightDrag(to: point, modifiers: modifiers) {
+            return
+        }
 
         if tool == .select {
             if resizeHandle != nil {
@@ -95,8 +103,14 @@ public extension EditorDocumentModel {
             resizeStartBounds = nil
             cropDragHandle = nil
             cropDragStartRect = nil
+            pendingSmartHighlight = nil
+            hoveredHighlightBox = nil
             marquee = nil
             draft = nil
+        }
+
+        if commitSmartHighlight() {
+            return
         }
 
         if tool == .select {
@@ -139,6 +153,8 @@ public extension EditorDocumentModel {
         } else if !document.selection.contains(hit.id) {
             document.selection = [hit.id]
         }
+
+        guard !isCanvasLocked else { return }
 
         isMovingSelection = !document.selection.isEmpty
         guard isMovingSelection else { return }

@@ -60,6 +60,8 @@ public actor RecordingEngine {
     var segmentClose: Task<Void, Never>?
 
     var options = RecordingOptions()
+    /// Last-buffer loudness, sampled by the control bar (CleanShot §13.3).
+    public internal(set) var audioMeter = AudioMeter()
     var pixelSize = PixelSize(width: 0, height: 0)
     var segments: [URL] = []
     var sessionDirectory: URL?
@@ -286,6 +288,12 @@ public actor RecordingEngine {
     /// click halos and keystrokes in the file and nowhere else (docs/04 §4.3).
     private func consume(_ box: SampleBufferBox) async {
         guard state == .recording, let writer else { return }
+
+        if box.kind == .microphone {
+            audioMeter.microphone = AudioLevel.peak(of: box.buffer)
+        } else if box.kind == .systemAudio {
+            audioMeter.system = AudioLevel.peak(of: box.buffer)
+        }
 
         if box.kind == .video {
             let time = recordingTime(of: box.buffer)

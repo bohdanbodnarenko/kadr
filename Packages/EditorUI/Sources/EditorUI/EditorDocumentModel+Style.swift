@@ -36,6 +36,39 @@ public extension EditorDocumentModel {
         rewriteSelectionLive { $0.applying(strokeWidth: clamped) }
     }
 
+    /// `` ` `` / `+` / `-` adjust the armed tool's size (CleanShot §8.2).
+    func adjustToolSize(by steps: Int) {
+        guard steps != 0, let tool = inspectedTool else { return }
+        if tool == .text {
+            adjustTextSize(by: steps)
+            return
+        }
+        guard toolUsesStrokeWidth(tool) else { return }
+        let step: CGFloat = 2
+        let current = styleMemory.stroke(for: tool).width
+        applyStrokeWidth(current + CGFloat(steps) * step)
+    }
+
+    private func toolUsesStrokeWidth(_ tool: AnnotationTool) -> Bool {
+        switch tool {
+        case .arrow, .shape, .line, .freehand, .highlighter:
+            true
+        default:
+            false
+        }
+    }
+
+    private func adjustTextSize(by steps: Int) {
+        var style = styleMemory.lastTextStyle
+        style.fontSize = min(max(style.fontSize + CGFloat(steps) * 2, 10), 120)
+        styleMemory.lastTextStyle = style
+        rewriteSelectionLive { command in
+            guard case var .text(spec) = command else { return command }
+            spec.style.fontSize = style.fontSize
+            return .text(spec)
+        }
+    }
+
     func applyShapeKind(_ kind: ShapeKind) {
         endInspectorStyleEdit()
         styleMemory.lastShapeKind = kind
@@ -85,12 +118,43 @@ public extension EditorDocumentModel {
         rewriteSelection { $0.applying(redactionStyle: style) }
     }
 
+    func applySpotlightDimOpacity(_ opacity: CGFloat) {
+        styleMemory.lastSpotlightDimOpacity = opacity
+        rewriteSelectionLive { $0.applying(spotlightDimOpacity: opacity) }
+    }
+
+    func applySpotlightCornerRadius(_ radius: CGFloat) {
+        styleMemory.lastSpotlightCornerRadius = radius
+        rewriteSelectionLive { $0.applying(spotlightCornerRadius: radius) }
+    }
+
     /// ⌘D: a copy offset so it is obvious there are now two (docs/03 §3).
     func duplicateSelection() {
-        let selected = document.commands.filter { document.selection.contains($0.id) && $0.isSelectable }
-        guard !selected.isEmpty else { return }
+        guard !isCanvasLocked else { return }
+        insertCopies(selectedCommands)
+    }
+
+    /// JSON of the current selection, for the pasteboard (CleanShot 4.4).
+    func encodedSelection() -> Data? {
+        let selected = selectedCommands
+        guard !selected.isEmpty else { return nil }
+        return try? JSONEncoder().encode(selected)
+    }
+
+    /// Pastes annotations copied from this editor or another (CleanShot 4.4).
+    @discardableResult
+    func pasteEncoded(_ data: Data) -> Bool {
+        guard let commands = try? JSONDecoder().decode([AnnotationCommand].self, from: data),
+              !commands.isEmpty
+        else { return false }
+        insertCopies(commands)
+        return true
+    }
+
+    private func insertCopies(_ commands: [AnnotationCommand]) {
+        guard !commands.isEmpty else { return }
         let offset = CGSize(width: 16, height: 16)
-        let copies = selected.map { command in
+        let copies = commands.map { command in
             Self.translated(command.withNewIdentity(), by: offset)
         }
         document.perform { $0.append(contentsOf: copies) }

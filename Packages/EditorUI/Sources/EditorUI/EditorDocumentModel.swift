@@ -34,6 +34,16 @@ public final class EditorDocumentModel {
     public internal(set) var document: AnnotationDocument
     public var tool: EditorTool = .select
     public var styleMemory = StyleMemory()
+    /// The emoji the sticker tool places on the next click (docs/03 §3 P2).
+    public var stickerEmoji = "😀"
+    /// Pixel scale of Copy/Save relative to the capture. 1 is native; smaller
+    /// values downscale the export without changing the canvas (docs/03 §3 P2).
+    public var exportScale: CGFloat = 1 {
+        didSet {
+            let clamped = min(max(exportScale, 0.25), 1)
+            if exportScale != clamped { exportScale = clamped }
+        }
+    }
 
     /// A text annotation that was just placed and should open the in-place editor.
     ///
@@ -45,6 +55,12 @@ public final class EditorDocumentModel {
     /// (docs/03 §3, docs/06 M18) — detecting a secret must not blur it on its own.
     public internal(set) var redactionCandidates: [RedactionCandidate] = []
     public internal(set) var recognizedLines: [RecognizedLine] = []
+    /// Word boxes from the same OCR pass, for the smart highlighter (docs/03 §3 P2).
+    public internal(set) var recognizedWords: [RecognizedWord] = []
+    /// Image-space boxes the highlighter snaps to. Empty until OCR has run.
+    public internal(set) var highlightBoxes: [CGRect] = []
+    /// The word or line currently under the pointer, while the highlighter is armed.
+    public internal(set) var hoveredHighlightBox: CGRect?
     public internal(set) var isFindingRedactions = false
     public var redactionQuery = ""
     public internal(set) var redactionAssistError: String?
@@ -62,6 +78,10 @@ public final class EditorDocumentModel {
     /// Background removal, which is a round trip to the helper (docs/06 M23).
     public internal(set) var isLiftingSubject = false
     public internal(set) var subjectLiftError: String?
+
+    /// When on, existing annotations stay put so drawing tools do not accidentally grab
+    /// them (CleanShot §8.1, docs/03 §3 P2).
+    public var isCanvasLocked = false
 
     /// The annotation being drawn right now. It lives outside the document until the
     /// mouse comes up, so a half-drawn arrow never lands in the undo history.
@@ -83,6 +103,8 @@ public final class EditorDocumentModel {
     /// The crop handle being dragged in crop mode (docs/09 U1.8).
     var cropDragHandle: CropHandle?
     var cropDragStartRect: CGRect?
+    /// A highlighter click that has not yet become a freehand drag (docs/03 §3 P2).
+    var pendingSmartHighlight: CGRect?
     /// True while an inspector slider owns the open document gesture, so releasing the
     /// slider (or clicking the canvas) closes that undo step without colliding with a drag.
     @ObservationIgnored var inspectorStyleGesture = false
@@ -142,6 +164,21 @@ public final class EditorDocumentModel {
         document.redo()
     }
 
+    /// Rotate the capture 90° clockwise (docs/03 §3 P2).
+    public func rotateClockwise() {
+        document.rotateClockwise()
+    }
+
+    /// Mirror the capture left-to-right (docs/03 §3 P2).
+    public func flipHorizontal() {
+        document.flipHorizontal()
+    }
+
+    /// Mirror the capture top-to-bottom (CleanShot §8.2).
+    public func flipVertical() {
+        document.flipVertical()
+    }
+
     // MARK: - Selection
 
     /// Moves the selection by a delta from where the drag started.
@@ -149,6 +186,7 @@ public final class EditorDocumentModel {
     /// Offsets are computed from the drag's origin rather than accumulated per event, so a
     /// fast drag cannot drift away from the pointer.
     public func moveSelection(by delta: CGSize) {
+        guard !isCanvasLocked else { return }
         // Read the selection out first: `perform` hands the command list back as `inout`,
         // and reading another property of the same document inside that closure is an
         // exclusive-access violation that traps at runtime.
@@ -167,6 +205,7 @@ public final class EditorDocumentModel {
     }
 
     public func deleteSelection() {
+        guard !isCanvasLocked else { return }
         document.remove(document.selection)
     }
 
@@ -191,189 +230,5 @@ public final class EditorDocumentModel {
 
     public func sendSelectionBackward() {
         document.sendBackward(document.selection)
-    }
-
-    // MARK: - Drafting
-
-    func makeDraft(_ annotationTool: AnnotationTool, at point: CGPoint) -> AnnotationCommand? {
-        let stroke = styleMemory.stroke(for: annotationTool)
-        switch annotationTool {
-        case .arrow:
-            return .arrow(ArrowSpec(start: point, end: point, head: styleMemory.lastArrowHead, stroke: stroke))
-        case .shape:
-            return .shape(ShapeSpec(
-                kind: styleMemory.lastShapeKind,
-                rect: CGRect(origin: point, size: .zero),
-                stroke: stroke,
-                fill: styleMemory.fill(for: .shape)
-            ))
-        case .line:
-            return .line(LineSpec(start: point, end: point, stroke: stroke))
-        case .freehand:
-            return .freehand(FreehandSpec(points: [point], stroke: stroke))
-        case .highlighter:
-            return .highlighter(HighlighterSpec(points: [point], stroke: stroke))
-        case .text:
-            return .text(TextSpec(
-                rect: CGRect(origin: point, size: CGSize(width: 200, height: 40)),
-                style: styleMemory.lastTextStyle
-            ))
-        case .redaction:
-            return .redaction(RedactionSpec(
-                rect: CGRect(origin: point, size: .zero),
-                style: styleMemory.lastRedactionStyle
-            ))
-        case .crop:
-            return .crop(CropSpec(rect: CGRect(origin: point, size: .zero)))
-        case .measure:
-            return .measure(MeasureSpec(
-                start: point,
-                end: point,
-                measuresBox: styleMemory.lastMeasuresBox,
-                stroke: stroke
-            ))
-        case .counter, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
-            return nil
-        }
-    }
-
-    func update(
-        _ draft: inout AnnotationCommand,
-        from origin: CGPoint,
-        to point: CGPoint,
-        modifiers: EditorModifiers
-    ) {
-        switch draft {
-        case var .arrow(spec):
-            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
-            draft = .arrow(spec)
-        case var .line(spec):
-            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
-            draft = .line(spec)
-        case var .shape(spec):
-            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
-            draft = .shape(spec)
-        case var .redaction(spec):
-            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
-            draft = .redaction(spec)
-        case var .crop(spec):
-            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
-            draft = .crop(spec)
-        case var .text(spec):
-            spec.rect = Self.rect(from: origin, to: point, modifiers: modifiers)
-            draft = .text(spec)
-        case var .freehand(spec):
-            spec.points.append(point)
-            draft = .freehand(spec)
-        case var .highlighter(spec):
-            spec.points.append(point)
-            draft = .highlighter(spec)
-        case var .measure(spec):
-            spec.end = modifiers.contains(.constrain) ? Self.snapped(point, from: origin) : point
-            draft = .measure(spec)
-        case .counter, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
-            break
-        }
-    }
-
-    func rememberStyle(of command: AnnotationCommand) {
-        switch command {
-        case let .arrow(spec):
-            styleMemory.remember(spec.stroke, for: .arrow)
-            styleMemory.lastArrowHead = spec.head
-        case let .shape(spec):
-            styleMemory.remember(spec.stroke, for: .shape)
-            styleMemory.remember(spec.fill, for: .shape)
-            styleMemory.lastShapeKind = spec.kind
-        case let .line(spec):
-            styleMemory.remember(spec.stroke, for: .line)
-        case let .freehand(spec):
-            styleMemory.remember(spec.stroke, for: .freehand)
-        case let .highlighter(spec):
-            styleMemory.remember(spec.stroke, for: .highlighter)
-        case let .text(spec):
-            styleMemory.lastTextStyle = spec.style
-        case let .redaction(spec):
-            styleMemory.lastRedactionStyle = spec.style
-        case let .measure(spec):
-            styleMemory.remember(spec.stroke, for: .measure)
-            styleMemory.lastMeasuresBox = spec.measuresBox
-        case .counter, .crop, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift,
-             .image:
-            break
-        }
-    }
-
-    // MARK: - Geometry
-
-    /// A rect from a drag, honouring ⇧ (square) and ⌥ (from the centre).
-    static func rect(from origin: CGPoint, to point: CGPoint, modifiers: EditorModifiers) -> CGRect {
-        var corner = point
-        if modifiers.contains(.constrain) {
-            let side = max(abs(point.x - origin.x), abs(point.y - origin.y))
-            corner = CGPoint(
-                x: origin.x + (point.x >= origin.x ? side : -side),
-                y: origin.y + (point.y >= origin.y ? side : -side)
-            )
-        }
-        if modifiers.contains(.fromCenter) {
-            return CGRect(
-                x: origin.x - abs(corner.x - origin.x),
-                y: origin.y - abs(corner.y - origin.y),
-                width: abs(corner.x - origin.x) * 2,
-                height: abs(corner.y - origin.y) * 2
-            )
-        }
-        return CGRect(
-            x: min(origin.x, corner.x),
-            y: min(origin.y, corner.y),
-            width: abs(corner.x - origin.x),
-            height: abs(corner.y - origin.y)
-        )
-    }
-
-    /// ⇧ on a line or arrow snaps to the nearest 45°.
-    static func snapped(_ point: CGPoint, from origin: CGPoint) -> CGPoint {
-        let dx = point.x - origin.x
-        let dy = point.y - origin.y
-        let angle = (atan2(dy, dx) / (.pi / 4)).rounded() * (.pi / 4)
-        let length = hypot(dx, dy)
-        return CGPoint(x: origin.x + cos(angle) * length, y: origin.y + sin(angle) * length)
-    }
-
-    /// Whether a finished drag actually drew something.
-    ///
-    /// A click with no drag leaves a zero-sized annotation. Testing the *geometry* rather
-    /// than the bounding box matters: a bounding box includes the stroke, so a zero-sized
-    /// shape with a four-point stroke looks non-empty and would be kept.
-    static func isWorthKeeping(_ command: AnnotationCommand) -> Bool {
-        // Below this a drag is a click that wobbled.
-        let minimum: CGFloat = 2
-
-        switch command {
-        case let .arrow(spec):
-            return hypot(spec.end.x - spec.start.x, spec.end.y - spec.start.y) >= minimum
-        case let .line(spec):
-            return hypot(spec.end.x - spec.start.x, spec.end.y - spec.start.y) >= minimum
-        case let .shape(spec):
-            return spec.rect.width >= minimum || spec.rect.height >= minimum
-        case let .redaction(spec):
-            return spec.rect.width >= minimum && spec.rect.height >= minimum
-        case let .crop(spec):
-            return spec.rect.width >= minimum && spec.rect.height >= minimum
-        case let .freehand(spec):
-            return spec.points.count > 1
-        case let .highlighter(spec):
-            return spec.points.count > 1
-        case let .measure(spec):
-            // A click that did not drag is not a failed measurement — it is a request to
-            // measure the element under the pointer, handled in `pointerUp`.
-            return spec.length >= minimum
-        // A text box starts empty by design; the user types into it next.
-        case .text:
-            return true
-        case .counter, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
-            return true
-        }
     }
 }

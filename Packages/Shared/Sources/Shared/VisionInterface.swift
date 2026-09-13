@@ -88,17 +88,21 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     /// Tables found in the capture (macOS 15+, docs/06 M25). Empty on macOS 14, and empty
     /// when the capture is not of a table.
     public let tables: [RecognizedTable]
+    /// Word boxes in annotation space, for the smart highlighter (docs/03 §3 P2).
+    public let words: [RecognizedWord]
 
     public init(
         lines: [RecognizedLine] = [],
         codes: [DetectedCode] = [],
         candidates: [RedactionCandidate] = [],
-        tables: [RecognizedTable] = []
+        tables: [RecognizedTable] = [],
+        words: [RecognizedWord] = []
     ) {
         self.lines = lines
         self.codes = codes
         self.candidates = candidates
         self.tables = tables
+        self.words = words
     }
 
     /// The best table found, if any is worth offering.
@@ -122,7 +126,7 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case lines, codes, candidates, tables
+        case lines, codes, candidates, tables, words
     }
 
     public init(from decoder: Decoder) throws {
@@ -131,6 +135,7 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
         codes = try container.decodeIfPresent([DetectedCode].self, forKey: .codes) ?? []
         candidates = try container.decodeIfPresent([RedactionCandidate].self, forKey: .candidates) ?? []
         tables = try container.decodeIfPresent([RecognizedTable].self, forKey: .tables) ?? []
+        words = try container.decodeIfPresent([RecognizedWord].self, forKey: .words) ?? []
     }
 }
 
@@ -214,17 +219,21 @@ public struct ScrollStitchRequest: Codable, Sendable, Hashable {
     public var memoryMappedThreshold: Int
     /// Frames the user asked to leave out after reviewing a bad seam, by index.
     public var excludedFrames: [Int]
+    /// Which way the capture grew (CleanShot §4.8 horizontal scrolling).
+    public var axis: ScrollAxis
 
     public init(
         framePaths: [String],
         destinationPath: String,
         memoryMappedThreshold: Int = 16000,
-        excludedFrames: [Int] = []
+        excludedFrames: [Int] = [],
+        axis: ScrollAxis = .vertical
     ) {
         self.framePaths = framePaths
         self.destinationPath = destinationPath
         self.memoryMappedThreshold = memoryMappedThreshold
         self.excludedFrames = excludedFrames
+        self.axis = axis
     }
 }
 

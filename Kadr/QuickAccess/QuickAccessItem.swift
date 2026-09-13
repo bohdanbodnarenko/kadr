@@ -18,7 +18,11 @@ struct QuickAccessItem: Identifiable, Sendable {
     var fileURL: URL
     /// True while the file is still in staging and has not been finalised (docs/03 §2).
     var isStaged: Bool
-    let pixelSize: PixelSize
+    var pixelSize: PixelSize
+    /// Backing scale at capture time, so "Scale Retina to 1×" knows whether it applies.
+    var scale: DisplayScale = .oneToOne
+    /// Bumped when the file's pixels change in place, so the thumbnail reloads.
+    var contentRevision = 0
     let capturedAt: Date
     let displayID: CGDirectDisplayID?
     /// True for a screen recording, whose card shows a poster frame and a play badge
@@ -61,6 +65,11 @@ struct QuickAccessItem: Identifiable, Sendable {
     /// "1280 × 960" for the hover readout.
     var dimensionsText: String {
         "\(pixelSize.width) × \(pixelSize.height)"
+    }
+
+    /// Whether the context menu should offer Scale Retina to 1× (CleanShot §6.2).
+    var canScaleRetina: Bool {
+        !isVideo && scale.factor > 1
     }
 
     /// File size on disk, formatted, or nil while the file is missing.

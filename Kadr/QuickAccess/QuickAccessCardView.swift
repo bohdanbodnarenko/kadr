@@ -8,6 +8,11 @@ import SwiftUI
 struct QuickAccessCardActions {
     var copy: () -> Void = {}
     var save: () -> Void = {}
+    var saveAs: () -> Void = {}
+    var rotate: () -> Void = {}
+    var flipHorizontal: () -> Void = {}
+    var flipVertical: () -> Void = {}
+    var scaleRetina: () -> Void = {}
     var annotate: () -> Void = {}
     var pin: () -> Void = {}
     var recognizeText: () -> Void = {}
@@ -59,6 +64,10 @@ struct QuickAccessCardView: View {
     /// Held back while the stack is reflowing, so the actions do not flash across every
     /// card that passes under a stationary pointer.
     var suppressHoverChrome = false
+    /// A dot on the newest card when several are stacked (CleanShot §6.3).
+    var showsNewestIndicator = false
+    /// Trash control for captures already on disk (CleanShot §6.2).
+    var showsTrashButton = false
 
     @State private var isHovering = false
 
@@ -143,8 +152,24 @@ struct QuickAccessCardView: View {
                 actions.setHovered(hovering)
             }
             .contextMenu {
+                Button("Copy", action: actions.copy)
+                Button("Save As…", action: actions.saveAs)
+                if !item.isVideo {
+                    Button("Rotate 90°", action: actions.rotate)
+                    Button("Flip Horizontal", action: actions.flipHorizontal)
+                    Button("Flip Vertical", action: actions.flipVertical)
+                    if item.canScaleRetina {
+                        Button("Scale Retina to 1×", action: actions.scaleRetina)
+                    }
+                }
+                Divider()
+                Text(item.dimensionsText)
+                if let size = item.fileSizeText {
+                    Text(size)
+                }
+                Divider()
                 Button("Hide", action: actions.dismiss)
-                Button("Delete", action: actions.delete)
+                Button("Delete", role: .destructive, action: actions.delete)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
@@ -159,7 +184,8 @@ struct QuickAccessCardView: View {
         ThumbnailImage(
             url: item.fileURL,
             maxPixelSize: Int((width * displayScale).rounded()),
-            isVideo: item.isVideo
+            isVideo: item.isVideo,
+            revision: item.contentRevision
         )
         .frame(width: width, height: height)
         // Rounded at the source as well as by the outer clip: during a compound animation
@@ -188,6 +214,25 @@ struct QuickAccessCardView: View {
         .compositingGroup()
         .shadow(color: .black.opacity(0.20), radius: 14, y: 6)
         .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
+        .overlay(alignment: .topLeading) {
+            if showsNewestIndicator {
+                newestIndicator
+            }
+        }
+    }
+
+    /// Marks the card the user just captured when several are stacked (CleanShot §6.3).
+    private var newestIndicator: some View {
+        Circle()
+            .fill(Color.accentColor)
+            .frame(width: 8, height: 8)
+            .overlay(
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.5)
+            )
+            .padding(7)
+            .accessibilityLabel("Newest capture")
+            .help("Your most recent capture")
     }
 
     private var dragSurface: some View {
@@ -228,7 +273,12 @@ struct QuickAccessCardView: View {
                     corner(.topLeading)
                     Spacer(minLength: 0)
                     corner(.topTrailing)
-                    hideButton
+                    HStack(spacing: 4) {
+                        if showsTrashButton {
+                            trashButton
+                        }
+                        hideButton
+                    }
                 }
                 Spacer(minLength: 0)
                 centreActions
@@ -329,6 +379,18 @@ struct QuickAccessCardView: View {
         .accessibilityLabel("Hide card")
     }
 
+    /// Move to Trash when the capture is already on disk (CleanShot §6.2).
+    private var trashButton: some View {
+        Button(action: actions.delete) {
+            Image(systemName: "trash")
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(CardCloseButtonStyle())
+        .help("Move to Trash")
+        .accessibilityLabel("Delete capture")
+    }
+
     /// The buttons the user's layout asks for, in the order they asked for them
     /// (docs/09 U2.3).
     ///
@@ -387,6 +449,7 @@ struct QuickAccessCardView: View {
         [
             .copy: actions.copy,
             .save: actions.save,
+            .saveAs: actions.saveAs,
             .annotate: actions.annotate,
             .pin: actions.pin,
             .recognizeText: actions.recognizeText,

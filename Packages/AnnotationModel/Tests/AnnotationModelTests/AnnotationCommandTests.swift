@@ -25,6 +25,7 @@ private let everyCommand: [AnnotationCommand] = [
     .text(TextSpec(string: "Hello", rect: CGRect(x: 10, y: 10, width: 120, height: 40))),
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))),
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20), style: .defaultPixelate)),
+    .spotlight(SpotlightSpec(rect: CGRect(x: 10, y: 10, width: 80, height: 60))),
     .counter(CounterSpec(number: 3, center: CGPoint(x: 50, y: 50))),
     .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100), canExpandCanvas: true)),
     .beautify(BeautifySpec(padding: .points(24), aspect: .sixteenNine)),
@@ -101,10 +102,10 @@ struct AnnotationCommandTests {
         #expect(CounterSpec(center: .zero, radius: -5).radius == 1)
     }
 
-    @Test("There are three arrow heads and five text presets, as docs/03 §3 says")
+    @Test("There are three arrow heads and seven text presets, as docs/03 §3 says")
     func specCounts() {
         #expect(ArrowHead.allCases.count == 3)
-        #expect(TextStyle.presets.count == 5)
+        #expect(TextStyle.presets.count == 7)
         #expect(StrokeStyle.widthPresets.allSatisfy { StrokeStyle.widthRange.contains($0) })
     }
 
@@ -120,6 +121,15 @@ struct AnnotationCommandTests {
         #expect(blur.togglingKind(pixelate: true).isPixelate)
         #expect(!pixelate.togglingKind(pixelate: false).isPixelate)
         #expect(abs(blur.withDensity(1).density - 1) < 0.001)
+    }
+
+    @Test("Spotlight dim and corner radius clamp to the documented ranges")
+    func spotlightClamps() {
+        let spec = SpotlightSpec(rect: CGRect(x: 0, y: 0, width: 40, height: 20), dimOpacity: 2, cornerRadius: 100)
+        #expect(spec.dimOpacity == SpotlightSpec.dimOpacityRange.upperBound)
+        #expect(spec.cornerRadius == SpotlightSpec.cornerRadiusRange.upperBound)
+        #expect(spec.fittedCornerRadius == 10)
+        #expect(SpotlightSpec(rect: .zero, dimOpacity: -1).dimOpacity == SpotlightSpec.dimOpacityRange.lowerBound)
     }
 
     @Test("Recolouring a filled shape keeps the fill's opacity")

@@ -57,11 +57,18 @@ struct TestHarness {
 }
 
 @MainActor
+func ephemeralPinManager() -> PinManager {
+    let storeURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("kadr-pins-\(UUID().uuidString).json")
+    return PinManager(store: PinStore(fileURL: storeURL))
+}
+
+@MainActor
 func makeManager(
     saveFolder: URL,
     stagingFolder: URL,
     history: HistoryController? = nil,
-    pins: PinManager = PinManager()
+    pins: PinManager = ephemeralPinManager()
 ) -> TestHarness {
     let suite = UUID().uuidString
     guard let store = UserDefaults(suiteName: suite) else {
@@ -100,4 +107,15 @@ func throwawayDefaults() -> UserDefaults {
     }
     store.removePersistentDomain(forName: suite)
     return store
+}
+
+/// Waits for a sequential dismiss cascade to finish (CleanShot §6.3 / 4.7.5).
+@MainActor
+func waitForEmptyStack(_ manager: QuickAccessManager, timeoutMs: Int = 2_500) async throws {
+    let steps = max(1, timeoutMs / 50)
+    for _ in 0 ..< steps {
+        if manager.items.isEmpty { return }
+        try await Task.sleep(for: .milliseconds(50))
+    }
+    Issue.record("Overlay stack did not empty within \(timeoutMs)ms (count=\(manager.items.count))")
 }

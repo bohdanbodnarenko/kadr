@@ -21,6 +21,7 @@ final class StudioPreviewAudio {
         var screenPath: String
         var clips: ClipTimeline
         var soundtrackPath: String?
+        var mutesAudio: Bool
     }
 
     var isPlaying: Bool {
@@ -83,7 +84,8 @@ final class StudioPreviewAudio {
         let next = Prepared(
             screenPath: session.screenURL.path,
             clips: edit.clips,
-            soundtrackPath: session.soundtrackURL(for: edit)?.path
+            soundtrackPath: session.soundtrackURL(for: edit)?.path,
+            mutesAudio: edit.mutesAudio
         )
         if prepared == next, hasItem {
             return
@@ -117,6 +119,7 @@ final class StudioPreviewAudio {
         session: RecordingSession,
         edit: StudioEdit
     ) async -> AVMutableComposition? {
+        guard !edit.mutesAudio else { return nil }
         let mixed: AVMutableComposition
         do {
             mixed = try await ClipCompositionBuilder().composition(

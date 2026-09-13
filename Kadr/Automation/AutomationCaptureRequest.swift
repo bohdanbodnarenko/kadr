@@ -53,4 +53,50 @@ enum DisplayLookup {
         }
         return best?.id
     }
+
+    /// Screens in CleanShot order: index 1 is the primary (menu-bar) display.
+    static func orderedScreens() -> [ScreenDescriptor] {
+        NSScreen.screens.compactMap(ScreenDescriptor.init)
+    }
+
+    /// CleanShot §20: `display=1` is the primary display.
+    static func screen(atOneBased index: Int) -> ScreenDescriptor? {
+        let screens = orderedScreens()
+        guard index >= 1, index <= screens.count else { return nil }
+        return screens[index - 1]
+    }
+
+    /// Resolves a captured region and optional 1-based display index.
+    ///
+    /// Without `display`, `region` is already global AppKit screen space. With `display`,
+    /// `region` is local to that display's bottom-left. An index the Mac does not have
+    /// is a runtime failure — the parser cannot know how many screens are attached.
+    static func resolve(region: ScreenRect?, display index: Int?) -> AutomationTarget {
+        guard let index else {
+            if let region {
+                return .region(region)
+            }
+            return .interactive
+        }
+        let screens = orderedScreens()
+        guard let screen = screen(atOneBased: index) else {
+            return .failed("There is no display \(index) (this Mac has \(screens.count)).")
+        }
+        if let region {
+            return .region(DisplayIndex.globalize(local: region, on: screen.frame))
+        }
+        return .display(screen.displayID)
+    }
+}
+
+/// What automation asked to capture, after `display=` has been applied.
+enum AutomationTarget {
+    /// Open the interactive overlay (or the verb's default whole-target path).
+    case interactive
+    /// A rectangle in global AppKit screen space.
+    case region(ScreenRect)
+    /// One whole display, identified by CoreGraphics id.
+    case display(CGDirectDisplayID)
+    /// `display=` named a screen this Mac does not have.
+    case failed(String)
 }

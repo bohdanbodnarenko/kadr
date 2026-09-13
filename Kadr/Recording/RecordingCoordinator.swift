@@ -49,13 +49,22 @@ final class RecordingCoordinator {
         didSet { onStateChanged?() }
     }
 
+    /// Last-buffer loudness for the control bar meter (CleanShot §13.3).
+    var audioMeter = AudioMeter()
+
+    /// Loudest microphone sample so far this take, for the silent-mic notice.
+    @ObservationIgnored var microphonePeakMax: Float = 0
+
     /// Seconds left on the pre-roll, so the floating bar can show the same number as the overlay.
     var countdownRemaining = 0 {
         didSet { onStateChanged?() }
     }
 
     /// A finished recording, ready for the overlay.
-    var onFinished: ((RecordingResult) -> Void)?
+    ///
+    /// The Bool is true when this take was a dedicated GIF capture, so the overlay
+    /// encodes a GIF instead of stopping at the MP4 card (CleanShot §13.6).
+    var onFinished: ((RecordingResult, Bool) -> Void)?
     /// A finished recording that also has a studio session, so the editor can open it.
     var onStudioSessionReady: ((RecordingSession, RecordingResult) -> Void)?
     /// Fired whenever the state or the clock moves, so the menu bar can follow.
@@ -64,8 +73,8 @@ final class RecordingCoordinator {
 
     /// Ticks the elapsed time while recording.
     ///
-    /// The only repeating timer in the app, and it exists solely while a recording is
-    /// running — the idle path still has none (PRD §8).
+    /// A Task, not a Timer, and only while a recording is running — the idle path still
+    /// has none (PRD §8). 10 Hz so the audio meter can move; the clock text is still mm:ss.
     @ObservationIgnored var tickTask: Task<Void, Never>?
     @ObservationIgnored var startedAt: Date?
     @ObservationIgnored var pausedDuration: TimeInterval = 0
@@ -116,36 +125,16 @@ final class RecordingCoordinator {
     func arm(_ overrides: RecordingOverrides) {
         self.overrides = overrides
         startedByAutomation = true
+        if overrides.exportAsGIF {
+            wantsGIFExport = true
+        }
     }
 
     /// Whether the recording about to start was asked for by a script rather than a person.
     @ObservationIgnored var startedByAutomation = false
-
-    /// Picks a region with the selection overlay, then records it.
-    func beginRegionRecording() {
-        guard !isRecording else { return }
-        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                await CaptureExclusionPush.into(captureEngine)
-                let freezes = try await captureEngine.freezeAllDisplays()
-                permissions.noteCaptureSuccess()
-                overlay.present(
-                    freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) }
-                ) { [weak self] outcome in
-                    guard case let .region(result) = outcome else { return }
-                    self?.startAfterCountdown(
-                        target: .region(result.rect, display: result.display.displayID)
-                    )
-                }
-            } catch {
-                permissions.noteCaptureFailure(error)
-                logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
-                presentPermissionRecoveryIfNeeded(error)
-            }
-        }
-    }
+    /// Dedicated GIF capture (All-in-One G / `record-gif`): encode a GIF when this
+    /// recording stops, instead of leaving only the MP4 card (CleanShot §13.6).
+    @ObservationIgnored var wantsGIFExport = false
 
     /// Records a whole display, with no overlay.
     func beginDisplayRecording(_ displayID: CGDirectDisplayID = CGMainDisplayID()) {
@@ -236,7 +225,7 @@ final class RecordingCoordinator {
 
     /// The monthly Sequoia nag and a missing grant look the same to ScreenCaptureKit.
     /// Surface them here so a recording that never started is not a silent no-op.
-    private func presentPermissionRecoveryIfNeeded(_ error: any Error) {
+    func presentPermissionRecoveryIfNeeded(_ error: any Error) {
         guard CaptureError.mapping(error).indicatesPermissionLoss else { return }
         switch recovery.present(state: permissions.state, includePicker: false) {
         case .openSettings:
@@ -441,7 +430,8 @@ final class RecordingCoordinator {
                 ? nil
                 : settings.recordingMicrophoneDeviceID,
             showsCursor: showsCursor,
-            dynamicRange: settings.recordingDynamicRange
+            dynamicRange: settings.recordingDynamicRange,
+            recordsMono: settings.recordsMono
         )
     }
 
@@ -467,10 +457,18 @@ final class RecordingCoordinator {
     /// reach the thing it exists to update is worse than no extension.
     func startTicking() {
         stopTicking()
+        microphonePeakMax = 0
+        audioMeter = AudioMeter()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .milliseconds(100))
                 guard let self, let startedAt else { return }
+                let fresh = await engine.audioMeter
+                microphonePeakMax = max(microphonePeakMax, fresh.microphone)
+                audioMeter = AudioMeter(
+                    microphone: max(fresh.microphone, audioMeter.microphone * 0.72),
+                    system: max(fresh.system, audioMeter.system * 0.72)
+                )
                 elapsed = Date().timeIntervalSince(startedAt) - pausedDuration
             }
         }

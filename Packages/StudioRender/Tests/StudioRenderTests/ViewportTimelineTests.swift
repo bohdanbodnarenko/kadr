@@ -145,6 +145,13 @@ struct ViewportTimelineTests {
         #expect(MotionBlurPlan.plan(isMoving: true).isBlurring)
     }
 
+    @Test("Zero intensity is a still frame even when the camera is moving")
+    func zeroIntensityDoesNotBlur() {
+        #expect(!MotionBlurPlan.plan(isMoving: true, intensity: 0).isBlurring)
+        #expect(MotionBlurPlan.plan(isMoving: true, intensity: 0.5).sampleCount == 4)
+        #expect(MotionBlurPlan.plan(isMoving: true, intensity: 1).sampleCount == 8)
+    }
+
     @Test("Samples straddle the frame's own time rather than dragging it forward")
     func offsetsAreCentred() {
         let offsets = MotionBlurPlan(sampleCount: 4).offsets(frameDuration: 1.0 / 60)

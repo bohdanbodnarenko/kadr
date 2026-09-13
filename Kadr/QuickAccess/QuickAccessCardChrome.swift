@@ -15,6 +15,7 @@ struct ThumbnailImage: View {
     let url: URL
     let maxPixelSize: Int
     let isVideo: Bool
+    var revision = 0
 
     @State private var image: CGImage?
 
@@ -36,7 +37,7 @@ struct ThumbnailImage: View {
                     .foregroundStyle(.white, .black.opacity(0.4))
             }
         }
-        .task(id: url) {
+        .task(id: "\(url.path)-\(revision)") {
             image = isVideo
                 ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
                 : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)

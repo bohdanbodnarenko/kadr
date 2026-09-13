@@ -184,7 +184,7 @@ struct QuickAccessManagerTests {
     }
 
     @Test("Dismissing everything leaves no cards behind")
-    func dismissAll() throws {
+    func dismissAll() async throws {
         let save = temporaryDirectory("save")
         let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage"))
         for _ in 0 ..< 3 {
@@ -194,7 +194,28 @@ struct QuickAccessManagerTests {
         }
 
         harness.manager.dismissAll()
+        try await waitForEmptyStack(harness.manager)
 
+        #expect(harness.manager.items.isEmpty)
+    }
+
+    @Test("Close all removes cards one at a time so the stack can animate")
+    func dismissAllIsSequential() async throws {
+        let save = temporaryDirectory("save-seq")
+        let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage-seq"))
+        for _ in 0 ..< 3 {
+            let capture = makeCapture()
+            let result = try #require(harness.output.deliver(capture))
+            harness.manager.show(result, capture: capture)
+        }
+
+        harness.manager.dismissAll()
+        #expect(harness.manager.items.count == 3)
+
+        try await Task.sleep(for: QuickAccessManager.dismissCascadeInterval)
+        #expect(harness.manager.items.count == 2)
+
+        try await waitForEmptyStack(harness.manager)
         #expect(harness.manager.items.isEmpty)
     }
 
@@ -385,6 +406,57 @@ struct QuickAccessDragTests {
         #expect(item.contentType == expected)
     }
 
+    @Test("Hiding the stack does not dismiss cards (CleanShot §6.3)")
+    func hidingKeepsCards() throws {
+        let save = temporaryDirectory("save")
+        let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage"))
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+
+        harness.manager.toggleHidden()
+        #expect(harness.manager.areHidden)
+        #expect(harness.manager.items.count == 1)
+
+        harness.manager.toggleHidden()
+        #expect(!harness.manager.areHidden)
+        harness.manager.dismissAll()
+    }
+
+    @Test("Save all finalises every staged card")
+    func saveAllDismissesCards() async throws {
+        let save = temporaryDirectory("save-all")
+        let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage-all"))
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+        #expect(harness.manager.items.count == 1)
+
+        harness.manager.saveAll()
+        try await waitForEmptyStack(harness.manager)
+        #expect(harness.manager.items.isEmpty)
+    }
+
+    @Test("Save all dismisses every card without skipping any")
+    func saveAllDismissesEveryCard() async throws {
+        let save = temporaryDirectory("save-all-multi")
+        let stage = temporaryDirectory("stage-all-multi")
+        let harness = makeManager(saveFolder: save, stagingFolder: stage)
+        harness.settings.defaultAction = .overlayOnly
+
+        for _ in 0 ..< 3 {
+            let capture = makeCapture()
+            let result = try #require(harness.output.deliver(capture))
+            harness.manager.show(result, capture: capture)
+        }
+        #expect(harness.manager.items.count == 3)
+
+        harness.manager.saveAll()
+        try await waitForEmptyStack(harness.manager)
+        #expect(harness.manager.items.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: save.path).count == 3)
+    }
+
     @Test("A promise for a plain file carries that file's name")
     func payloadForAPlainFile() {
         let url = URL(fileURLWithPath: "/tmp/Kadr-2026-08-28.png")
@@ -392,5 +464,62 @@ struct QuickAccessDragTests {
         #expect(payload.suggestedName == "Kadr-2026-08-28.png")
         #expect(payload.contentType == .png)
         #expect(payload.resolve() == url)
+    }
+
+    @Test("Rotate 90° swaps the card's pixel size (CleanShot §6.2)")
+    func rotateSwapsPixelSize() throws {
+        let save = temporaryDirectory("save-rotate")
+        let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage-rotate"))
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+        let item = try #require(harness.manager.items.first)
+        #expect(item.pixelSize == PixelSize(width: 20, height: 10))
+        #expect(item.canScaleRetina)
+
+        harness.manager.rotate(item)
+
+        let rotated = try #require(harness.manager.items.first)
+        #expect(rotated.pixelSize == PixelSize(width: 10, height: 20))
+        #expect(rotated.contentRevision == 1)
+        #expect(FileManager.default.fileExists(atPath: rotated.fileURL.path))
+        harness.manager.dismissAll()
+    }
+
+    @Test("Scale Retina to 1× halves a 2× capture")
+    func scaleRetinaHalves() throws {
+        let save = temporaryDirectory("save-1x")
+        let harness = makeManager(saveFolder: save, stagingFolder: temporaryDirectory("stage-1x"))
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+        let item = try #require(harness.manager.items.first)
+
+        harness.manager.scaleRetina(item)
+
+        let scaled = try #require(harness.manager.items.first)
+        #expect(scaled.pixelSize == PixelSize(width: 10, height: 5))
+        #expect(scaled.scale == .oneToOne)
+        #expect(!scaled.canScaleRetina)
+        harness.manager.dismissAll()
+    }
+
+    @Test("A recording cannot be rotated from the overlay")
+    func videoSkipsRotate() throws {
+        let item = QuickAccessItem(
+            fileURL: URL(fileURLWithPath: "/tmp/clip.mp4"),
+            isStaged: false,
+            pixelSize: PixelSize(width: 10, height: 10),
+            capturedAt: Date(),
+            displayID: nil,
+            isVideo: true
+        )
+        #expect(!item.canScaleRetina)
+        let harness = makeManager(
+            saveFolder: temporaryDirectory("save-vid"),
+            stagingFolder: temporaryDirectory("stage-vid")
+        )
+        harness.manager.rotate(item)
+        #expect(harness.manager.items.isEmpty)
     }
 }

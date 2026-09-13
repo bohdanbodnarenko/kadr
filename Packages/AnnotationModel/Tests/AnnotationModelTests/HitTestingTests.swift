@@ -62,7 +62,20 @@ struct HitTestingTests {
         HitCase(name: "outside a counter badge", command: badge, point: CGPoint(x: 80, y: 80), hits: false),
 
         HitCase(name: "inside a text frame", command: label, point: CGPoint(x: 20, y: 20), hits: true),
-        HitCase(name: "outside a text frame", command: label, point: CGPoint(x: 200, y: 20), hits: false)
+        HitCase(name: "outside a text frame", command: label, point: CGPoint(x: 200, y: 20), hits: false),
+
+        HitCase(
+            name: "inside a spotlight hole",
+            command: .spotlight(SpotlightSpec(rect: CGRect(x: 10, y: 10, width: 80, height: 60))),
+            point: CGPoint(x: 40, y: 40),
+            hits: true
+        ),
+        HitCase(
+            name: "outside a spotlight hole",
+            command: .spotlight(SpotlightSpec(rect: CGRect(x: 10, y: 10, width: 80, height: 60))),
+            point: CGPoint(x: 200, y: 40),
+            hits: false
+        )
     ]
 
     @Test("Points hit the annotations they look like they hit", arguments: cases)

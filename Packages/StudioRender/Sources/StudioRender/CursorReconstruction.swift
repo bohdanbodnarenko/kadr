@@ -175,4 +175,14 @@ public enum ClickRippleMetrics {
         guard elapsed > fadeStart else { return 1 }
         return 1 - (elapsed - fadeStart) / (captionDuration - fadeStart)
     }
+
+    /// How far the pointer shrinks at `progress` through a click (CleanShot §14.4).
+    ///
+    /// Deepest at the instant of the press, recovered as the ripple fades. 1 is the
+    /// recorded size; the dip is small enough to read as a press, not a resize.
+    public static func pressScale(at progress: Double) -> Double {
+        let clamped = min(max(progress, 0), 1)
+        let remaining = 1 - clamped
+        return 1 - 0.12 * remaining * remaining
+    }
 }

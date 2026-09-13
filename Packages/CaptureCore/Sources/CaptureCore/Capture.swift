@@ -75,6 +75,25 @@ public struct Capture: Sendable {
         self.image = image
         self.metadata = metadata
     }
+
+    /// A copy whose pixels (and recorded pixel size) have been replaced, used when a
+    /// window is composited onto a backdrop after capture (docs/03 §1.2).
+    public func replacingImage(_ image: CGImage) -> Capture {
+        Capture(
+            image: image,
+            metadata: CaptureMetadata(
+                source: metadata.source,
+                displayID: metadata.displayID,
+                scale: metadata.scale,
+                pointRect: metadata.pointRect,
+                pixelSize: PixelSize(width: image.width, height: image.height),
+                colorSpaceName: metadata.colorSpaceName,
+                frontmostApp: metadata.frontmostApp,
+                windowTitle: metadata.windowTitle,
+                capturedAt: metadata.capturedAt
+            )
+        )
+    }
 }
 
 /// One display's frozen contents (docs/04 §4.2).

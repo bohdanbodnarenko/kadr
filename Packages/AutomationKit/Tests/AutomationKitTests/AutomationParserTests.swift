@@ -83,7 +83,7 @@ struct AutomationParserTests {
     @Test("pin needs a file path, under any of its spellings", arguments: ["path", "filepath", "file"])
     func pinTakesAPath(parameter: String) throws {
         let url = try #require(URL(string: "kadr://pin?\(parameter)=/tmp/a.png"))
-        guard case let .pin(target) = try AutomationParser.command(from: url) else {
+        guard case let .pin(.some(target)) = try AutomationParser.command(from: url) else {
             Issue.record("expected pin")
             return
         }
@@ -242,10 +242,10 @@ struct AutomationParserTests {
         }
     }
 
-    @Test("pin without a path is an error")
-    func pinWithoutPathFails() {
-        #expect(throws: AutomationError.missingRequiredParameter(verb: "pin", name: "path")) {
-            try AutomationParser.invocation(arguments: ["pin"])
+    @Test("annotate without a path is still an error")
+    func annotateWithoutPathFails() {
+        #expect(throws: AutomationError.missingRequiredParameter(verb: "annotate", name: "path")) {
+            try AutomationParser.invocation(arguments: ["annotate"])
         }
     }
 
@@ -280,5 +280,149 @@ struct AutomationParserTests {
         #expect(try !AutomationParser.command(verb: .recordScreen, values: [:]).producesOutput)
         #expect(try !AutomationParser.command(verb: .openSettings, values: [:]).producesOutput)
         #expect(try !AutomationParser.command(verb: .closeAllPins, values: [:]).producesOutput)
+        #expect(try !AutomationParser.command(verb: .allInOne, values: [:]).producesOutput)
+        #expect(try AutomationParser.command(verb: .selfTimer, values: [:]).producesOutput)
+    }
+
+    @Test("all-in-one with a region is a capture, not a HUD")
+    func allInOneWithRegionProducesOutput() throws {
+        let url = try #require(URL(string: "kadr://all-in-one?x=1&y=2&w=3&h=4"))
+        let command = try AutomationParser.command(from: url)
+        #expect(command.producesOutput)
+        #expect(command.verb == .allInOne)
+    }
+
+    @Test("display= is parsed as a 1-based index")
+    func displayIsOneBased() throws {
+        let url = try #require(URL(string: "kadr://capture-area?x=100&y=120&w=200&h=150&display=1"))
+        guard case let .captureArea(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected capture-area")
+            return
+        }
+        #expect(options.display == 1)
+        #expect(options.region == ScreenRect(x: 100, y: 120, width: 200, height: 150))
+    }
+
+    @Test("display=0 is refused rather than wrapping to the last screen")
+    func displayZeroIsInvalid() throws {
+        let url = try #require(URL(string: "kadr://capture-fullscreen?display=0"))
+        #expect(throws: AutomationError.invalidValue(name: "display", value: "0")) {
+            try AutomationParser.command(from: url)
+        }
+    }
+
+    @Test("record-screen accepts display=")
+    func recordScreenTakesDisplay() throws {
+        let url = try #require(URL(string: "kadr://record-screen?display=2"))
+        guard case let .recordScreen(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected record-screen")
+            return
+        }
+        #expect(options.display == 2)
+    }
+
+    @Test("capture-text accepts display= with a region")
+    func captureTextTakesDisplay() throws {
+        let url = try #require(URL(string: "kadr://capture-text?x=10&y=20&w=30&h=40&display=1"))
+        guard case let .captureText(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected capture-text")
+            return
+        }
+        #expect(options.display == 1)
+        #expect(options.region == ScreenRect(x: 10, y: 20, width: 30, height: 40))
+    }
+
+    @Test("pin without a path opens a picker rather than failing")
+    func pinWithoutPathIsAllowed() throws {
+        let url = try #require(URL(string: "kadr://pin"))
+        #expect(try AutomationParser.command(from: url) == .pin(nil))
+    }
+
+    @Test("hide-desktop-icons hides, show-desktop-icons shows")
+    func desktopIconSpellingsSetState() throws {
+        let hide = try #require(URL(string: "kadr://hide-desktop-icons"))
+        #expect(try AutomationParser.command(from: hide) == .toggleDesktopIcons(.on))
+        let show = try #require(URL(string: "kadr://show-desktop-icons"))
+        #expect(try AutomationParser.command(from: show) == .toggleDesktopIcons(.off))
+    }
+
+    @Test("CleanShot settings tabs land on a Kadr pane", arguments: [
+        ("wallpaper", SettingsTab.capture),
+        ("screenshots", SettingsTab.capture),
+        ("quickaccess", SettingsTab.overlay),
+        ("about", SettingsTab.updates)
+    ])
+    func cleanshotSettingsTabs(pair: (String, SettingsTab)) throws {
+        let url = try #require(URL(string: "kadr://open-settings?tab=\(pair.0)"))
+        #expect(try AutomationParser.command(from: url) == .openSettings(pair.1))
+    }
+
+    @Test("capture-text accepts linebreaks")
+    func captureTextLinebreaks() throws {
+        let url = try #require(URL(string: "kadr://capture-text?linebreaks=false"))
+        guard case let .captureText(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected capture-text")
+            return
+        }
+        #expect(options.preservesLineBreaks == false)
+    }
+
+    @Test("capture-text accepts filepath")
+    func captureTextTakesFilepath() throws {
+        let url = try #require(URL(string: "kadr://capture-text?filepath=/tmp/shot.png"))
+        guard case let .captureText(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected capture-text")
+            return
+        }
+        #expect(options.path == "/tmp/shot.png")
+        #expect(options.region == nil)
+    }
+
+    @Test("record-gif is a dedicated GIF capture, not an alias of record-region")
+    func recordGifSetsExportFlag() throws {
+        let url = try #require(URL(string: "kadr://record-gif?fps=30"))
+        guard case let .recordRegion(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected record-gif to assemble as a region recording")
+            return
+        }
+        #expect(options.exportAsGIF == true)
+        #expect(options.frameRate == 30)
+        #expect(try AutomationParser.command(from: url).verb == .recordGif)
+    }
+
+    @Test("record-region does not encode a GIF on stop")
+    func recordRegionIsNotGIF() throws {
+        let url = try #require(URL(string: "kadr://record-region"))
+        guard case let .recordRegion(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected record-region")
+            return
+        }
+        #expect(options.exportAsGIF != true)
+        #expect(try AutomationParser.command(from: url).verb == .recordRegion)
+    }
+
+    @Test("capture-scrolling accepts CleanShot start and autoscroll parameters")
+    func scrollingCaptureParameters() throws {
+        let url = try #require(URL(string:
+            "kadr://scrolling-capture?x=100&y=120&width=200&height=150&start=false&autoscroll=true"
+        ))
+        guard case let .captureScrolling(options) = try AutomationParser.command(from: url) else {
+            Issue.record("expected capture-scrolling")
+            return
+        }
+        #expect(options.region?.origin.x == 100)
+        #expect(options.region?.origin.y == 120)
+        #expect(options.region?.width == 200)
+        #expect(options.region?.height == 150)
+        #expect(options.startsImmediately == false)
+        #expect(options.autoScroll == true)
+    }
+
+    @Test("start and autoscroll are not accepted on capture-area")
+    func scrollingParametersAreScrollingOnly() throws {
+        let url = try #require(URL(string: "kadr://capture-area?start=true"))
+        #expect(throws: AutomationError.self) {
+            _ = try AutomationParser.command(from: url)
+        }
     }
 }

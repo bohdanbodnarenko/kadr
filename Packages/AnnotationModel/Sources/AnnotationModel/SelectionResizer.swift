@@ -273,6 +273,9 @@ public enum SelectionResizer {
         case var .redaction(spec):
             spec.rect = mapRect(spec.rect, from: old, to: new)
             return .redaction(spec)
+        case var .spotlight(spec):
+            spec.rect = mapRect(spec.rect, from: old, to: new)
+            return .spotlight(spec)
         case var .crop(spec):
             spec.rect = mapRect(spec.rect, from: old, to: new)
             return .crop(spec)

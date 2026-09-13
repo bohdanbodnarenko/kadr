@@ -249,7 +249,7 @@ public enum ScrollAligner {
     /// well at 199, and counting that as competition would report every correct alignment
     /// as uncertain. What matters is whether somewhere *else* entirely matched almost as
     /// well, which is exactly what repetitive content does.
-    private static func confidence(of scores: [Float], best: Int) -> Double {
+    static func confidence(of scores: [Float], best: Int) -> Double {
         let exclusion = 8
         var rival = Float.greatestFiniteMagnitude
         for (offset, score) in scores.enumerated() where abs(offset - best) > exclusion {
@@ -265,5 +265,163 @@ public enum ScrollAligner {
         // screenshot and on a mostly-white page.
         let separation = Double(1 - winner / rival)
         return min(max(separation, 0), 1)
+    }
+}
+
+// MARK: - Horizontal alignment
+
+/// A frame reduced to one small feature vector per column.
+public struct ColumnProfile: Sendable, Hashable {
+    public static let bucketCount = RowProfile.bucketCount
+
+    public let width: Int
+    /// `width * bucketCount` values, column-major, each the mean luminance of one bucket.
+    public let values: [Float]
+
+    public init(width: Int, values: [Float]) {
+        precondition(values.count == width * Self.bucketCount, "a column profile is bucketCount tall")
+        self.width = width
+        self.values = values
+    }
+
+    /// Builds a profile from 8-bit grayscale pixels.
+    public init(grayscale pixels: UnsafePointer<UInt8>, width: Int, height: Int, bytesPerRow: Int) {
+        var values = [Float](repeating: 0, count: width * Self.bucketCount)
+        guard width > 0, height > 0 else {
+            self.init(width: 0, values: [])
+            return
+        }
+
+        var column = [Float](repeating: 0, count: height)
+        for x in 0 ..< width {
+            for y in 0 ..< height {
+                column[y] = Float(pixels[y * bytesPerRow + x])
+            }
+            for bucket in 0 ..< Self.bucketCount {
+                let from = bucket * height / Self.bucketCount
+                let to = max(from + 1, (bucket + 1) * height / Self.bucketCount)
+                values[x * Self.bucketCount + bucket] = vDSP.mean(column[from ..< min(to, height)])
+            }
+        }
+        self.init(width: width, values: values)
+    }
+
+    func distance(column: Int, to other: ColumnProfile, column otherColumn: Int) -> Float {
+        var total: Float = 0
+        let base = column * Self.bucketCount
+        let otherBase = otherColumn * Self.bucketCount
+        for bucket in 0 ..< Self.bucketCount {
+            total += abs(values[base + bucket] - other.values[otherBase + bucket])
+        }
+        return total / Float(Self.bucketCount)
+    }
+}
+
+public enum ColumnAligner {
+    public static let confidenceThreshold = ScrollAligner.confidenceThreshold
+    public static let minimumOverlap = ScrollAligner.minimumOverlap
+    static let sameColumnTolerance: Float = ScrollAligner.sameRowTolerance
+
+    /// Finds chrome that stays put during horizontal scrolling.
+    ///
+    /// `StickyBands.header` is the leading edge; `StickyBands.footer` is the trailing edge.
+    public static func stickyBands(
+        previous: ColumnProfile,
+        current: ColumnProfile,
+        offset: Int
+    ) -> StickyBands {
+        guard previous.width == current.width, previous.width > 0, offset > 0 else {
+            return .none
+        }
+        let limit = previous.width / 3
+
+        var leading = 0
+        while leading < limit {
+            let stays = previous.distance(column: leading, to: current, column: leading)
+            guard stays < sameColumnTolerance else { break }
+            let body = leading + offset
+            let ambiguous = body < previous.width
+                && previous.distance(column: body, to: current, column: leading) < sameColumnTolerance
+            guard !ambiguous else { break }
+            leading += 1
+        }
+
+        var trailing = 0
+        while trailing < limit {
+            let column = previous.width - 1 - trailing
+            let stays = previous.distance(column: column, to: current, column: column)
+            guard stays < sameColumnTolerance else { break }
+            let body = column - offset
+            let ambiguous = body >= 0
+                && previous.distance(column: column, to: current, column: body) < sameColumnTolerance
+            guard !ambiguous else { break }
+            trailing += 1
+        }
+
+        if leading + trailing >= previous.width {
+            return .none
+        }
+        return StickyBands(header: leading, footer: trailing)
+    }
+
+    /// Finds how far the content moved left between `previous` and `current`.
+    public static func align(
+        previous: ColumnProfile,
+        current: ColumnProfile,
+        sticky: StickyBands = .none,
+        minimumOverlap: Int = ColumnAligner.minimumOverlap
+    ) -> ScrollAlignment {
+        guard previous.width == current.width, previous.width > 0 else {
+            return ScrollAlignment(offset: 0, confidence: 0, overlappingRows: 0)
+        }
+
+        let leading = sticky.header
+        let trailing = previous.width - sticky.footer
+        let bodyWidth = trailing - leading
+        guard bodyWidth > minimumOverlap else {
+            return ScrollAlignment(offset: 0, confidence: 0, overlappingRows: 0)
+        }
+
+        let maximumOffset = bodyWidth - minimumOverlap
+        let buckets = ColumnProfile.bucketCount
+        var scores = [Float](repeating: .greatestFiniteMagnitude, count: maximumOffset + 1)
+        var difference = [Float](repeating: 0, count: bodyWidth * buckets)
+
+        previous.values.withUnsafeBufferPointer { previousValues in
+            current.values.withUnsafeBufferPointer { currentValues in
+                difference.withUnsafeMutableBufferPointer { scratch in
+                    guard let previousBase = previousValues.baseAddress,
+                          let currentBase = currentValues.baseAddress,
+                          let scratchBase = scratch.baseAddress
+                    else { return }
+
+                    for offset in 0 ... maximumOffset {
+                        let count = vDSP_Length((bodyWidth - offset) * buckets)
+                        vDSP_vsub(
+                            currentBase + leading * buckets,
+                            1,
+                            previousBase + (leading + offset) * buckets,
+                            1,
+                            scratchBase,
+                            1,
+                            count
+                        )
+                        var total: Float = 0
+                        vDSP_svemg(scratchBase, 1, &total, count)
+                        scores[offset] = total / Float(count)
+                    }
+                }
+            }
+        }
+
+        guard let best = scores.indices.min(by: { scores[$0] < scores[$1] }) else {
+            return ScrollAlignment(offset: 0, confidence: 0, overlappingRows: 0)
+        }
+
+        return ScrollAlignment(
+            offset: best,
+            confidence: ScrollAligner.confidence(of: scores, best: best),
+            overlappingRows: bodyWidth - best
+        )
     }
 }

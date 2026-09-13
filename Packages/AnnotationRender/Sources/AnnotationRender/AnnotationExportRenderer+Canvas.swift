@@ -21,7 +21,7 @@ extension AnnotationExportRenderer {
             target.saveGState()
             target.translateBy(x: origin.x, y: origin.y)
             if document.crop?.canExpandCanvas == true {
-                target.setFillColor(CGColor(gray: 1, alpha: 1))
+                target.setFillColor(ExpandCanvasFill.color(around: source))
                 target.fill(canvas)
             }
             target.draw(source, in: document.baseImage.bounds)
@@ -89,5 +89,41 @@ extension AnnotationExportRenderer {
         flat.scaleBy(x: 1, y: -1)
         contents(flat, CGPoint(x: -canvas.minX, y: -canvas.minY))
         return flat.makeImage()
+    }
+
+    /// Scene blur, then rotate/flip. Both are last-wins canvas chrome (docs/03 §3 P2,
+    /// docs/09 U1.3).
+    func finish(
+        _ image: CGImage,
+        document: AnnotationDocument,
+        canvas: CGRect,
+        scale: CGFloat,
+        applyOrientation: Bool
+    ) -> CGImage {
+        let composed: CGImage = if let blur = document.progressiveBlur, blur.extent == .scene {
+            ProgressiveBlurCompositor.apply(blur, to: image, in: canvas, scale: scale) ?? image
+        } else {
+            image
+        }
+        guard applyOrientation, !document.orientation.isIdentity else { return composed }
+        return document.orientation.applying(to: composed) ?? composed
+    }
+
+    /// Halves (or otherwise shrinks) an export. Never upscales — that cannot add detail.
+    static func downscaled(_ image: CGImage, by factor: CGFloat) -> CGImage? {
+        let clamped = min(max(factor, 0.25), 1)
+        guard abs(clamped - 1) > 0.001 else { return image }
+        let width = max(1, Int((CGFloat(image.width) * clamped).rounded()))
+        let height = max(1, Int((CGFloat(image.height) * clamped).rounded()))
+        guard width != image.width || height != image.height else { return image }
+        guard let context = makeContext(width: width, height: height, matching: image) else {
+            return nil
+        }
+        context.interpolationQuality = .high
+        context.draw(
+            image,
+            in: CGRect(x: 0, y: 0, width: width, height: height)
+        )
+        return context.makeImage()
     }
 }

@@ -133,7 +133,7 @@ struct EditorDraftingTests {
     }
 
     @Test("A one-shot tool returns to Select after it lands", arguments: [
-        EditorTool.arrow, .shape, .line, .redaction
+        EditorTool.arrow, .shape, .line, .redaction, .spotlight
     ])
     func oneShotToolReturnsToSelect(tool: EditorTool) {
         let model = makeModel()
@@ -243,6 +243,7 @@ struct EditorDraftingTests {
         (.highlighter, .highlighter),
         (.text, .text),
         (.redaction, .redaction),
+        (.spotlight, .spotlight),
         (.crop, .crop)
     ])
     func everyToolDraws(tool: EditorTool, expected: AnnotationTool) {
@@ -357,6 +358,42 @@ struct EditorSelectionTests {
         #expect(spec.rect.origin == CGPoint(x: 15, y: 7))
     }
 
+    @Test("Locking the canvas stops moves but still allows new strokes")
+    func canvasLockBlocksMoves() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.tool = .select
+        model.isCanvasLocked = true
+
+        model.pointerDown(at: CGPoint(x: 30, y: 30))
+        model.pointerDragged(to: CGPoint(x: 130, y: 80))
+        model.pointerUp(at: CGPoint(x: 130, y: 80))
+
+        guard case let .shape(spec) = try? #require(model.document.command(target.id)) else { return }
+        #expect(spec.rect == CGRect(x: 10, y: 10, width: 50, height: 50))
+
+        model.tool = .arrow
+        model.pointerDown(at: CGPoint(x: 0, y: 0))
+        model.pointerDragged(to: CGPoint(x: 40, y: 40))
+        model.pointerUp(at: CGPoint(x: 40, y: 40))
+        #expect(model.document.commands.contains { if case .arrow = $0 { true } else { false } })
+    }
+
+    @Test("Locking the canvas blocks nudging and duplicating")
+    func canvasLockBlocksEdits() {
+        let target = shape(CGRect(x: 10, y: 10, width: 50, height: 50))
+        let model = makeModel([target])
+        model.selection = [target.id]
+        model.isCanvasLocked = true
+
+        model.nudgeSelection(dx: 5, dy: 5)
+        model.duplicateSelection()
+
+        #expect(model.document.commands.count == 1)
+        guard case let .shape(spec) = try? #require(model.document.command(target.id)) else { return }
+        #expect(spec.rect.origin == CGPoint(x: 10, y: 10))
+    }
+
     @Test("Every annotation type can be moved", arguments: [
         AnnotationCommand.arrow(ArrowSpec(start: .zero, end: CGPoint(x: 10, y: 10))),
         .line(LineSpec(start: .zero, end: CGPoint(x: 10, y: 10))),
@@ -365,6 +402,7 @@ struct EditorSelectionTests {
         .highlighter(HighlighterSpec(points: [.zero, CGPoint(x: 10, y: 10)])),
         .text(TextSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
         .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
+        .spotlight(SpotlightSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10))),
         .counter(CounterSpec(center: .zero)),
         .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 10, height: 10)))
     ])
@@ -421,6 +459,26 @@ struct EditorSelectionTests {
         #expect(model.document.commands.count == 1)
     }
 
+    @Test("Rotate and flip are undoable canvas chrome")
+    func rotateAndFlipUndo() {
+        let model = makeModel()
+        model.rotateClockwise()
+        #expect(model.document.orientation.quarterTurnsCW == 1)
+        model.flipHorizontal()
+        #expect(model.document.orientation.isFlippedHorizontally)
+        model.undo()
+        #expect(model.document.orientation.quarterTurnsCW == 1)
+        #expect(!model.document.orientation.isFlippedHorizontally)
+        model.undo()
+        #expect(model.document.orientation.isIdentity)
+
+        model.flipVertical()
+        #expect(model.document.orientation.quarterTurnsCW == 2)
+        #expect(model.document.orientation.isFlippedHorizontally)
+        model.undo()
+        #expect(model.document.orientation.isIdentity)
+    }
+
     @Test("Beautify is undoable canvas chrome")
     func beautifyUndo() {
         let model = makeModel()
@@ -453,14 +511,14 @@ struct EditorToolTests {
     func everyAnnotationToolIsReachable() {
         let reachable = Set(EditorTool.allCases.compactMap(\.annotation))
         let chrome: Set<AnnotationTool> = [
-            .beautify, .subjectLift, .image, .camera, .progressiveBlur, .watermark
+            .beautify, .subjectLift, .camera, .progressiveBlur, .watermark
         ]
         #expect(reachable == Set(AnnotationTool.allCases).subtracting(chrome))
     }
 
     @Test("One-shot tools return to Select; repeatable tools stay armed")
     func returnsToSelectAfterUse() {
-        let oneShot: Set<EditorTool> = [.arrow, .shape, .line, .text, .redaction]
+        let oneShot: Set<EditorTool> = [.arrow, .shape, .line, .text, .redaction, .spotlight]
         for tool in EditorTool.allCases {
             #expect(tool.returnsToSelectAfterUse == oneShot.contains(tool), "\(tool)")
         }

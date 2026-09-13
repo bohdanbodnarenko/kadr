@@ -248,6 +248,31 @@ struct StudioFrameComposerTests {
         #expect(large.at(330, 100).green > 180, "a 3× cursor did not reach 30 px away")
     }
 
+    @Test("A click press shrinks the pointer at the instant of the click")
+    func clickPressShrinksTheArtwork() throws {
+        var telemetry = try cursorTelemetry(at: CGPoint(x: 300, y: 100))
+        telemetry.clicks = [ClickEvent(time: 2, position: CGPoint(x: 300, y: 100))]
+        var full = edit(showsCursor: true)
+        full.cursorScale = 3
+        full.showsClickPress = false
+        var pressed = full
+        pressed.showsClickPress = true
+        let atRest = try render(
+            composer(full, telemetry: telemetry)
+                .frame(at: 2, source: halvedSource(), camera: nil),
+            size: sourceSize
+        )
+        let atPress = try render(
+            composer(pressed, telemetry: telemetry)
+                .frame(at: 2, source: halvedSource(), camera: nil),
+            size: sourceSize
+        )
+        #expect(atRest.at(330, 100).green > 180, "a 3× cursor should still reach 30 px away")
+        let restWidth = (0 ..< atRest.width).filter { atRest.at($0, 100).green > 180 }.count
+        let pressWidth = (0 ..< atPress.width).filter { atPress.at($0, 100).green > 180 }.count
+        #expect(pressWidth < restWidth, "the press did not shrink the pointer (\(pressWidth) vs \(restWidth))")
+    }
+
     /// Overlay tests draw over a flat background rather than the halved one: a ripple is
     /// detected by looking for a channel the background does not have, and a sampling row
     /// that crossed the red/blue boundary would report the boundary as the ripple.

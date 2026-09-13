@@ -62,6 +62,33 @@ struct StudioClickOverlayTests {
         )
     }
 
+    @Test("A filled ripple covers more of the frame than an outline")
+    func filledCoversMoreThanOutline() throws {
+        var telemetry = InputTelemetry(
+            pointer: [
+                PointerSample(time: 0, position: press),
+                PointerSample(time: 4, position: press)
+            ]
+        )
+        telemetry.clicks = [ClickEvent(time: 2, position: press)]
+
+        var outline = StudioEdit.untouched(duration: 4)
+        outline.showsClicks = true
+        outline.showsCursor = false
+        outline.clickScale = 3
+        outline.clickStyle = .outline
+
+        var filled = outline
+        filled.clickStyle = .filled
+
+        let ring = try render(outline, telemetry: telemetry)
+        let disc = try render(filled, telemetry: telemetry)
+        #expect(
+            whiteness(in: disc) > whiteness(in: ring),
+            "a filled disc should paint more of the scene than a ring"
+        )
+    }
+
     private enum Fill {
         case red
         case blue

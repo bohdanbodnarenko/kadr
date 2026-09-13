@@ -65,11 +65,25 @@ extension AnnotationCanvasView {
     }
 
     private func handleEditingKey(_ event: NSEvent) {
-        if applyArrowKey(event) || applyDeleteKey(event) || applyEscapeKey(event) {
+        if applyToolSizeKey(event) || applyArrowKey(event) || applyDeleteKey(event) || applyEscapeKey(event) {
             refreshAfterEdit()
             return
         }
         applyToolShortcut(event)
+    }
+
+    private func applyToolSizeKey(_ event: NSEvent) -> Bool {
+        guard !event.modifierFlags.contains(.command) else { return false }
+        let delta: Int? = switch event.keyCode {
+        case 24 where event.modifierFlags.contains(.shift): 1
+        case 69: 1
+        case 50, 27, 78: -1
+        default: nil
+        }
+        guard let delta else { return false }
+        model.endInspectorStyleEdit()
+        model.adjustToolSize(by: delta)
+        return true
     }
 
     private func applyArrowKey(_ event: NSEvent) -> Bool {

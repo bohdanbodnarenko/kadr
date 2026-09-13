@@ -275,6 +275,26 @@ struct ClipCompositionTests {
         #expect(abs(audioLength - 2) < 0.2, "a shorter soundtrack ends early, got \(audioLength)")
     }
 
+    @Test("Mute leaves the picture and drops the soundtrack")
+    func muteDropsAudio() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await makeMovie(seconds: 3, in: folder)
+        let wav = folder.appendingPathComponent("voice.wav")
+        try writeSilentWav(seconds: 2, to: wav)
+
+        let composition = try await ClipCompositionBuilder().composition(
+            for: .whole(duration: 3),
+            screen: movie,
+            soundtrack: wav,
+            includeAudio: false
+        )
+        let audio = try await composition.loadTracks(withMediaType: .audio)
+        #expect(audio.isEmpty)
+        let length = try await duration(of: composition)
+        #expect(abs(length - 3) < 0.2)
+    }
+
     /// A tiny PCM file, so the soundtrack path can be tested without a real recording.
     private func writeSilentWav(seconds: Double, to url: URL) throws {
         let sampleRate: UInt32 = 44100

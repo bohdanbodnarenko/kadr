@@ -1,5 +1,7 @@
 import AppKit
+import CaptureCore
 import Foundation
+import os
 import OverlayKit
 import RecordingCore
 import SelectionUI
@@ -133,5 +135,53 @@ extension RecordingCoordinator {
         NSScreen.screens.compactMap(ScreenDescriptor.init).first { descriptor in
             DisplayRect(cgRect: CGDisplayBounds(descriptor.displayID)).intersects(hole)
         }?.displayID
+    }
+
+    /// Records a named rectangle with no overlay (docs/03 §8.4 `x,y,w,h` and `display=`).
+    func beginRegionRecording(_ screenRect: ScreenRect) {
+        guard !isRecording else { return }
+        let global = screenRect.inDisplaySpace(.current)
+        guard let displayID = DisplayLookup.display(containing: global) else {
+            logger.error("The requested recording region is not on any display")
+            return
+        }
+        startAfterCountdown(target: .region(global, display: displayID))
+    }
+
+    /// Picks a region with the selection overlay, then records it.
+    func beginRegionRecording() {
+        guard !isRecording else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                await CaptureExclusionPush.into(captureEngine)
+                let freezes = try await captureEngine.freezeAllDisplays()
+                permissions.noteCaptureSuccess()
+                overlay.present(
+                    freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) }
+                ) { [weak self] outcome in
+                    guard case let .region(result) = outcome else {
+                        self?.wantsGIFExport = false
+                        return
+                    }
+                    self?.startAfterCountdown(
+                        target: .region(result.rect, display: result.display.displayID)
+                    )
+                }
+            } catch {
+                self.wantsGIFExport = false
+                permissions.noteCaptureFailure(error)
+                logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
+                presentPermissionRecoveryIfNeeded(error)
+            }
+        }
+    }
+
+    /// Dedicated GIF capture: same region overlay, then GIF-encode on stop (CleanShot §13.6).
+    func beginGIFRecording() {
+        guard !isRecording else { return }
+        wantsGIFExport = true
+        beginRegionRecording()
     }
 }

@@ -43,7 +43,7 @@ public enum KadrDocumentFile {
     public static func data(for contents: Contents) throws -> Data {
         let payload = Payload(
             version: currentVersion,
-            baseImage: contents.document.baseImage,
+            baseImage: encodedBaseImage(of: contents.document),
             commands: contents.document.commands
         )
         let encoder = JSONEncoder()
@@ -89,5 +89,13 @@ public enum KadrDocumentFile {
 
     public static func read(from url: URL) throws -> Contents {
         try contents(of: Data(contentsOf: url))
+    }
+
+    /// Current orientation lives on the document's history; the file stores it on the
+    /// base-image record so a `.kadr` reopens already rotated.
+    private static func encodedBaseImage(of document: AnnotationDocument) -> BaseImageReference {
+        var reference = document.baseImage
+        reference.orientation = document.orientationHistory[document.historyIndex]
+        return reference
     }
 }

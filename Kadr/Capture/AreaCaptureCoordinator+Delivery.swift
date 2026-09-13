@@ -1,3 +1,4 @@
+import AnnotationModel
 import AppKit
 import AutomationKit
 import CaptureCore
@@ -18,9 +19,12 @@ import Shared
 extension AreaCaptureCoordinator {
     /// Exports every display captured by one action (docs/07 M4).
     func deliverAll(_ captures: [Capture]) async {
-        let delivered = await output.deliverOffMain(captures, overrides: automation.overrides)
+        let prepared = captures.map { FullscreenNotchCropper.apply($0, settings: settings) }
+        let delivered = await output.deliverOffMain(prepared, overrides: automation.overrides)
+        let spec = autoBeautifySpec()
         for entry in delivered {
             quickAccess.show(entry.result, capture: entry.capture)
+            writeBeautifyProject(alongside: entry.result.fileURL, original: entry.capture, beautify: spec)
         }
         let first = delivered.first?.result.fileURL
         automation.report(first.map(CaptureOutcome.file) ?? .failed("Kadr could not write the capture."))
@@ -31,12 +35,26 @@ extension AreaCaptureCoordinator {
     /// Async because the encode happens off the main actor: a 5K PNG is hundreds of
     /// milliseconds of CPU, and doing it here froze every window and blew the
     /// selection→clipboard budget this path's own signpost measures (docs/07 H4).
-    func deliver(_ capture: Capture) async {
-        guard let result = await output.deliverOffMain(capture, overrides: automation.overrides) else {
+    ///
+    /// `beautify` is window-capture chrome or a stills preset. When omitted, the
+    /// capture-pane auto-beautify setting applies unless Shift skipped it.
+    func deliver(
+        _ capture: Capture,
+        editableOriginal: Capture? = nil,
+        beautify: BeautifySpec? = nil
+    ) async {
+        let prepared = FullscreenNotchCropper.apply(capture, settings: settings)
+        let preparedOriginal = editableOriginal.map { FullscreenNotchCropper.apply($0, settings: settings) }
+        guard let result = await output.deliverOffMain(prepared, overrides: automation.overrides) else {
             automation.report(.failed("Kadr could not write the capture."))
             return
         }
-        quickAccess.show(result, capture: capture)
+        quickAccess.show(result, capture: prepared)
+        writeBeautifyProject(
+            alongside: result.fileURL,
+            original: preparedOriginal ?? prepared,
+            beautify: beautify ?? autoBeautifySpec()
+        )
 
         if let fileURL = result.fileURL {
             // `action=annotate|pin` says what to do with the file once it exists
@@ -58,6 +76,15 @@ extension AreaCaptureCoordinator {
         automation.report(outcome ?? .failed("Kadr could not write the capture."))
     }
 
+    func autoBeautifySpec() -> BeautifySpec? {
+        skipAutoBeautify ? nil : AutoBeautify.spec(for: settings.autoBeautifyPreset)
+    }
+
+    func writeBeautifyProject(alongside fileURL: URL?, original: Capture, beautify: BeautifySpec?) {
+        guard let fileURL, let beautify else { return }
+        CaptureProject.write(original: original, beautify: beautify, alongside: fileURL)
+    }
+
     /// Runs the after-capture actions the settings ask for (docs/09 U2.2).
     ///
     /// Only the ones that say what to do *with* the file: whether it was copied or saved
@@ -65,6 +92,11 @@ extension AreaCaptureCoordinator {
     /// before the bytes are written rather than after.
     func applyAfterCaptureActions(to fileURL: URL) {
         let actions = settings.afterCaptureActions(for: .screenshot)
+        if actions.contains(.promptSave) {
+            if let item = quickAccess.item(matching: fileURL) {
+                quickAccess.promptSave(item)
+            }
+        }
         if actions.contains(.annotate) {
             quickAccess.annotateFile(at: fileURL)
         }

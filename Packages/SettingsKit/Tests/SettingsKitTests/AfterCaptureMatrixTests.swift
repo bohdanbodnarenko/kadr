@@ -88,6 +88,13 @@ struct AfterCaptureMatrixTests {
         #expect(titles.count == AfterCaptureActions.allCases.count)
     }
 
+    @Test("Asking where to save applies to stills and recordings")
+    func promptSaveAppliesToBothKinds() {
+        #expect(AfterCaptureActions.promptSave.applies(to: .screenshot))
+        #expect(AfterCaptureActions.promptSave.applies(to: .recording))
+        #expect(AfterCaptureActions.promptSave.title == "Ask where to save")
+    }
+
     // MARK: - Migration
 
     /// The old setting is the only statement the user has ever made about this; discarding

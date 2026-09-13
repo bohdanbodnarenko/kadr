@@ -56,6 +56,7 @@ struct OverlayPane: View {
                     }
                 }
                 Toggle("Dismiss a card when it is dragged out", isOn: $settings.overlayDismissOnDrag)
+                Toggle("Return saves the hovered card", isOn: $settings.overlayReturnSaves)
                 Text("Dismissing a card never deletes its file. Hovering or dragging pauses auto-dismiss.")
                     .font(.callout)
                     .foregroundStyle(.secondary)

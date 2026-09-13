@@ -33,27 +33,34 @@ public struct TextRecognizer: Sendable {
         let state = signposter.beginInterval("visionAnalyze")
         defer { signposter.endInterval("visionAnalyze", state) }
 
-        async let linesAndCandidates = recognizeText(in: image, options: options)
+        async let pass = recognizeText(in: image, options: options)
         async let codes = options.detectsCodes ? detectCodes(in: image) : []
         // Concurrent with the rest: it is a second pass over the same pixels, and making
         // Capture Text wait for it in series would double the latency budget (docs/03 §1.7).
         async let tables = options.detectsTables ? DocumentTableRecognizer().tables(in: image) : []
 
-        let (lines, candidates) = try await linesAndCandidates
+        let text = try await pass
         return try await VisionAnalysis(
-            lines: lines,
+            lines: text.lines,
             codes: codes,
-            candidates: candidates,
-            tables: tables
+            candidates: text.candidates,
+            tables: tables,
+            words: text.words
         )
     }
 
     // MARK: - Text
 
+    private struct TextPass: Sendable {
+        var lines: [RecognizedLine]
+        var candidates: [RedactionCandidate]
+        var words: [RecognizedWord]
+    }
+
     private func recognizeText(
         in image: CGImage,
         options: TextRecognitionOptions
-    ) async throws -> ([RecognizedLine], [RedactionCandidate]) {
+    ) async throws -> TextPass {
         let request = VNRecognizeTextRequest()
         // Accurate rather than fast: this is a user asking for the text in a screenshot,
         // not a real-time video pass (docs/03 §1.7).
@@ -76,7 +83,9 @@ public struct TextRecognizer: Sendable {
         let observations = request.results ?? []
         var lines: [RecognizedLine] = []
         var candidates: [RedactionCandidate] = []
+        var words: [RecognizedWord] = []
         lines.reserveCapacity(observations.count)
+        words.reserveCapacity(observations.count)
 
         let redactionState = options.includeRedactionCandidates
             ? signposter.beginInterval("redactionDetect")
@@ -94,6 +103,7 @@ public struct TextRecognizer: Sendable {
                 confidence: Double(recognized.confidence),
                 boundingBox: observation.boundingBox
             ))
+            words.append(contentsOf: Self.words(from: recognized, observation: observation))
             if options.includeRedactionCandidates {
                 candidates.append(contentsOf: Self.candidates(from: recognized, observation: observation))
             }
@@ -103,7 +113,37 @@ public struct TextRecognizer: Sendable {
             candidates.append(contentsOf: Self.unboxedMatches(in: lines, already: candidates))
         }
 
-        return (lines, candidates)
+        return TextPass(lines: lines, candidates: candidates, words: words)
+    }
+
+    /// Word boxes in annotation space. The highlighter snaps to these (docs/03 §3 P2).
+    private static func words(
+        from recognized: VNRecognizedText,
+        observation: VNRecognizedTextObservation
+    ) -> [RecognizedWord] {
+        var boxes: [RecognizedWord] = []
+        recognized.string.enumerateSubstrings(
+            in: recognized.string.startIndex...,
+            options: .byWords
+        ) { substring, range, _, _ in
+            guard let substring, !substring.isEmpty else { return }
+            let visionBox = substringBox(
+                of: recognized,
+                range: NSRange(range, in: recognized.string),
+                fallback: observation.boundingBox
+            )
+            boxes.append(RecognizedWord(
+                text: substring,
+                boundingBox: VisionNormalizedBox.topLeft(fromVision: visionBox)
+            ))
+        }
+        if boxes.isEmpty, !recognized.string.isEmpty {
+            boxes.append(RecognizedWord(
+                text: recognized.string,
+                boundingBox: VisionNormalizedBox.topLeft(fromVision: observation.boundingBox)
+            ))
+        }
+        return boxes
     }
 
     /// Secrets that only appear once the lines are joined — a JWT OCR'd as two lines, for

@@ -19,6 +19,33 @@ public extension AnnotationDocument {
         }.first
     }
 
+    /// Replaces the current beautify command, coalescing successive inspector edits into
+    /// one undo step so dragging a slider does not flood the undo stack.
+    mutating func setBeautify(_ spec: BeautifySpec?) {
+        var updated = commands
+        updated.removeAll { command in
+            if case .beautify = command {
+                return true
+            }
+            return false
+        }
+        if let spec {
+            updated.insert(.beautify(spec), at: 0)
+        }
+        guard updated != commands else { return }
+        if shouldCoalesce(updated, matching: {
+            if case .beautify = $0 {
+                true
+            } else {
+                false
+            }
+        }) {
+            history[historyIndex] = updated
+            return
+        }
+        pushHistory(updated)
+    }
+
     /// The background removal in force, if any. The last one wins.
     var subjectLift: SubjectLiftSpec? {
         commands.reversed().compactMap { command in

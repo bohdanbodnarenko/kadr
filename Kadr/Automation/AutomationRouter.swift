@@ -1,6 +1,7 @@
 import AppKit
 import AutomationKit
 import os
+import SelectionUI
 import Shared
 
 /// Turns an `AppCommand` into something the agent actually does (docs/03 §8.4).
@@ -14,15 +15,16 @@ import Shared
 /// user is still framing a selection.
 @MainActor
 final class AutomationRouter {
-    private let areaCapture: AreaCaptureCoordinator
-    private let scrollCapture: ScrollCaptureCoordinator
-    private let recording: RecordingCoordinator
+    let areaCapture: AreaCaptureCoordinator
+    let scrollCapture: ScrollCaptureCoordinator
+    let recording: RecordingCoordinator
     private let hygiene: DesktopHygieneController
     private let openSettings: (SettingsTab?) -> Void
     private let openHistory: () -> Void
     /// Adds a file to the capture library. Returns false when it is not something the
     /// library can hold.
     private let addToHistory: (URL) -> Bool
+    private let openAllInOne: () -> Void
     private let logger = KadrLog.logger(.app)
 
     init(
@@ -32,7 +34,8 @@ final class AutomationRouter {
         hygiene: DesktopHygieneController,
         openSettings: @escaping (SettingsTab?) -> Void,
         openHistory: @escaping () -> Void,
-        addToHistory: @escaping (URL) -> Bool
+        addToHistory: @escaping (URL) -> Bool,
+        openAllInOne: @escaping () -> Void = {}
     ) {
         self.areaCapture = areaCapture
         self.scrollCapture = scrollCapture
@@ -41,6 +44,7 @@ final class AutomationRouter {
         self.openSettings = openSettings
         self.openHistory = openHistory
         self.addToHistory = addToHistory
+        self.openAllInOne = openAllInOne
     }
 
     /// Runs a command and reports what it produced.
@@ -73,7 +77,7 @@ final class AutomationRouter {
         switch command {
         case let .captureArea(options):
             areaCapture.arm(CaptureOverrides(options), completion: report)
-            begin(options.region) { self.areaCapture.beginAreaCapture() }
+            begin(options, report: report) { self.areaCapture.beginAreaCapture() }
 
         case let .captureWindow(options):
             areaCapture.arm(CaptureOverrides(options), completion: report)
@@ -81,7 +85,7 @@ final class AutomationRouter {
 
         case let .captureFullscreen(options):
             areaCapture.arm(CaptureOverrides(options), completion: report)
-            areaCapture.captureAllDisplays()
+            beginFullscreen(options, report: report)
 
         case let .capturePreviousArea(options):
             guard areaCapture.hasPreviousRegion || options.region != nil else {
@@ -89,11 +93,11 @@ final class AutomationRouter {
                 return true
             }
             areaCapture.arm(CaptureOverrides(options), completion: report)
-            begin(options.region) { self.areaCapture.capturePreviousArea() }
+            begin(options, report: report) { self.areaCapture.capturePreviousArea() }
 
         case let .captureText(options):
             areaCapture.arm(CaptureOverrides(options), completion: report)
-            areaCapture.beginTextCapture()
+            beginText(options, report: report)
 
         case .pickColor:
             areaCapture.arm(.none, completion: report)
@@ -102,9 +106,26 @@ final class AutomationRouter {
         case let .captureScrolling(options):
             // The overrides belong to the capture; the result comes from the stitcher.
             areaCapture.arm(CaptureOverrides(options), completion: nil)
-            scrollCapture.arm(completion: report)
-            scrollCapture.begin()
+            beginScrolling(options, report: report)
 
+        default:
+            return performUnifiedCapture(command, report: report, completion: completion)
+        }
+        return true
+    }
+
+    /// All-in-One and self-timer, split out so the main capture switch stays readable.
+    private func performUnifiedCapture(
+        _ command: AppCommand,
+        report: @escaping (CaptureOutcome) -> Void,
+        completion: @escaping (AutomationResponse) -> Void
+    ) -> Bool {
+        switch command {
+        case let .allInOne(options):
+            beginAllInOne(options, report: report, completion: completion)
+        case let .selfTimer(options):
+            areaCapture.arm(CaptureOverrides(options), completion: report)
+            begin(options, report: report) { self.areaCapture.beginSelfTimedAreaCapture() }
         default:
             return false
         }
@@ -112,11 +133,70 @@ final class AutomationRouter {
     }
 
     /// Captures the named region directly, or falls back to the interactive flow.
-    private func begin(_ region: ScreenRect?, interactively: () -> Void) {
-        if let region {
-            areaCapture.captureRegion(region)
-        } else {
+    private func begin(
+        _ options: CaptureOptions,
+        report: @escaping (CaptureOutcome) -> Void,
+        interactively: () -> Void
+    ) {
+        switch DisplayLookup.resolve(region: options.region, display: options.display) {
+        case let .failed(message):
+            report(.failed(message))
+        case .interactive, .display:
             interactively()
+        case let .region(rect):
+            areaCapture.captureRegion(rect)
+        }
+    }
+
+    private func beginFullscreen(
+        _ options: CaptureOptions,
+        report: @escaping (CaptureOutcome) -> Void
+    ) {
+        switch DisplayLookup.resolve(region: options.region, display: options.display) {
+        case let .failed(message):
+            report(.failed(message))
+        case .interactive:
+            areaCapture.captureAllDisplays()
+        case let .region(rect):
+            areaCapture.captureRegion(rect)
+        case let .display(id):
+            areaCapture.captureDisplay(id)
+        }
+    }
+
+    private func beginScrolling(
+        _ options: CaptureOptions,
+        report: @escaping (CaptureOutcome) -> Void
+    ) {
+        scrollCapture.arm(overrides: ScrollingOverrides(options), completion: report)
+        switch DisplayLookup.resolve(region: options.region, display: options.display) {
+        case let .failed(message):
+            report(.failed(message))
+        case .interactive, .display:
+            scrollCapture.begin()
+        case let .region(rect):
+            if options.startsImmediately == false {
+                scrollCapture.begin()
+            } else {
+                scrollCapture.begin(region: rect)
+            }
+        }
+    }
+
+    private func beginAllInOne(
+        _ options: CaptureOptions,
+        report: @escaping (CaptureOutcome) -> Void,
+        completion: @escaping (AutomationResponse) -> Void
+    ) {
+        switch DisplayLookup.resolve(region: options.region, display: options.display) {
+        case let .failed(message):
+            completion(.failed(message))
+        case .interactive, .display:
+            openAllInOne()
+            completion(.ok)
+        case let .region(rect):
+            areaCapture.arm(CaptureOverrides(options), completion: report)
+            areaCapture.captureRegion(rect)
         }
     }
 
@@ -127,14 +207,10 @@ final class AutomationRouter {
     ) -> Bool {
         switch command {
         case let .recordScreen(options):
-            start(RecordingOverrides(options), completion: completion) {
-                self.recording.beginDisplayRecording()
-            }
+            beginAutomatedRecording(options, wholeDisplay: true, completion: completion)
 
         case let .recordRegion(options):
-            start(RecordingOverrides(options), completion: completion) {
-                self.recording.beginRegionRecording()
-            }
+            beginAutomatedRecording(options, wholeDisplay: false, completion: completion)
 
         case .stopRecording:
             guard recording.isRecording else {
@@ -167,38 +243,123 @@ final class AutomationRouter {
         completion(.ok)
     }
 
+    private func beginAutomatedRecording(
+        _ options: RecordOptions,
+        wholeDisplay: Bool,
+        completion: @escaping (AutomationResponse) -> Void
+    ) {
+        switch DisplayLookup.resolve(region: options.region, display: options.display) {
+        case let .failed(message):
+            completion(.failed(message))
+        case let target:
+            start(RecordingOverrides(options), completion: completion) {
+                self.applyRecording(target, wholeDisplay: wholeDisplay)
+            }
+        }
+    }
+
+    private func applyRecording(_ target: AutomationTarget, wholeDisplay: Bool) {
+        switch target {
+        case .interactive:
+            if wholeDisplay {
+                recording.beginDisplayRecording()
+            } else {
+                recording.beginRegionRecording()
+            }
+        case let .region(rect):
+            recording.beginRegionRecording(rect)
+        case let .display(id):
+            if wholeDisplay {
+                recording.beginDisplayRecording(id)
+            } else {
+                recording.beginRegionRecording()
+            }
+        case .failed:
+            break
+        }
+    }
+
     /// The verbs that name a file, and the ones that act on cards already on screen.
     private func performFile(
         _ command: AppCommand,
         completion: @escaping (AutomationResponse) -> Void
     ) -> Bool {
+        if performNamedFile(command, completion: completion) {
+            return true
+        }
+        switch command {
+        case .openFromClipboard:
+            let opened = areaCapture.presentFromClipboard()
+            completion(opened ? .ok : .failed("The clipboard does not hold an image or a file."))
+        case .closeAllPins:
+            areaCapture.closeAllPins()
+            completion(.ok)
+        case .hidePins:
+            areaCapture.togglePinsHidden()
+            completion(.ok)
+        case .restoreRecentlyClosed:
+            areaCapture.restoreRecentlyClosed()
+            completion(.ok)
+        default:
+            return performOverlayStack(command, completion: completion)
+        }
+        return true
+    }
+
+    /// Verbs that take a path (or offer an open panel when pin has none).
+    private func performNamedFile(
+        _ command: AppCommand,
+        completion: @escaping (AutomationResponse) -> Void
+    ) -> Bool {
         switch command {
         case let .pin(target):
-            guard exists(target, completion: completion) else { return true }
-            let pinned = areaCapture.pinFile(at: target.url)
-            completion(pinned ? .file(target.url.path) : .failed("Kadr could not read \(target.path)."))
-
+            performPin(target, completion: completion)
         case let .annotate(target):
             guard exists(target, completion: completion) else { return true }
             areaCapture.annotateFile(at: target.url)
             completion(.file(target.url.path))
-
         case let .addToHistory(target):
             guard exists(target, completion: completion) else { return true }
             let added = addToHistory(target.url)
             completion(added ? .file(target.url.path) : .failed("Kadr could not add \(target.path)."))
-
-        case .closeAllPins:
-            areaCapture.closeAllPins()
-            completion(.ok)
-
-        case .restoreRecentlyClosed:
-            areaCapture.restoreRecentlyClosed()
-            completion(.ok)
-
+        case let .addQuickAccessOverlay(target):
+            guard exists(target, completion: completion) else { return true }
+            let shown = areaCapture.presentExternalFile(at: target.url)
+            completion(shown ? .file(target.url.path) : .failed("Kadr could not read \(target.path)."))
         default:
             return false
         }
+        return true
+    }
+
+    private func performPin(_ target: FileTarget?, completion: @escaping (AutomationResponse) -> Void) {
+        if let target {
+            guard exists(target, completion: completion) else { return }
+            let pinned = areaCapture.pinFile(at: target.url)
+            completion(pinned ? .file(target.url.path) : .failed("Kadr could not read \(target.path)."))
+        } else if let url = areaCapture.pinFromOpenPanel() {
+            completion(.file(url.path))
+        } else {
+            completion(.cancelled)
+        }
+    }
+
+    /// Overlay-stack verbs (CleanShot §6.3), kept off the file-path switch.
+    private func performOverlayStack(
+        _ command: AppCommand,
+        completion: @escaping (AutomationResponse) -> Void
+    ) -> Bool {
+        switch command {
+        case .closeAllOverlays:
+            areaCapture.closeAllOverlays()
+        case .saveAllOverlays:
+            areaCapture.saveAllOverlays()
+        case .hideOverlays:
+            areaCapture.toggleOverlaysHidden()
+        default:
+            return false
+        }
+        completion(.ok)
         return true
     }
 

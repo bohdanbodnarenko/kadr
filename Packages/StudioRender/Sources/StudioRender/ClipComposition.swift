@@ -39,7 +39,8 @@ public struct ClipCompositionBuilder: Sendable {
         screen: URL,
         camera: URL? = nil,
         cameraStartOffset: TimeInterval = 0,
-        soundtrack: URL? = nil
+        soundtrack: URL? = nil,
+        includeAudio: Bool = true
     ) async throws -> AVMutableComposition {
         let asset = AVURLAsset(url: screen)
         // `try?` rather than propagating: a file that is not a movie and a movie with no
@@ -48,10 +49,13 @@ public struct ClipCompositionBuilder: Sendable {
         guard let sourceVideo = try? await asset.loadTracks(withMediaType: .video).first else {
             throw BuildError.noVideoTrack
         }
-        let replacement = await soundtrackFile(at: soundtrack)
-        let sourceAudio = await replacement == nil
-            ? (try? asset.loadTracks(withMediaType: .audio).first)
-            : nil
+        let replacement = includeAudio ? await soundtrackFile(at: soundtrack) : nil
+        let sourceAudio: AVAssetTrack?
+        if includeAudio, replacement == nil {
+            sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
+        } else {
+            sourceAudio = nil
+        }
 
         let composition = AVMutableComposition()
         guard let video = composition.addMutableTrack(

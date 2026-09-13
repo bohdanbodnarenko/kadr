@@ -18,6 +18,8 @@ public enum SelectionPurpose: Sendable {
     case recognizeText
     /// Choosing the window onto a long page, which Kadr then scrolls through (docs/03 §1.6).
     case scrollingCapture
+    /// Freeze to inspect moving UI, then capture from the frozen frames (docs/03 §7).
+    case inspect
 
     /// A badge shown by the crosshair.
     public var badge: String? {
@@ -25,6 +27,7 @@ public enum SelectionPurpose: Sendable {
         case .capture: nil
         case .recognizeText: "TEXT"
         case .scrollingCapture: "SCROLL"
+        case .inspect: "FREEZE"
         }
     }
 }
@@ -178,6 +181,9 @@ public final class SelectionOverlayController {
         windowSet?.isPresented ?? false
     }
 
+    /// Why the overlay is up. Freeze inspect stays `.inspect` until it is dismissed.
+    public var currentPurpose: SelectionPurpose { purpose }
+
     /// Shows the frozen screen and resolves with the user's selection, or `nil` on Esc.
     ///
     /// - Parameter signpostState: the interval opened at hotkey time, closed here once
@@ -297,6 +303,23 @@ public final class SelectionOverlayController {
         dismiss(result: nil)
     }
 
+    /// The frozen bitmaps currently on screen, for a later capture that should stay WYSIWYG
+    /// (docs/03 §7: freeze, then capture normally).
+    public var heldFreezes: [FrozenDisplay] {
+        Array(freezes.values)
+    }
+
+    /// Dismisses without reporting cancel, so a follow-up capture can keep the frozen pixels.
+    @discardableResult
+    public func stealFreezesAndDismiss() -> [FrozenDisplay] {
+        let held = Array(freezes.values)
+        completion = nil
+        if isPresented {
+            dismiss(result: nil)
+        }
+        return held
+    }
+
     /// Wires one panel's colour picking: the mode follows every display, and a pick
     /// answers before the overlay is torn down (docs/06 M22).
     private func configureEyedropper(on panel: SelectionPanel) {
@@ -319,7 +342,7 @@ public final class SelectionOverlayController {
 
     private func makePanel(for descriptor: ScreenDescriptor) -> SelectionPanel? {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
-        let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: purpose)
+        let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: currentPurpose)
         panel.view.setPickableWindows(pickableWindows[descriptor.displayID] ?? [])
         panel.view.setSnapping(snapping[descriptor.displayID])
         panel.view.setPrecisionMode(isPrecisionMode)

@@ -103,6 +103,18 @@ struct AnnotationExportRendererTests {
         #expect(image.height == 400)
     }
 
+    @Test("A rotated document exports with swapped axes")
+    func rotationSwapsExportSize() throws {
+        var document = makeDocument(size: CGSize(width: 40, height: 20), scale: 1)
+        document.rotateClockwise()
+        let image = try renderer.render(
+            baseImage: makeStripedImage(width: 40, height: 20),
+            document: document
+        )
+        #expect(image.width == 20)
+        #expect(image.height == 40)
+    }
+
     @Test("A crop exports only the cropped area")
     func cropLimitsTheCanvas() throws {
         let document = makeDocument(commands: [
@@ -112,6 +124,38 @@ struct AnnotationExportRendererTests {
 
         #expect(image.width == 100)
         #expect(image.height == 60)
+    }
+
+    @Test("An expanded crop fills padding with the capture's edge colour")
+    func expandedCropUsesEdgeColour() throws {
+        guard let base = CGContext(
+            data: nil,
+            width: 100,
+            height: 80,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            Issue.record("Could not create a test bitmap context")
+            return
+        }
+        base.setFillColor(CGColor(red: 0.1, green: 0.12, blue: 0.14, alpha: 1))
+        base.fill(CGRect(x: 0, y: 0, width: 100, height: 80))
+        let source = try #require(base.makeImage())
+
+        let document = makeDocument(size: CGSize(width: 100, height: 80), commands: [
+            .crop(CropSpec(
+                rect: CGRect(x: -20, y: -10, width: 140, height: 100),
+                canExpandCanvas: true
+            ))
+        ])
+        let image = try renderer.render(baseImage: source, document: document)
+        #expect(image.width == 140)
+        #expect(image.height == 100)
+
+        let corner = pixels(of: image, in: CGRect(x: 2, y: 2, width: 4, height: 4))
+        #expect(corner[0] < 80, "padding should match the dark edge, got \(corner[0])")
     }
 
     @Test("Every annotation type renders without failing", arguments: [
@@ -139,7 +183,8 @@ struct AnnotationExportRendererTests {
             rect: CGRect(x: 10, y: 10, width: 100, height: 30),
             style: TextStyle(backgroundColor: .black)
         )),
-        .counter(CounterSpec(number: 7, center: CGPoint(x: 100, y: 100)))
+        .counter(CounterSpec(number: 7, center: CGPoint(x: 100, y: 100))),
+        .spotlight(SpotlightSpec(rect: CGRect(x: 20, y: 20, width: 80, height: 60)))
     ])
     func rendersEveryCommand(command: AnnotationCommand) throws {
         let document = makeDocument(commands: [command])
@@ -390,6 +435,42 @@ struct RedactionTests {
         ])
         let image = try renderer.render(baseImage: makeStripedImage(), document: document)
         #expect(image.width == 200)
+    }
+
+    @Test("A spotlight dims the canvas except the hole")
+    func spotlightDimsOutsideTheHole() throws {
+        let hole = CGRect(x: 40, y: 40, width: 100, height: 100)
+        let document = makeDocument(commands: [
+            .spotlight(SpotlightSpec(rect: hole, dimOpacity: 0.8))
+        ])
+        let image = try renderer.render(baseImage: makeStripedImage(), document: document)
+        let inside = pixels(of: image, in: CGRect(x: 80, y: 80, width: 8, height: 8))
+        let outside = pixels(of: image, in: CGRect(x: 8, y: 8, width: 8, height: 8))
+        let insideMean = inside.reduce(0) { $0 + Int($1) } / max(inside.count, 1)
+        let outsideMean = outside.reduce(0) { $0 + Int($1) } / max(outside.count, 1)
+        #expect(insideMean > outsideMean, "the hole should stay brighter than the dimmed surround")
+    }
+
+    @Test("Export scale downscales the flattened image")
+    func exportScaleDownscales() throws {
+        let image = try renderer.render(
+            baseImage: makeStripedImage(width: 200, height: 100),
+            document: makeDocument(size: CGSize(width: 200, height: 100), scale: 1),
+            exportScale: 0.5
+        )
+        #expect(image.width == 100)
+        #expect(image.height == 50)
+    }
+
+    @Test("Export scale does not upscale")
+    func exportScaleDoesNotUpscale() throws {
+        let image = try renderer.render(
+            baseImage: makeStripedImage(),
+            document: makeDocument(),
+            exportScale: 2
+        )
+        #expect(image.width == 200)
+        #expect(image.height == 200)
     }
 }
 

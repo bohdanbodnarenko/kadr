@@ -33,6 +33,7 @@ extension RecordingEngine {
         state = .starting
         let token = beginGeneration()
         self.options = options
+        audioMeter = AudioMeter()
 
         do {
             let content = try await shareableContent()
@@ -200,6 +201,7 @@ extension RecordingEngine {
         consumeTask?.cancel()
         consumeTask = nil
         output = nil
+        audioMeter = AudioMeter()
         segments = []
         if deletingFiles, let sessionDirectory {
             try? FileManager.default.removeItem(at: sessionDirectory)

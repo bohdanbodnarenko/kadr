@@ -62,4 +62,20 @@ enum QuickAccessStackLayout {
         guard available > 0, stride > 0 else { return 1 }
         return max(1, Int((available + spacing) / stride))
     }
+
+    /// Whether a card should show the newest-capture dot (CleanShot §6.3).
+    ///
+    /// Only when more than one card is visible — a lone card does not need a label for
+    /// being the newest.
+    static func showsNewestIndicator(for itemID: UUID, in items: [QuickAccessItem]) -> Bool {
+        items.count > 1 && items.first?.id == itemID
+    }
+
+    /// Whether the trash control should appear (CleanShot §6.2).
+    ///
+    /// Auto-saved captures are already on disk, so hiding the card is not enough — the user
+    /// needs a one-click way to throw the file away.
+    static func showsTrashButton(for item: QuickAccessItem) -> Bool {
+        !item.isStaged
+    }
 }

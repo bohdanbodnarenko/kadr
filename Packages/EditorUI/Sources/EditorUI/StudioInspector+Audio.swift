@@ -15,11 +15,21 @@ extension StudioInspector {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            Toggle("Mute", isOn: Binding(
+                get: { model.edit.mutesAudio },
+                set: { value in model.change { $0.mutesAudio = value } }
+            ))
+            Toggle("Mix to mono", isOn: Binding(
+                get: { model.edit.mixesToMono },
+                set: { value in model.change { $0.mixesToMono = value } }
+            ))
+            .disabled(model.edit.mutesAudio)
             Button("Import soundtrack…") { model.chooseSoundtrack() }
                 .controlSize(.small)
             Button("Export audio…") { model.exportEditedAudio() }
                 .controlSize(.small)
-            Text("Export the edited soundtrack, clean it in another tool, then drop the file back in.")
+                .disabled(model.edit.mutesAudio)
+            Text("Mute silences preview and export. Mix to mono is applied when you export.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

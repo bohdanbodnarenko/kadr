@@ -18,7 +18,7 @@ extension EditorDocumentModel {
         modifiers: EditorModifiers,
         tolerance: CGFloat
     ) -> Bool {
-        guard tool == .select, !modifiers.contains(.extendSelection) else { return false }
+        guard tool == .select, !isCanvasLocked, !modifiers.contains(.extendSelection) else { return false }
         let selected = selectedCommands
         guard !selected.isEmpty else { return false }
         // Screen-space hits from the canvas win: they stay a constant size at every zoom,

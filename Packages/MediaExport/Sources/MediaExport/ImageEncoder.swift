@@ -14,17 +14,23 @@ public struct EncodingOptions: Sendable, Hashable {
     public var scale: DisplayScale
     /// Halve a Retina capture on the way out (docs/03 §8.3).
     public var downscaleToOneToOne: Bool
+    /// Convert Display P3 (and any other tagged space) to sRGB so browsers match
+    /// what was on screen (CleanShot §8.5 / §23.4). Off by default: a P3 capture
+    /// should keep its profile unless the user asks.
+    public var convertToSRGB: Bool
 
     public init(
         format: ImageFormat = .png,
         quality: Double = 0.9,
         scale: DisplayScale = .oneToOne,
-        downscaleToOneToOne: Bool = false
+        downscaleToOneToOne: Bool = false,
+        convertToSRGB: Bool = false
     ) {
         self.format = format
         self.quality = min(max(quality, 0), 1)
         self.scale = scale
         self.downscaleToOneToOne = downscaleToOneToOne
+        self.convertToSRGB = convertToSRGB
     }
 }
 
@@ -49,11 +55,14 @@ public struct ImageEncoder: Sendable {
 
     public init() {}
 
-    /// Encodes an image, applying downscaling and metadata.
+    /// Encodes an image, applying downscaling, optional sRGB conversion, and metadata.
     public func encode(_ image: CGImage, options: EncodingOptions) throws -> Data {
-        let source = options.downscaleToOneToOne && options.scale.factor > 1
+        var source = options.downscaleToOneToOne && options.scale.factor > 1
             ? try downscale(image, by: options.scale.factor)
             : image
+        if options.convertToSRGB {
+            source = convertToSRGB(source)
+        }
 
         guard options.format.isWritable else {
             throw ExportError.unsupportedFormat(options.format)
@@ -125,5 +134,29 @@ public struct ImageEncoder: Sendable {
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         guard let result = context.makeImage() else { throw ExportError.downscaleFailed }
         return result
+    }
+
+    /// Draws into sRGB so the file a browser opens matches the capture (CleanShot §23.4).
+    ///
+    /// HDR captures stay in their own space: flattening them to 8-bit sRGB is the
+    /// opposite of why they were captured. Already-sRGB images are returned as-is.
+    func convertToSRGB(_ image: CGImage) -> CGImage {
+        let sRGB = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        if image.colorSpace?.name == sRGB.name { return image }
+        guard image.bitsPerComponent <= 8 else { return image }
+
+        guard let context = CGContext(
+            data: nil,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: sRGB,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return image
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return context.makeImage() ?? image
     }
 }

@@ -11,6 +11,7 @@ struct CaptureOverrides: Sendable, Equatable {
     var action: CaptureAction?
     var delaySeconds: Int?
     var includesCursor: Bool?
+    var preservesLineBreaks: Bool?
 
     static let none = CaptureOverrides()
 
@@ -18,17 +19,24 @@ struct CaptureOverrides: Sendable, Equatable {
         self == .none
     }
 
-    init(action: CaptureAction? = nil, delaySeconds: Int? = nil, includesCursor: Bool? = nil) {
+    init(
+        action: CaptureAction? = nil,
+        delaySeconds: Int? = nil,
+        includesCursor: Bool? = nil,
+        preservesLineBreaks: Bool? = nil
+    ) {
         self.action = action
         self.delaySeconds = delaySeconds
         self.includesCursor = includesCursor
+        self.preservesLineBreaks = preservesLineBreaks
     }
 
     init(_ options: CaptureOptions) {
         self.init(
             action: options.action,
             delaySeconds: options.delay,
-            includesCursor: options.includesCursor
+            includesCursor: options.includesCursor,
+            preservesLineBreaks: options.preservesLineBreaks
         )
     }
 }

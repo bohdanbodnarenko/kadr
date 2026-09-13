@@ -15,8 +15,11 @@ public struct AnnotationExportRenderer: Sendable {
     private let rasterizer = RedactionRasterizer()
     private let subjectLift = SubjectLiftCompositor()
     private let logger = KadrLog.logger(.capture)
+    let objectShadowsEnabled: Bool
 
-    public init() {}
+    public init(objectShadowsEnabled: Bool? = nil) {
+        self.objectShadowsEnabled = objectShadowsEnabled ?? ObjectShadowPolicy.isEnabled()
+    }
 
     public enum RenderError: Error, Equatable {
         case couldNotCreateContext
@@ -30,12 +33,18 @@ public struct AnnotationExportRenderer: Sendable {
     ///   - document: the annotations.
     ///   - includeAnnotations: false produces "Copy without annotations" (docs/03 §3),
     ///     which still honours the crop but draws nothing on top.
-    ///   - randomSeed: pins pixelate jitter for tests.
+    ///   - applyOrientation: false skips rotate/flip, for the in-editor flatten that
+    ///     already sits inside the canvas's oriented layer host.
+    ///   - exportScale: 1 is native pixels; smaller values downscale Copy/Save
+    ///     (docs/03 §3 P2). Ignored when `applyOrientation` is false — the canvas
+    ///     flatten must match the view, not the export size.
     public func render(
         baseImage: CGImage,
         document: AnnotationDocument,
         includeAnnotations: Bool = true,
-        randomSeed: UInt64? = nil
+        randomSeed: UInt64? = nil,
+        applyOrientation: Bool = true,
+        exportScale: CGFloat = 1
     ) throws -> CGImage {
         let scale = document.baseImage.scale
         let canvas = document.canvasRect
@@ -107,13 +116,10 @@ public struct AnnotationExportRenderer: Sendable {
         }
 
         guard let image = context.makeImage() else { throw RenderError.couldNotCreateImage }
-
-        // A scene blur is the last thing that happens: it covers the backdrop as well as
-        // the capture, which is only possible once everything is composed (docs/09 U1.3).
-        if let blur = document.progressiveBlur, blur.extent == .scene {
-            return ProgressiveBlurCompositor.apply(blur, to: image, in: canvas, scale: scale) ?? image
-        }
-        return image
+        let finished = finish(
+            image, document: document, canvas: canvas, scale: scale, applyOrientation: applyOrientation
+        )
+        return Self.downscaled(finished, by: applyOrientation ? exportScale : 1) ?? finished
     }
 
     /// A canvas that can hold everything the source image can (docs/06 M25).
@@ -173,17 +179,38 @@ public struct AnnotationExportRenderer: Sendable {
 
     /// The commands that draw text or an effect — and the three that deliberately draw
     /// nothing here.
-    private func drawContent(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
+    func drawContent(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
         switch command {
         case let .text(spec): drawText(spec, in: context)
         case let .counter(spec): drawCounter(spec, in: context)
         case let .measure(spec): drawMeasure(spec, in: context, imageScale: imageScale)
         case let .image(spec): drawImage(spec, in: context)
+        case let .spotlight(spec): drawSpotlight(spec, in: context)
         // A redaction is already burned into the image; drawing it again would be the
         // removable overlay this design exists to avoid. The crop and the beautify
         // backdrop are the canvas itself, applied by the transform above.
         default: break
         }
+    }
+
+    /// Dims the canvas except for a rounded hole, so one region stays bright.
+    private func drawSpotlight(_ spec: SpotlightSpec, in context: CGContext) {
+        let canvas = context.boundingBoxOfClipPath
+        guard !canvas.isNull, !canvas.isInfinite, canvas.width > 0, canvas.height > 0 else { return }
+        context.saveGState()
+        context.setFillColor(gray: 0, alpha: spec.dimOpacity)
+        context.beginPath()
+        context.addRect(canvas)
+        let hole = spec.rect.standardized
+        let radius = spec.fittedCornerRadius
+        context.addPath(CGPath(
+            roundedRect: hole,
+            cornerWidth: radius,
+            cornerHeight: radius,
+            transform: nil
+        ))
+        context.drawPath(using: .eoFill)
+        context.restoreGState()
     }
 
     private func apply(_ stroke: StrokeStyle, to context: CGContext) {
@@ -375,71 +402,6 @@ public struct AnnotationExportRenderer: Sendable {
         context.textPosition = CGPoint(
             x: rect.midX - bounds.width / 2 - bounds.minX,
             y: rect.midY - bounds.height / 2 - bounds.minY
-        )
-        CTLineDraw(line, context)
-        context.restoreGState()
-    }
-
-    /// An inserted image, with its shadow and rounded corners (docs/06 M24).
-    private func drawImage(_ spec: ImageSpec, in context: CGContext) {
-        guard let image = ImageRendering.decode(spec.pngData) else { return }
-        let rect = spec.rect.standardized
-        guard !rect.isEmpty else { return }
-
-        context.saveGState()
-        context.setAlpha(spec.opacity)
-        if spec.hasShadow {
-            let radius = ImageRendering.shadowRadius(spec)
-            context.setShadow(
-                offset: CGSize(width: 0, height: -radius / 2),
-                blur: radius,
-                color: CGColor(gray: 0, alpha: 0.35)
-            )
-        }
-        if spec.cornerRadius > 0 {
-            // Clipping needs its own state: the shadow is cast by the drawing, and a clip
-            // applied to the shadow as well would square its corners off again.
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
-            context.addPath(ImageRendering.clipPath(spec))
-            context.clip()
-        }
-
-        // Images are drawn in the flipped space every command works in, so the transform
-        // is undone around this one draw rather than the image being mirrored.
-        context.translateBy(x: 0, y: rect.midY * 2)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(image, in: rect)
-
-        if spec.cornerRadius > 0 {
-            context.endTransparencyLayer()
-        }
-        context.restoreGState()
-    }
-
-    private func drawCounter(_ spec: CounterSpec, in context: CGContext) {
-        let rect = CGRect(
-            x: spec.center.x - spec.radius,
-            y: spec.center.y - spec.radius,
-            width: spec.radius * 2,
-            height: spec.radius * 2
-        )
-        context.setFillColor(spec.fill.cgColor)
-        context.fillEllipse(in: rect)
-
-        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, spec.radius * 1.1, nil)
-        let attributed = NSAttributedString(string: "\(spec.number)", attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor
-        ])
-        let line = CTLineCreateWithAttributedString(attributed)
-        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
-
-        context.saveGState()
-        context.translateBy(x: 0, y: spec.center.y * 2)
-        context.scaleBy(x: 1, y: -1)
-        context.textPosition = CGPoint(
-            x: spec.center.x - bounds.width / 2 - bounds.minX,
-            y: spec.center.y - bounds.height / 2 - bounds.minY
         )
         CTLineDraw(line, context)
         context.restoreGState()

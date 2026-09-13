@@ -49,17 +49,26 @@ public struct AutoScroller: Sendable {
         return AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
     }
 
-    /// Sends one scroll step to whatever is under `point`.
+    /// Sends one vertical scroll step to whatever is under `point`.
     ///
     /// Pixel units rather than lines: a line is whatever the target app decides it is, and
     /// the stitch wants a predictable, modest step with plenty of overlap.
     public func step(at point: CGPoint, configuration: Configuration = Configuration()) {
+        postScroll(at: point, wheel1: Int32(-configuration.pointsPerStep), wheel2: 0)
+    }
+
+    /// Sends one horizontal scroll step to whatever is under `point`.
+    public func stepHorizontally(at point: CGPoint, configuration: Configuration = Configuration()) {
+        postScroll(at: point, wheel1: 0, wheel2: Int32(-configuration.pointsPerStep))
+    }
+
+    private func postScroll(at point: CGPoint, wheel1: Int32, wheel2: Int32) {
         guard let event = CGEvent(
             scrollWheelEvent2Source: nil,
             units: .pixel,
-            wheelCount: 1,
-            wheel1: Int32(-configuration.pointsPerStep),
-            wheel2: 0,
+            wheelCount: 2,
+            wheel1: wheel1,
+            wheel2: wheel2,
             wheel3: 0
         ) else {
             logger.error("Could not synthesize a scroll event")
@@ -81,20 +90,38 @@ public struct AutoScroller: Sendable {
 public struct ScrollSettleDetector: Sendable {
     /// Frames with no movement before the page counts as finished.
     public let requiredStillFrames: Int
+    public let axis: ScrollAxis
     private var stillFrames = 0
-    private var previous: RowProfile?
+    private var previousVertical: RowProfile?
+    private var previousHorizontal: ColumnProfile?
 
-    public init(requiredStillFrames: Int = 2) {
+    public init(requiredStillFrames: Int = 2, axis: ScrollAxis = .vertical) {
         self.requiredStillFrames = requiredStillFrames
+        self.axis = axis
     }
 
     /// Whether the page has settled, given the newest frame.
     public mutating func settled(with profile: RowProfile) -> Bool {
-        defer { previous = profile }
-        guard let previous else { return false }
+        guard axis == .vertical else { return false }
+        defer { previousVertical = profile }
+        guard let previousVertical else { return false }
 
-        let alignment = ScrollAligner.align(previous: previous, current: profile)
-        if alignment.offset == 0 {
+        let alignment = ScrollAligner.align(previous: previousVertical, current: profile)
+        return recordMovement(alignment.offset == 0)
+    }
+
+    /// Whether the page has settled, given the newest frame.
+    public mutating func settled(with profile: ColumnProfile) -> Bool {
+        guard axis == .horizontal else { return false }
+        defer { previousHorizontal = profile }
+        guard let previousHorizontal else { return false }
+
+        let alignment = ColumnAligner.align(previous: previousHorizontal, current: profile)
+        return recordMovement(alignment.offset == 0)
+    }
+
+    private mutating func recordMovement(_ still: Bool) -> Bool {
+        if still {
             stillFrames += 1
         } else {
             stillFrames = 0
@@ -105,6 +132,7 @@ public struct ScrollSettleDetector: Sendable {
     /// Forgets what it has seen, for a new run.
     public mutating func reset() {
         stillFrames = 0
-        previous = nil
+        previousVertical = nil
+        previousHorizontal = nil
     }
 }

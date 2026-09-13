@@ -25,7 +25,7 @@ struct AutomationPathTests {
         let url: URL
     }
 
-    private func stagedCapture(pins: PinManager = PinManager()) throws -> StagedCapture {
+    private func stagedCapture(pins: PinManager = ephemeralPinManager()) throws -> StagedCapture {
         let save = temporaryDirectory("save")
         let stage = temporaryDirectory("stage")
         let harness = makeManager(saveFolder: save, stagingFolder: stage, pins: pins)
@@ -38,7 +38,7 @@ struct AutomationPathTests {
 
     @Test("Pinning a staged path moves the file out of staging first")
     func pinFinalisesStagedPath() throws {
-        let pins = PinManager()
+        let pins = ephemeralPinManager()
         let staged = try stagedCapture(pins: pins)
         let (harness, save, stage, url) = (staged.harness, staged.save, staged.stage, staged.url)
         defer { pins.closeAll() }
@@ -55,7 +55,7 @@ struct AutomationPathTests {
 
     @Test("The pin ends up pointing at the file's new home")
     func pinFollowsTheFinalisedFile() throws {
-        let pins = PinManager()
+        let pins = ephemeralPinManager()
         let staged = try stagedCapture(pins: pins)
         let (harness, save, url) = (staged.harness, staged.save, staged.url)
         defer { pins.closeAll() }
@@ -68,7 +68,7 @@ struct AutomationPathTests {
 
     @Test("A path that was never staged is pinned exactly as given")
     func ordinaryPathIsUntouched() throws {
-        let pins = PinManager()
+        let pins = ephemeralPinManager()
         let session = try stagedCapture(pins: pins)
         let (harness, staged) = (session.harness, session.url)
         defer { pins.closeAll() }

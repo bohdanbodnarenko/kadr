@@ -21,6 +21,9 @@ extension AppDelegate {
         if performCapture(command) {
             return
         }
+        if performOverlay(command) {
+            return
+        }
         switch command {
         case .captureScrolling:
             scrollCapture.begin()
@@ -28,13 +31,22 @@ extension AppDelegate {
             performRecording(command)
         case .toggleDesktopIcons:
             desktopHygiene.toggleUserHide()
-        default:
+        case .allInOne, .captureArea, .captureWindow, .captureFullscreen, .captureText,
+             .pickColor, .capturePreviousArea, .captureAreaAndCopy, .captureAreaAndSave,
+             .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
+             .hidePins:
             break
         }
     }
 
     /// The commands that go through the selection overlay. Returns whether it was one.
     func performCapture(_ command: CaptureCommand) -> Bool {
+        if performCaptureAndAction(command) {
+            return true
+        }
+        if performCaptureAid(command) {
+            return true
+        }
         switch command {
         case .captureArea:
             areaCapture.beginAreaCapture()
@@ -48,12 +60,71 @@ extension AppDelegate {
             areaCapture.beginTextCapture()
         case .pickColor:
             areaCapture.beginColorPick()
-        case .freezeScreen:
-            areaCapture.toggleFreezeScreen()
         default:
             return false
         }
         return true
+    }
+
+    /// Freeze, self-timer, and All-in-One — capture aids rather than a region tool.
+    func performCaptureAid(_ command: CaptureCommand) -> Bool {
+        switch command {
+        case .freezeScreen:
+            areaCapture.toggleFreezeScreen()
+        case .selfTimer:
+            areaCapture.beginSelfTimedAreaCapture()
+        case .allInOne:
+            allInOne.toggle()
+        default:
+            return false
+        }
+        return true
+    }
+
+    /// Capture-and-action family: same overlay, a forced post-capture action (CleanShot §5).
+    func performCaptureAndAction(_ command: CaptureCommand) -> Bool {
+        switch command {
+        case .captureAreaAndCopy:
+            areaCapture.arm(CaptureOverrides(action: .copy), completion: nil)
+            areaCapture.beginAreaCapture()
+        case .captureAreaAndSave:
+            areaCapture.arm(CaptureOverrides(action: .save), completion: nil)
+            areaCapture.beginAreaCapture()
+        default:
+            return false
+        }
+        return true
+    }
+
+    /// Overlay stack commands (CleanShot §6.3). Returns whether it was one.
+    func performOverlay(_ command: CaptureCommand) -> Bool {
+        switch command {
+        case .closeAllOverlays:
+            areaCapture.closeAllOverlays()
+        case .saveAllOverlays:
+            areaCapture.saveAllOverlays()
+        case .hideOverlays:
+            areaCapture.toggleOverlaysHidden()
+        case .hidePins:
+            areaCapture.togglePinsHidden()
+        default:
+            return false
+        }
+        return true
+    }
+
+    /// What the All-in-One strip starts (docs/03 §1.4).
+    func performAllInOne(_ mode: AllInOneMode) {
+        switch mode {
+        case .area: areaCapture.beginAreaCapture()
+        case .window: areaCapture.beginWindowCapture()
+        case .screen: areaCapture.captureAllDisplays()
+        case .record: recordSetup.toggle()
+        case .gif: recording.beginGIFRecording()
+        case .scrolling: scrollCapture.begin()
+        case .ocr: areaCapture.beginTextCapture()
+        case .color: areaCapture.beginColorPick()
+        }
     }
 
     /// Keeps the menu bar and the floating controls in step with the recording.
@@ -121,7 +192,11 @@ extension AppDelegate {
                 }
             },
             cancel: { [weak self] in self?.recording.cancel() },
-            restart: { [weak self] in self?.recording.restart() }
+            restart: { [weak self] in self?.recording.restart() },
+            audioLevel: recording.audioMeter.peak,
+            microphoneIsSilent: recording.settings.recordsMicrophone
+                && recording.elapsed > 2
+                && recording.microphonePeakMax < AudioMeter.silence
         )
     }
 

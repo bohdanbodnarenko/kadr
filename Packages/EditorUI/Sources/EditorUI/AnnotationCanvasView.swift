@@ -60,6 +60,8 @@ public final class AnnotationCanvasView: NSView {
     let draftLayer = CALayer()
     let selectionLayer = CALayer()
     let cropLayer = CALayer()
+    /// Hosts every drawing layer so rotate/flip can transform them as one (docs/03 §3 P2).
+    let drawingHost = CALayer()
     /// The density the vector chrome was last rasterised at, so a zoom that changes nothing
     /// does not walk every layer.
     var lastContentsScale: CGFloat = 0
@@ -68,6 +70,8 @@ public final class AnnotationCanvasView: NSView {
     /// Layers by annotation, so an update finds its own layer without a search.
     var layers: [AnnotationID: CALayer] = [:]
     private var draftShapeLayer: CALayer?
+    /// Hover preview for a snapped highlighter stroke.
+    var highlightPreviewLayer: CALayer?
     /// Kept so the measure tool can read the image's straight edges the first time it is
     /// used — never at open, because most sessions never measure anything (docs/06 M21).
     let baseImage: CGImage
@@ -99,22 +103,25 @@ public final class AnnotationCanvasView: NSView {
         root.backgroundColor = NSColor.clear.cgColor
         root.isOpaque = false
 
+        drawingHost.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        root.addSublayer(drawingHost)
+
         backdropLayer.addSublayer(gradientLayer)
-        root.addSublayer(backdropLayer)
-        root.addSublayer(shadowLayer)
+        drawingHost.addSublayer(backdropLayer)
+        drawingHost.addSublayer(shadowLayer)
 
         baseLayer.contents = baseImage
         baseLayer.magnificationFilter = .trilinear
         contentHost.addSublayer(baseLayer)
-        root.addSublayer(contentHost)
+        drawingHost.addSublayer(contentHost)
         // Drawn on the canvas, not inside the card: arrows and shapes belong on the
         // beautify padding as well as on the screenshot (docs/03 §3).
         for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer, cropLayer] {
             layer.masksToBounds = false
-            root.addSublayer(layer)
+            drawingHost.addSublayer(layer)
         }
         cameraLayer.isHidden = true
-        root.addSublayer(cameraLayer)
+        drawingHost.addSublayer(cameraLayer)
 
         marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
         marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
@@ -169,7 +176,8 @@ public final class AnnotationCanvasView: NSView {
                 for: command,
                 contentsScale: scale,
                 imageScale: imageScale,
-                baseImage: displayedImage
+                baseImage: displayedImage,
+                canvasRect: model.document.canvasRect
             ) else {
                 continue
             }
@@ -204,46 +212,8 @@ public final class AnnotationCanvasView: NSView {
         }
     }
 
-    /// Sizes the view and the card so beautify chrome matches export (docs/03 §3 P2).
-    /// Maps a click on the view onto image-space points (beautify offsets the card).
-    private func imagePoint(from event: NSEvent) -> CGPoint {
-        imagePoint(fromWindowPoint: event.locationInWindow)
-    }
-
-    /// The same mapping from a bare window point.
-    ///
-    /// Internal, not private: a drop reports a location rather than an event, and the
-    /// drop handling lives in `AnnotationCanvasView+Drop.swift`.
-    func imagePoint(fromWindowPoint windowPoint: CGPoint) -> CGPoint {
-        var viewPoint = convert(windowPoint, from: nil)
-
-        // A tilted capture is still editable, because the click is traced back through the
-        // camera's inverse before anything else looks at it. Without this, clicking a
-        // shape on a leaning screenshot selects whatever sits at the same *screen* point
-        // on the upright one (docs/09 U1.2).
-        if let camera = model.document.cameraGeometry {
-            guard let unprojected = camera.contentPoint(from: viewPoint) else { return viewPoint }
-            viewPoint = unprojected
-        }
-
-        // Crop mode shows the full capture so the overlay can dim the exterior. Mapping
-        // through `contentRect` would jump the pointer into the already-cropped space.
-        if model.tool == .crop {
-            return viewPoint
-        }
-        return model.document.imagePoint(fromCanvas: viewPoint)
-    }
-
-    /// Image-space point as a point in this view, honouring crop-mode's full-capture layout.
-    func viewPoint(fromImage point: CGPoint) -> CGPoint {
-        if model.tool == .crop {
-            return point
-        }
-        return model.document.canvasPoint(fromImage: point)
-    }
-
     /// Refreshes the live drag preview: one layer, replaced only when the kind changes.
-    private func updateDraftLayer() {
+    func updateDraftLayer() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -260,7 +230,8 @@ public final class AnnotationCanvasView: NSView {
                 existing,
                 for: draft,
                 imageScale: imageScale,
-                baseImage: displayedImage
+                baseImage: displayedImage,
+                canvasRect: model.document.canvasRect
             )
         } else {
             draftShapeLayer?.removeFromSuperlayer()
@@ -268,7 +239,8 @@ public final class AnnotationCanvasView: NSView {
                 for: draft,
                 contentsScale: scale,
                 imageScale: imageScale,
-                baseImage: displayedImage
+                baseImage: displayedImage,
+                canvasRect: model.document.canvasRect
             )
             if let layer = draftShapeLayer {
                 draftLayer.addSublayer(layer)
@@ -332,6 +304,7 @@ public final class AnnotationCanvasView: NSView {
         }
         model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
         updateDraftLayer()
+        updateHighlightPreview()
         rebuildAnnotationLayers()
         if let id = model.consumePendingTextEdit() {
             beginEditingText(id)
@@ -366,7 +339,8 @@ public final class AnnotationCanvasView: NSView {
                 layer,
                 for: command,
                 imageScale: imageScale,
-                baseImage: displayedImage
+                baseImage: displayedImage,
+                canvasRect: model.document.canvasRect
             )
         }
     }
@@ -387,7 +361,7 @@ public final class AnnotationCanvasView: NSView {
         return drawableIDs == orderedLayerIDs
     }
 
-    private func modifiers(from event: NSEvent) -> EditorModifiers {
+    func modifiers(from event: NSEvent) -> EditorModifiers {
         var modifiers: EditorModifiers = []
         if event.modifierFlags.contains(.shift) {
             modifiers.insert(.constrain)
@@ -457,7 +431,8 @@ public final class AnnotationCanvasView: NSView {
                 layer,
                 for: command,
                 imageScale: imageScale,
-                baseImage: displayedImage
+                baseImage: displayedImage,
+                canvasRect: model.document.canvasRect
             )
         }
         updateSelectionHandles()

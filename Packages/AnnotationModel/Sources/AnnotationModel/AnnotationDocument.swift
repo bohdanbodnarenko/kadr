@@ -6,10 +6,13 @@ public struct BaseImageReference: Codable, Hashable, Sendable {
     /// Size in points; the pixel size is this multiplied by `scale`.
     public var size: CGSize
     public var scale: CGFloat
+    /// How the capture is shown and exported. The pixels themselves never rotate.
+    public var orientation: CanvasOrientation
 
-    public init(size: CGSize, scale: CGFloat = 2) {
+    public init(size: CGSize, scale: CGFloat = 2, orientation: CanvasOrientation = .identity) {
         self.size = size
         self.scale = max(scale, 1)
+        self.orientation = orientation
     }
 
     public var pixelSize: CGSize {
@@ -18,6 +21,29 @@ public struct BaseImageReference: Codable, Hashable, Sendable {
 
     public var bounds: CGRect {
         CGRect(origin: .zero, size: size)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case size
+        case scale
+        case orientation
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        size = try container.decode(CGSize.self, forKey: .size)
+        scale = try max(container.decode(CGFloat.self, forKey: .scale), 1)
+        orientation = try container.decodeIfPresent(CanvasOrientation.self, forKey: .orientation)
+            ?? .identity
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(size, forKey: .size)
+        try container.encode(scale, forKey: .scale)
+        if !orientation.isIdentity {
+            try container.encode(orientation, forKey: .orientation)
+        }
     }
 }
 
@@ -39,28 +65,36 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     /// `AnnotationDocument+Chrome.swift`, and `private` is file-scoped.
     var history: [[AnnotationCommand]]
     var historyIndex: Int
+    /// Parallel to `history`: rotate/flip is canvas chrome, not a drawing command.
+    var orientationHistory: [CanvasOrientation]
 
     /// The command list as it was when the current gesture opened, or nil when no gesture
     /// is in progress. Never encoded: a gesture cannot outlive the drag that opened it,
     /// so a document saved mid-drag reopens with the gesture already resolved.
-    private var gestureBaseline: [AnnotationCommand]?
+    /// Internal, not private: Codable lives in `AnnotationDocument+Codable.swift`.
+    var gestureBaseline: [AnnotationCommand]?
 
     public var selection: Set<AnnotationID>
 
     public init(baseImage: BaseImageReference, commands: [AnnotationCommand] = []) {
-        self.baseImage = baseImage
+        var stored = baseImage
+        let orientation = stored.orientation
+        stored.orientation = .identity
+        self.baseImage = stored
         history = [commands]
         historyIndex = 0
+        orientationHistory = [orientation]
         selection = []
     }
 
-    /// The gesture baseline is deliberately absent: it is transient UI state that belongs
-    /// to a drag in progress, and a decoded document is never mid-drag.
-    private enum CodingKeys: String, CodingKey {
-        case baseImage
-        case history
-        case historyIndex
-        case selection
+    /// How the capture is currently shown. Last-wins chrome, one undo step per action.
+    public var orientation: CanvasOrientation {
+        orientationHistory[historyIndex]
+    }
+
+    /// The canvas the editor viewport uses: `canvasRect`, after rotate/flip.
+    public var orientedCanvasSize: CGSize {
+        orientation.orientedSize(of: canvasRect.size)
     }
 
     /// The annotations as they stand, in back-to-front order.
@@ -143,33 +177,6 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     /// it (arrows on the padding) because the layer does not mask to its bounds.
     public var imageSpaceFrame: CGRect {
         CGRect(origin: canvasPoint(fromImage: .zero), size: baseImage.size)
-    }
-
-    /// Replaces the current beautify command, coalescing successive inspector edits into
-    /// one undo step so dragging a slider does not flood the undo stack.
-    public mutating func setBeautify(_ spec: BeautifySpec?) {
-        var updated = commands
-        updated.removeAll { command in
-            if case .beautify = command {
-                return true
-            }
-            return false
-        }
-        if let spec {
-            updated.insert(.beautify(spec), at: 0)
-        }
-        guard updated != commands else { return }
-        if shouldCoalesce(updated, matching: {
-            if case .beautify = $0 {
-                true
-            } else {
-                false
-            }
-        }) {
-            history[historyIndex] = updated
-            return
-        }
-        pushHistory(updated)
     }
 
     /// Whether replacing a chrome command should overwrite the last history entry rather
@@ -355,15 +362,35 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         return true
     }
 
-    mutating func pushHistory(_ commands: [AnnotationCommand]) {
+    /// Rotate the capture 90° clockwise (docs/03 §3 P2). One undo step.
+    public mutating func rotateClockwise() {
+        pushHistory(commands, canvasOrientation: orientation.rotatedClockwise())
+    }
+
+    /// Mirror the capture left-to-right (docs/03 §3 P2). One undo step.
+    public mutating func flipHorizontal() {
+        pushHistory(commands, canvasOrientation: orientation.flippedHorizontally())
+    }
+
+    /// Mirror the capture top-to-bottom (CleanShot §8.2). One undo step.
+    public mutating func flipVertical() {
+        pushHistory(commands, canvasOrientation: orientation.flippedVertically())
+    }
+
+    mutating func pushHistory(_ commands: [AnnotationCommand], canvasOrientation: CanvasOrientation? = nil) {
         // Anything undone is discarded the moment a new edit lands, which is what every
         // editor does and what users expect.
+        let nextOrientation = canvasOrientation ?? orientationHistory[historyIndex]
         if historyIndex < history.count - 1 {
             history.removeSubrange((historyIndex + 1)...)
+            orientationHistory.removeSubrange((historyIndex + 1)...)
         }
         history.append(commands)
+        orientationHistory.append(nextOrientation)
         if history.count > Self.undoDepth {
-            history.removeFirst(history.count - Self.undoDepth)
+            let extra = history.count - Self.undoDepth
+            history.removeFirst(extra)
+            orientationHistory.removeFirst(extra)
         }
         historyIndex = history.count - 1
     }

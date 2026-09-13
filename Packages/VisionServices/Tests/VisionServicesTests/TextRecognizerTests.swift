@@ -94,6 +94,17 @@ struct TextRecognizerTests {
         #expect(analysis.candidates.isEmpty, "redaction candidates are opt-in")
     }
 
+    @Test("Word boxes travel with recognised lines")
+    func wordBoxes() async throws {
+        let analysis = try await recognizer.analyze(
+            pngData: makeTextImage("Hello Kadr"),
+            options: TextRecognitionOptions(detectsCodes: false, detectsTables: false)
+        )
+        guard !analysis.lines.isEmpty else { return }
+        #expect(!analysis.words.isEmpty, "a line Vision could read should produce word boxes")
+        #expect(analysis.words.allSatisfy { $0.boundingBox.width > 0 && $0.boundingBox.height > 0 })
+    }
+
     @Test("Redaction candidates stay off unless asked")
     func redactionCandidatesAreLazy() async throws {
         let analysis = try await recognizer.analyze(
@@ -143,12 +154,20 @@ struct VisionAnalysisTests {
     func codable() throws {
         let analysis = VisionAnalysis(
             lines: lines,
-            codes: [DetectedCode(payload: "x", symbology: "QR", boundingBox: .zero)]
+            codes: [DetectedCode(payload: "x", symbology: "QR", boundingBox: .zero)],
+            words: [RecognizedWord(text: "first", boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.1))]
         )
         let data = try JSONEncoder().encode(analysis)
         let decoded = try JSONDecoder().decode(VisionAnalysis.self, from: data)
         #expect(decoded == analysis)
         #expect(decoded.candidates.isEmpty)
+    }
+
+    @Test("JSON without words still decodes")
+    func decodesWithoutWords() throws {
+        let json = Data(#"{"lines":[],"codes":[]}"#.utf8)
+        let analysis = try JSONDecoder().decode(VisionAnalysis.self, from: json)
+        #expect(analysis.words.isEmpty)
     }
 
     @Test("Options round-trip too")

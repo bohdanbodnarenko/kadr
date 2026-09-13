@@ -113,7 +113,11 @@ extension AnnotationCanvasView {
         let image = baseImage
 
         Task.detached(priority: .userInitiated) {
-            let rendered = try? AnnotationExportRenderer().render(baseImage: image, document: document)
+            let rendered = try? AnnotationExportRenderer().render(
+                baseImage: image,
+                document: document,
+                applyOrientation: false
+            )
             await MainActor.run { [weak self] in
                 guard let self, generation == chromeRenderGeneration else { return }
                 applyRenderedChrome(rendered)
@@ -166,9 +170,11 @@ extension AnnotationCanvasView {
         let showsFullCapture = model.tool == .crop
         guard !showsFullCapture, let spec = model.document.beautify, let layout = model.document.beautifyLayout else {
             layoutPlainCanvas(imageBounds: imageBounds, showsFullCapture: showsFullCapture)
+            applyCanvasOrientation()
             return
         }
         layoutBeautifiedCanvas(spec: spec, layout: layout, imageBounds: imageBounds)
+        applyCanvasOrientation()
     }
 
     /// Crop mode and the un-beautified editor: the capture, optionally clipped to the crop.
@@ -332,6 +338,7 @@ struct CanvasLayoutKey: Equatable {
     var imageSpace: CGRect
     var beautify: BeautifySpec?
     var isCropping: Bool
+    var orientation: CanvasOrientation
 }
 
 extension AnnotationCanvasView {
@@ -343,7 +350,8 @@ extension AnnotationCanvasView {
                 content: bounds,
                 imageSpace: CGRect(origin: .zero, size: bounds.size),
                 beautify: nil,
-                isCropping: true
+                isCropping: true,
+                orientation: model.document.orientation
             )
         }
         return CanvasLayoutKey(
@@ -351,7 +359,8 @@ extension AnnotationCanvasView {
             content: model.document.contentRect,
             imageSpace: model.document.imageSpaceFrame,
             beautify: model.document.beautify,
-            isCropping: false
+            isCropping: false,
+            orientation: model.document.orientation
         )
     }
 }

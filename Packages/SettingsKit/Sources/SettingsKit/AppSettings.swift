@@ -66,6 +66,41 @@ public final class AppSettings {
         didSet { store[SettingKeys.downscaleRetinaCaptures] = downscaleRetinaCaptures }
     }
 
+    /// Convert captures to sRGB on save and copy (CleanShot §8.5). Off keeps P3.
+    public var convertExportsToSRGB = SettingKeys.convertExportsToSRGB.defaultValue {
+        didSet { store[SettingKeys.convertExportsToSRGB] = convertExportsToSRGB }
+    }
+
+    /// Mix each recording audio track to mono (CleanShot §13.3).
+    public var recordsMono = SettingKeys.recordsMono.defaultValue {
+        didSet { store[SettingKeys.recordsMono] = recordsMono }
+    }
+
+    /// Overlay Save asks for a folder and name (CleanShot §6.2).
+    public var askForSaveDestination = SettingKeys.askForSaveDestination.defaultValue {
+        didSet { store[SettingKeys.askForSaveDestination] = askForSaveDestination }
+    }
+
+    /// Drop the notch strip from fullscreen screenshots on notched Macs (CleanShot 4.6).
+    public var cropNotchFromFullscreen = SettingKeys.cropNotchFromFullscreen.defaultValue {
+        didSet { store[SettingKeys.cropNotchFromFullscreen] = cropNotchFromFullscreen }
+    }
+
+    /// Start Annotate with objects locked so drawing does not move them (CleanShot §8.1).
+    public var lockCanvasByDefault = SettingKeys.lockCanvasByDefault.defaultValue {
+        didSet { store[SettingKeys.lockCanvasByDefault] = lockCanvasByDefault }
+    }
+
+    /// Draw drop shadows behind inserted images in Annotate (CleanShot §8.2 / §21).
+    public var objectShadowsEnabled = SettingKeys.objectShadowsEnabled.defaultValue {
+        didSet { store[SettingKeys.objectShadowsEnabled] = objectShadowsEnabled }
+    }
+
+    /// Save annotated exports beside the original capture (CleanShot §7).
+    public var keepOriginalWhenAnnotating = SettingKeys.keepOriginalWhenAnnotating.defaultValue {
+        didSet { store[SettingKeys.keepOriginalWhenAnnotating] = keepOriginalWhenAnnotating }
+    }
+
     /// Draw the pointer into captures.
     public var includesCursor: Bool {
         didSet { store[SettingKeys.includesCursor] = includesCursor }
@@ -82,7 +117,25 @@ public final class AppSettings {
         didSet { store[SettingKeys.transparentWindowBackground] = transparentWindowBackground }
     }
 
-    public var ocrPreservesLineBreaks: Bool {
+    /// Fill behind a window when transparency is off (docs/03 §1.2, CleanShot §10).
+    public var windowBackdrop: WindowBackdrop = SettingKeys.windowBackdrop.defaultValue {
+        didSet { store[SettingKeys.windowBackdrop] = windowBackdrop }
+    }
+
+    public var windowBackdropImagePath: String = SettingKeys.windowBackdropImagePath.defaultValue {
+        didSet { store[SettingKeys.windowBackdropImagePath] = windowBackdropImagePath }
+    }
+
+    public var windowBackdropPadding: Int = SettingKeys.windowBackdropPadding.defaultValue {
+        didSet { store[SettingKeys.windowBackdropPadding] = windowBackdropPadding }
+    }
+
+    /// Built-in look applied to new stills (CleanShot §9). Shift at hotkey time skips it.
+    public var autoBeautifyPreset: AutoBeautifyPreset = SettingKeys.autoBeautifyPreset.defaultValue {
+        didSet { store[SettingKeys.autoBeautifyPreset] = autoBeautifyPreset }
+    }
+
+    public var ocrPreservesLineBreaks: Bool = SettingKeys.ocrPreservesLineBreaks.defaultValue {
         didSet { store[SettingKeys.ocrPreservesLineBreaks] = ocrPreservesLineBreaks }
     }
 
@@ -220,6 +273,10 @@ public final class AppSettings {
         didSet { store[SettingKeys.scrollFrameRate] = scrollFrameRate }
     }
 
+    public var scrollAxis: ScrollAxis {
+        didSet { store[SettingKeys.scrollAxis] = scrollAxis }
+    }
+
     public var scrollReviewsSeams: Bool {
         didSet { store[SettingKeys.scrollReviewsSeams] = scrollReviewsSeams }
     }
@@ -283,6 +340,27 @@ public final class AppSettings {
         didSet { store[SettingKeys.overlayDismissOnDrag] = overlayDismissOnDrag }
     }
 
+    /// Return saves the hovered card and dismisses it (CleanShot §6.2).
+    public var overlayReturnSaves: Bool {
+        didSet { store[SettingKeys.overlayReturnSaves] = overlayReturnSaves }
+    }
+
+    /// Last All-in-One mode, so Return on the HUD repeats it (docs/03 §1.4).
+    ///
+    /// Computed so it does not grow the initializer: it is a remembered string, not a
+    /// setting the reset sheet needs to reason about beyond writing the default.
+    public var lastAllInOneMode: String {
+        get {
+            access(keyPath: \.lastAllInOneMode)
+            return store[SettingKeys.lastAllInOneMode]
+        }
+        set {
+            withMutation(keyPath: \.lastAllInOneMode) {
+                store[SettingKeys.lastAllInOneMode] = newValue
+            }
+        }
+    }
+
     public var historyRetention: HistoryRetention {
         didSet { store[SettingKeys.historyRetention] = historyRetention }
     }
@@ -341,6 +419,7 @@ public final class AppSettings {
         customTimerSeconds > 0 ? customTimerSeconds : selfTimer.seconds
     }
 
+    /// Every key is assigned from the store; splitting the list would hide a missed load.
     public init(store: UserDefaults = .standard) {
         SettingsMigrator.migrate(store)
         self.store = store
@@ -357,7 +436,6 @@ public final class AppSettings {
         includesCursor = store[SettingKeys.includesCursor]
         windowShadow = store[SettingKeys.windowShadow]
         transparentWindowBackground = store[SettingKeys.transparentWindowBackground]
-        ocrPreservesLineBreaks = store[SettingKeys.ocrPreservesLineBreaks]
         recordingFrameRate = store[SettingKeys.recordingFrameRate]
         recordingCodec = store[SettingKeys.recordingCodec]
         recordsSystemAudio = store[SettingKeys.recordsSystemAudio]
@@ -383,6 +461,7 @@ public final class AppSettings {
         scrollAutoScroll = store[SettingKeys.scrollAutoScroll]
         scrollStepPoints = store[SettingKeys.scrollStepPoints]
         scrollFrameRate = store[SettingKeys.scrollFrameRate]
+        scrollAxis = store[SettingKeys.scrollAxis]
         scrollReviewsSeams = store[SettingKeys.scrollReviewsSeams]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
@@ -390,6 +469,7 @@ public final class AppSettings {
         overlayTimeout = store[SettingKeys.overlayTimeout]
         overlayOnPrimaryDisplay = store[SettingKeys.overlayOnPrimaryDisplay]
         overlayDismissOnDrag = store[SettingKeys.overlayDismissOnDrag]
+        overlayReturnSaves = store[SettingKeys.overlayReturnSaves]
         historyRetention = store[SettingKeys.historyRetention]
         historySizeCap = store[SettingKeys.historySizeCap]
         historyIndexesText = store[SettingKeys.historyIndexesText]
@@ -402,6 +482,22 @@ public final class AppSettings {
         captureSnapsToEdges = store[SettingKeys.captureSnapsToEdges]
         captureDynamicRange = store[SettingKeys.captureDynamicRange].resolved
         recordingDynamicRange = store[SettingKeys.recordingDynamicRange].resolved
+        readWindowFill()
+    }
+
+    private func readWindowFill() {
+        windowBackdrop = store[SettingKeys.windowBackdrop]
+        windowBackdropImagePath = store[SettingKeys.windowBackdropImagePath]
+        windowBackdropPadding = store[SettingKeys.windowBackdropPadding]
+        convertExportsToSRGB = store[SettingKeys.convertExportsToSRGB]
+        recordsMono = store[SettingKeys.recordsMono]
+        askForSaveDestination = store[SettingKeys.askForSaveDestination]
+        cropNotchFromFullscreen = store[SettingKeys.cropNotchFromFullscreen]
+        lockCanvasByDefault = store[SettingKeys.lockCanvasByDefault]
+        objectShadowsEnabled = store[SettingKeys.objectShadowsEnabled]
+        keepOriginalWhenAnnotating = store[SettingKeys.keepOriginalWhenAnnotating]
+        autoBeautifyPreset = store[SettingKeys.autoBeautifyPreset]
+        ocrPreservesLineBreaks = store[SettingKeys.ocrPreservesLineBreaks]
     }
 
     /// Where captures are written. Falls back to the Desktop until the user picks a folder.

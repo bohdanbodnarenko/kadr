@@ -14,7 +14,7 @@ import StudioSession
 /// `.regular` activation, so it has a Dock icon and ⌘Tab like the document editor it is —
 /// which also sidesteps every LSUIElement focus quirk the agent has to work around.
 @main
-final class EditorAppDelegate: NSObject, NSApplicationDelegate {
+final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private static let shared = EditorAppDelegate()
 
     @MainActor
@@ -100,6 +100,55 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
     @objc func importImage(_ sender: Any?) {
         guard let url = CaptureImporter().promptForImport() else { return }
         open(url)
+    }
+
+    @MainActor
+    @objc func saveDocument(_ sender: Any?) {
+        keyEditor()?.export(.save)
+    }
+
+    @MainActor
+    @objc func saveDocumentAs(_ sender: Any?) {
+        keyEditor()?.export(.saveAs)
+    }
+
+    @MainActor
+    @objc func saveProjectDocument(_ sender: Any?) {
+        keyEditor()?.saveProject()
+    }
+
+    @MainActor
+    @objc func printDocument(_ sender: Any?) {
+        keyEditor()?.export(.print)
+    }
+
+    @MainActor
+    @objc func toggleCanvasLock(_ sender: Any?) {
+        guard let editor = keyEditor() else { return }
+        editor.model.isCanvasLocked.toggle()
+    }
+
+    @MainActor
+    private func keyEditor() -> EditorWindowController? {
+        windows.first { $0.window?.isKeyWindow == true } ?? windows.last
+    }
+
+    @MainActor
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(saveDocument(_:)),
+             #selector(saveDocumentAs(_:)),
+             #selector(saveProjectDocument(_:)),
+             #selector(printDocument(_:)),
+             #selector(toggleCanvasLock(_:)):
+            guard let editor = keyEditor() else { return menuItem.action != #selector(toggleCanvasLock(_:)) }
+            if menuItem.action == #selector(toggleCanvasLock(_:)) {
+                menuItem.state = editor.model.isCanvasLocked ? .on : .off
+            }
+            return true
+        default:
+            return true
+        }
     }
 
     /// The whole point of the separate process: when the last window goes, so does the
@@ -266,6 +315,22 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(withTitle: "Open…", action: #selector(importImage(_:)), keyEquivalent: "o")
         fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Save", action: #selector(saveDocument(_:)), keyEquivalent: "s")
+        let saveAs = fileMenu.addItem(
+            withTitle: "Save As…",
+            action: #selector(saveDocumentAs(_:)),
+            keyEquivalent: "s"
+        )
+        saveAs.keyEquivalentModifierMask = [.command, .shift]
+        let saveProject = fileMenu.addItem(
+            withTitle: "Save Project…",
+            action: #selector(saveProjectDocument(_:)),
+            keyEquivalent: "s"
+        )
+        saveProject.keyEquivalentModifierMask = [.command, .option]
+        fileMenu.addItem(.separator())
+        fileMenu.addItem(withTitle: "Print…", action: #selector(printDocument(_:)), keyEquivalent: "p")
+        fileMenu.addItem(.separator())
         fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         fileItem.submenu = fileMenu
         main.addItem(fileItem)
@@ -280,6 +345,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(.separator())
+        let lock = editMenu.addItem(
+            withTitle: "Lock Objects",
+            action: #selector(toggleCanvasLock(_:)),
+            keyEquivalent: "l"
+        )
+        lock.keyEquivalentModifierMask = [.command, .shift]
         editItem.submenu = editMenu
         main.addItem(editItem)
 

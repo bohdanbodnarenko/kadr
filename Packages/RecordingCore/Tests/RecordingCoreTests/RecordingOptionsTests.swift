@@ -56,6 +56,13 @@ struct RecordingOptionsTests {
         #expect(settings[AVNumberOfChannelsKey] as? Int == 2)
     }
 
+    @Test("Mono mixdown is one AAC channel")
+    func monoAudioSettings() {
+        let settings = RecordingOptions(recordsMono: true).audioSettings()
+        #expect(settings[AVNumberOfChannelsKey] as? Int == 1)
+        #expect((settings[AVEncoderBitRateKey] as? Int ?? 0) < 128_000)
+    }
+
     @Test("Every frame rate the UI offers is a real one", arguments: RecordingFrameRate.allCases)
     func frameRates(rate: RecordingFrameRate) {
         #expect([24, 30, 60].contains(rate.rawValue))

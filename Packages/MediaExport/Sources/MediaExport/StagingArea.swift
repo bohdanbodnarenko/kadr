@@ -62,6 +62,28 @@ public struct StagingArea: Sendable {
         throw ExportError.writeFailed("Could not find a free name in \(folder.lastPathComponent)")
     }
 
+    /// Moves a staged file to a path the user picked (CleanShot §6.2 / §7).
+    ///
+    /// The save panel has already confirmed a replace, so an existing file at
+    /// `destination` is removed first rather than getting a counter suffix.
+    @discardableResult
+    public func finalize(_ url: URL, to destination: URL) throws -> URL {
+        let folder = destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        if url.standardizedFileURL == destination.standardizedFileURL {
+            return destination
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        do {
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            throw ExportError.writeFailed(error.localizedDescription)
+        }
+        return destination
+    }
+
     /// How many names to try before giving up. Reached only if something is creating files
     /// as fast as we can name them.
     private static let collisionRetries = 32

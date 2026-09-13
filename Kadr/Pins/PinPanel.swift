@@ -47,6 +47,7 @@ final class PinPanel: NonActivatingPanel {
     /// Recognises the pin's text and copies it (docs/03 §1.7). The pin holds a file URL,
     /// so the work is the manager's — the panel only offers the command (docs/07 M8).
     var onCopyText: (() -> Void)?
+    var onGeometryChanged: (() -> Void)?
 
     /// Drags the pinned file out to another app. Pins always point at a finalised file,
     /// so the promise has nothing to resolve beyond handing the path over.
@@ -170,6 +171,9 @@ final class PinPanel: NonActivatingPanel {
         if changed {
             scheduleBackingReload()
         }
+        if !inLiveResize {
+            onGeometryChanged?()
+        }
     }
 
     // MARK: - Zoom and opacity (docs/03 §4)
@@ -180,6 +184,7 @@ final class PinPanel: NonActivatingPanel {
             setZoom(zoom * (1 + event.scrollingDeltaY / 200))
         } else {
             alphaValue = min(max(alphaValue + event.scrollingDeltaY / 200, 0.2), 1)
+            onGeometryChanged?()
         }
     }
 
@@ -212,6 +217,32 @@ final class PinPanel: NonActivatingPanel {
     /// Arrow keys nudge the pin, ⇧ by ten points (docs/03 §4).
     func nudge(dx: CGFloat, dy: CGFloat) {
         setFrameOrigin(CGPoint(x: frame.origin.x + dx, y: frame.origin.y + dy))
+        onGeometryChanged?()
+    }
+
+    /// Restores frame, opacity and lock mode from the last session (docs/03 §4 P2).
+    func applyPersistedState(frame: CGRect, alpha: Double, clickThrough: Bool) {
+        setFrame(frame, display: false)
+        alphaValue = min(max(alpha, 0.2), 1)
+        if clickThrough != isClickThrough {
+            toggleClickThrough()
+        }
+    }
+
+    /// Hide without closing, so the pin is not clickable while tucked away (CleanShot §11).
+    func hideForStack() {
+        ignoresMouseEvents = true
+        orderOut(nil)
+    }
+
+    func revealFromStack() {
+        ignoresMouseEvents = isClickThrough
+        orderFrontRegardless()
+    }
+
+    /// Middle-click closes the pin without taking it through the context menu (CleanShot §11).
+    func closeFromMiddleClick() {
+        onClose?()
     }
 
     // MARK: - Click-through (docs/03 §4)
@@ -230,6 +261,7 @@ final class PinPanel: NonActivatingPanel {
             clickThroughBadge = nil
         }
         logger.info("Pin click-through \(self.isClickThrough ? "on" : "off", privacy: .public)")
+        onGeometryChanged?()
     }
 
     var clickThroughEnabled: Bool {
@@ -270,13 +302,14 @@ private final class PinContentView: NSView {
     override func viewDidEndLiveResize() {
         super.viewDidEndLiveResize()
         panel?.reloadBackingImageIfNeeded()
+        panel?.onGeometryChanged?()
     }
 
     override func scrollWheel(with event: NSEvent) {
         panel?.handleScroll(event)
     }
 
-    override func mouseDown(with event: NSEvent) {
+        override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             panel?.resetZoom()
         } else if event.modifierFlags.contains(.option) {
@@ -286,6 +319,14 @@ private final class PinContentView: NSView {
         } else {
             super.mouseDown(with: event)
         }
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        if event.buttonNumber == 2 {
+            panel?.closeFromMiddleClick()
+            return
+        }
+        super.otherMouseDown(with: event)
     }
 
     override func keyDown(with event: NSEvent) {

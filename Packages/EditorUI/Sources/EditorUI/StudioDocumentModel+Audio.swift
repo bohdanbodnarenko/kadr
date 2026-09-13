@@ -75,7 +75,9 @@ public extension StudioDocumentModel {
                 clips: edit.clips,
                 soundtrack: session.soundtrackURL(for: edit),
                 to: url,
-                format: format
+                format: format,
+                mutesAudio: edit.mutesAudio,
+                mixesToMono: edit.mixesToMono
             )
             notice = "Saved the soundtrack."
         } catch StudioAudioExporter.ExportError.noAudioTrack {

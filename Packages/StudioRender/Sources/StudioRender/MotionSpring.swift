@@ -1,15 +1,13 @@
 import CoreGraphics
 import Foundation
+import StudioSession
 
 /// A critically damped spring, integrated at a fixed rate (docs/09 U3.2).
 ///
-/// One spring, shared by the cursor and the camera, and that is the whole point. Two
-/// separately-tuned smoothers make the pointer and the zoom settle at different moments,
-/// which reads as the camera chasing the cursor — the exact thing a smooth recording is
-/// supposed to avoid. Sharing the constant makes them arrive together by construction.
-///
-/// Critically damped rather than under-damped: overshoot on a cursor looks like the pointer
-/// sliding past what it clicked, which is worse than being slightly late.
+/// The cursor and the camera each pick their own stiffness (pointer motion vs zoom
+/// motion) so a snappy zoom does not drag the pointer with it. Both still use this
+/// integrator: overshoot on a cursor looks like the pointer sliding past what it clicked,
+/// which is worse than being slightly late.
 ///
 /// Integrated at a fixed step rather than per output frame, because otherwise the smoothing
 /// depends on the export's frame rate — a 30 fps and a 60 fps render of the same edit would
@@ -24,6 +22,16 @@ public struct MotionSpring: Sendable, Hashable {
 
     public init(stiffness: Double = 12) {
         self.stiffness = max(stiffness, 0.01)
+    }
+
+    /// The spring that matches a studio edit's cursor-smoothing choice (CleanShot §14.4).
+    public init(_ smoothing: CursorSmoothing) {
+        self.init(stiffness: smoothing.stiffness)
+    }
+
+    /// The spring that matches a studio edit's zoom animation (CleanShot §14.3).
+    public init(_ style: ZoomAnimationStyle) {
+        self.init(stiffness: style.stiffness)
     }
 
     /// The step the integrator uses, in seconds.
@@ -62,10 +70,9 @@ public struct MotionSpring: Sendable, Hashable {
 
 /// Runs a spring over a series of targets, at a fixed rate (docs/09 U3.2, U3.3).
 ///
-/// Shared by the cursor reconstruction and the camera timeline so that "smoothed" means the
-/// same thing to both. Sampling the result is separate from producing it, which is what
-/// lets a preview at 30 fps and an export at 60 fps agree exactly: they are reading the
-/// same integration at different points, not integrating differently.
+/// Sampling the result is separate from producing it, which is what lets a preview at 30
+/// fps and an export at 60 fps agree exactly: they are reading the same integration at
+/// different points, not integrating differently.
 public struct SpringIntegrator: Sendable {
     public var spring: MotionSpring
 

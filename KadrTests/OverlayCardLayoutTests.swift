@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SettingsKit
+import Shared
 import SwiftUI
 import Testing
 @testable import Kadr
@@ -195,5 +196,48 @@ struct CardActionLayoutTests {
     func widerCardsFitMore() {
         #expect(QuickAccessCardView.actionsPerRow(width: 420) > QuickAccessCardView.actionsPerRow(width: 140))
         #expect(QuickAccessCardView.actionsPerRow(width: 140) >= 1)
+    }
+
+    @Test("Only the newest card is marked when several are stacked")
+    func newestIndicator() {
+        let first = QuickAccessItem(
+            fileURL: URL(fileURLWithPath: "/tmp/first.png"),
+            isStaged: false,
+            pixelSize: PixelSize(width: 10, height: 10),
+            capturedAt: Date(),
+            displayID: nil
+        )
+        let second = QuickAccessItem(
+            fileURL: URL(fileURLWithPath: "/tmp/second.png"),
+            isStaged: false,
+            pixelSize: PixelSize(width: 10, height: 10),
+            capturedAt: Date(),
+            displayID: nil
+        )
+        let items = [first, second]
+
+        #expect(!QuickAccessStackLayout.showsNewestIndicator(for: second.id, in: [first]))
+        #expect(QuickAccessStackLayout.showsNewestIndicator(for: first.id, in: items))
+        #expect(!QuickAccessStackLayout.showsNewestIndicator(for: second.id, in: items))
+    }
+
+    @Test("Trash appears only after a capture is saved to disk")
+    func trashButtonWhenSaved() {
+        let staged = QuickAccessItem(
+            fileURL: URL(fileURLWithPath: "/tmp/staged.png"),
+            isStaged: true,
+            pixelSize: PixelSize(width: 10, height: 10),
+            capturedAt: Date(),
+            displayID: nil
+        )
+        let saved = QuickAccessItem(
+            fileURL: URL(fileURLWithPath: "/tmp/saved.png"),
+            isStaged: false,
+            pixelSize: PixelSize(width: 10, height: 10),
+            capturedAt: Date(),
+            displayID: nil
+        )
+        #expect(!QuickAccessStackLayout.showsTrashButton(for: staged))
+        #expect(QuickAccessStackLayout.showsTrashButton(for: saved))
     }
 }
