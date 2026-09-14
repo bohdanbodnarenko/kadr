@@ -129,14 +129,12 @@ public struct CardLayout: Hashable, Sendable, Codable {
 
     /// Kadr's own layout, and what the pane resets to.
     ///
-    /// One layout serves both kinds and each card drops what does not apply, so the
-    /// recording-only actions cost a screenshot nothing by being here. Which is why they
-    /// are: Studio and Trim were both placeable and neither was placed, so a recording's
-    /// card offered Copy, Save, Share and Delete and no way at all to edit the thing it
-    /// was a card for.
+    /// A card is a thumbnail, not a toolbar. The daily four — Copy, Save, Annotate or
+    /// Studio, Share — sit on the picture. Everything else lives in More, the context
+    /// menu, and this editor.
     public static let standard = CardLayout(
         corners: [:],
-        column: [.copy, .save, .annotate, .pin, .recognizeText, .studio, .trim, .share, .delete]
+        column: [.copy, .save, .annotate, .studio, .share]
     )
 
     /// Every action currently placed anywhere.
@@ -253,11 +251,25 @@ public struct CardLayout: Hashable, Sendable, Codable {
 extension CardLayout: SettingValue {
     public static func read(from defaults: UserDefaults, forKey key: String) -> CardLayout? {
         guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(CardLayout.self, from: data)
+        guard let decoded = try? JSONDecoder().decode(CardLayout.self, from: data) else { return nil }
+        if decoded == .retiredCrowdedStandard {
+            return .standard
+        }
+        return decoded
     }
 
     public func write(to defaults: UserDefaults, forKey key: String) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         defaults.set(data, forKey: key)
     }
+}
+
+extension CardLayout {
+    /// The row that used to cover the thumbnail. Read as `standard` so a capture
+    /// still looks like a picture after this simplification, unless the user arranged
+    /// something else.
+    static let retiredCrowdedStandard = CardLayout(
+        corners: [:],
+        column: [.copy, .save, .annotate, .pin, .recognizeText, .studio, .trim, .share, .delete]
+    )
 }

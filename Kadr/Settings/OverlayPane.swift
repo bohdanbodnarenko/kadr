@@ -60,7 +60,7 @@ struct OverlayPane: View {
                 Toggle("Always show actions", isOn: $settings.overlayAlwaysShowActions)
                 Text(
                     "Dismissing a card never deletes its file. Hovering or dragging pauses auto-dismiss. "
-                        + "Actions otherwise appear on hover."
+                        + "Hover shows Copy, Save, Annotate or Studio, and Share — the picture stays visible."
                 )
                 .font(.callout)
                 .foregroundStyle(.secondary)

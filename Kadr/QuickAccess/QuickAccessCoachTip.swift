@@ -74,7 +74,7 @@ private struct QuickAccessCoachTipView: View {
                 tip(
                     symbol: "cursorarrow",
                     title: "Hover it",
-                    detail: "The actions appear — copy, save, annotate, pin."
+                    detail: "Copy, save, annotate, or share — without covering the capture."
                 )
                 tip(
                     symbol: "hand.draw",

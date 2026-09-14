@@ -172,22 +172,21 @@ struct CardGestureTests {
 @MainActor
 @Suite("Card action layout")
 struct CardActionLayoutTests {
-    /// The bug: the default layout puts nine actions in the column slot, drawn as one
-    /// `HStack`. That is 302 points of buttons inside a 200-point card, clipped at both ends
-    /// by the card's own rounded shape — the outer two sliced in half, the rest invisible.
-    @Test("Every action fits inside the card at any width it can be set to")
+    /// Extra actions fold into More rather than wrapping a second row over the thumbnail.
+    @Test("A crowded row keeps one line and overflows the rest")
     func actionsFitTheCard() {
-        let actions = CardLayout.standard.actions(in: .column, for: .screenshot)
-        #expect(actions.count > 1, "this only proves something if the default row is crowded")
+        let actions = CardAction.allCases.filter { $0.applies(to: .screenshot) }
+        #expect(actions.count > QuickAccessCardView.maxVisibleActions)
 
         for width in [CGFloat(140), 160, 200, 280, 420] {
-            let rows = QuickAccessCardView.actionRows(actions, width: width)
-            let widest = rows.map(\.count).max() ?? 0
-            let used = CGFloat(widest) * QuickAccessCardView.actionButtonSize
-                + CGFloat(max(0, widest - 1)) * QuickAccessCardView.actionSpacing
+            let split = QuickAccessCardView.splitActions(actions, width: width)
+            let visibleCount = split.visible.count + (split.overflow.isEmpty ? 0 : 1)
+            let used = CGFloat(visibleCount) * QuickAccessCardView.actionButtonSize
+                + CGFloat(max(0, visibleCount - 1)) * QuickAccessCardView.actionSpacing
             let available = width - QuickAccessCardView.chromeInset * 2
-            #expect(used <= available, "a row of \(widest) needs \(used) in \(available) at width \(width)")
-            #expect(rows.flatMap(\.self) == actions, "wrapping must not drop or reorder an action")
+            #expect(used <= available, "\(visibleCount) controls need \(used) in \(available) at width \(width)")
+            #expect(split.visible + split.overflow == actions, "splitting must not drop or reorder an action")
+            #expect(split.visible.count <= QuickAccessCardView.maxVisibleActions)
         }
     }
 

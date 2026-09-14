@@ -7,13 +7,15 @@ import Testing
 struct CardLayoutTests {
     // MARK: - The default
 
-    /// The feature is opt-in by being invisible: somebody who never opens the editor sees
-    /// the row the cards have always had.
-    @Test("The standard layout is the row the cards already had")
+    /// Somebody who never opens the editor sees a thumbnail with the daily four, not a
+    /// toolbar of every action Kadr knows.
+    @Test("The standard layout is the daily actions")
     func standardIsTheOldRow() {
         let layout = CardLayout.standard
-        #expect(layout.column.first == .copy)
-        #expect(layout.column.contains(.delete))
+        #expect(layout.column == [.copy, .save, .annotate, .studio, .share])
+        #expect(!layout.column.contains(.pin))
+        #expect(!layout.column.contains(.recognizeText))
+        #expect(!layout.column.contains(.delete), "Delete is the hover trash, not a row button")
         #expect(layout.corners.isEmpty)
     }
 
@@ -201,6 +203,13 @@ struct CardLayoutTests {
 
         layout.write(to: store, forKey: "test.layout")
         #expect(CardLayout.read(from: store, forKey: "test.layout") == layout)
+    }
+
+    @Test("The old nine-button row reads as the daily four")
+    func crowdedDefaultMigrates() {
+        let store = throwawayDefaults()
+        CardLayout.retiredCrowdedStandard.write(to: store, forKey: "test.layout")
+        #expect(CardLayout.read(from: store, forKey: "test.layout") == .standard)
     }
 
     @Test("Nothing stored reads as nothing, so the default applies")

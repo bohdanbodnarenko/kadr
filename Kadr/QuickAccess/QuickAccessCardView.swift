@@ -4,15 +4,11 @@ import SettingsKit
 import Shared
 import SwiftUI
 
-/// The card (docs/03 §2): a thumbnail at rest, everything else on hover.
+/// The card (docs/03 §2): a thumbnail at rest, a short action row on hover.
 ///
-/// At rest it is only the capture. It used to be a material panel wrapping the thumbnail
-/// with a row of filename and dimensions underneath, which made it half as big again for
-/// information nobody reads at a glance — and docs/03 §2 puts that information on hover
-/// anyway, along with the actions and the close.
-///
-/// So hover is where the card explains itself, and at rest it says the one thing it is for:
-/// this is what you just captured, and it is over here.
+/// At rest it is only the capture. Hover keeps that picture visible — a gradient at the
+/// edges, not a frosted sheet — and offers the daily actions in one row. Hide sits in the
+/// corner; everything else is More, the context menu, or a shortcut.
 struct QuickAccessCardView: View {
     let item: QuickAccessItem
     let actions: QuickAccessCardActions
@@ -49,6 +45,11 @@ struct QuickAccessCardView: View {
     /// One action button, edge to edge, and the gap between two.
     static let actionButtonSize: CGFloat = 28
     static let actionSpacing: CGFloat = 4
+    /// Never more than this many glyphs on the picture, even on a wide card.
+    ///
+    /// A second row of buttons is how a thumbnail becomes a control panel. Extra actions
+    /// go in More, the context menu, and keyboard shortcuts.
+    static let maxVisibleActions = 4
     /// How far the chrome is inset from the card's edge.
     ///
     /// Enough to clear the corner radius, so a button in a corner is not shaved by the
@@ -56,12 +57,6 @@ struct QuickAccessCardView: View {
     static let chromeInset: CGFloat = 8
 
     /// How many action buttons fit across a card of this width.
-    ///
-    /// The default layout puts nine actions in the column slot, and they were drawn as one
-    /// `HStack`: 302 points of buttons inside a card 200 points wide, clipped at both ends
-    /// by the card's own rounded shape. Every action past the fifth was invisible, and the
-    /// two at the edges were sliced in half — which is exactly what a row that cannot count
-    /// looks like. So it wraps, and this is the count it wraps at.
     static func actionsPerRow(width: CGFloat) -> Int {
         let available = width - chromeInset * 2
         let stride = actionButtonSize + actionSpacing
@@ -69,12 +64,17 @@ struct QuickAccessCardView: View {
         return max(1, Int((available + actionSpacing) / stride))
     }
 
-    /// The column's actions, split into rows that fit.
-    static func actionRows(_ actions: [CardAction], width: CGFloat) -> [[CardAction]] {
-        let perRow = actionsPerRow(width: width)
-        return stride(from: 0, to: actions.count, by: perRow).map { start in
-            Array(actions[start ..< min(start + perRow, actions.count)])
+    /// The actions that sit on the thumbnail, and the ones that fold into More.
+    static func splitActions(_ actions: [CardAction], width: CGFloat) -> (
+        visible: [CardAction],
+        overflow: [CardAction]
+    ) {
+        let cap = min(actionsPerRow(width: width), maxVisibleActions)
+        guard actions.count > cap else {
+            return (actions, [])
         }
+        let visibleCount = max(cap - 1, 1)
+        return (Array(actions.prefix(visibleCount)), Array(actions.dropFirst(visibleCount)))
     }
 
     /// Proportional to the width, not a constant.
@@ -103,6 +103,18 @@ struct QuickAccessCardView: View {
     /// Every action this card's layout offers, in stable order.
     private var configuredActions: [CardAction] {
         CardSlot.allCases.flatMap { layout.actions(in: $0, for: item.captureKind) }
+    }
+
+    /// Layout actions first, then the ones that still apply but are not on the picture.
+    ///
+    /// The daily row is short on purpose. Pin, OCR, Trim and the rest stay reachable from
+    /// the context menu and VoiceOver so simplifying the thumbnail does not hide them.
+    private var reachableActions: [CardAction] {
+        let onCard = configuredActions
+        let rest = CardAction.allCases.filter {
+            $0.applies(to: item.captureKind) && !onCard.contains($0)
+        }
+        return onCard + rest
     }
 
     /// Chrome fades for hover, and simply goes when the stack starts moving.
@@ -141,7 +153,7 @@ struct QuickAccessCardView: View {
 
     @ViewBuilder
     private var contextMenu: some View {
-        ForEach(configuredActions, id: \.self) { cardAction in
+        ForEach(reachableActions.filter { $0 != .delete }, id: \.self) { cardAction in
             switch cardAction {
             case .share:
                 ShareLink(item: item.fileURL) {
@@ -175,7 +187,7 @@ struct QuickAccessCardView: View {
 
     @ViewBuilder
     private var accessibilityActions: some View {
-        ForEach(configuredActions, id: \.self) { cardAction in
+        ForEach(reachableActions.filter { $0 != .delete }, id: \.self) { cardAction in
             Button(cardAction.title) {
                 perform(cardAction)
             }
@@ -272,183 +284,5 @@ struct QuickAccessCardView: View {
             },
             onDragBegan: { actions.beginDrag() }
         )
-    }
-
-    /// Everything the card can tell you and everything it can do (docs/03 §2).
-    private var hoverChrome: some View {
-        ZStack {
-            // Dark regardless of the system appearance: it covers a screenshot, not a
-            // window, so what it has to stay legible against is the user's capture.
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-                .allowsHitTesting(false)
-
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 4) {
-                    corner(.topLeading)
-                    Spacer(minLength: 0)
-                    corner(.topTrailing)
-                    HStack(spacing: 4) {
-                        if showsTrashButton {
-                            trashButton
-                        }
-                        hideButton
-                    }
-                }
-                Spacer(minLength: 0)
-                centreActions
-                Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: 4) {
-                    corner(.bottomLeading)
-                    Spacer(minLength: 0)
-                    corner(.bottomTrailing)
-                }
-            }
-            .padding(6)
-
-            VStack {
-                Spacer()
-                details
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 6)
-            .allowsHitTesting(false)
-        }
-    }
-
-    /// The actions the user put in the column slot, across the middle of the card.
-    ///
-    /// Wrapped to the card's width rather than run off both edges — see `actionsPerRow`.
-    @ViewBuilder
-    private var centreActions: some View {
-        let column = layout.actions(in: .column, for: item.captureKind)
-        if !column.isEmpty {
-            VStack(spacing: Self.actionSpacing) {
-                ForEach(Array(Self.actionRows(column, width: width).enumerated()), id: \.offset) { _, row in
-                    HStack(spacing: Self.actionSpacing) {
-                        ForEach(row, id: \.self) { action in
-                            button(for: action)
-                                .background(.regularMaterial, in: Circle())
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Hide, not delete. The file stays where the save policy put it (docs/03 §2).
-    private var hideButton: some View {
-        Button(action: actions.dismiss) {
-            Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .bold))
-                .frame(width: 14, height: 14)
-        }
-        .buttonStyle(CardCloseButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help("Hide — the file stays")
-        .accessibilityLabel("Hide card")
-    }
-
-    /// Move to Trash when the capture is already on disk (CleanShot §6.2).
-    private var trashButton: some View {
-        Button(action: actions.delete) {
-            Image(systemName: "trash")
-                .font(.system(size: 9, weight: .semibold))
-                .frame(width: 14, height: 14)
-        }
-        .buttonStyle(CardCloseButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help("Move to Trash")
-        .accessibilityLabel("Delete capture")
-    }
-
-    /// The buttons the user's layout asks for, in the order they asked for them
-    /// (docs/09 U2.3).
-    ///
-    /// The layout is read rather than hard-coded, and filtered by what the capture is:
-    /// one layout serves both kinds, so placing Trim shows it on recordings and hides it
-    /// on screenshots without anybody keeping two layouts in step.
-    private func corner(_ slot: CardSlot) -> some View {
-        ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { action in
-            button(for: action)
-                .background(.regularMaterial, in: Circle())
-        }
-    }
-
-    @ViewBuilder
-    private func button(for cardAction: CardAction) -> some View {
-        switch cardAction {
-        case .share:
-            // ShareLink is its own control: it needs the item, not a closure, so the
-            // system picker can offer the right services for the file.
-            ShareLink(item: item.fileURL) {
-                Image(systemName: cardAction.systemImage)
-                    .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
-            }
-            .buttonStyle(CardActionButtonStyle())
-            .kadrHitTarget(minSize: 20)
-            .help("Share")
-            .accessibilityLabel("Share \(item.filename)")
-        default:
-            action(
-                cardAction.title,
-                systemImage: cardAction.systemImage,
-                action: { perform(cardAction) }
-            )
-        }
-    }
-
-    private func perform(_ cardAction: CardAction) {
-        if let reason = actions.unavailableReason(cardAction) {
-            actions.reportUnavailable(reason)
-            return
-        }
-        handler(for: cardAction)()
-    }
-
-    /// What each button does.
-    ///
-    /// A table rather than a switch: it is a lookup with one arm per action and no
-    /// branching worth the name, and as a switch it reads to a complexity check as a
-    /// function that decides eleven things.
-    ///
-    /// Share is absent on purpose — it is drawn by its own case above, because
-    /// `NSSharingServicePicker` needs the button's frame to point at.
-    private var handlers: [CardAction: () -> Void] {
-        [
-            .copy: actions.copy,
-            .save: actions.save,
-            .saveAs: actions.saveAs,
-            .annotate: actions.annotate,
-            .pin: actions.pin,
-            .recognizeText: actions.recognizeText,
-            .trim: actions.trim,
-            .studio: actions.studio,
-            .exportGIF: actions.exportGIF,
-            .compress: actions.compress,
-            .delete: actions.delete
-        ]
-    }
-
-    private func handler(for cardAction: CardAction) -> () -> Void {
-        handlers[cardAction] ?? {}
-    }
-
-    private func action(
-        _ title: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                // The style adds 3 points on each side, making `actionButtonSize` — which is
-                // what the wrap arithmetic counts in.
-                .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
-        }
-        .buttonStyle(CardActionButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help(title)
-        .accessibilityLabel(title)
     }
 }

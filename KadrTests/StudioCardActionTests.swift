@@ -22,7 +22,8 @@ struct StudioCardActionTests {
     func standardLayoutOffersStudio() {
         let actions = CardLayout.standard.actions(in: .column, for: .recording)
         #expect(actions.contains(.studio))
-        #expect(actions.contains(.trim))
+        #expect(!actions.contains(.annotate))
+        #expect(actions.contains(.share))
     }
 
     @Test("The standard layout does not offer the studio on a screenshot")
