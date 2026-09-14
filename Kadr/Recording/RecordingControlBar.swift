@@ -194,6 +194,9 @@ final class RecordingControlBar {
         hosting.layer?.isOpaque = false
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
         hosting.layer?.masksToBounds = model.docksToNotch
+        // A docked island sits in the menu-bar strip. Container safe area would
+        // inset it and leave a hairline under the hardware notch.
+        hosting.safeAreaRegions = model.docksToNotch ? [] : .all
     }
 
     private func teardownPanel() {

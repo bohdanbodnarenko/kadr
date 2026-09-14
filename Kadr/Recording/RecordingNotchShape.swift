@@ -17,16 +17,16 @@ enum RecordingNotchScreen {
     }
 }
 
-/// Dynamic Island silhouette: concave ears at the top, convex corners at the bottom.
+/// Notch-docked shell: flat against the screen top, pill ears only at the bottom.
 ///
-/// The top edge is flat against the display so the shell continues the hardware notch
-/// without a gap. Corner radii scale with total height so the ears stay subtle on a
-/// short strip and read clearly when the shell extends below the camera.
+/// Concave top “island ears” nicked the menu bar on a wide countdown strip — the
+/// hardware notch already supplies the top edge, so the panel must not cut itself
+/// away from it. A 1-pt bleed above the view kills the anti-aliased hairline.
 struct RecordingNotchShape: Shape {
     var topCornerRadius: CGFloat
     var bottomCornerRadius: CGFloat
 
-    init(topCornerRadius: CGFloat = 10, bottomCornerRadius: CGFloat = 16) {
+    init(topCornerRadius: CGFloat = 0, bottomCornerRadius: CGFloat = 16) {
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
     }
@@ -34,7 +34,7 @@ struct RecordingNotchShape: Shape {
     static func forShell(height: CGFloat) -> RecordingNotchShape {
         let clamped = max(height, 24)
         return RecordingNotchShape(
-            topCornerRadius: min(10, clamped * 0.36),
+            topCornerRadius: 0,
             bottomCornerRadius: min(clamped * 0.5, 16)
         )
     }
@@ -48,37 +48,16 @@ struct RecordingNotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY + topCornerRadius),
-            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY)
-        )
-        path.addLine(to: CGPoint(
-            x: rect.minX + topCornerRadius,
-            y: rect.maxY - bottomCornerRadius
-        ))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + topCornerRadius + bottomCornerRadius, y: rect.maxY),
-            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY)
-        )
-        path.addLine(to: CGPoint(
-            x: rect.maxX - topCornerRadius - bottomCornerRadius,
-            y: rect.maxY
-        ))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY - bottomCornerRadius),
-            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY)
-        )
-        path.addLine(to: CGPoint(
-            x: rect.maxX - topCornerRadius,
-            y: rect.minY + topCornerRadius
-        ))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY),
-            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY)
-        )
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        return path
+        let radius = min(bottomCornerRadius, rect.height / 2, rect.width / 2)
+        var bleed = rect
+        bleed.origin.y -= 1
+        bleed.size.height += 1
+        return UnevenRoundedRectangle(
+            topLeadingRadius: topCornerRadius,
+            bottomLeadingRadius: radius,
+            bottomTrailingRadius: radius,
+            topTrailingRadius: topCornerRadius,
+            style: .continuous
+        ).path(in: bleed)
     }
 }

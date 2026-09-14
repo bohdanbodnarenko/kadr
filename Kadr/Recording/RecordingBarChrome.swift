@@ -86,13 +86,20 @@ struct RecordingBarFilledCircleButton: View {
 /// control bar already refreshes from the sample buffers.
 struct RecordingAudioMeter: View {
     var level: Float
+    /// Tighter bars for the notch island so hover only needs a small width grow.
+    var compact: Bool = false
 
     var body: some View {
-        HStack(spacing: 2) {
+        let barWidth: CGFloat = compact ? 2 : 3
+        let spacing: CGFloat = compact ? 1 : 2
+        HStack(spacing: spacing) {
             ForEach(0 ..< 5, id: \.self) { index in
                 Capsule()
                     .fill(level > Float(index) / 5 ? Color.green : Color.primary.opacity(0.18))
-                    .frame(width: 3, height: 6 + CGFloat(index) * 2.5)
+                    .frame(
+                        width: barWidth,
+                        height: compact ? 5 + CGFloat(index) * 2 : 6 + CGFloat(index) * 2.5
+                    )
             }
         }
         .accessibilityLabel("Audio level")

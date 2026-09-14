@@ -15,36 +15,43 @@ struct RecordingNotchIsland: View {
         let layout = model.notchLayout
         let shape = layout.notchShape
         HStack(spacing: 0) {
-            wingContent(layout: layout, side: .leading)
-                .padding(.leading, RecordingNotchLayout.endInset)
-                .padding(.trailing, RecordingNotchLayout.cameraSidePad)
-                .frame(width: layout.leftWingWidth, alignment: .leading)
-
-            Color.black
-                .frame(width: layout.cameraReserveWidth)
+            Color.clear
+                .frame(width: layout.islandLeadingInset)
                 .allowsHitTesting(false)
-                .accessibilityHidden(true)
 
-            wingContent(layout: layout, side: .trailing)
-                .padding(.leading, RecordingNotchLayout.cameraSidePad)
-                .padding(.trailing, RecordingNotchLayout.endInset)
-                .frame(width: layout.rightWingWidth, alignment: .trailing)
+            HStack(spacing: 0) {
+                wingContent(layout: layout, side: .leading)
+                    .padding(.leading, RecordingNotchLayout.endInset)
+                    .padding(.trailing, RecordingNotchLayout.cameraSidePad)
+                    .frame(width: layout.leftWingWidth, alignment: .trailing)
+
+                Color.black
+                    .frame(width: layout.cameraReserveWidth)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                wingContent(layout: layout, side: .trailing)
+                    .padding(.leading, RecordingNotchLayout.cameraSidePad)
+                    .padding(.trailing, RecordingNotchLayout.endInset)
+                    .frame(width: layout.rightWingWidth, alignment: .leading)
+            }
+            .foregroundStyle(.white)
+            .frame(width: layout.islandWidth, height: layout.shellHeight)
+            .background(shape.fill(.black))
+            .clipShape(shape)
         }
-        .foregroundStyle(.white)
-        .frame(width: layout.islandWidth, height: layout.shellHeight)
-        .background(shape.fill(.black))
-        .clipShape(shape)
-        .compositingGroup()
-        .frame(width: layout.windowSize.width, height: layout.windowSize.height, alignment: .top)
+        .frame(width: layout.windowSize.width, height: layout.windowSize.height, alignment: .topLeading)
         .contentShape(Rectangle())
-        .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: layout.islandWidth)
-        .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: model.notchVisible)
+        .compositingGroup()
+        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: layout.islandWidth)
+        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: layout.islandLeadingInset)
+        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: model.notchVisible)
         .onExitCommand {
             if model.preRoll != nil {
                 model.preRoll?.cancel()
             }
         }
-        .ignoresSafeArea(.container, edges: .top)
+        .ignoresSafeArea()
         .onHover { hovering in
             collapseTask?.cancel()
             if hovering {
@@ -96,8 +103,7 @@ struct RecordingNotchIsland: View {
                     .accessibilityLabel("Recording time")
 
                 if layout.isExpanded {
-                    RecordingAudioMeter(level: model.audioLevel)
-                        .scaleEffect(0.82)
+                    RecordingAudioMeter(level: model.audioLevel, compact: true)
 
                     if model.microphoneIsSilent {
                         Label("Mic", systemImage: "mic.slash.fill")

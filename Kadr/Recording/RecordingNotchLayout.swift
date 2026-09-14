@@ -31,13 +31,22 @@ struct RecordingNotchMetrics: Equatable, Sendable {
 /// The shell is menu-bar height only. A non-interactive band covers the camera;
 /// every button lives in the left or right wing so nothing is hidden behind it.
 struct RecordingNotchLayout: Equatable, Sendable {
-    /// Inset from each rounded end so the first and last controls sit inside the ears.
-    static let endInset: CGFloat = 14
-    static let cameraSidePad: CGFloat = 4
+    /// Inset from each rounded end so the first and last controls sit inside the ears,
+    /// past the pill’s corner — not flush against the curve.
+    static let endInset: CGFloat = 20
+    /// Gap between a wing and the camera housing. Zero: the hardware reserve is
+    /// already the camera, so extra pad here was a second empty strip.
+    static let cameraSidePad: CGFloat = 0
+    /// Extra left-wing width on hover — a small island breathe, not a full grow.
+    static let hoverExpansion: CGFloat = 12
     static let controlSize: CGFloat = 22
     static let controlGap: CGFloat = 6
     /// Interactive row height — matches the menu-bar strip.
     static let contentHeight: CGFloat = 32
+    /// Clear margin past each pill ear so the window’s square clip cannot flatten it.
+    static var windowEarPad: CGFloat {
+        RecordingNotchShape.forShell(height: contentHeight).bottomCornerRadius
+    }
 
     var hardware: RecordingNotchMetrics
     var isExpanded: Bool
@@ -74,7 +83,7 @@ struct RecordingNotchLayout: Equatable, Sendable {
         // does not grow a strip of empty black on hover.
         var content = 7 + Self.controlGap + 40 + Self.controlGap + Self.controlSize
         if isExpanded {
-            content += Self.controlGap + 20
+            content += Self.hoverExpansion
         }
         return wingInsets + content
     }
@@ -91,7 +100,17 @@ struct RecordingNotchLayout: Equatable, Sendable {
         isVisible ? restIslandWidth : 0
     }
 
+    /// Leading space so the camera band stays on the hardware notch while a
+    /// wing is wider than the other (countdown is left-heavy). Always at least
+    /// `windowEarPad` so the left pill is not clipped to a square.
+    var islandLeadingInset: CGFloat {
+        max(0, (windowSize.width - cameraReserveWidth) / 2 - leftWingWidth)
+    }
+
     /// The panel stays this size so hover can animate the island without moving the window.
+    ///
+    /// Wider than the island when the wings are unequal, plus ear pads, so the
+    /// camera can sit on the display centre and the pill is not clipped square.
     var windowSize: CGSize {
         let widest = RecordingNotchLayout(
             hardware: hardware,
@@ -99,6 +118,8 @@ struct RecordingNotchLayout: Equatable, Sendable {
             hasPreRoll: hasPreRoll,
             isVisible: true
         )
-        return CGSize(width: widest.restIslandWidth, height: shellHeight)
+        let wing = max(widest.leftWingWidth, widest.rightWingWidth)
+        let pad = Self.windowEarPad * 2
+        return CGSize(width: wing * 2 + widest.cameraReserveWidth + pad, height: shellHeight)
     }
 }
