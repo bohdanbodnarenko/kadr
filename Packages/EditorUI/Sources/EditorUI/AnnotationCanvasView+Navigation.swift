@@ -43,6 +43,18 @@ extension AnnotationCanvasView {
         handleEditingKey(event)
     }
 
+    /// The canvas is first responder while drawing, so ⌘Z has to land here rather than
+    /// on the window's empty undo manager.
+    @objc func undo(_ sender: Any?) {
+        model.undo()
+        refreshAfterEdit()
+    }
+
+    @objc func redo(_ sender: Any?) {
+        model.redo()
+        refreshAfterEdit()
+    }
+
     override public func keyUp(with event: NSEvent) {
         if event.keyCode == 49 {
             spaceIsDown = false

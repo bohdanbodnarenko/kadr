@@ -1,6 +1,5 @@
 import AnnotationModel
 import CoreGraphics
-import CoreText
 import Foundation
 
 extension AnnotationExportRenderer {
@@ -41,31 +40,6 @@ extension AnnotationExportRenderer {
     }
 
     func drawCounter(_ spec: CounterSpec, in context: CGContext) {
-        let rect = CGRect(
-            x: spec.center.x - spec.radius,
-            y: spec.center.y - spec.radius,
-            width: spec.radius * 2,
-            height: spec.radius * 2
-        )
-        context.setFillColor(spec.fill.cgColor)
-        context.fillEllipse(in: rect)
-
-        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, spec.radius * 1.1, nil)
-        let attributed = NSAttributedString(string: spec.label, attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor
-        ])
-        let line = CTLineCreateWithAttributedString(attributed)
-        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
-
-        context.saveGState()
-        context.translateBy(x: 0, y: spec.center.y * 2)
-        context.scaleBy(x: 1, y: -1)
-        context.textPosition = CGPoint(
-            x: spec.center.x - bounds.width / 2 - bounds.minX,
-            y: spec.center.y - bounds.height / 2 - bounds.minY
-        )
-        CTLineDraw(line, context)
-        context.restoreGState()
+        CounterRendering.draw(spec, in: context)
     }
 }

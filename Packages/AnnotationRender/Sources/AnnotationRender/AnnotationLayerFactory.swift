@@ -118,7 +118,7 @@ public enum AnnotationLayerFactory {
             layer.frame = spec.rect
             (layer as? CATextLayer)?.string = attributedText(spec)
         case let .counter(spec):
-            layer.frame = counterFrame(spec)
+            applyCounter(spec, to: layer)
         case let .redaction(spec):
             applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
         case let .spotlight(spec):
@@ -292,32 +292,19 @@ public enum AnnotationLayerFactory {
         ])
     }
 
-    private static func counterFrame(_ spec: CounterSpec) -> CGRect {
-        CGRect(
-            x: spec.center.x - spec.radius,
-            y: spec.center.y - spec.radius,
-            width: spec.radius * 2,
-            height: spec.radius * 2
-        )
+    private static func counterLayer(_ spec: CounterSpec, contentsScale: CGFloat) -> CALayer {
+        let layer = CounterBadgeLayer()
+        layer.contentsScale = contentsScale
+        layer.apply(spec)
+        return layer
     }
 
-    private static func counterLayer(_ spec: CounterSpec, contentsScale: CGFloat) -> CALayer {
-        let container = CALayer()
-        container.frame = counterFrame(spec)
-        container.backgroundColor = spec.fill.cgColor
-        container.cornerRadius = spec.radius
-
-        let text = CATextLayer()
-        text.frame = CGRect(x: 0, y: spec.radius * 0.35, width: spec.radius * 2, height: spec.radius)
-        text.string = NSAttributedString(string: spec.label, attributes: [
-            .init(kCTFontAttributeName as String):
-                CTFontCreateWithName("Helvetica-Bold" as CFString, spec.radius * 1.1, nil),
-            .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor
-        ])
-        text.alignmentMode = .center
-        text.contentsScale = contentsScale
-        container.addSublayer(text)
-        return container
+    private static func applyCounter(_ spec: CounterSpec, to layer: CALayer) {
+        if let badge = layer as? CounterBadgeLayer {
+            badge.apply(spec)
+            return
+        }
+        layer.frame = CounterRendering.frame(spec)
     }
 
     /// Samples the capture under the box so the editor shows a real blur, not a grey

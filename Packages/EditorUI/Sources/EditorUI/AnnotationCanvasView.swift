@@ -289,7 +289,7 @@ public final class AnnotationCanvasView: NSView {
         model.pointerDragged(to: imagePoint(from: event), modifiers: modifiers(from: event))
         // The hot path: only the draft and the handles move.
         updateDraftLayer()
-        if model.tool == .select {
+        if model.tool == .select || model.isMovingSelection {
             rebuildAnnotationLayersDuringMove()
         }
         if model.tool == .crop {

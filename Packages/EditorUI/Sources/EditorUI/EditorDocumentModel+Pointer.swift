@@ -51,6 +51,9 @@ public extension EditorDocumentModel {
         }
 
         if tool.isClickToPlace {
+            if beginDragOfExistingClickToPlace(at: point) {
+                return
+            }
             place(annotationTool, at: point)
             return
         }
@@ -64,19 +67,22 @@ public extension EditorDocumentModel {
             return
         }
 
+        if resizeHandle != nil {
+            dragResize(to: point, from: origin, modifiers: modifiers)
+            return
+        }
+        if isMovingSelection {
+            dragSelection(to: point, from: origin)
+            return
+        }
+
         if tool == .select {
-            if resizeHandle != nil {
-                dragResize(to: point, from: origin, modifiers: modifiers)
-            } else if isMovingSelection {
-                dragSelection(to: point, from: origin)
-            } else {
-                marquee = CGRect(
-                    x: min(origin.x, point.x),
-                    y: min(origin.y, point.y),
-                    width: abs(origin.x - point.x),
-                    height: abs(origin.y - point.y)
-                )
-            }
+            marquee = CGRect(
+                x: min(origin.x, point.x),
+                y: min(origin.y, point.y),
+                width: abs(origin.x - point.x),
+                height: abs(origin.y - point.y)
+            )
             return
         }
 
@@ -137,6 +143,22 @@ public extension EditorDocumentModel {
         document.selection = [draft.id]
         rememberStyle(of: draft)
         finishAppliedTool(placed: draft.id)
+    }
+
+    /// A click on an already-placed badge (or sticker) drags it rather than stacking
+    /// another on the same spot — the user meant the one they can see.
+    private func beginDragOfExistingClickToPlace(at point: CGPoint) -> Bool {
+        guard let expected = tool.annotation,
+              let hit = AnnotationHitTesting.topmost(in: document.commands, at: point),
+              hit.tool == expected
+        else { return false }
+
+        document.selection = [hit.id]
+        guard !isCanvasLocked else { return true }
+        dragStartCommands = [hit.id: hit]
+        isMovingSelection = true
+        document.beginGesture()
+        return true
     }
 
     private func beginSelectionDrag(at point: CGPoint, modifiers: EditorModifiers) {

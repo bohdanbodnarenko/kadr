@@ -23,6 +23,8 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     /// the alpha the user picked rather than snapping to the default wash.
     private var fillOpacity: Double?
     private var counterNumbering: CounterNumbering?
+    private var counterSize: CounterBadgeSize?
+    private var counterFill: AnnotationColor?
 
     public init() {
         strokes = [:]
@@ -110,6 +112,17 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     public var lastCounterNumbering: CounterNumbering {
         get { counterNumbering ?? .arabic }
         set { counterNumbering = newValue }
+    }
+
+    /// Shared by every badge on the canvas. Optional on the wire so older memory decodes.
+    public var lastCounterSize: CounterBadgeSize {
+        get { counterSize ?? .default }
+        set { counterSize = newValue }
+    }
+
+    public var lastCounterFill: AnnotationColor {
+        get { counterFill ?? .annotationRed }
+        set { counterFill = newValue }
     }
 
     /// Sensible starting points per tool, so the first use of each is already usable.

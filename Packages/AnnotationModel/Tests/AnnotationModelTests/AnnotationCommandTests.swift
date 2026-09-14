@@ -94,6 +94,9 @@ struct AnnotationCommandTests {
     func luminance() {
         #expect(AnnotationColor.white.luminance > 0.9)
         #expect(AnnotationColor.black.luminance < 0.1)
+        #expect(AnnotationColor.white.contrastingInk == .black)
+        #expect(AnnotationColor.black.contrastingInk == .white)
+        #expect(AnnotationColor.annotationRed.contrastingInk == .white)
     }
 
     @Test("Negative stroke widths and font sizes are refused")
@@ -161,5 +164,24 @@ struct AnnotationCommandTests {
         }
         #expect(abs((spec.fill.color?.alpha ?? 0) - 0.8) < 0.001)
         #expect(spec.fill.color?.red == AnnotationColor.annotationRed.red)
+    }
+
+    @Test("Recolouring a counter picks contrasting ink")
+    func counterFillPicksContrastingInk() {
+        let badge = AnnotationCommand.counter(CounterSpec(center: .zero, fill: .annotationRed))
+        guard case let .counter(spec) = badge.applying(color: .white) else {
+            Issue.record("expected a counter")
+            return
+        }
+        #expect(spec.fill == .white)
+        #expect(spec.textColor == .black)
+    }
+
+    @Test("Badge size presets are ordered S–XL")
+    func counterBadgeSizeSteps() {
+        #expect(CounterBadgeSize.matching(18) == .medium)
+        #expect(CounterBadgeSize.medium.advanced(by: 1) == .large)
+        #expect(CounterBadgeSize.small.advanced(by: -1) == .small)
+        #expect(CounterBadgeSize.extraLarge.advanced(by: 1) == .extraLarge)
     }
 }

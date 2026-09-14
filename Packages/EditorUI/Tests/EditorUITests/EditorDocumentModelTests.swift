@@ -134,6 +134,83 @@ struct EditorDraftingTests {
         #expect(model.tool == .counter, "counters stay armed so 1, 2, 3… can be placed in sequence")
     }
 
+    @Test("Clicking an existing badge with the counter tool drags it, rather than stacking another")
+    func counterClickOnExistingDrags() throws {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerUp(at: CGPoint(x: 40, y: 40))
+
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerDragged(to: CGPoint(x: 120, y: 90))
+        model.pointerUp(at: CGPoint(x: 120, y: 90))
+
+        #expect(model.document.commands.count == 1)
+        guard case let .counter(spec) = try #require(model.document.commands.first) else { return }
+        #expect(spec.center == CGPoint(x: 120, y: 90))
+        #expect(spec.number == 1)
+        #expect(model.tool == .counter)
+
+        model.undo()
+        guard case let .counter(restored) = try #require(model.document.commands.first) else { return }
+        #expect(restored.center == CGPoint(x: 40, y: 40), "undo of a re-drag restores position, not deletion")
+    }
+
+    @Test("A click on an existing badge without a drag does not place another")
+    func counterClickOnExistingWithoutDragKeepsOne() {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerUp(at: CGPoint(x: 40, y: 40))
+
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerUp(at: CGPoint(x: 40, y: 40))
+
+        #expect(model.document.commands.count == 1)
+    }
+
+    @Test("Holding the click that placed a counter slides it")
+    func counterClickHoldMoves() {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerDragged(to: CGPoint(x: 90, y: 70))
+        model.pointerUp(at: CGPoint(x: 90, y: 70))
+
+        guard case let .counter(spec) = try? #require(model.document.commands.first) else { return }
+        #expect(spec.center == CGPoint(x: 90, y: 70))
+        #expect(model.document.commands.count == 1)
+    }
+
+    @Test("Undo removes a counter, including one that was slid after placing")
+    func counterUndoRemovesIt() {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 20, y: 20))
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+
+        #expect(model.canUndo)
+        model.undo()
+        #expect(model.document.commands.isEmpty, "place and the hold-drag are one undo step")
+
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 15, y: 15))
+        model.pointerUp(at: CGPoint(x: 15, y: 15))
+        model.undo()
+        #expect(model.document.commands.isEmpty)
+
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 10, y: 10))
+        model.pointerUp(at: CGPoint(x: 10, y: 10))
+        model.pointerDown(at: CGPoint(x: 50, y: 50))
+        model.pointerUp(at: CGPoint(x: 50, y: 50))
+        model.undo()
+        #expect(model.document.commands.count == 1, "undo removes only the last badge")
+        model.undo()
+        #expect(model.document.commands.isEmpty)
+    }
+
     @Test("A one-shot tool returns to Select after it lands", arguments: [
         EditorTool.arrow, .shape, .line, .redaction, .spotlight
     ])

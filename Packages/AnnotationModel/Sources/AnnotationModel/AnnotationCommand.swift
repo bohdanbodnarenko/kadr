@@ -197,7 +197,7 @@ public struct CounterSpec: Codable, Hashable, Sendable {
         id: AnnotationID = AnnotationID(),
         number: Int = 1,
         center: CGPoint,
-        radius: CGFloat = 18,
+        radius: CGFloat = CounterBadgeSize.default.radius,
         fill: AnnotationColor = .annotationRed,
         textColor: AnnotationColor = .white,
         numbering: CounterNumbering? = nil

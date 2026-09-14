@@ -55,8 +55,12 @@ extension AnnotationCanvasView {
         guard let layers else { return }
         for layer in layers {
             // A layer showing a bitmap gains nothing and would only re-interpolate it; the
-            // vector ones are the ones that resolve.
-            if layer.contents == nil {
+            // vector ones are the ones that resolve. A counter redraws its digits, so it
+            // has to take the new scale rather than stretching a stale backing store.
+            if let badge = layer as? CounterBadgeLayer {
+                badge.contentsScale = scale
+                badge.setNeedsDisplay()
+            } else if layer.contents == nil {
                 layer.contentsScale = scale
             }
             applyContentsScale(scale, to: layer.sublayers)

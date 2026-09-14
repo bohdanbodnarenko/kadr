@@ -7,6 +7,10 @@ public extension EditorDocumentModel {
     /// a colour in an editor means (docs/03 §3).
     func applyColor(_ color: AnnotationColor) {
         endInspectorStyleEdit()
+        if inspectedTool == .counter {
+            applyCounterFill(color)
+            return
+        }
         if let annotation = inspectedTool {
             var stroke = styleMemory.stroke(for: annotation)
             stroke.color = color
@@ -41,6 +45,10 @@ public extension EditorDocumentModel {
         guard steps != 0, let tool = inspectedTool else { return }
         if tool == .text {
             adjustTextSize(by: steps)
+            return
+        }
+        if tool == .counter {
+            applyCounterSize(styleMemory.lastCounterSize.advanced(by: steps))
             return
         }
         guard toolUsesStrokeWidth(tool) else { return }
@@ -173,7 +181,21 @@ public extension EditorDocumentModel {
     func applyCounterNumbering(_ numbering: CounterNumbering) {
         endInspectorStyleEdit()
         styleMemory.lastCounterNumbering = numbering
-        rewriteSelection { $0.applying(counterNumbering: numbering) }
+        rewriteCounters { $0.applying(counterNumbering: numbering) }
+    }
+
+    /// Size is shared by every badge: the inspector picker rewrites them all so a
+    /// sequence of 1, 2, 3 stays one size (docs/03 §3).
+    func applyCounterSize(_ size: CounterBadgeSize) {
+        endInspectorStyleEdit()
+        styleMemory.lastCounterSize = size
+        rewriteCounters { $0.applying(counterRadius: size.radius) }
+    }
+
+    func applyCounterFill(_ color: AnnotationColor) {
+        endInspectorStyleEdit()
+        styleMemory.lastCounterFill = color
+        rewriteCounters { $0.applying(color: color) }
     }
 
     func applySpotlightDimOpacity(_ opacity: CGFloat) {
@@ -218,6 +240,18 @@ public extension EditorDocumentModel {
         document.perform { $0.append(contentsOf: copies) }
         document.renumberCounters()
         document.selection = Set(copies.map(\.id))
+    }
+
+    /// Counters share one size and colour, so a style change rewrites every badge,
+    /// not just the selection.
+    private func rewriteCounters(_ transform: (AnnotationCommand) -> AnnotationCommand) {
+        guard document.commands.contains(where: { $0.tool == .counter }) else { return }
+        document.perform { commands in
+            for index in commands.indices {
+                guard case .counter = commands[index] else { continue }
+                commands[index] = transform(commands[index])
+            }
+        }
     }
 
     private func rewriteSelection(_ transform: (AnnotationCommand) -> AnnotationCommand) {

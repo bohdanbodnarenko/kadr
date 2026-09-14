@@ -209,7 +209,15 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     ///
     /// Everything that mutates the document funnels through here, so there is exactly one
     /// place where history is maintained and no way to forget.
+    ///
+    /// Inside an open gesture this amends the current step rather than pushing a new one,
+    /// so a click-to-place that is still held — or an inspector write that lands mid-drag —
+    /// does not hide the real edit behind a decoy undo.
     public mutating func perform(_ change: (inout [AnnotationCommand]) -> Void) {
+        if gestureBaseline != nil {
+            updateGesture(change)
+            return
+        }
         var updated = commands
         change(&updated)
         guard updated != commands else { return }

@@ -114,6 +114,30 @@ struct AnnotationLayerFactoryTests {
         #expect(AnnotationLayerFactory.strokePath([]).isEmpty)
     }
 
+    @Test("Resizing a counter updates the badge layer, not only its frame")
+    func counterUpdateRedraws() throws {
+        var spec = CounterSpec(number: 8, center: CGPoint(x: 40, y: 40), radius: 18)
+        let layer = try #require(
+            AnnotationLayerFactory.makeLayer(for: .counter(spec), contentsScale: 2) as? CounterBadgeLayer
+        )
+        #expect(layer.frame == CGRect(x: 22, y: 22, width: 36, height: 36))
+
+        spec.radius = 40
+        AnnotationLayerFactory.update(layer, for: .counter(spec))
+        #expect(layer.frame == CGRect(x: 0, y: 0, width: 80, height: 80))
+        #expect(layer.bounds.size == CGSize(width: 80, height: 80))
+    }
+
+    @Test("More digits get a smaller face so they stay inside the disc")
+    func counterFontFitsTheDisc() {
+        let one = CounterSpec(number: 8, center: .zero, radius: 18)
+        let ten = CounterSpec(number: 10, center: .zero, radius: 18)
+        let hundred = CounterSpec(number: 100, center: .zero, radius: 18)
+        #expect(CounterRendering.fontSize(for: one) < one.radius * 2)
+        #expect(CounterRendering.fontSize(for: ten) == CounterRendering.fontSize(for: one))
+        #expect(CounterRendering.fontSize(for: hundred) < CounterRendering.fontSize(for: one))
+    }
+
     @Test("A live blur preview destroys the detail under the box")
     func previewBlurs() throws {
         let image = stripedImage()

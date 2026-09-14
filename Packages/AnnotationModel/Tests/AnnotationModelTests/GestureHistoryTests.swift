@@ -131,6 +131,19 @@ struct GestureHistoryTests {
         #expect(origin(of: document) == .zero)
     }
 
+    @Test("perform during a gesture amends it rather than hiding it behind another step")
+    func performDuringGestureIsOneStep() {
+        var document = makeDocument()
+        document.beginGesture()
+        document.perform { $0.append(.counter(CounterSpec(center: CGPoint(x: 8, y: 8)))) }
+        document.endGesture()
+
+        #expect(document.commands.count == 2)
+        document.undo()
+        #expect(document.commands.count == 1)
+        #expect(!document.canUndo)
+    }
+
     @Test("A gesture discards a pending redo, like any other edit")
     func gestureDiscardsRedo() {
         var document = makeDocument()

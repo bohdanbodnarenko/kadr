@@ -67,6 +67,28 @@ struct SelectionResizerTests {
         #expect(hit == .box(.bottomTrailing))
     }
 
+    @Test("Counters have no resize handles; size comes from the inspector")
+    func counterIsMoveOnly() {
+        let badge = AnnotationCommand.counter(CounterSpec(center: CGPoint(x: 50, y: 50), radius: 20))
+        #expect(SelectionResizer.isMoveOnly([badge]))
+        #expect(SelectionResizer.anchors(for: [badge]).isEmpty)
+        let pair = [
+            badge,
+            AnnotationCommand.counter(CounterSpec(center: CGPoint(x: 120, y: 50), radius: 20))
+        ]
+        #expect(SelectionResizer.isMoveOnly(pair))
+        #expect(SelectionResizer.anchors(for: pair).isEmpty)
+    }
+
+    @Test("Clicking a counter is a move, including on the old corner of its bounds")
+    func counterInteriorIsNotAHandle() {
+        let badge = AnnotationCommand.counter(CounterSpec(center: CGPoint(x: 50, y: 50), radius: 20))
+        #expect(SelectionResizer.handle(at: CGPoint(x: 50, y: 50), in: [badge], tolerance: 12) == nil)
+        #expect(SelectionResizer.handle(at: CGPoint(x: 50, y: 70), in: [badge], tolerance: 12) == nil)
+        let box = SelectionResizer.unionBounds(of: [badge])
+        #expect(SelectionResizer.handle(at: CGPoint(x: box.maxX, y: box.maxY), in: [badge], tolerance: 10) == nil)
+    }
+
     // MARK: - Box scale
 
     @Test("Dragging the far corner grows the shape; the origin stays put")
@@ -87,8 +109,8 @@ struct SelectionResizerTests {
         #expect(abs(spec.rect.height - 60) < 0.5)
     }
 
-    @Test("A counter stays circular when the box is stretched")
-    func counterStaysACircle() {
+    @Test("A group scale moves a counter without changing its radius")
+    func counterKeepsItsRadiusWhenTheGroupScales() {
         let badge = AnnotationCommand.counter(CounterSpec(
             center: CGPoint(x: 50, y: 50),
             radius: 20
@@ -101,8 +123,8 @@ struct SelectionResizerTests {
             Issue.record("expected a counter")
             return
         }
-        #expect(spec.radius > 20)
-        #expect(spec.radius < 40, "a one-axis stretch must not double a circle")
+        #expect(abs(spec.radius - 20) < 0.01)
+        #expect(spec.center != CGPoint(x: 50, y: 50))
     }
 
     @Test("A side handle on text changes wrap width, not type size")

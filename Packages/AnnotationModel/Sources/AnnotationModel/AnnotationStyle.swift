@@ -54,6 +54,11 @@ public struct AnnotationColor: Codable, Hashable, Sendable {
     public var luminance: Double {
         0.299 * red + 0.587 * green + 0.114 * blue
     }
+
+    /// Ink that stays readable on this fill: dark on yellow/white, light on red/blue.
+    public var contrastingInk: AnnotationColor {
+        luminance > 0.6 ? .black : .white
+    }
 }
 
 /// How an annotation's outline is drawn.
@@ -332,6 +337,56 @@ public struct TextStyle: Codable, Hashable, Sendable {
             backgroundColor: AnnotationColor(red: 0.94, green: 0.94, blue: 0.94)
         ))
     ]
+}
+
+/// Discrete badge sizes. Counters are not free-resized; every badge shares one size
+/// from the inspector (docs/03 §3).
+public enum CounterBadgeSize: String, Codable, Hashable, Sendable, CaseIterable {
+    case small
+    case medium
+    case large
+    case extraLarge
+
+    /// The default landing size, matching `CounterSpec`'s historical radius of 18.
+    public static let `default` = CounterBadgeSize.medium
+
+    public var title: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        case .extraLarge: "Extra Large"
+        }
+    }
+
+    public var shortTitle: String {
+        switch self {
+        case .small: "S"
+        case .medium: "M"
+        case .large: "L"
+        case .extraLarge: "XL"
+        }
+    }
+
+    public var radius: CGFloat {
+        switch self {
+        case .small: 12
+        case .medium: 18
+        case .large: 26
+        case .extraLarge: 36
+        }
+    }
+
+    /// Nearest preset, so a document saved before sizes were discrete still maps.
+    public static func matching(_ radius: CGFloat) -> CounterBadgeSize {
+        allCases.min { abs($0.radius - radius) < abs($1.radius - radius) } ?? .default
+    }
+
+    public func advanced(by steps: Int) -> CounterBadgeSize {
+        let all = Array(Self.allCases)
+        guard let index = all.firstIndex(of: self) else { return self }
+        return all[min(max(index + steps, 0), all.count - 1)]
+    }
 }
 
 /// How a counter badge writes its number (docs/03 §3).

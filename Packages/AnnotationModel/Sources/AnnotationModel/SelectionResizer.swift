@@ -78,11 +78,20 @@ public enum SelectionResizer {
         }
     }
 
+    /// Counters are sized from the inspector, not by dragging corners. A selection of
+    /// only badges has no resize handles — click-drag moves them.
+    public static func isMoveOnly(_ commands: [AnnotationCommand]) -> Bool {
+        !commands.isEmpty && commands.allSatisfy { $0.tool == .counter }
+    }
+
     /// Handle locations in image space, in hit-test order (corners before edges).
     public static func anchors(for commands: [AnnotationCommand]) -> [(SelectionHandle, CGPoint)] {
         guard !commands.isEmpty else { return [] }
         if usesPathHandles(commands), let command = commands.first {
             return pathAnchors(of: command)
+        }
+        if isMoveOnly(commands) {
+            return []
         }
         // On the geometry, not the padded outline: a click on a shape's visible corner
         // has to grab a handle, not start a move (Screendrop's `selectionBounds.box`).
@@ -94,12 +103,24 @@ public enum SelectionResizer {
     }
 
     /// The handle under `point`, if the pointer is close enough.
+    ///
+    /// The face of a counter is always a move: size comes from the inspector, so a
+    /// click on the number must drag it, not start a resize.
     public static func handle(
         at point: CGPoint,
         in commands: [AnnotationCommand],
         tolerance: CGFloat
     ) -> SelectionHandle? {
-        anchors(for: commands).first { hypot(point.x - $0.1.x, point.y - $0.1.y) <= tolerance }?.0
+        if isCounterInterior(point, in: commands) {
+            return nil
+        }
+        return anchors(for: commands).first { hypot(point.x - $0.1.x, point.y - $0.1.y) <= tolerance }?.0
+    }
+
+    /// Whether `point` is on the disc of a lone selected counter.
+    public static func isCounterInterior(_ point: CGPoint, in commands: [AnnotationCommand]) -> Bool {
+        guard commands.count == 1, case let .counter(spec) = commands.first else { return false }
+        return hypot(point.x - spec.center.x, point.y - spec.center.y) <= spec.radius
     }
 
     /// Scales every selected annotation from `old` bounds onto `new`.
@@ -248,9 +269,6 @@ public enum SelectionResizer {
             return .measure(spec)
         case var .counter(spec):
             spec.center = move(spec.center)
-            let scaleX = old.width > 0 ? abs(new.width / old.width) : 1
-            let scaleY = old.height > 0 ? abs(new.height / old.height) : 1
-            spec.radius = max(4, spec.radius * (scaleX + scaleY) / 2)
             return .counter(spec)
         default:
             return nil

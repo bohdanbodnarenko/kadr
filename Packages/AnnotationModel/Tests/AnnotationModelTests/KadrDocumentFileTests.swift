@@ -187,6 +187,8 @@ struct StyleMemoryTests {
         #expect(memory.stroke(for: .highlighter).width == 20)
         #expect(memory.stroke(for: .freehand).width == 3)
         #expect(memory.fill(for: .shape).color == nil)
+        #expect(memory.lastCounterSize == .medium)
+        #expect(memory.lastCounterFill == .annotationRed)
     }
 
     @Test("A style set on one tool does not leak into another")
@@ -206,6 +208,8 @@ struct StyleMemoryTests {
         memory.lastArrowHead = .concave
         memory.lastTextStyle = TextStyle(fontSize: 32)
         memory.lastRedactionStyle = .defaultPixelate
+        memory.lastCounterSize = .large
+        memory.lastCounterFill = .black
 
         let data = try JSONEncoder().encode(memory)
         let restored = try JSONDecoder().decode(StyleMemory.self, from: data)
@@ -213,6 +217,8 @@ struct StyleMemoryTests {
         #expect(restored == memory)
         #expect(restored.stroke(for: .shape).width == 8)
         #expect(restored.lastArrowHead == .concave)
+        #expect(restored.lastCounterSize == .large)
+        #expect(restored.lastCounterFill == .black)
     }
 
     @Test("Turning fill off keeps the last opacity for the next fill")

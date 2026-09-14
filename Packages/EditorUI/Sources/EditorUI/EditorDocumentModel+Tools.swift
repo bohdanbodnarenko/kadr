@@ -42,21 +42,43 @@ public extension EditorDocumentModel {
     }
 
     /// Counters are placed with a click, and auto-increment (docs/03 §3).
+    ///
+    /// The gesture stays open so holding the click slides the new badge, and releasing
+    /// records place+move as one undo step — ⌘Z removes it, rather than parking it where
+    /// the pointer went down.
     internal func place(_ annotationTool: AnnotationTool, at point: CGPoint) {
+        document.beginGesture()
         switch annotationTool {
         case .counter:
+            let fill = styleMemory.lastCounterFill
             let command = AnnotationCommand.counter(CounterSpec(
                 number: document.nextCounterNumber,
                 center: point,
+                radius: styleMemory.lastCounterSize.radius,
+                fill: fill,
+                textColor: fill.contrastingInk,
                 numbering: styleMemory.lastCounterNumbering
             ))
             document.add(command)
             document.selection = [command.id]
+            rememberStyle(of: command)
+            beginDragOfPlaced(command)
         case .image:
             placeSticker(at: point)
+            if let id = document.selection.first, let command = document.command(id) {
+                beginDragOfPlaced(command)
+            }
         default:
             break
         }
+    }
+
+    /// Holding the click that placed an annotation slides it, the way a sticker does on
+    /// a board: put it down, then nudge before you let go.
+    private func beginDragOfPlaced(_ command: AnnotationCommand) {
+        guard !isCanvasLocked else { return }
+        dragStartCommands = [command.id: command]
+        isMovingSelection = true
     }
 
     func placeSticker(at point: CGPoint) {

@@ -49,6 +49,8 @@ extension EditorDocumentModel {
             styleMemory.lastMeasuresBox = spec.measuresBox
         case let .counter(spec):
             styleMemory.lastCounterNumbering = spec.numberingStyle
+            styleMemory.lastCounterSize = CounterBadgeSize.matching(spec.radius)
+            styleMemory.lastCounterFill = spec.fill
         case .crop, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
             break
         }

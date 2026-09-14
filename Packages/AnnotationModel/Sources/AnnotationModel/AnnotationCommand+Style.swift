@@ -35,6 +35,7 @@ public extension AnnotationCommand {
             return .measure(spec)
         case var .counter(spec):
             spec.fill = color
+            spec.textColor = color.contrastingInk
             return .counter(spec)
         default:
             return self
@@ -93,6 +94,12 @@ public extension AnnotationCommand {
     func applying(counterNumbering: CounterNumbering) -> AnnotationCommand {
         guard case var .counter(spec) = self else { return self }
         spec.numbering = counterNumbering
+        return .counter(spec)
+    }
+
+    func applying(counterRadius: CGFloat) -> AnnotationCommand {
+        guard case var .counter(spec) = self else { return self }
+        spec.radius = max(counterRadius, 1)
         return .counter(spec)
     }
 

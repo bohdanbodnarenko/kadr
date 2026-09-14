@@ -48,7 +48,7 @@ struct EditorInspector: View {
                     case .redaction: redactionOptions
                     case .spotlight: spotlightOptions
                     case .measure: measureOptions
-                    case .counter: counterOptions
+                    case .counter: EditorCounterInspector(model: model)
                     default: EmptyView()
                     }
                 }
@@ -275,24 +275,6 @@ struct EditorInspector: View {
                 format: .percent
             )
         }
-    }
-
-    private var counterOptions: some View {
-        Picker("Numbering", selection: Binding(
-            get: { inspectedCounterNumbering },
-            set: { model.applyCounterNumbering($0) }
-        )) {
-            ForEach(CounterNumbering.allCases, id: \.self) { numbering in
-                Text(numbering.title).tag(numbering)
-            }
-        }
-    }
-
-    private var inspectedCounterNumbering: CounterNumbering {
-        if let id = model.selection.first, case let .counter(spec)? = model.document.command(id) {
-            return spec.numberingStyle
-        }
-        return model.styleMemory.lastCounterNumbering
     }
 
     private var inspectedRedactionStyle: RedactionStyle {

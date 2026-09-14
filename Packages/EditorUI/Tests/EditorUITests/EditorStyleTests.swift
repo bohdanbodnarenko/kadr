@@ -239,4 +239,56 @@ struct EditorStyleTests {
         model.tool = .arrow
         #expect(model.inspectedTool == .arrow)
     }
+
+    @Test("Counter size and colour rewrite every badge, not just the selection")
+    func counterStyleUpdatesAllBadges() {
+        let model = makeModel()
+        model.tool = .counter
+        model.pointerDown(at: CGPoint(x: 20, y: 20))
+        model.pointerUp(at: CGPoint(x: 20, y: 20))
+        model.pointerDown(at: CGPoint(x: 80, y: 80))
+        model.pointerUp(at: CGPoint(x: 80, y: 80))
+
+        model.applyCounterSize(.large)
+        model.applyCounterFill(.black)
+
+        let badges = model.document.commands.compactMap { command -> CounterSpec? in
+            if case let .counter(spec) = command {
+                spec
+            } else {
+                nil
+            }
+        }
+        #expect(badges.count == 2)
+        #expect(badges.allSatisfy { abs($0.radius - CounterBadgeSize.large.radius) < 0.01 })
+        #expect(badges.allSatisfy { $0.fill == .black })
+        #expect(badges.allSatisfy { $0.textColor == .white })
+        #expect(model.styleMemory.lastCounterSize == .large)
+        #expect(model.styleMemory.lastCounterFill == .black)
+    }
+
+    @Test("The next counter lands at the remembered size and colour")
+    func counterPlaceUsesRememberedStyle() throws {
+        let model = makeModel()
+        model.tool = .counter
+        model.applyCounterSize(.small)
+        model.applyCounterFill(.white)
+        model.pointerDown(at: CGPoint(x: 40, y: 40))
+        model.pointerUp(at: CGPoint(x: 40, y: 40))
+
+        guard case let .counter(spec) = try #require(model.document.commands.first) else { return }
+        #expect(abs(spec.radius - CounterBadgeSize.small.radius) < 0.01)
+        #expect(spec.fill == .white)
+        #expect(spec.textColor == .black)
+    }
+
+    @Test("Size shortcuts step the counter through S–XL")
+    func counterSizeShortcuts() {
+        let model = makeModel()
+        model.tool = .counter
+        model.adjustToolSize(by: 1)
+        #expect(model.styleMemory.lastCounterSize == .large)
+        model.adjustToolSize(by: -2)
+        #expect(model.styleMemory.lastCounterSize == .small)
+    }
 }

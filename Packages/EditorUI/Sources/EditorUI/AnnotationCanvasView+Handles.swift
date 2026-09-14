@@ -3,6 +3,7 @@ import AppKit
 import QuartzCore
 
 /// Selection chrome: a dashed frame, eight box anchors, or path terminals for arrows.
+/// Counters keep the frame but no anchors — they are sized from the inspector.
 extension AnnotationCanvasView {
     /// Screen-constant size, derived from the window transform so it stays honest when
     /// the scroll view's `magnification` is stale or missing (Screendrop's `pageToScreen`).
@@ -57,22 +58,31 @@ extension AnnotationCanvasView {
             return
         }
         guard model.tool == .select else { return }
+        let selected = model.selectedCommands
         let hit = SelectionResizer.hitRadius / handleViewScale
-        for (handle, point) in SelectionResizer.anchors(for: model.selectedCommands) {
+        for (handle, point) in SelectionResizer.anchors(for: selected) {
             let canvas = viewPoint(fromImage: point)
             addCursorRect(
                 CGRect(x: canvas.x - hit, y: canvas.y - hit, width: hit * 2, height: hit * 2),
                 cursor: cursor(for: handle)
             )
         }
+        // Last wins when rects overlap: the disc itself is a move, not a resize.
+        if let disc = counterDiscCursorRect(for: selected) {
+            addCursorRect(disc, cursor: canvasCursor)
+        }
     }
 
     /// Which handle is under the event, tested in window space so the target stays ~12pt
     /// at every zoom — the same contract as Screendrop's `handle(at: screenPoint)`.
     func screenSpaceHandle(at event: NSEvent) -> SelectionHandle? {
+        let selected = model.selectedCommands
         let click = event.locationInWindow
+        if isScreenSpaceCounterInterior(click, in: selected) {
+            return nil
+        }
         let radius = SelectionResizer.hitRadius
-        for (handle, imagePoint) in SelectionResizer.anchors(for: model.selectedCommands) {
+        for (handle, imagePoint) in SelectionResizer.anchors(for: selected) {
             let canvas = viewPoint(fromImage: imagePoint)
             let window = convert(canvas, to: nil)
             if hypot(click.x - window.x, click.y - window.y) <= radius {
@@ -80,6 +90,30 @@ extension AnnotationCanvasView {
             }
         }
         return nil
+    }
+
+    private func isScreenSpaceCounterInterior(_ click: CGPoint, in commands: [AnnotationCommand]) -> Bool {
+        guard commands.count == 1, case let .counter(spec) = commands.first else { return false }
+        let center = convert(viewPoint(fromImage: spec.center), to: nil)
+        let edge = convert(
+            viewPoint(fromImage: CGPoint(x: spec.center.x + spec.radius, y: spec.center.y)),
+            to: nil
+        )
+        let radius = hypot(edge.x - center.x, edge.y - center.y)
+        return hypot(click.x - center.x, click.y - center.y) <= radius
+    }
+
+    private func counterDiscCursorRect(for commands: [AnnotationCommand]) -> CGRect? {
+        guard commands.count == 1, case let .counter(spec) = commands.first else { return nil }
+        let center = viewPoint(fromImage: spec.center)
+        let edge = viewPoint(fromImage: CGPoint(x: spec.center.x + spec.radius, y: spec.center.y))
+        let radius = hypot(edge.x - center.x, edge.y - center.y)
+        return CGRect(
+            x: center.x - radius,
+            y: center.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
     }
 
     private func addBoxHandles(for commands: [AnnotationCommand]) {
