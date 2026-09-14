@@ -40,6 +40,9 @@ struct EditorCanvasHost: NSViewRepresentable {
             session?.noteLiveMagnification(value)
         }
         context.coordinator.startObserving(scrollView)
+        scrollView.onLiveResizeEnded = { [weak coordinator = context.coordinator] in
+            coordinator?.apply()
+        }
         return scrollView
     }
 
@@ -58,6 +61,7 @@ struct EditorCanvasHost: NSViewRepresentable {
         coordinator.tearDown()
         nsView.onMagnificationChanged = nil
         nsView.onZoomed = nil
+        nsView.onLiveResizeEnded = nil
     }
 
     func makeCoordinator() -> Coordinator {
@@ -81,21 +85,25 @@ struct EditorCanvasHost: NSViewRepresentable {
         private var magnifyEndObserver: NSObjectProtocol?
 
         func startObserving(_ scrollView: EditorCanvasScrollView) {
+            // Delivered on the posting thread (`nil` queue), which for a frame change is
+            // the layout pass. Hopping to a later main-queue turn left one frame of the
+            // default clip origin (top-left) on screen — the jump while the inspector
+            // divider is dragged.
             frameObserver = NotificationCenter.default.addObserver(
                 forName: NSView.frameDidChangeNotification,
                 object: scrollView,
-                queue: .main
+                queue: nil
             ) { [weak self] _ in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     self?.apply()
                 }
             }
             magnifyEndObserver = NotificationCenter.default.addObserver(
                 forName: NSScrollView.didEndLiveMagnifyNotification,
                 object: scrollView,
-                queue: .main
+                queue: nil
             ) { [weak self] _ in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     self?.scrollView?.isUserMagnifying = false
                     self?.apply()
                 }
@@ -145,7 +153,13 @@ struct EditorCanvasHost: NSViewRepresentable {
                 )
                 if lastFitKey != key {
                     lastFitKey = key
-                    session.noteFittedMagnification(target)
+                    // After layout, not during it: writing @Observable magnification
+                    // from a frame-change observer retriggers SwiftUI while the
+                    // inspector divider is still being dragged.
+                    let fitted = target
+                    Task { @MainActor in
+                        self.session?.noteFittedMagnification(fitted)
+                    }
                 }
             } else {
                 lastFitKey = nil
@@ -183,15 +197,19 @@ struct EditorCanvasHost: NSViewRepresentable {
             // Rasterise the vector chrome for the density it is now being seen at.
             canvas.updateContentsScale(forMagnification: scrollView.magnification)
 
-            let overflowing = EditorCanvasLayout.canPan(
-                canvas: canvasSize,
-                viewport: viewport,
-                magnification: scrollView.magnification
-            )
-            scrollView.hasVerticalScroller = overflowing
-            scrollView.hasHorizontalScroller = overflowing
-            scrollView.verticalScrollElasticity = overflowing ? .automatic : .none
-            scrollView.horizontalScrollElasticity = overflowing ? .automatic : .none
+            // Toggling scrollers mid-drag resizes the content view and fights the
+            // divider. Overlay scrollers can wait until the live resize ends.
+            if !scrollView.inLiveResize {
+                let overflowing = EditorCanvasLayout.canPan(
+                    canvas: canvasSize,
+                    viewport: viewport,
+                    magnification: scrollView.magnification
+                )
+                scrollView.hasVerticalScroller = overflowing
+                scrollView.hasHorizontalScroller = overflowing
+                scrollView.verticalScrollElasticity = overflowing ? .automatic : .none
+                scrollView.horizontalScrollElasticity = overflowing ? .automatic : .none
+            }
         }
 
         private struct FitKey: Equatable {
@@ -213,19 +231,28 @@ final class CenteringClipView: NSClipView {
         false
     }
 
+    /// Live resize (window or inspector divider) goes through here, not `scroll(to:)`.
+    /// Without this the clip origin snaps to zero on every tick and the capture jumps
+    /// to the top-left until `apply()` recentres it.
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrained = super.constrainBoundsRect(proposedBounds)
+        constrained.origin = clampedOrigin(constrained.origin, clip: constrained.size)
+        return constrained
+    }
+
     override func scroll(to newOrigin: NSPoint) {
-        super.scroll(to: clampedOrigin(newOrigin))
+        super.scroll(to: clampedOrigin(newOrigin, clip: bounds.size))
     }
 
     func recenterDocument() {
         scroll(to: bounds.origin)
     }
 
-    private func clampedOrigin(_ proposed: NSPoint) -> NSPoint {
+    private func clampedOrigin(_ proposed: NSPoint, clip: NSSize) -> NSPoint {
         guard let documentView else { return proposed }
         return EditorCanvasLayout.clipOrigin(
             document: documentView.frame.size,
-            clip: bounds.size,
+            clip: clip,
             proposed: proposed
         )
     }
@@ -237,9 +264,15 @@ final class EditorCanvasScrollView: NSScrollView {
     /// Reports a magnification this view performed itself, so the session can follow.
     var onZoomed: ((CGFloat) -> Void)?
     var isUserMagnifying = false
+    var onLiveResizeEnded: (() -> Void)?
 
     override var isOpaque: Bool {
         false
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        onLiveResizeEnded?()
     }
 
     /// The middle of the visible region, in the coordinates `setMagnification` wants.

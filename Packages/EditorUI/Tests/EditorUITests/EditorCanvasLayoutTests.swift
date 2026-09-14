@@ -100,6 +100,23 @@ struct EditorCanvasLayoutTests {
         #expect(origin == CGPoint(x: -100, y: -100))
     }
 
+    @Test("A live clip shrink recenters even when AppKit proposes the origin")
+    func liveClipShrinkStaysCentered() {
+        let document = CGSize(width: 800, height: 600)
+        let wide = EditorCanvasLayout.clipOrigin(
+            document: document,
+            clip: CGSize(width: 1000, height: 800),
+            proposed: .zero
+        )
+        let narrowed = EditorCanvasLayout.clipOrigin(
+            document: document,
+            clip: CGSize(width: 900, height: 800),
+            proposed: .zero
+        )
+        #expect(wide == CGPoint(x: -100, y: -100))
+        #expect(narrowed == CGPoint(x: -50, y: -100))
+    }
+
     @Test("A capture larger than the clip keeps a clamped proposed origin")
     func largeDocumentClamps() {
         let origin = EditorCanvasLayout.clipOrigin(
@@ -180,6 +197,15 @@ struct EditorCanvasLayoutTests {
     func fitStillAssigns() throws {
         let source = try String(contentsOf: hostSourceURL(), encoding: .utf8)
         #expect(source.contains("scrollView.magnification = target"))
+    }
+
+    /// Inspector-divider (and window) resize constrains the clip bounds directly. Waiting
+    /// for `apply()` to call `scroll(to:)` left a frame of origin-zero on screen.
+    @Test("The clip view constrains its origin on resize, not only on scroll")
+    func clipViewConstrainsBoundsOnResize() throws {
+        let source = try String(contentsOf: hostSourceURL(), encoding: .utf8)
+        #expect(source.contains("override func constrainBoundsRect"))
+        #expect(source.contains("queue: nil"), "a main-queue observer is one turn too late")
     }
 
     private func hostSourceURL() -> URL {
