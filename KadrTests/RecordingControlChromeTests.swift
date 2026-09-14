@@ -49,7 +49,6 @@ struct RecordingControlChromePlacementTests {
         #expect(compact.stripHeight == 32)
         #expect(compact.shellHeight == 32)
         #expect(compact.cameraReserveWidth == 180)
-        #expect(compact.windowSize == CGSize(width: compact.islandWidth, height: 32))
         #expect(compact.leftWingWidth < 120)
         #expect(compact.islandWidth == compact.leftWingWidth + 180 + compact.rightWingWidth)
         #expect(compact.islandWidth < 380)
@@ -59,6 +58,8 @@ struct RecordingControlChromePlacementTests {
             isExpanded: true,
             hasPreRoll: false
         )
+        #expect(expanded.windowSize == compact.windowSize)
+        #expect(compact.windowSize.width == expanded.islandWidth)
         #expect(expanded.windowSize.height == compact.windowSize.height)
         #expect(expanded.islandWidth > compact.islandWidth)
         #expect(expanded.islandWidth - compact.islandWidth < 50)

@@ -100,7 +100,11 @@ final class RecordingControlBar {
         model.session = true
         applyChrome(settings: settings)
         syncWindowChrome()
-        resizeToFittingSize()
+        // Notch: the panel stays at expanded size; resizing on the timer (or hover)
+        // leaves a delayed ghost of the island. Floating chrome still morphs width.
+        if !model.docksToNotch {
+            resizeToFittingSize()
+        }
     }
 
     /// What the bar offers while the countdown is running.
@@ -144,9 +148,6 @@ final class RecordingControlBar {
     }
 
     private func present(key: Bool) {
-        model.onNotchLayoutChange = { [weak self] in
-            self?.resizeToFittingSize()
-        }
         if let panel {
             panel.becomesKeyOnlyIfNeeded = !key
             if key {
@@ -192,6 +193,7 @@ final class RecordingControlBar {
         hosting.wantsLayer = true
         hosting.layer?.isOpaque = false
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.layer?.masksToBounds = model.docksToNotch
     }
 
     private func teardownPanel() {
@@ -211,7 +213,6 @@ final class RecordingControlBar {
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
-        model.onNotchLayoutChange = nil
     }
 
     private func revealNotchIfNeeded() {
@@ -256,6 +257,8 @@ final class RecordingControlBar {
         guard let panel, let hosting else { return }
         if model.docksToNotch {
             let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+            // Re-setting the frame while the island is springing leaves a delayed ghost.
+            guard !panel.frame.equalTo(frame) else { return }
             panel.setFrame(frame, display: false)
             hosting.frame = NSRect(origin: .zero, size: frame.size)
             return
@@ -328,8 +331,6 @@ final class RecordingControlBarModel {
     var notchVisible = false
     var notchExpanded = false
     var notchMetrics = RecordingNotchMetrics.fallback
-    /// The AppKit panel resizes when the island grows or shrinks (hover, pre-roll).
-    @ObservationIgnored var onNotchLayoutChange: (() -> Void)?
 
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(

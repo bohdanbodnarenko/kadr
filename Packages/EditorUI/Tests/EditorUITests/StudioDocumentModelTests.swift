@@ -105,6 +105,15 @@ struct StudioDocumentModelTests {
         #expect(studio.edit.showsCursor == !baked)
     }
 
+    @Test("A default look still draws the pointer when the recording hid it")
+    func defaultLookRestoresAnUnbakedCursor() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, hasBakedCursor: false)
+        studio.applyDefaultPresetIfFresh()
+        #expect(studio.edit.showsCursor)
+    }
+
     @Test("Reopening finds the draft rather than starting over")
     func reopensTheDraft() throws {
         let folder = scratch()

@@ -45,7 +45,7 @@ public extension StudioDocumentModel {
         guard document.edit(StudioEdit.self) == nil else { return }
         guard !canUndo else { return }
         let preset = presetStore.defaultPreset() ?? StudioPreset.presenter
-        var next = preset.applied(to: edit)
+        var next = resolvingBakedCursor(preset.applied(to: edit))
         let planned = ZoomCuePlanner().cues(
             for: telemetry.clicks,
             in: manifest.pixelSize,
@@ -61,8 +61,13 @@ public extension StudioDocumentModel {
     }
 
     var isAppliedPresetEdited: Bool {
-        guard let applied = allPresets.first(where: { $0.id == appliedPresetID }) else {
+        guard var applied = allPresets.first(where: { $0.id == appliedPresetID }) else {
             return false
+        }
+        // A baked pointer cannot follow the look's reconstructed-cursor flag, and that
+        // refusal is not a user edit of the preset.
+        if manifest.hasBakedCursor {
+            applied.showsCursor = false
         }
         return !applied.matches(edit)
     }

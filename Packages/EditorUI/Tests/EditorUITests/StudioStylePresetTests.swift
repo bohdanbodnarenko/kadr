@@ -98,7 +98,21 @@ struct StudioStylePresetTests {
         studio.applyDefaultPresetIfFresh()
         #expect(studio.edit.canvas == .presenter)
         #expect(studio.appliedPresetName == "Presenter")
+        #expect(!studio.edit.showsCursor, "Presenter must not redraw a pointer already in the footage")
+        #expect(!studio.isAppliedPresetEdited)
         #expect(!studio.canUndo)
+    }
+
+    @Test("A default look does not stack a reconstructed pointer on baked footage")
+    func defaultLookKeepsABakedCursorAlone() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, store: throwawayStore())
+        #expect(!studio.edit.showsCursor)
+        studio.applyDefaultPresetIfFresh()
+        #expect(!studio.edit.showsCursor)
+        studio.applyPreset(StudioPreset.presenter)
+        #expect(!studio.edit.showsCursor)
     }
 
     @Test("A fresh recording with click clusters opens with smart zooms")

@@ -34,8 +34,9 @@ struct RecordingNotchIsland: View {
         .frame(width: layout.islandWidth, height: layout.shellHeight)
         .background(shape.fill(.black))
         .clipShape(shape)
-        .contentShape(shape)
-        .frame(maxWidth: layout.windowSize.width, maxHeight: layout.windowSize.height, alignment: .top)
+        .compositingGroup()
+        .frame(width: layout.windowSize.width, height: layout.windowSize.height, alignment: .top)
+        .contentShape(Rectangle())
         .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: layout.islandWidth)
         .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: model.notchVisible)
         .onExitCommand {
@@ -67,9 +68,6 @@ struct RecordingNotchIsland: View {
             Button("Keep Recording", role: .cancel) {}
         } message: {
             Text("What you have recorded so far will be deleted.")
-        }
-        .onChange(of: layout.windowSize) { _, _ in
-            model.onNotchLayoutChange?()
         }
     }
 

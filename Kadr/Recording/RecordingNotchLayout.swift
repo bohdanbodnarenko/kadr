@@ -91,7 +91,14 @@ struct RecordingNotchLayout: Equatable, Sendable {
         isVisible ? restIslandWidth : 0
     }
 
+    /// The panel stays this size so hover can animate the island without moving the window.
     var windowSize: CGSize {
-        CGSize(width: restIslandWidth, height: shellHeight)
+        let widest = RecordingNotchLayout(
+            hardware: hardware,
+            isExpanded: true,
+            hasPreRoll: hasPreRoll,
+            isVisible: true
+        )
+        return CGSize(width: widest.restIslandWidth, height: shellHeight)
     }
 }
