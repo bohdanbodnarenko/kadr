@@ -76,13 +76,7 @@ struct StudioPreviewView: View {
         // Two triggers, because they cost different amounts. A scrub reuses the pipeline
         // and costs one decode; an edit rebuilds it. Watching the whole model instead would
         // redraw on the selection changing, which costs a decode and changes nothing.
-        // Hover-skim is a third: it must not move the playhead, but it must show the frame
-        // under the pointer. Quantised so a fast sweep does not decode every pixel.
-        .task(id: model.playhead) {
-            guard model.skimTime == nil else { return }
-            await refresh()
-        }
-        .task(id: skimKey) { await refresh() }
+        .task(id: model.playhead) { await refresh() }
         .task(id: model.edit) { await refresh() }
         .task(id: model.isCropping) { await refresh() }
     }
@@ -100,14 +94,7 @@ struct StudioPreviewView: View {
     }
 
     private var previewTime: TimeInterval {
-        model.skimTime ?? model.playhead
-    }
-
-    /// Fifteen keys a second while skimming. Enough to follow a hover without decoding
-    /// every pointer-moved event. −1 when not skimming, so the playhead task owns that path.
-    private var skimKey: Int {
-        guard let skim = model.skimTime else { return -1 }
-        return Int((skim * 15).rounded())
+        model.playhead
     }
 
     private func refresh() async {
@@ -115,7 +102,7 @@ struct StudioPreviewView: View {
         frame = await renderer.image(
             at: previewTime,
             using: currentPipeline().composer,
-            exact: !model.isPlaying && model.skimTime == nil
+            exact: !model.isPlaying
         )
     }
 

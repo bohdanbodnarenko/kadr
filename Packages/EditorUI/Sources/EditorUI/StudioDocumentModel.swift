@@ -50,12 +50,6 @@ public final class StudioDocumentModel {
     /// The selected clip, if one is. Edge-trimming and the speed slider talk to this.
     public var selectedClip: Clip.ID?
 
-    /// Edited time under the timeline pointer, for hover-skim of the preview.
-    ///
-    /// Independent of the playhead: hovering does not commit a cut, and the playhead is
-    /// where Split and Export still read from.
-    public var skimTime: TimeInterval?
-
     /// How a forthcoming export should be encoded. Remembered across recordings.
     public var exportSettings = StudioExportSettings.remembered
 

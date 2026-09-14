@@ -17,8 +17,9 @@ import SwiftUI
 /// stays in view while it is moving.
 ///
 /// Clips are edged-trimmed by dragging their ends, the way a trim actually happens in
-/// Screendrop: hovering shows a skim line, and **C** splits there without moving the playhead.
-/// Drag across the zoom lane to place a cue; a click still only scrubs.
+/// Screendrop: hovering shows a split marker, and **C** splits there without moving the
+/// playhead. The preview stays on the playhead until the time bar is dragged. Drag across
+/// the zoom lane to place a cue; a click still only scrubs.
 @MainActor
 struct StudioTimelineView: View {
     let model: StudioDocumentModel
@@ -41,7 +42,7 @@ struct StudioTimelineView: View {
     @State var dragging: (id: ZoomCue.ID, start: TimeInterval)?
     /// A zoom being drawn on the lane, in edited time.
     @State var creating: (start: TimeInterval, end: TimeInterval)?
-    /// Edited time under the pointer, for skim and hover-C.
+    /// Edited time under the pointer, for the split marker and hover-C.
     @State var hoverTime: TimeInterval?
     /// Latest timeline viewport width, so the zoom buttons can pin around the same axis.
     @State var viewportWidth: CGFloat = 1
@@ -167,10 +168,8 @@ struct StudioTimelineView: View {
                     scale: scale,
                     duration: model.edit.duration
                 )
-                model.skimTime = hoverTime
             case .ended:
                 hoverTime = nil
-                model.skimTime = nil
             }
         }
         .overlay(alignment: .topLeading) {
