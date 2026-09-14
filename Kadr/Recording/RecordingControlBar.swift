@@ -144,6 +144,9 @@ final class RecordingControlBar {
     }
 
     private func present(key: Bool) {
+        model.onNotchLayoutChange = { [weak self] in
+            self?.resizeToFittingSize()
+        }
         if let panel {
             panel.becomesKeyOnlyIfNeeded = !key
             if key {
@@ -158,6 +161,7 @@ final class RecordingControlBar {
         }
 
         let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
+        configureHosting(hosting)
         hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
         hosting.frame = NSRect(origin: .zero, size: hostingSize)
 
@@ -184,6 +188,12 @@ final class RecordingControlBar {
         revealNotchIfNeeded()
     }
 
+    private func configureHosting(_ hosting: NSHostingView<RecordingControlBarView>) {
+        hosting.wantsLayer = true
+        hosting.layer?.isOpaque = false
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
     private func teardownPanel() {
         hideTask = nil
         guard let panel else { return }
@@ -201,6 +211,7 @@ final class RecordingControlBar {
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
+        model.onNotchLayoutChange = nil
     }
 
     private func revealNotchIfNeeded() {
@@ -236,6 +247,7 @@ final class RecordingControlBar {
 
     private func syncWindowChrome() {
         guard let panel, let hosting else { return }
+        configureHosting(hosting)
         hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
         applyMovability(to: panel)
     }
@@ -316,6 +328,8 @@ final class RecordingControlBarModel {
     var notchVisible = false
     var notchExpanded = false
     var notchMetrics = RecordingNotchMetrics.fallback
+    /// The AppKit panel resizes when the island grows or shrinks (hover, pre-roll).
+    @ObservationIgnored var onNotchLayoutChange: (() -> Void)?
 
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(
@@ -367,6 +381,8 @@ struct RecordingControlBarView: View {
         .kadrAnimation(.snappy(duration: 0.22), value: model.session != nil)
         .kadrAnimation(.snappy(duration: 0.22), value: model.preRoll != nil)
         .kadrAnimation(.snappy(duration: 0.22), value: model.docksToNotch)
+        .kadrLayoutDirection()
+        .background(Color.clear)
         .onExitCommand {
             if model.preRoll != nil {
                 model.preRoll?.cancel()

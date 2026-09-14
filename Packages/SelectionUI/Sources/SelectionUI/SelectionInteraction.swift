@@ -75,6 +75,8 @@ public struct SelectionInteraction: Equatable, Sendable {
 
     /// True while Space is held, which turns a drag into a move (docs/03 §1.1).
     public private(set) var isMovingSelection = false
+    /// True while the current rect is sitting on a detected edge (docs/14 D4 haptic).
+    public private(set) var isAlignedToEdge = false
     private var moveOrigin: CGPoint?
     private var moveRectOrigin: CGPoint?
 
@@ -94,6 +96,7 @@ public struct SelectionInteraction: Equatable, Sendable {
         pointer = point
         rect = CGRect(origin: point, size: .zero)
         phase = .dragging
+        isAlignedToEdge = false
     }
 
     public mutating func drag(to point: CGPoint, modifiers: SelectionModifiers = []) {
@@ -128,7 +131,10 @@ public struct SelectionInteraction: Equatable, Sendable {
                 height: abs(corner.y - anchor.y)
             )
         }
-        rect = snapped(unclamped.intersection(bounds), modifiers: modifiers)
+        let proposed = unclamped.intersection(bounds)
+        let next = snapped(proposed, modifiers: modifiers)
+        isAlignedToEdge = next != proposed
+        rect = next
     }
 
     /// Applies edge snapping, unless the user asked for it not to be.
@@ -163,6 +169,7 @@ public struct SelectionInteraction: Equatable, Sendable {
         rect = nil
         anchor = nil
         isMovingSelection = false
+        isAlignedToEdge = false
         moveOrigin = nil
         moveRectOrigin = nil
     }
@@ -249,7 +256,15 @@ public struct SelectionInteraction: Equatable, Sendable {
     /// Replaces the current rect, keeping the selection committed.
     public mutating func setRect(_ newRect: CGRect) {
         guard !newRect.isEmpty else { return }
-        rect = keepInsideBounds(newRect)
+        let clamped = keepInsideBounds(newRect)
+        if let snapping, !snapping.isEmpty {
+            let next = snapping.snapped(clamped)
+            isAlignedToEdge = next != clamped
+            rect = next
+        } else {
+            isAlignedToEdge = false
+            rect = clamped
+        }
         phase = .selected
     }
 

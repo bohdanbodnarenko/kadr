@@ -10,8 +10,8 @@ import UniformTypeIdentifiers
 
 /// One editor window over one capture (docs/03 §3).
 @MainActor
-final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation, RedactionAssisting,
-    SubjectLifting
+final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation,
+    RedactionAssisting, SubjectLifting
 {
     enum OpenError: LocalizedError {
         case unreadableImage(URL)
@@ -160,6 +160,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
+        let responder = FocusRestoration.capture(from: sender)
         alert.beginSheetModal(for: sender) { [weak self] response in
             guard let self else { return }
             switch response {
@@ -173,7 +174,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 isClosingConfirmed = true
                 sender.close()
             default:
-                break
+                FocusRestoration.restore(responder, in: sender)
             }
         }
         return false

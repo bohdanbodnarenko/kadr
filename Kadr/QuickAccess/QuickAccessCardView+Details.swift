@@ -37,7 +37,7 @@ extension QuickAccessCardView {
                 }
             }
         }
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(.white)
         .shadow(color: .black.opacity(0.6), radius: 2)
         .help(fullDetailsHelp)
@@ -81,7 +81,7 @@ extension QuickAccessCardView {
     var compressionBadge: some View {
         if let savings = item.compressionSavings, savings > 0 {
             Text("−\(Int((savings * 100).rounded()))%")
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
                 .background(Color.green.opacity(0.35), in: Capsule())

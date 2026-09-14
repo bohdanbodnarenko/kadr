@@ -49,8 +49,10 @@ struct RecordingControlChromePlacementTests {
         #expect(compact.stripHeight == 32)
         #expect(compact.shellHeight == 32)
         #expect(compact.cameraReserveWidth == 180)
-        #expect(compact.windowSize == CGSize(width: 420, height: 32))
-        #expect(compact.islandWidth == 314)
+        #expect(compact.windowSize == CGSize(width: compact.islandWidth, height: 32))
+        #expect(compact.leftWingWidth < 120)
+        #expect(compact.islandWidth == compact.leftWingWidth + 180 + compact.rightWingWidth)
+        #expect(compact.islandWidth < 380)
 
         let expanded = RecordingNotchLayout(
             hardware: hardware,
@@ -59,6 +61,14 @@ struct RecordingControlChromePlacementTests {
         )
         #expect(expanded.windowSize.height == compact.windowSize.height)
         #expect(expanded.islandWidth > compact.islandWidth)
-        #expect(expanded.islandWidth == 424)
+        #expect(expanded.islandWidth - compact.islandWidth < 50)
+        #expect(RecordingNotchLayout.endInset >= 12)
+    }
+
+    @Test("The shell uses pill ears, not a rectangle")
+    func shellCornerRadii() {
+        let shape = RecordingNotchShape.forShell(height: 32)
+        #expect(shape.bottomCornerRadius >= 14)
+        #expect(shape.topCornerRadius >= 8)
     }
 }

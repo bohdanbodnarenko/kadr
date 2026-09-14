@@ -311,7 +311,11 @@ final class SelectionOverlayView: NSView {
             return
         }
         guard mode == .area else { return }
+        let wasAligned = interaction.isAlignedToEdge
         interaction.drag(to: point, modifiers: modifiers(from: event))
+        if interaction.isAlignedToEdge, !wasAligned {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
         redraw()
     }
 

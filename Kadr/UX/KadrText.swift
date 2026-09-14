@@ -7,9 +7,23 @@ import Foundation
 /// resolved string to roughly 1.4× so layout can be tested without a second locale.
 enum KadrText {
     nonisolated static let pseudolocalizeArgument = "-KadrPseudolocalize"
+    nonisolated static let pseudolocalize2xArgument = "-KadrPseudolocalize2x"
+    nonisolated static let rtlArgument = "-KadrRTL"
 
     nonisolated static var isPseudolocalized: Bool {
-        ProcessInfo.processInfo.arguments.contains(pseudolocalizeArgument)
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains(pseudolocalizeArgument) || arguments.contains(pseudolocalize2xArgument)
+    }
+
+    nonisolated static var isRightToLeft: Bool {
+        ProcessInfo.processInfo.arguments.contains(rtlArgument)
+    }
+
+    nonisolated static var expansionFactor: Double {
+        if ProcessInfo.processInfo.arguments.contains(pseudolocalize2xArgument) {
+            return 2.0
+        }
+        return isPseudolocalized ? 1.4 : 1.0
     }
 
     nonisolated static func string(_ value: String.LocalizationValue) -> String {
@@ -18,15 +32,16 @@ enum KadrText {
 
     nonisolated static func expand(_ value: String) -> String {
         guard isPseudolocalized else { return value }
-        return Pseudolocalization.expand(value)
+        return Pseudolocalization.expand(value, factor: expansionFactor)
     }
 }
 
 enum Pseudolocalization {
-    /// Roughly 1.4× expansion, wrapping every label that may wrap, without inventing
-    /// extra words that would hide clipping of the real copy.
-    nonisolated static func expand(_ value: String) -> String {
-        let extra = max(Int((Double(value.count) * 0.4).rounded()), 1)
+    /// Expansion that wraps every label that may wrap, without inventing extra words
+    /// that would hide clipping of the real copy. 1.4× is the layout default; 2× is
+    /// the stress case in docs/14 §6.
+    nonisolated static func expand(_ value: String, factor: Double = 1.4) -> String {
+        let extra = max(Int((Double(value.count) * max(factor - 1, 0)).rounded()), 1)
         let pad = String(repeating: "·", count: extra)
         return "⟦\(value) \(pad)⟧"
     }

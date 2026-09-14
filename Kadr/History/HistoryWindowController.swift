@@ -57,7 +57,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.center()
         window.setFrameAutosaveName("app.kadr.Kadr.history")
-        window.minSize = NSSize(width: 560, height: 360)
+        window.minSize = HistoryWindowGeometry.minimumSize
 
         self.window = window
         hostingView = hosting

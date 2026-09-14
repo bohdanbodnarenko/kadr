@@ -73,6 +73,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         navigation?.selectedTab
     }
 
+    var isSidebarHidden: Bool {
+        navigation?.isSidebarHidden ?? false
+    }
+
     /// - Parameter tab: which pane to land on, for `kadr open-settings --tab …`
     ///   (docs/03 §8.4). `nil` leaves the window wherever the user left it.
     func show(tab: SettingsTab? = nil) {

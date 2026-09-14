@@ -56,8 +56,8 @@ struct StudioInspectorSection<Content: View>: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
                     .rotationEffect(.degrees(isOpen ? 90 : 0))
                     .foregroundStyle(.secondary)
                 Text(title)

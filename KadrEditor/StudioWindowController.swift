@@ -181,8 +181,12 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Stop and Close")
             alert.addButton(withTitle: "Keep Working")
+            let responder = FocusRestoration.capture(from: sender)
             alert.beginSheetModal(for: sender) { [weak self] response in
-                guard let self, response == .alertFirstButtonReturn else { return }
+                guard let self, response == .alertFirstButtonReturn else {
+                    FocusRestoration.restore(responder, in: sender)
+                    return
+                }
                 model.cancelTidySpeech()
                 model.cancelSpeechModelInstall()
                 isClosingConfirmed = true

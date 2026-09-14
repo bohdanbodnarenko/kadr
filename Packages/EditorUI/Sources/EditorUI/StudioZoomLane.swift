@@ -90,7 +90,7 @@ struct StudioZoomLane: View {
         return HStack(spacing: 0) {
             handle(for: cue, leading: true)
             Text(String(format: "%.1f×", cue.magnification))
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)

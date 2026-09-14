@@ -145,12 +145,15 @@ struct CapturePane: View {
                     Toggle("Show me joins Kadr is unsure about", isOn: $settings.scrollReviewsSeams)
                 }
             } footer: {
-                Text(
-                    "Auto-scroll needs Accessibility permission. Manual scrolling needs only "
-                        + "Screen Recording."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(
+                        "Auto-scroll needs Accessibility permission. Manual scrolling needs only "
+                            + "Screen Recording."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    SettingsLearnMore(topic: .scrolling)
+                }
             }
 
             Section {
@@ -187,13 +190,16 @@ struct CapturePane: View {
                     Toggle("Snap the selection to edges Kadr finds", isOn: $settings.captureSnapsToEdges)
                 }
             } footer: {
-                Text(
-                    "Hides Finder icons and can swap the wallpaper. A crash restores the "
-                        + "previous wallpaper."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(
+                        "Hides Finder icons and can swap the wallpaper. A crash restores the "
+                            + "previous wallpaper."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    SettingsLearnMore(topic: .desktopHygiene)
+                }
             }
         }
         .settingsFormChrome()

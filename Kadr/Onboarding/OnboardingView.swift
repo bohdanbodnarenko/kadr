@@ -36,6 +36,7 @@ struct OnboardingView: View {
                 .padding(16)
         }
         .frame(minWidth: 520, minHeight: 560)
+        .kadrLayoutDirection()
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: model.step)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if model.step == .permissions {
@@ -224,7 +225,7 @@ struct OnboardingView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
@@ -292,7 +293,7 @@ struct OnboardingView: View {
                 Button {
                     model.goBack()
                 } label: {
-                    Label("Back", systemImage: "chevron.left")
+                    Label("Back", systemImage: "chevron.backward")
                         .labelStyle(.iconOnly)
                 }
                 .help("Back")

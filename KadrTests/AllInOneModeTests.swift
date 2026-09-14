@@ -30,4 +30,12 @@ struct AllInOneModeTests {
         #expect(AllInOneMode.matching(shortcut: "x") == nil)
         #expect(AllInOneMode.matching(shortcut: "") == nil)
     }
+
+    @Test("Every mode has a VoiceOver title and help")
+    func titlesAndHelp() {
+        for mode in AllInOneMode.allCases {
+            #expect(!mode.title.isEmpty)
+            #expect(!mode.help.isEmpty)
+        }
+    }
 }

@@ -5,6 +5,8 @@ import SwiftUI
 ///
 /// Process-local: EditorUI must not push SwiftUI into Shared.
 enum EditorMotion {
+    static let rtlArgument = "-KadrRTL"
+
     static var reduceMotion: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
@@ -15,6 +17,10 @@ enum EditorMotion {
 
     static var increaseContrast: Bool {
         NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+    }
+
+    static var isRightToLeft: Bool {
+        ProcessInfo.processInfo.arguments.contains(rtlArgument)
     }
 
     static func animation(_ animation: Animation) -> Animation? {
@@ -29,5 +35,10 @@ enum EditorMotion {
 extension View {
     func editorAnimation(_ animation: Animation, value: some Equatable) -> some View {
         self.animation(EditorMotion.animation(animation), value: value)
+    }
+
+    /// Process-local RTL override (`-KadrRTL`). Public so the editor Help window can match.
+    public func editorLayoutDirection() -> some View {
+        environment(\.layoutDirection, EditorMotion.isRightToLeft ? .rightToLeft : .leftToRight)
     }
 }

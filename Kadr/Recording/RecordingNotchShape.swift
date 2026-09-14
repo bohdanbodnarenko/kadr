@@ -32,9 +32,10 @@ struct RecordingNotchShape: Shape {
     }
 
     static func forShell(height: CGFloat) -> RecordingNotchShape {
-        RecordingNotchShape(
-            topCornerRadius: min(10, height * 0.14),
-            bottomCornerRadius: min(16, height * 0.24)
+        let clamped = max(height, 24)
+        return RecordingNotchShape(
+            topCornerRadius: min(10, clamped * 0.36),
+            bottomCornerRadius: min(clamped * 0.5, 16)
         )
     }
 

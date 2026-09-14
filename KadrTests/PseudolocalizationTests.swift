@@ -15,6 +15,15 @@ struct PseudolocalizationTests {
         #expect(Double(expanded.count) >= Double(source.count) * 1.3)
     }
 
+    @Test("A 2× expansion is longer than 1.4×")
+    func expandsToDoubleLength() {
+        let source = "Capture Area"
+        let defaultExpand = Pseudolocalization.expand(source, factor: 1.4)
+        let doubled = Pseudolocalization.expand(source, factor: 2.0)
+        #expect(doubled.count > defaultExpand.count)
+        #expect(Double(doubled.count) >= Double(source.count) * 1.9)
+    }
+
     @Test("Plural strings distinguish one from many")
     func plurals() {
         #expect(KadrPlural.captures(1).contains("1"))

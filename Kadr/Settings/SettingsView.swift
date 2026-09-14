@@ -8,6 +8,8 @@ import SwiftUI
 @Observable
 final class SettingsNavigation {
     var selectedTab: SettingsTab
+    /// Mirrors the split view so View ▸ Show/Hide Sidebar can name the current state.
+    var isSidebarHidden = false
 
     init(selectedTab: SettingsTab) {
         self.selectedTab = selectedTab
@@ -56,11 +58,21 @@ struct SettingsView: View {
             minHeight: SettingsWindowGeometry.minimumHeight
         )
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    toggleSidebar()
+                } label: {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help(columnVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar")
+                .accessibilityLabel(columnVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar")
+                .keyboardShortcut("s", modifiers: [.control, .command])
+            }
             ToolbarItemGroup(placement: .navigation) {
                 Button {
                     goBack()
                 } label: {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                 }
                 .disabled(!canGoBack)
                 .help("Back")
@@ -69,20 +81,28 @@ struct SettingsView: View {
                 Button {
                     goForward()
                 } label: {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                 }
                 .disabled(!canGoForward)
                 .help("Forward")
                 .accessibilityLabel("Forward")
             }
         }
+        .kadrLayoutDirection()
         .onAppear {
             if navigationHistory.isEmpty {
                 navigationHistory = [navigation.selectedTab]
             }
+            publishSidebarVisibility()
         }
         .onChange(of: navigation.selectedTab) { _, _ in
             recordNavigation()
+        }
+        .onChange(of: columnVisibility) { _, _ in
+            publishSidebarVisibility()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .kadrToggleSettingsSidebar)) { _ in
+            toggleSidebar()
         }
     }
 
@@ -112,6 +132,14 @@ struct SettingsView: View {
         Task { @MainActor in
             isHistoryNavigation = false
         }
+    }
+
+    private func toggleSidebar() {
+        columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+    }
+
+    private func publishSidebarVisibility() {
+        navigation.isSidebarHidden = columnVisibility == .detailOnly
     }
 
     private func recordNavigation() {

@@ -77,4 +77,9 @@ extension View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
     }
+
+    /// Launch `-KadrRTL` to force right-to-left even in English (docs/14 UX-01.4).
+    func kadrLayoutDirection() -> some View {
+        environment(\.layoutDirection, KadrText.isRightToLeft ? .rightToLeft : .leftToRight)
+    }
 }

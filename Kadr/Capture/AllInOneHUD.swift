@@ -1,5 +1,6 @@
 import AppKit
 import OverlayKit
+import RecordingCore
 import SettingsKit
 import Shared
 import SwiftUI
@@ -101,14 +102,14 @@ nonisolated enum AllInOneMode: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .area: "Area"
-        case .window: "Window"
-        case .screen: "Screen"
-        case .record: "Record"
-        case .gif: "GIF"
-        case .scrolling: "Scrolling"
-        case .ocr: "Text"
-        case .color: "Colour"
+        case .area: KadrText.string("Area")
+        case .window: KadrText.string("Window")
+        case .screen: KadrText.string("Screen")
+        case .record: KadrText.string("Record")
+        case .gif: KadrText.string("GIF")
+        case .scrolling: KadrText.string("Scrolling")
+        case .ocr: KadrText.string("Text")
+        case .color: KadrText.string("Colour")
         }
     }
 
@@ -127,14 +128,14 @@ nonisolated enum AllInOneMode: String, CaseIterable, Sendable {
 
     var help: String {
         switch self {
-        case .area: "Drag to capture a region (A)"
-        case .window: "Click a window to capture it (W)"
-        case .screen: "Capture the whole display (F)"
-        case .record: "Open the recorder (R)"
-        case .gif: "Record a region, then export GIF (G)"
-        case .scrolling: "Capture a scrolling region (S)"
-        case .ocr: "Select text and copy it (T)"
-        case .color: "Pick a colour from the screen (P)"
+        case .area: KadrText.string("Drag to capture a region (A)")
+        case .window: KadrText.string("Click a window to capture it (W)")
+        case .screen: KadrText.string("Capture the whole display (F)")
+        case .record: KadrText.string("Open the recorder (R)")
+        case .gif: KadrText.string("Record a region, then export GIF (G)")
+        case .scrolling: KadrText.string("Capture a scrolling region (S)")
+        case .ocr: KadrText.string("Select text and copy it (T)")
+        case .color: KadrText.string("Pick a colour from the screen (P)")
         }
     }
 
@@ -214,6 +215,7 @@ struct AllInOneView: View {
         }
         .accessibilityLabel("All-in-One capture")
         .accessibilityHint("Pick a capture mode, or press Return for the last one.")
+        .kadrLayoutDirection()
     }
 
     private var fullStrip: some View {
@@ -222,6 +224,8 @@ struct AllInOneView: View {
             RecordingBarDivider()
             timerMenu
             aspectMenu
+            saveTargetMenu
+            recordingAudioMenu
             closeButton
         }
     }
@@ -237,6 +241,8 @@ struct AllInOneView: View {
             HStack(spacing: 6) {
                 timerMenu
                 aspectMenu
+                saveTargetMenu
+                recordingAudioMenu
                 Spacer(minLength: 0)
             }
         }
@@ -247,7 +253,7 @@ struct AllInOneView: View {
             modeButtons(for: Self.primaryModes)
             overflowMenu
             RecordingBarDivider()
-            timerMenu
+            optionsMenu
             closeButton
         }
     }
@@ -293,7 +299,7 @@ struct AllInOneView: View {
         .accessibilityLabel("Close")
     }
 
-    private var timerOptions: [Int] {
+    var timerOptions: [Int] {
         var options = Self.presetTimerOptions
         let custom = model.settings.customTimerSeconds
         if custom > 0, !options.contains(custom) {
@@ -372,7 +378,7 @@ struct AllInOneView: View {
         return "Self-timer \(seconds)s — click to change"
     }
 
-    private func timerLabel(_ seconds: Int) -> String {
+    func timerLabel(_ seconds: Int) -> String {
         if seconds == 0 {
             return "No delay"
         }

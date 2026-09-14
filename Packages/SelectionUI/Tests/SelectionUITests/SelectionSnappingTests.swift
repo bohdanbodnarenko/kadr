@@ -38,6 +38,7 @@ struct SelectionSnappingTests {
 
         #expect(rect.minX == 50)
         #expect(rect.minY == 40)
+        #expect(interaction.isAlignedToEdge)
         #expect(rect.maxX == 300)
         #expect(rect.maxY == 200)
     }

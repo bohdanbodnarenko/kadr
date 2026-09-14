@@ -30,9 +30,12 @@ struct RecordingPane: View {
                     .disabled(settings.recordingCodec != .hevc)
                 }
             } footer: {
-                Text("HEVC keeps files smaller; HDR requires it.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("HEVC keeps files smaller; HDR requires it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    SettingsLearnMore(topic: .recordingFormat)
+                }
             }
 
             Section {
@@ -48,9 +51,12 @@ struct RecordingPane: View {
             } header: {
                 Text("Audio")
             } footer: {
-                Text("The microphone is saved as its own track so you can drop it later.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("The microphone is saved as its own track so you can drop it later.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    SettingsLearnMore(topic: .recordingAudio)
+                }
             }
 
             Section {
@@ -158,12 +164,15 @@ struct RecordingPane: View {
             } header: {
                 Text("Overlays")
             } footer: {
-                Text(
-                    "Keystroke overlays can reveal passwords. Reading keys needs Accessibility "
-                        + "permission the first time you record with this on."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(
+                        "Keystroke overlays can reveal passwords. Reading keys needs Accessibility "
+                            + "permission the first time you record with this on."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    SettingsLearnMore(topic: .overlays)
+                }
             }
 
             TeleprompterSection(settings: settings)
@@ -181,12 +190,15 @@ struct RecordingPane: View {
                     .disabled(!settings.recordingCapturesStudioSession)
                 }
             } footer: {
-                Text(
-                    "Editable data is a few kilobytes and enables smooth zooms and reconstructed "
-                        + "clicks. Without it, those effects are gone once recording ends."
-                )
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(
+                        "Editable data is a few kilobytes and enables smooth zooms and reconstructed "
+                            + "clicks. Without it, those effects are gone once recording ends."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    SettingsLearnMore(topic: .studioCapture)
+                }
             }
 
             Section {

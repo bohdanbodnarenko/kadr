@@ -138,6 +138,13 @@ struct UXExcellenceTests {
         #expect(SettingsWindowGeometry.minimumSize == NSSize(width: 700, height: 540))
     }
 
+    @Test("RTL and 2× launch arguments are documented")
+    func layoutLaunchArguments() {
+        #expect(KadrText.rtlArgument == "-KadrRTL")
+        #expect(KadrText.pseudolocalize2xArgument == "-KadrPseudolocalize2x")
+        #expect(KadrHelpTopic.allCases.count >= 6)
+    }
+
     // MARK: - UX-11
 
     @Test("Recording overlay scales map to readable percent units")

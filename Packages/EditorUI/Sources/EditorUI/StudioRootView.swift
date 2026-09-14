@@ -52,6 +52,7 @@ public struct StudioRootView: View {
                 )
         }
         .frame(minWidth: 820, minHeight: 520)
+        .editorLayoutDirection()
         .animation(motion(.easeOut(duration: 0.2)), value: model.notice)
         .overlay(alignment: .top) { banner }
         .overlay(alignment: .top) { failureBanner }

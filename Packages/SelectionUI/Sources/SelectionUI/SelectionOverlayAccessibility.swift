@@ -6,18 +6,18 @@ import Shared
 /// VoiceOver reads mode, dimensions and actions from here; the mouse path stays layers.
 @MainActor
 final class SelectionOverlayAccessibilityElement: NSAccessibilityElement {
-    private weak var owner: SelectionOverlayView?
+    /// VoiceOver can query the frame off the main actor; `refresh` writes this snapshot.
+    private nonisolated(unsafe) var screenFrame: NSRect = .zero
 
     init(owner: SelectionOverlayView) {
-        self.owner = owner
         super.init()
         setAccessibilityRole(.group)
         setAccessibilityLabel("Capture selection")
+        snapshotFrame(from: owner)
     }
 
-    override func accessibilityFrame() -> NSRect {
-        guard let owner, let window = owner.window else { return .zero }
-        return window.convertToScreen(owner.bounds)
+    override nonisolated func accessibilityFrame() -> NSRect {
+        screenFrame
     }
 
     override func accessibilityChildren() -> [Any]? {
@@ -25,6 +25,7 @@ final class SelectionOverlayAccessibilityElement: NSAccessibilityElement {
     }
 
     func refresh(from view: SelectionOverlayView) {
+        snapshotFrame(from: view)
         setAccessibilityLabel(view.accessibilitySummaryLabel)
         setAccessibilityValue(view.accessibilitySummaryValue)
         setAccessibilityHelp(view.accessibilitySummaryHelp)
@@ -34,6 +35,14 @@ final class SelectionOverlayAccessibilityElement: NSAccessibilityElement {
                 return true
             }
         })
+    }
+
+    private func snapshotFrame(from view: SelectionOverlayView) {
+        if let window = view.window {
+            screenFrame = window.convertToScreen(view.bounds)
+        } else {
+            screenFrame = .zero
+        }
     }
 }
 

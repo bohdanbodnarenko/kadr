@@ -181,7 +181,7 @@ struct StudioTimelineView: View {
                 duration: model.edit.duration
             ) { time in
                 model.pausePlayback()
-                model.playhead = time
+                model.playhead = snapEditedTime(time, scale: scale, excludingPlayhead: true)
             }
         }
         .contextMenu {
@@ -277,7 +277,7 @@ struct StudioTimelineView: View {
             }
             if clip.speed != 1 {
                 Text(speedLabel(clip.speed))
-                    .font(.caption2.monospacedDigit().weight(.semibold))
+                    .font(.caption.monospacedDigit().weight(.semibold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .foregroundStyle(.white)

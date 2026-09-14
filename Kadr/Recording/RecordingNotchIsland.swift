@@ -16,7 +16,9 @@ struct RecordingNotchIsland: View {
         let shape = layout.notchShape
         HStack(spacing: 0) {
             wingContent(layout: layout, side: .leading)
-                .frame(width: layout.leftWingWidth, alignment: .trailing)
+                .padding(.leading, RecordingNotchLayout.endInset)
+                .padding(.trailing, RecordingNotchLayout.cameraSidePad)
+                .frame(width: layout.leftWingWidth, alignment: .leading)
 
             Color.black
                 .frame(width: layout.cameraReserveWidth)
@@ -24,7 +26,9 @@ struct RecordingNotchIsland: View {
                 .accessibilityHidden(true)
 
             wingContent(layout: layout, side: .trailing)
-                .frame(width: layout.rightWingWidth, alignment: .leading)
+                .padding(.leading, RecordingNotchLayout.cameraSidePad)
+                .padding(.trailing, RecordingNotchLayout.endInset)
+                .frame(width: layout.rightWingWidth, alignment: .trailing)
         }
         .foregroundStyle(.white)
         .frame(width: layout.islandWidth, height: layout.shellHeight)
@@ -54,6 +58,18 @@ struct RecordingNotchIsland: View {
         }
         .onDisappear {
             collapseTask?.cancel()
+        }
+        .confirmationDialog(
+            "Discard this recording?",
+            isPresented: $isConfirmingCancel
+        ) {
+            Button("Discard", role: .destructive) { model.cancel() }
+            Button("Keep Recording", role: .cancel) {}
+        } message: {
+            Text("What you have recorded so far will be deleted.")
+        }
+        .onChange(of: layout.windowSize) { _, _ in
+            model.onNotchLayoutChange?()
         }
     }
 
@@ -86,38 +102,15 @@ struct RecordingNotchIsland: View {
                         .scaleEffect(0.82)
 
                     if model.microphoneIsSilent {
-                        Text("Mic")
-                            .font(.caption2.weight(.semibold))
+                        Label("Mic", systemImage: "mic.slash.fill")
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.orange)
+                            .labelStyle(.titleAndIcon)
                             .accessibilityLabel("Microphone is silent")
                     }
                 }
 
                 notchMoreButton
-
-                if layout.isExpanded {
-                    notchCircleButton(
-                        symbol: "arrow.counterclockwise",
-                        help: "Start over — discard what's recorded and record again"
-                    ) {
-                        model.restart()
-                    }
-                    .accessibilityLabel("Restart recording")
-
-                    notchCircleButton(symbol: "trash", help: "Discard this recording") {
-                        isConfirmingCancel = true
-                    }
-                    .accessibilityLabel("Discard recording")
-                    .confirmationDialog(
-                        "Discard this recording?",
-                        isPresented: $isConfirmingCancel
-                    ) {
-                        Button("Discard", role: .destructive) { model.cancel() }
-                        Button("Keep Recording", role: .cancel) {}
-                    } message: {
-                        Text("What you have recorded so far will be deleted.")
-                    }
-                }
 
             case .trailing:
                 notchCircleButton(
@@ -137,7 +130,6 @@ struct RecordingNotchIsland: View {
                 .accessibilityLabel("Stop and save")
             }
         }
-        .padding(.horizontal, 6)
     }
 
     private var statusDot: some View {
@@ -206,7 +198,6 @@ struct RecordingNotchIsland: View {
                 .accessibilityLabel("Cancel countdown")
             }
         }
-        .padding(.horizontal, 6)
     }
 
     private func notchCircleButton(

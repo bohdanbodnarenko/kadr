@@ -32,8 +32,9 @@ struct HistoryView: View {
             Divider()
             footer
         }
-        .frame(minWidth: 560, minHeight: 360)
+        .frame(minWidth: HistoryWindowGeometry.minimumWidth, minHeight: HistoryWindowGeometry.minimumHeight)
         .background(.background)
+        .kadrLayoutDirection()
         .searchable(text: $searchText, prompt: "Search captures")
         .toolbar { toolbarContent }
         .onDeleteCommand { Task { await deleteSelected() } }
@@ -435,7 +436,7 @@ private struct HistoryCell: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Text("\(record.width) × \(record.height)")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)

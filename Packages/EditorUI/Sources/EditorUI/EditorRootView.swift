@@ -96,6 +96,7 @@ public struct EditorRootView: View {
         }
         .editorAnimation(.snappy(duration: 0.2), value: model.showsCopiedToast)
         .frame(minWidth: EditorWindowGeometry.minSize.width, minHeight: EditorWindowGeometry.minSize.height)
+        .editorLayoutDirection()
         .onChange(of: model.tool) { _, tool in
             if tool == .highlighter {
                 Task { await prepareSmartHighlighter() }

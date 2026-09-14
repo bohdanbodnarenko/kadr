@@ -45,11 +45,14 @@ struct GeneralPane: View {
                     }
                 }
                 Toggle("Ask where to save from the overlay", isOn: $settings.askForSaveDestination)
-                Text("Save on a card shows a folder picker instead of writing to this folder. "
-                    + "After-capture “Ask where to save” does the same the moment a capture lands.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Save on a card shows a folder picker instead of writing to this folder. "
+                        + "After-capture “Ask where to save” does the same the moment a capture lands.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    SettingsLearnMore(topic: .saveTarget)
+                }
             }
 
             Section {

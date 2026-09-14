@@ -19,12 +19,16 @@ extension StudioTimelineView {
                     model.selectedClip = clip.id
                     model.pausePlayback()
                     let start = model.edit.clips.editedStartTime(ofClipAt: index)
-                    let time = start + (isLeading ? 0 : clip.editedDuration) + value.translation.width / scale
+                    let raw = start + (isLeading ? 0 : clip.editedDuration) + value.translation.width / scale
+                    let time = snapEditedTime(raw, scale: scale)
                     if isLeading {
                         model.trimClipStart(clip.id, toEdited: time)
                     } else {
                         model.trimClipEnd(clip.id, toEdited: time)
                     }
+                }
+                .onEnded { _ in
+                    AlignmentHaptic.released()
                 }
         )
         .onHover { hovering in
@@ -59,5 +63,26 @@ extension StudioTimelineView {
             model.step(frames: frames)
         }
         return .handled
+    }
+
+    func snapEditedTime(_ time: TimeInterval, scale: CGFloat, excludingPlayhead: Bool = false) -> TimeInterval {
+        var candidates: [TimeInterval] = [0, model.edit.duration]
+        if !excludingPlayhead {
+            candidates.append(model.playhead)
+        }
+        for (index, clip) in model.edit.clips.clips.enumerated() {
+            let start = model.edit.clips.editedStartTime(ofClipAt: index)
+            candidates.append(start)
+            candidates.append(start + clip.editedDuration)
+        }
+        for cue in model.edit.zooms {
+            candidates.append(cue.start)
+            candidates.append(cue.end)
+        }
+        let snapped = TimelineSnap.snap(time, candidates: candidates, scale: scale)
+        if snapped != time {
+            AlignmentHaptic.snap(id: String(format: "%.3f", snapped))
+        }
+        return snapped
     }
 }

@@ -138,7 +138,7 @@ struct ScrollCaptureHUDView: View {
             Spacer()
             if coordinator.isAutoScrolling {
                 Text("AUTO")
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Color.accentColor.opacity(0.2), in: Capsule())

@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-/// Size of the camera housing, from the display's own safe area and menu-bar split.
+/// Size of the camera housing, from the display's own menu-bar split.
 struct RecordingNotchMetrics: Equatable, Sendable {
     var width: CGFloat
     var height: CGFloat
@@ -11,12 +11,15 @@ struct RecordingNotchMetrics: Equatable, Sendable {
     static let fallback = RecordingNotchMetrics(width: 180, height: 32)
 
     static func hardware(on screen: NSScreen) -> RecordingNotchMetrics {
-        let height = max(screen.safeAreaInsets.top, 24)
+        // The menu-bar strip, not `safeAreaInsets.top`: that inset is taller than the
+        // camera housing and made the shell a slab under the notch.
         guard let left = screen.auxiliaryTopLeftArea,
               let right = screen.auxiliaryTopRightArea
         else {
+            let height = min(max(screen.safeAreaInsets.top, 24), 34)
             return RecordingNotchMetrics(width: fallback.width, height: height)
         }
+        let height = min(max(left.height, 24), 34)
         let gap = right.minX - left.maxX
         let width = gap > 80 ? gap : fallback.width
         return RecordingNotchMetrics(width: width, height: height)
@@ -25,10 +28,14 @@ struct RecordingNotchMetrics: Equatable, Sendable {
 
 /// Dynamic Island geometry (macos-notch-ui): flush to the screen top, controls in the ears.
 ///
-/// The shell is menu-bar height only. A non-interactive black band covers the camera;
+/// The shell is menu-bar height only. A non-interactive band covers the camera;
 /// every button lives in the left or right wing so nothing is hidden behind it.
 struct RecordingNotchLayout: Equatable, Sendable {
-    static let maxWindowWidth: CGFloat = 420
+    /// Inset from each rounded end so the first and last controls sit inside the ears.
+    static let endInset: CGFloat = 14
+    static let cameraSidePad: CGFloat = 4
+    static let controlSize: CGFloat = 22
+    static let controlGap: CGFloat = 6
     /// Interactive row height — matches the menu-bar strip.
     static let contentHeight: CGFloat = 32
 
@@ -55,23 +62,29 @@ struct RecordingNotchLayout: Equatable, Sendable {
         RecordingNotchShape.forShell(height: shellHeight)
     }
 
+    private var wingInsets: CGFloat {
+        Self.endInset + Self.cameraSidePad
+    }
+
     var leftWingWidth: CGFloat {
         if hasPreRoll {
-            return 188
+            return wingInsets + 20 + (3 * (Self.controlSize + Self.controlGap))
         }
-        return isExpanded ? 186 : 76
+        // Dot + elapsed time. Restart/discard stay in the More menu so the ear
+        // does not grow a strip of empty black on hover.
+        var content = 7 + Self.controlGap + 40 + Self.controlGap + Self.controlSize
+        if isExpanded {
+            content += Self.controlGap + 20
+        }
+        return wingInsets + content
     }
 
     var rightWingWidth: CGFloat {
-        hasPreRoll ? 72 : 58
+        wingInsets + (2 * Self.controlSize) + Self.controlGap
     }
 
     var restIslandWidth: CGFloat {
-        let wings = leftWingWidth + cameraReserveWidth + rightWingWidth
-        if hasPreRoll {
-            return max(360, wings)
-        }
-        return max(isExpanded ? 400 : 300, wings)
+        leftWingWidth + cameraReserveWidth + rightWingWidth
     }
 
     var islandWidth: CGFloat {
@@ -79,6 +92,6 @@ struct RecordingNotchLayout: Equatable, Sendable {
     }
 
     var windowSize: CGSize {
-        CGSize(width: Self.maxWindowWidth, height: shellHeight)
+        CGSize(width: restIslandWidth, height: shellHeight)
     }
 }
