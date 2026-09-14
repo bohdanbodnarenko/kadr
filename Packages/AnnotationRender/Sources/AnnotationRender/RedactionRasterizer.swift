@@ -40,6 +40,8 @@ public struct RedactionRasterizer: Sendable {
             ).integral.intersection(bounds)
             guard crop.width >= 1, crop.height >= 1 else { return nil }
             return previewPixelate(image, crop: crop, cellSize: max(cellSize * scale, 2))
+        case .erase:
+            return previewErase(image, rect: spec.rect, scale: scale)
         }
     }
 
@@ -77,6 +79,77 @@ public struct RedactionRasterizer: Sendable {
             height: box.height
         )
         return KadrRenderContext.shared.createCGImage(blurred, from: output)
+    }
+
+    /// Fill with the colour of the region's edge, so chrome and buttons disappear.
+    private func previewErase(_ image: CGImage, rect: CGRect, scale: CGFloat) -> CGImage? {
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let box = CGRect(
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral.intersection(bounds)
+        guard box.width >= 1, box.height >= 1, let crop = image.cropping(to: box) else { return nil }
+        let sample = edgeColor(of: crop)
+        return solidImage(width: Int(box.width), height: Int(box.height), sample: sample)
+    }
+
+    private func erased(_ image: CIImage, in rect: CGRect, context: CIContext) -> CIImage {
+        let sample = if let region = context.createCGImage(image, from: rect) {
+            edgeColor(of: region)
+        } else {
+            EdgeSample.fallback
+        }
+        let color = CIColor(red: sample.red, green: sample.green, blue: sample.blue)
+        return CIImage(color: color).cropped(to: rect)
+    }
+
+    private func edgeColor(of image: CGImage) -> EdgeSample {
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return .fallback }
+        var sumRed = 0
+        var sumGreen = 0
+        var sumBlue = 0
+        var count = 0
+        let samples: [(Int, Int)] = [
+            (0, 0), (max(width / 2, 0), 0), (max(width - 1, 0), 0),
+            (0, max(height / 2, 0)), (max(width - 1, 0), max(height / 2, 0)),
+            (0, max(height - 1, 0)), (max(width / 2, 0), max(height - 1, 0)),
+            (max(width - 1, 0), max(height - 1, 0))
+        ]
+        for (x, y) in samples {
+            guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)),
+                  let data = pixel.dataProvider?.data,
+                  let bytes = CFDataGetBytePtr(data)
+            else { continue }
+            sumRed += Int(bytes[0])
+            sumGreen += Int(bytes[1])
+            sumBlue += Int(bytes[2])
+            count += 1
+        }
+        guard count > 0 else { return .fallback }
+        return EdgeSample(
+            red: CGFloat(sumRed) / CGFloat(count * 255),
+            green: CGFloat(sumGreen) / CGFloat(count * 255),
+            blue: CGFloat(sumBlue) / CGFloat(count * 255)
+        )
+    }
+
+    private func solidImage(width: Int, height: Int, sample: EdgeSample) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(red: sample.red, green: sample.green, blue: sample.blue, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 
     /// The region handed to CoreImage: the box, plus enough margin for the Gaussian to have
@@ -203,6 +276,8 @@ public struct RedactionRasterizer: Sendable {
                     context: context,
                     generator: &generator
                 )
+            case .erase:
+                erased(output, in: pixels, context: context)
             }
             output = obscured.cropped(to: pixels).composited(over: output)
         }
@@ -282,6 +357,15 @@ public struct RedactionRasterizer: Sendable {
                 kCIInputScaleKey: cellSize
             ])
     }
+}
+
+/// Mean colour of eight samples around a region's edge.
+private struct EdgeSample {
+    var red: CGFloat
+    var green: CGFloat
+    var blue: CGFloat
+
+    static let fallback = EdgeSample(red: 0.85, green: 0.85, blue: 0.85)
 }
 
 /// A reproducible random source, so pixelate jitter can be pinned in tests.

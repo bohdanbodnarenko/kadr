@@ -54,6 +54,12 @@ extension AreaCaptureCoordinator {
         quickAccess.presentFromClipboard()
     }
 
+    /// Pins the clipboard as a reference window: an image, or text drawn as a card.
+    @discardableResult
+    func pinClipboard() -> Bool {
+        quickAccess.pinClipboard()
+    }
+
     /// Pins a file chosen from an open panel, for `kadr pin` with no path.
     @discardableResult
     func pinFromOpenPanel() -> URL? {

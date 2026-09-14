@@ -190,6 +190,8 @@ public struct CounterSpec: Codable, Hashable, Sendable {
     public var radius: CGFloat
     public var fill: AnnotationColor
     public var textColor: AnnotationColor
+    /// Nil means arabic, so documents from before numbering existed still load.
+    public var numbering: CounterNumbering?
 
     public init(
         id: AnnotationID = AnnotationID(),
@@ -197,7 +199,8 @@ public struct CounterSpec: Codable, Hashable, Sendable {
         center: CGPoint,
         radius: CGFloat = 18,
         fill: AnnotationColor = .annotationRed,
-        textColor: AnnotationColor = .white
+        textColor: AnnotationColor = .white,
+        numbering: CounterNumbering? = nil
     ) {
         self.id = id
         self.number = number
@@ -205,6 +208,15 @@ public struct CounterSpec: Codable, Hashable, Sendable {
         self.radius = max(radius, 1)
         self.fill = fill
         self.textColor = textColor
+        self.numbering = numbering
+    }
+
+    public var numberingStyle: CounterNumbering {
+        numbering ?? .arabic
+    }
+
+    public var label: String {
+        numberingStyle.label(for: number)
     }
 }
 

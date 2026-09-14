@@ -177,9 +177,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var updater = UpdaterManager.shared
 
     lazy var onboarding = OnboardingWindowController(
-        model: OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem),
+        model: makeOnboardingModel(),
         settings: settings
     )
+
+    private func makeOnboardingModel() -> OnboardingModel {
+        let model = OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem)
+        model.onOpenPractice = { [weak self] url in
+            self?.areaCapture.quickAccess.openInEditor(url)
+        }
+        return model
+    }
 
     #if DEBUG
         var debugCaptureMenu: DebugCaptureMenu?
@@ -308,10 +316,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // loading cannot eat into the launch budget.
         loginItem.refresh()
 
-        // First launch goes straight to onboarding; every later launch just checks
+        // First launch goes straight to onboarding; a grant that needed a restart
+        // comes back to the permissions screen; every later launch just checks
         // whether the grant is still there (docs/03 §8.2, docs/04 §4.1).
         permissions.refresh()
-        if !settings.hasCompletedOnboarding {
+        if settings.resumeOnboardingAtPermissions || !settings.hasCompletedOnboarding {
             onboarding.show()
         }
         // Bound to a local: a log message is an autoclosure, so referring to a property

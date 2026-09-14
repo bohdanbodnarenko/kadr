@@ -149,7 +149,8 @@ struct QuickAccessStackView: View {
                     for: item.id,
                     in: manager.items
                 ),
-                showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item)
+                showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item),
+                alwaysShowActions: manager.settings.overlayAlwaysShowActions
             )
             .transition(
                 .move(edge: QuickAccessStackLayout.slideEdge(for: corner))

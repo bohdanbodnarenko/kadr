@@ -22,6 +22,7 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     /// Last fill opacity, kept even when fill is off so toggling Filled back on restores
     /// the alpha the user picked rather than snapping to the default wash.
     private var fillOpacity: Double?
+    private var counterNumbering: CounterNumbering?
 
     public init() {
         strokes = [:]
@@ -104,6 +105,11 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     public var lastCropAspect: CropAspectPreset {
         get { cropAspect ?? .free }
         set { cropAspect = newValue }
+    }
+
+    public var lastCounterNumbering: CounterNumbering {
+        get { counterNumbering ?? .arabic }
+        set { counterNumbering = newValue }
     }
 
     /// Sensible starting points per tool, so the first use of each is already usable.

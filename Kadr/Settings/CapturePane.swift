@@ -88,6 +88,12 @@ struct CapturePane: View {
                 Text("Off folds recognised lines into spaces, which suits copying a paragraph.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                Toggle("Open a review window", isOn: $settings.ocrShowsReview)
+                Text("The text is copied immediately. The window is for editing, a word count, "
+                    + "and opening a QR code.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Selection") {
@@ -98,6 +104,12 @@ struct CapturePane: View {
                 }
                 Text("Locks area capture to a ratio. ⇧-drag still forces a square. "
                     + "The All-in-One strip has the same menu.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Show what the keys do", isOn: $settings.captureShowsOverlayHints)
+                Text("A line in the middle of the freeze: drag, W for a window, F for this "
+                    + "display. Hidden once a rectangle exists.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

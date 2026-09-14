@@ -273,29 +273,29 @@ extension QuickAccessManager {
         return true
     }
 
+    /// Pins whatever is on the clipboard as a reference window (docs/03 §4).
+    @discardableResult
+    func pinClipboard() -> Bool {
+        if let url = ClipboardMedia.fileURL(from: .general) {
+            return pinFile(at: url)
+        }
+        guard let pngURL = ClipboardMedia.stillPNGFile(from: .general) else {
+            return false
+        }
+        return pinFile(at: pngURL)
+    }
+
     /// Opens whatever is on the clipboard as a card, or in the editor for a project.
     ///
     /// Images and movies both count: CleanShot 4.6 opens an MP4 copied onto the
-    /// pasteboard the same way as a still.
+    /// pasteboard the same way as a still. Plain text becomes a card so it can be pinned.
     @discardableResult
     func presentFromClipboard() -> Bool {
         let pasteboard = NSPasteboard.general
         if let url = ClipboardMedia.fileURL(from: pasteboard) {
             return presentExternalFile(at: url)
         }
-        guard let image = NSImage(pasteboard: pasteboard),
-              let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let png = bitmap.representation(using: .png, properties: [:])
-        else {
-            return false
-        }
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr-clipboard-\(UUID().uuidString).png")
-        do {
-            try png.write(to: destination, options: .atomic)
-        } catch {
-            logger.error("Could not write the clipboard image: \(error.localizedDescription, privacy: .public)")
+        guard let destination = ClipboardMedia.stillPNGFile(from: pasteboard) else {
             return false
         }
         return presentExternalFile(at: destination)

@@ -3,23 +3,19 @@ import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
-import os
 import Shared
 
 /// Applies a blur that varies across the image (docs/09 U1.3).
 ///
-/// `CIMaskedVariableBlur` takes a greyscale mask and blurs each pixel by the mask's value
-/// there — white is the full radius, black is untouched. So the whole effect is: build the
-/// right gradient, hand it over. Everything interesting is in the gradient, which is why
-/// the gradient is decided in `ProgressiveBlurMask` where it can be tested without
-/// rendering anything.
+/// Three stacked Gaussians with a ramped mask, not `CIMaskedVariableBlur`. The masked
+/// filter is one pass and it bands; stacking the way a live photographic blur does keeps
+/// the middle sharp and the edges actually soft. The gradient that decides *where* is
+/// still built in `ProgressiveBlurMask`, so the geometry can be tested without rendering.
 ///
 /// Note what this is *not*: the redaction blur. That one burns irreversibly into the pixels
 /// over a rectangle the user drew, and carries a security claim (docs/03 §3). This is
 /// decoration, and the two share no code on purpose.
 enum ProgressiveBlurCompositor {
-    private static let logger = KadrLog.logger(.capture)
-
     /// Blurs `image`, which occupies `rect` in points, at `scale` pixels per point.
     ///
     /// Returns nil when CoreImage declines, so the caller can draw the image unblurred —
@@ -48,18 +44,28 @@ enum ProgressiveBlurCompositor {
             return nil
         }
 
-        let filter = CIFilter.maskedVariableBlur()
-        // Clamped, or the blur pulls in transparent pixels from beyond the edge and the
-        // whole image fades out at its borders — the same reason the redaction blur clamps.
-        filter.inputImage = source.clampedToExtent()
-        filter.mask = gradient
-        filter.radius = Float(mask.blurRadius * scale)
-
-        guard let output = filter.outputImage else {
-            logger.error("The progressive blur produced no image; drawing it sharp")
-            return nil
+        // Three stacked Gaussians, the same approximation a photographic progressive blur
+        // uses live: `CIMaskedVariableBlur` bands, stacked Gaussians look like glass.
+        // Stronger levels cover weaker ones as the mask ramps up, so the sharp region
+        // stays sharp and the edges go properly soft.
+        let clamped = source.clampedToExtent()
+        var composite = source.cropped(to: pixelRect)
+        let levels = 3
+        for level in 0 ..< levels {
+            let start = CGFloat(level) / CGFloat(levels)
+            let end = CGFloat(level + 1) / CGFloat(levels)
+            let radius = max(mask.blurRadius * scale * end, 0.5)
+            let blurred = clamped
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
+                .cropped(to: pixelRect)
+            let band = bandMask(gradient, start: start, end: end)
+            let blend = CIFilter.blendWithMask()
+            blend.inputImage = blurred
+            blend.backgroundImage = composite
+            blend.maskImage = band
+            composite = blend.outputImage ?? composite
         }
-        return KadrRenderContext.shared.createCGImage(output, from: pixelRect)
+        return KadrRenderContext.shared.createCGImage(composite, from: pixelRect)
     }
 
     /// The greyscale ramp: black where the image stays sharp, white where it is fully
@@ -105,5 +111,23 @@ enum ProgressiveBlurCompositor {
 
         // Gradients are infinite; the blur needs one the size of the image.
         return gradient?.cropped(to: pixelRect)
+    }
+
+    /// Remaps a 0…1 gradient so this stack level ramps from clear to opaque across its
+    /// band, then stays opaque — later, stronger blurs cover the weaker ones.
+    private static func bandMask(_ gradient: CIImage, start: CGFloat, end: CGFloat) -> CIImage {
+        let width = max(end - start, 0.001)
+        return gradient
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 1 / width, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: 1 / width, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: 1 / width, w: 0),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+                "inputBiasVector": CIVector(x: -start / width, y: -start / width, z: -start / width, w: 0)
+            ])
+            .applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+            ])
     }
 }

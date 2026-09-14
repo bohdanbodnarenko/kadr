@@ -250,6 +250,13 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             logger.info("Keystroke overlay needs Accessibility permission; skipping it this time")
             return
         }
+        if !CGPreflightListenEventAccess() {
+            _ = CGRequestListenEventAccess()
+        }
+        guard CGPreflightListenEventAccess() else {
+            logger.info("Keystroke overlay needs Input Monitoring permission; skipping it this time")
+            return
+        }
 
         let callback: CGEventTapCallBack = { _, _, event, userInfo in
             guard let userInfo else { return Unmanaged.passUnretained(event) }

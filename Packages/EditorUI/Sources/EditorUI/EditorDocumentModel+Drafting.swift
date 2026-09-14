@@ -44,8 +44,9 @@ extension EditorDocumentModel {
         case let .measure(spec):
             styleMemory.remember(spec.stroke, for: .measure)
             styleMemory.lastMeasuresBox = spec.measuresBox
-        case .counter, .crop, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift,
-             .image:
+        case let .counter(spec):
+            styleMemory.lastCounterNumbering = spec.numberingStyle
+        case .crop, .beautify, .camera, .progressiveBlur, .watermark, .subjectLift, .image:
             break
         }
     }

@@ -84,8 +84,9 @@ struct RecordingPane: View {
                 }
                 .disabled(!settings.recordingShowsControlBar)
                 Text(
-                    "The floating island can be dragged anywhere. The notch layout grows "
-                        + "out of the MacBook camera cutout, like the Dynamic Island."
+                    "The floating island can be dragged anywhere. The notch layout extends "
+                        + "the camera cutout flush with the top of the screen; controls sit "
+                        + "in the menu bar beside the camera and widen on hover."
                 )
                 .font(.callout)
                 .foregroundStyle(.secondary)

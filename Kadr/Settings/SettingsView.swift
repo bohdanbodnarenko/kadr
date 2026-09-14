@@ -185,6 +185,8 @@ private struct SettingsDetailView: View {
             switch tab {
             case .general:
                 GeneralPane(settings: settings, loginItem: loginItem)
+            case .permissions:
+                PermissionsPane()
             case .overlay:
                 OverlayPane(settings: settings)
             case .capture:
@@ -212,6 +214,7 @@ extension SettingsTab {
     var title: String {
         switch self {
         case .general: "General"
+        case .permissions: "Permissions"
         case .overlay: "Overlay"
         case .capture: "Capture"
         case .recording: "Recording"
@@ -225,6 +228,7 @@ extension SettingsTab {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .permissions: "lock.shield"
         case .overlay: "rectangle.stack"
         case .capture: "camera.viewfinder"
         case .recording: "record.circle"

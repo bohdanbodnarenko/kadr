@@ -90,6 +90,12 @@ public extension AnnotationCommand {
         return .redaction(spec)
     }
 
+    func applying(counterNumbering: CounterNumbering) -> AnnotationCommand {
+        guard case var .counter(spec) = self else { return self }
+        spec.numbering = counterNumbering
+        return .counter(spec)
+    }
+
     func applying(spotlightDimOpacity: CGFloat) -> AnnotationCommand {
         guard case let .spotlight(spec) = self else { return self }
         return .spotlight(spec.withDimOpacity(spotlightDimOpacity))

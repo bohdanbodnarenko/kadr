@@ -47,7 +47,8 @@ public extension EditorDocumentModel {
         case .counter:
             let command = AnnotationCommand.counter(CounterSpec(
                 number: document.nextCounterNumber,
-                center: point
+                center: point,
+                numbering: styleMemory.lastCounterNumbering
             ))
             document.add(command)
             document.selection = [command.id]

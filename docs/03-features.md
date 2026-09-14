@@ -13,9 +13,9 @@
 
 Details:
 - Dimmed backdrop with a clear "hole" over the selection (even-odd fill).
-- While selecting: hold **Space** to move the selection; **arrow keys** nudge by 1 px (⇧ = 10 px); type numbers to set exact W×H; **⌥-drag** resizes from center; **aspect lock** via ⇧-drag; **Esc** cancels.
+- While selecting: hold **Space** to move the selection; **arrow keys** nudge by 1 px (⇧ = 10 px); type numbers to set exact W×H; **⌥-drag** resizes from center; **aspect lock** via ⇧-drag; **Esc** cancels. **F** captures this display at full size (not while the eyedropper is on). Idle overlay shows a teaching line (drag / W for a window / F for this display); hide it in Settings → Capture.
 - After mouse-up but before commit (optional "confirm mode", off by default): handles for resize, Enter/click-outside to commit.
-- **Remember last region**: hotkey "capture previous area" (P1) repeats the exact last rect on the same display instantly, no UI.
+- **Remember last region**: hotkey "capture previous area" (P1) repeats the exact last rect on the same display instantly, no UI. Opening area capture on that display also draws the last rect as a dashed ghost until a new drag starts.
 - **Snapping (P2):** selection edges snap to detected window frames and screen edges (from `SCShareableContent` window geometry); toggleable.
 - Freeze-frame means moving content (video, animations) is captured exactly as seen at hotkey time — this doubles as CleanShot's "Freeze screen" feature for free.
 
@@ -35,7 +35,7 @@ Options (in settings and via ⌥ modifier at click time):
 
 ### 1.3 Fullscreen / display capture (P1)
 
-Hotkey captures all displays (one file per display, or stitched — setting), or a chosen display via the All-in-One HUD. Silent (no overlay), instant, cursor optionally included. On a notched MacBook, fullscreen stills of an app that covers the display drop the camera strip (setting, on by default).
+Hotkey captures all displays (one file per display, or stitched — setting), or a chosen display via the All-in-One HUD. Silent (no overlay), instant, cursor optionally included. On a notched MacBook, fullscreen stills of an app that covers the display drop the camera strip (setting, on by default). From the area overlay, **F** captures the display under the pointer.
 
 ### 1.4 All-in-One capture HUD (P2)
 
@@ -60,7 +60,7 @@ Output goes to the editor scrolled-canvas mode. Failure mode: if stitching confi
 
 **Flow:** hotkey → same area-selection overlay (tinted differently + `TEXT` badge) → release → Vision text recognition on the selected pixels → recognized text **copied to clipboard** + toast preview with character count → optional popup editor to review before copy (setting).
 
-Details: language auto-detect (`automaticallyDetectsLanguage`), accurate mode; preserves line breaks (toggle: preserve / collapse to spaces); QR/barcode payloads decoded and offered ("Open link / Copy"); result also stored with the capture's history record (P2) to power search (P3).
+Details: language auto-detect (`automaticallyDetectsLanguage`), accurate mode; preserves line breaks (toggle: preserve / collapse to spaces); QR/barcode payloads decoded and offered ("Open link / Copy"); result also stored with the capture's history record (P2) to power search (P3). Settings → Capture can open a review window instead of the toast: editable text, word/character counts, table copy, and QR actions. The clipboard still receives the text immediately.
 
 **Accept:** ≥ Apple-Live-Text parity (it's the same engine); < 1 s for a typical region on M1; no network.
 
@@ -128,13 +128,13 @@ Opens in **its own process** (see doc 04) as a normal resizable window; multiple
 - **Shapes** — rect, rounded rect, ellipse, line; fill/stroke/none; stroke width via the inspector slider (presets 2/4/6/10/16 sit in the 1–32 pt range); fill opacity when filled.
 - **Freehand pencil** with smoothing; **Highlighter** (multiply-blend stroke).
 - **Text** — inline editing, 7 style presets + custom (font/size/weight/color/background pill). A click places a box and opens the editor; a click on existing text edits it.
-- **Blur / Pixelate** — rectangular region; pixelate uses randomized displacement (defeats de-pixelation of predictable grids); irreversible at export (actually re-rendered from blurred pixels, not an overlay that can be removed from the PNG — security-reviewed).
-- **Counter badges** — auto-incrementing numbered circles; drag to reorder renumbers.
+- **Blur / Pixelate / Erase** — rectangular region; pixelate uses randomized displacement (defeats de-pixelation of predictable grids); erase fills with the colour sampled from the region's edge so UI chrome disappears; irreversible at export (actually re-rendered from blurred pixels, not an overlay that can be removed from the PNG — security-reviewed).
+- **Counter badges** — auto-incrementing numbered circles; formats 1 / I / A / a; drag to reorder renumbers.
 - **Crop** — non-destructive; aspect presets; expand-canvas allowed (for padding). Expanded padding is filled from the capture's edge colour at export, not hard-coded white.
 - **Lock objects** — toolbar lock or ⇧⌘L keeps existing annotations from moving while you draw (CleanShot §8.1). Settings ▸ General can turn this on by default for new editor sessions.
 - **Object shadows** — Settings ▸ General can disable drop shadows on inserted images (CleanShot §8.2 / §21).
 - **Tool size** — `` ` `` / `+` (or `-`) changes the armed tool's stroke width, or text size for the text tool (CleanShot §8.2).
-- **Tool hand-off:** after a one-shot tool lands (arrow, shape, line, text once the in-place editor commits, blur/pixelate), the pointer returns to Select so the new annotation can be moved immediately. Pencil, highlighter, and counters stay armed — a numbered badge is one of a sequence. Crop is a mode until **Done**. Picking a drawing tool from the toolbar clears the current selection.
+- **Tool hand-off:** after a one-shot tool lands (arrow, shape, line, text once the in-place editor commits, blur/pixelate/erase), the pointer returns to Select so the new annotation can be moved immediately. Pencil, highlighter, and counters stay armed — a numbered badge is one of a sequence. Crop is a mode until **Done**. Picking a drawing tool from the toolbar clears the current selection.
 - Style system: last-used style per tool remembered; per-tool color/size in a floating inspector; global theme colors.
 - **Canvas drawing:** annotation tools apply to the whole canvas, including beautify padding around the screenshot — not only the capture itself. Coordinates stay image-relative so a crop still makes sense; the padding is just more of that plane.
 - **Inspector sliders:** every numeric control is a scrub track with the label inside it and a typed value field to the right (suffixes: "45%", "12 px", "30°", "1.5×"). Clicking the track sets the value at that position; hover reveals ticks; signed ranges (tilt, pan, roll) detent on zero. Arrow keys step one displayed unit.
@@ -154,7 +154,7 @@ Opens in **its own process** (see doc 04) as a normal resizable window; multiple
 Any capture (from overlay, editor, or history) can be **pinned**: a borderless always-on-top window showing the image at captured size (drag corners to scale; ⌥-scroll zoom; double-click = 100%).
 
 - Opacity slider (⌥-scroll or menu, 20–100%); **click-through mode** (⌘⌥L) making it a pure reference layer; arrow-key positioning; appears on all Spaces; multiple pins.
-- Pin menu (right-click): copy, save, annotate, OCR, close. "Close all pins" global command.
+- Pin menu (right-click): copy, save, annotate, OCR, close. "Close all pins" global command. **Pin Clipboard** (menu + hotkey) pins an image on the pasteboard, or draws plain/RTF/HTML text as a card and pins that.
 - Pins persist across app restarts (P2, from history).
 
 **Accept:** pin windows never take focus on show; click-through verified over interactive apps; 20 pins ≤ 40 MB added RSS (downsampled backing images, full-res reloaded on demand).
@@ -197,10 +197,10 @@ There is deliberately **no sharing infrastructure**: no hosting, no upload targe
 Template-style icon; states: idle / capture armed / recording (red + timer). Left-click menu: capture actions with hotkey hints, last-captures strip (P2), pins, history, settings, check-for-updates, quit. Drag a file *onto* the icon → opens in editor (P2). ⌥-click = All-in-One HUD.
 
 ### 8.2 Onboarding (P1)
-First launch: 3 screens max. (1) What it does + hotkey cheatsheet; (2) **Screen Recording permission** — explains TCC honestly, deep-links System Settings, live-detects grant, warns about macOS 15 monthly re-confirmation so it never surprises; (3) defaults choice: clipboard-first vs file-first, save folder, launch-at-login opt-in. Total < 2 min; every screen skippable.
+First launch: 3 screens max. (1) What it does + the main hotkeys; (2) **Permissions** — Screen Recording required; Accessibility, Input Monitoring, Microphone and Camera optional. Compact rows with live status (Allow / Open Settings / Allowed / Restricted), deep-links, live-detect on return from System Settings, resume after a grant that needs a relaunch, and an honest note about macOS 15’s monthly re-confirmation; (3) defaults choice: clipboard-first vs file-first, save folder, launch-at-login opt-in, plus a practice image that opens the editor with no capture. Total < 2 min; every screen skippable. Settings ▸ Permissions is the same recovery UI for people who skipped.
 
 ### 8.3 Settings (P1, grows)
-Panes: General (login item, default action, save folder, optional ask-where-to-save from the overlay, filename template `{app}-{date}-{time}`, format, Retina downscale, optional convert-to-sRGB on save), Shortcuts (recorder UI for every command), Overlay (corner, size, timeout, stacking), Capture (cursor, shadow, freeze, snapping, auto-crop notch), Recording (P2), History (P2), Advanced (URL scheme/CLI install, reset). Settings window is a normal app-style window (works around LSUIElement focus quirks per doc 04).
+Panes: General (login item, default action, save folder, optional ask-where-to-save from the overlay, filename template `{app}-{date}-{time}`, format, Retina downscale, optional convert-to-sRGB on save), Permissions (live TCC status and recovery for Screen Recording, Accessibility, Input Monitoring, Microphone and Camera), Shortcuts (recorder UI for every command), Overlay (corner, size, timeout, stacking, optional always-show actions), Capture (cursor, shadow, snapping, auto-crop notch, overlay teaching hints, OCR review window), Recording (P2), History (P2), Advanced (URL scheme/CLI install, reset). Settings window is a normal app-style window (works around LSUIElement focus quirks per doc 04).
 
 ### 8.4 Automation (P2)
 - URL scheme: `kadr://capture-area?action=copy|save|annotate|pin&x=&y=&w=&h=`, `capture-window`, `capture-fullscreen`, `capture-text`, `record-screen?fps=`, `pin?filepath=`, `toggle-desktop-icons`, `open-history`, `open-settings?tab=` … (CleanShot-verb alias table for Raycast migration).

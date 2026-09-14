@@ -37,6 +37,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case hideOverlays
     /// Hide / show every pinned screenshot without closing them (CleanShot §11).
     case hidePins
+    /// Pin whatever is on the clipboard — an image, or text drawn as a card (docs/03 §4).
+    case pinClipboard
 
     /// Menu title (docs/03 §8.1).
     var title: String {
@@ -62,6 +64,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .saveAllOverlays: "Save All Overlays"
         case .hideOverlays: "Hide Overlays"
         case .hidePins: "Hide Pins"
+        case .pinClipboard: "Pin Clipboard"
         }
     }
 
@@ -71,6 +74,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .toggleDesktopIcons: "Toggle Desktop Icons"
         case .hideOverlays: "Hide / Show Overlays"
         case .hidePins: "Hide / Show Pins"
+        case .pinClipboard: "Pin Clipboard"
         default: title
         }
     }
@@ -96,7 +100,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
 
     /// Overlay stack commands, grouped under History in the menu (CleanShot §6.3).
     static var overlayCommands: [CaptureCommand] {
-        [.saveAllOverlays, .closeAllOverlays, .hideOverlays]
+        [.saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard]
     }
 
     /// The recording commands, which the menu groups separately (docs/03 §1.8).

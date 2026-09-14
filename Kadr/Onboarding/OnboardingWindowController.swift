@@ -38,10 +38,16 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             return
         }
 
+        if settings.resumeOnboardingAtPermissions {
+            model.step = .permissions
+        } else {
+            model.step = .welcome
+        }
+
         let hosting = NSHostingView(rootView: OnboardingView(model: model, settings: settings))
         let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 560, height: 460),
-            styleMask: [.titled, .closable],
+            contentRect: CGRect(x: 0, y: 0, width: 640, height: 680),
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -49,12 +55,16 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 520, height: 560)
         window.center()
 
         self.window = window
         hostingView = hosting
         juggler.beginRegularWindow()
         window.makeKeyAndOrderFront(nil)
+        if model.step == .permissions {
+            model.startWatchingForGrant()
+        }
     }
 
     func close() {
@@ -63,6 +73,16 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model.stopWatchingForGrant()
+        // A relaunch for a new grant must keep the resume flag. Any other close is a
+        // skip, so setup never nags next launch (docs/03 §8.2).
+        if settings.resumeOnboardingAtPermissions, model.needsRelaunch {
+            logger.info("Keeping onboarding paused on permissions across relaunch")
+        } else {
+            settings.resumeOnboardingAtPermissions = false
+            if !settings.hasCompletedOnboarding {
+                settings.hasCompletedOnboarding = true
+            }
+        }
         window?.delegate = nil
         window?.contentView = nil
         window = nil

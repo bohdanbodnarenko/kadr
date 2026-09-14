@@ -163,31 +163,52 @@ public enum ShapeKind: Codable, Hashable, Sendable {
 }
 
 /// How a region is obscured (docs/03 §3).
+public enum RedactionKind: String, CaseIterable, Hashable, Sendable {
+    case blur
+    case pixelate
+    case erase
+
+    public var title: String {
+        switch self {
+        case .blur: "Blur"
+        case .pixelate: "Pixelate"
+        case .erase: "Erase"
+        }
+    }
+}
+
+/// How a region is obscured (docs/03 §3).
 public enum RedactionStyle: Codable, Hashable, Sendable {
     case blur(radius: CGFloat)
     /// Pixelation uses randomised per-cell displacement, because a predictable grid can
     /// be attacked — an even mosaic over known glyph shapes is recoverable.
     case pixelate(cellSize: CGFloat)
+    /// Fill with the colour sampled from the region's edge, so UI chrome disappears.
+    case erase
 
     /// Screendrop's default strength (0.55): enough to hide text, not a wall of fog.
     public static let defaultBlur = RedactionStyle.blur(density: 0.55)
     public static let defaultPixelate = RedactionStyle.pixelate(density: 0.55)
+    public static let defaultErase = RedactionStyle.erase
 
-    public var isPixelate: Bool {
-        if case .pixelate = self {
-            return true
+    public var kind: RedactionKind {
+        switch self {
+        case .blur: .blur
+        case .pixelate: .pixelate
+        case .erase: .erase
         }
-        return false
     }
 
     /// Strength on Screendrop's 0...1 slider. Blur radius is `2 + density × 28`;
-    /// pixel block size is `4 + density × 36`.
+    /// pixel block size is `4 + density × 36`. Erase has no strength.
     public var density: CGFloat {
         switch self {
         case let .blur(radius):
             min(max((radius - 2) / 28, 0), 1)
         case let .pixelate(cellSize):
             min(max((cellSize - 4) / 36, 0), 1)
+        case .erase:
+            0.55
         }
     }
 
@@ -199,14 +220,21 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
         .pixelate(cellSize: 4 + clampedDensity(density) * 36)
     }
 
-    /// Keeps the same strength while switching Blur ↔ Pixelate.
-    public func togglingKind(pixelate: Bool) -> RedactionStyle {
-        pixelate ? .pixelate(density: density) : .blur(density: density)
+    public func withKind(_ kind: RedactionKind) -> RedactionStyle {
+        switch kind {
+        case .blur: .blur(density: density)
+        case .pixelate: .pixelate(density: density)
+        case .erase: .erase
+        }
     }
 
     /// Keeps Blur vs Pixelate while the Strength slider moves.
     public func withDensity(_ density: CGFloat) -> RedactionStyle {
-        isPixelate ? .pixelate(density: density) : .blur(density: density)
+        switch kind {
+        case .pixelate: .pixelate(density: density)
+        case .blur: .blur(density: density)
+        case .erase: .erase
+        }
     }
 
     private static func clampedDensity(_ density: CGFloat) -> CGFloat {
@@ -258,4 +286,63 @@ public struct TextStyle: Codable, Hashable, Sendable {
             backgroundColor: AnnotationColor(red: 0.94, green: 0.94, blue: 0.94)
         ))
     ]
+}
+
+/// How a counter badge writes its number (docs/03 §3).
+public enum CounterNumbering: String, Codable, Hashable, Sendable, CaseIterable {
+    case arabic
+    case roman
+    case latinUpper
+    case latinLower
+
+    public var title: String {
+        switch self {
+        case .arabic: "1, 2, 3"
+        case .roman: "I, II, III"
+        case .latinUpper: "A, B, C"
+        case .latinLower: "a, b, c"
+        }
+    }
+
+    /// The glyph drawn inside the badge for `number` (1-based).
+    public func label(for number: Int) -> String {
+        let value = max(number, 1)
+        switch self {
+        case .arabic: return "\(value)"
+        case .roman: return Self.roman(value)
+        case .latinUpper: return Self.latin(value).uppercased()
+        case .latinLower: return Self.latin(value)
+        }
+    }
+
+    private static func roman(_ number: Int) -> String {
+        let glyphs: [(Int, String)] = [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ]
+        var remaining = min(number, 3999)
+        var result = ""
+        for (value, glyph) in glyphs {
+            while remaining >= value {
+                result += glyph
+                remaining -= value
+            }
+        }
+        return result
+    }
+
+    private static func latin(_ number: Int) -> String {
+        var value = number
+        var letters: [Character] = []
+        while value > 0 {
+            value -= 1
+            let code = 97 + (value % 26)
+            if let scalar = UnicodeScalar(code) {
+                letters.append(Character(scalar))
+            }
+            value /= 26
+        }
+        return String(letters.reversed())
+    }
 }

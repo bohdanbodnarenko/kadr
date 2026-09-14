@@ -85,6 +85,8 @@ extension SelectionOverlayView {
         case "a" where mode == .window:
             setMode(.area)
             onModeChanged?(.area)
+        case "f" where mode == .area && !isEyedropperMode && purpose == .capture:
+            onCaptureDisplay?()
         default:
             return false
         }

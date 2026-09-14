@@ -42,6 +42,7 @@ extension KeyboardShortcuts.Name {
     )
     static let hideOverlays = Self("hideOverlays", initial: .init(.o, modifiers: [.control, .shift]))
     static let hidePins = Self("hidePins", initial: .init(.u, modifiers: [.control, .shift]))
+    static let pinClipboard = Self("pinClipboard", initial: .init(.y, modifiers: [.control, .shift]))
 }
 
 extension CaptureCommand {
@@ -68,6 +69,7 @@ extension CaptureCommand {
         case .saveAllOverlays: .saveAllOverlays
         case .hideOverlays: .hideOverlays
         case .hidePins: .hidePins
+        case .pinClipboard: .pinClipboard
         }
     }
 }

@@ -25,6 +25,7 @@ private let everyCommand: [AnnotationCommand] = [
     .text(TextSpec(string: "Hello", rect: CGRect(x: 10, y: 10, width: 120, height: 40))),
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20))),
     .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20), style: .defaultPixelate)),
+    .redaction(RedactionSpec(rect: CGRect(x: 0, y: 0, width: 20, height: 20), style: .erase)),
     .spotlight(SpotlightSpec(rect: CGRect(x: 10, y: 10, width: 80, height: 60))),
     .counter(CounterSpec(number: 3, center: CGPoint(x: 50, y: 50))),
     .crop(CropSpec(rect: CGRect(x: 0, y: 0, width: 100, height: 100), canExpandCanvas: true)),
@@ -118,9 +119,11 @@ struct AnnotationCommandTests {
         if case let .blur(radius) = blur {
             #expect(abs(radius - 17.4) < 0.001)
         }
-        #expect(blur.togglingKind(pixelate: true).isPixelate)
-        #expect(!pixelate.togglingKind(pixelate: false).isPixelate)
+        #expect(blur.withKind(.pixelate).kind == .pixelate)
+        #expect(pixelate.withKind(.blur).kind == .blur)
         #expect(abs(blur.withDensity(1).density - 1) < 0.001)
+        #expect(blur.withKind(.erase) == .erase)
+        #expect(RedactionStyle.erase.withKind(.blur).kind == .blur)
     }
 
     @Test("Spotlight dim and corner radius clamp to the documented ranges")

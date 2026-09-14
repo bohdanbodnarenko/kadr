@@ -222,8 +222,8 @@ struct EditorStyleTests {
         model.applyRedactionStyle(.defaultPixelate)
 
         guard case let .redaction(spec) = try #require(model.document.commands.first) else { return }
-        #expect(spec.style.isPixelate)
-        #expect(model.styleMemory.lastRedactionStyle.isPixelate)
+        #expect(spec.style.kind == .pixelate)
+        #expect(model.styleMemory.lastRedactionStyle.kind == .pixelate)
 
         model.applyRedactionStyle(spec.style.withDensity(0.8))
         guard case let .redaction(stronger) = try #require(model.document.commands.first) else { return }

@@ -117,6 +117,7 @@ public enum ToggleState: String, Codable, Sendable, CaseIterable, Hashable {
 /// The Settings window's panes, addressable by name (docs/03 §8.4 `open-settings?tab=`).
 public enum SettingsTab: String, Codable, Sendable, CaseIterable, Hashable, Identifiable {
     case general
+    case permissions
     case overlay
     case capture
     case recording
@@ -140,6 +141,8 @@ public enum SettingsTab: String, Codable, Sendable, CaseIterable, Hashable, Iden
             return .capture
         case "quickaccess", "quick-access", "quickaccessoverlay":
             return .overlay
+        case "privacy", "tcc":
+            return .permissions
         case "about":
             return .updates
         default:

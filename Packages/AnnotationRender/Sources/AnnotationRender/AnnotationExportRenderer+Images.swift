@@ -51,7 +51,7 @@ extension AnnotationExportRenderer {
         context.fillEllipse(in: rect)
 
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, spec.radius * 1.1, nil)
-        let attributed = NSAttributedString(string: "\(spec.number)", attributes: [
+        let attributed = NSAttributedString(string: spec.label, attributes: [
             .init(kCTFontAttributeName as String): font,
             .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor
         ])

@@ -33,10 +33,13 @@ final class AreaCaptureCoordinator {
     /// Internal, not private: file OCR lives in `AreaCaptureCoordinator+OCR.swift`.
     let vision = TextRecognizer()
     let recovery = PermissionRecovery()
-    private var pickerSession: ContentSharingPickerSession?
+    /// Internal, not private: the picker path lives in `+Picker.swift`, and `private` is
+    /// file-scoped.
+    var pickerSession: ContentSharingPickerSession?
     /// Internal, not private: the colour-pick half lives in
     /// `AreaCaptureCoordinator+ColorPick.swift`, and `private` is file-scoped.
     let toast = TextCaptureToast()
+    let textReview = TextCaptureReview()
     /// Internal, not private: delivery lives in
     /// `AreaCaptureCoordinator+Delivery.swift`, and `private` is file-scoped.
     let output: CaptureOutput
@@ -210,6 +213,7 @@ final class AreaCaptureCoordinator {
                 }
 
                 let eyedropper = armOverlay()
+                overlay.lastRegion = lastRegion
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     mode: mode,
@@ -234,6 +238,7 @@ final class AreaCaptureCoordinator {
     private func armOverlay() -> Bool {
         overlay.snapsToEdges = settings.captureSnapsToEdges
         overlay.lockedAspect = settings.captureSelectionAspect.ratio
+        overlay.showsCaptureHints = settings.captureShowsOverlayHints
         overlay.onColorPicked = { [weak self] pick in
             self?.deliver(pick)
         }
@@ -275,7 +280,9 @@ final class AreaCaptureCoordinator {
 
     func capturePreviousArea() {
         rememberBeautifySkip()
-        if captureHeldFreezeCroppingLastRegion() { return }
+        if captureHeldFreezeCroppingLastRegion() {
+            return
+        }
         guard let lastRegion else {
             logger.info("No previous area to capture yet")
             return
@@ -309,7 +316,26 @@ final class AreaCaptureCoordinator {
             finishRegion(result, freezes: freezes)
         case let .window(selection):
             finishWindow(selection)
+        case let .fullscreen(displayID):
+            finishFullscreen(displayID, freezes: freezes)
         }
+    }
+
+    /// `F` on the overlay: the whole frozen display, still WYSIWYG (docs/03 §1.3).
+    private func finishFullscreen(_ displayID: CGDirectDisplayID, freezes: [DisplayFreeze]) {
+        guard let freeze = freezes.first(where: { $0.geometry.displayID == displayID }) else {
+            captureDisplay(displayID)
+            return
+        }
+        let local = freeze.geometry.localRect(for: freeze.geometry.frame)
+        finishRegion(
+            SelectionResult(
+                rect: freeze.geometry.frame,
+                display: freeze.geometry,
+                localRect: local.cgRect
+            ),
+            freezes: freezes
+        )
     }
 
     /// Captures the picked window through SCK, so it comes out unoccluded rather than
@@ -419,8 +445,8 @@ final class AreaCaptureCoordinator {
                 logger.info("Recognised \(characters, privacy: .public) characters")
 
                 let screen = NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
-                toast.show(
-                    text: recognition.text,
+                presentTextResult(
+                    recognition.text,
                     codes: recognition.codes,
                     table: recognition.table,
                     on: screen
@@ -451,33 +477,6 @@ final class AreaCaptureCoordinator {
             } catch {
                 hygiene?.endCapture()
                 handle(error)
-            }
-        }
-    }
-
-    /// The frontmost app right now, as a value.
-    private static func currentFrontmostApp() -> AppIdentity? {
-        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
-        return AppIdentity(name: app.localizedName, bundleIdentifier: app.bundleIdentifier)
-    }
-
-    /// Captures through `SCContentSharingPicker`, which needs no permission at all
-    /// (docs/04 §4.1) — the way to stay useful before, or without, a TCC grant.
-    func captureWithSystemPicker() {
-        rememberBeautifySkip()
-        let session = ContentSharingPickerSession()
-        pickerSession = session
-        inFlight = Task { [weak self] in
-            guard let self else { return }
-            defer { pickerSession = nil }
-            do {
-                let capture = try await session.captureUserSelection()
-                await deliver(capture)
-            } catch is CancellationError {
-                logger.info("Picker capture cancelled")
-            } catch {
-                let mapped = CaptureError.mapping(error)
-                logger.error("Picker capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
             }
         }
     }

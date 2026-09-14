@@ -309,7 +309,7 @@ public enum AnnotationLayerFactory {
 
         let text = CATextLayer()
         text.frame = CGRect(x: 0, y: spec.radius * 0.35, width: spec.radius * 2, height: spec.radius)
-        text.string = NSAttributedString(string: "\(spec.number)", attributes: [
+        text.string = NSAttributedString(string: spec.label, attributes: [
             .init(kCTFontAttributeName as String):
                 CTFontCreateWithName("Helvetica-Bold" as CFString, spec.radius * 1.1, nil),
             .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor
@@ -347,9 +347,15 @@ public enum AnnotationLayerFactory {
         layer.frame = spec.rect.standardized
         layer.masksToBounds = true
         layer.contentsGravity = .resize
+        // Linear, not nearest: a nearest-neighbour upsample of a Gaussian looks like a
+        // mosaic, which is the pixelate tool's job (docs/03 §3).
+        layer.magnificationFilter = .linear
+        layer.minificationFilter = .linear
         layer.borderWidth = 0
         if let baseImage, let preview = redactionRasterizer.preview(spec, from: baseImage, scale: imageScale) {
             layer.contents = preview
+            let width = max(spec.rect.width, 1)
+            layer.contentsScale = max(CGFloat(preview.width) / width, 1)
             layer.backgroundColor = nil
             return
         }

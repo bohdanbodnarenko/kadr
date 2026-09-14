@@ -6,6 +6,16 @@ public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
     /// Whether the user has been through onboarding (docs/03 §8.2).
     public static let hasCompletedOnboarding = SettingKey("app.hasCompletedOnboarding", default: false)
+    /// Reopen onboarding on the permissions screen after a grant that needs a relaunch.
+    ///
+    /// macOS applies Screen Recording, Accessibility and Input Monitoring to a freshly
+    /// launched process. Asking during setup, then coming back to a welcome screen, is
+    /// how people think the grant failed. This flag survives the restart; Skip, close
+    /// and Done clear it.
+    public static let resumeOnboardingAtPermissions = SettingKey(
+        "app.resumeOnboardingAtPermissions",
+        default: false
+    )
     /// Whether the one-time tip above the first capture card has been seen (docs/03 §2).
     ///
     /// Separate from onboarding, and deliberately: onboarding happens before the user has
@@ -50,6 +60,10 @@ public enum SettingKeys {
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
     /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
+    /// Open an editable review window after Capture Text (docs/03 §1.7).
+    public static let ocrShowsReview = SettingKey("capture.ocrShowsReview", default: true)
+    /// Teaching copy on the idle freeze overlay (docs/03 §1.1).
+    public static let captureShowsOverlayHints = SettingKey("capture.showsOverlayHints", default: true)
     /// Pull the selection onto the edges Kadr finds in the frozen screen (docs/06 M21).
     public static let captureSnapsToEdges = SettingKey("capture.snapsToEdges", default: true)
     public static let captureSelectionAspect = SettingKey(
@@ -78,6 +92,12 @@ public enum SettingKeys {
     /// no on-screen way to stop, and "I could not work out how to stop it" is the first
     /// thing anybody said about it.
     public static let recordingShowsControlBar = SettingKey("recording.showsControlBar", default: true)
+    /// Where the live recording controls sit. The notch layout needs a camera notch;
+    /// Macs without one keep the floating island.
+    public static let recordingControlChrome = SettingKey(
+        "recording.controlChrome",
+        default: RecordingControlChrome.island
+    )
     /// Seconds counted down before a recording starts (docs/03 §1.8).
     ///
     /// Its own key rather than sharing the still timer: three seconds before a screenshot is
@@ -193,6 +213,8 @@ public enum SettingKeys {
     public static let overlayDismissOnDrag = SettingKey("overlay.dismissOnDrag", default: true)
     /// Return saves the hovered card and dismisses it (CleanShot §6.2).
     public static let overlayReturnSaves = SettingKey("overlay.returnSaves", default: true)
+    /// Show card actions without hovering (docs/03 §2 still uses hover as the default).
+    public static let overlayAlwaysShowActions = SettingKey("overlay.alwaysShowActions", default: false)
     /// Last mode picked in the All-in-One HUD, so Return re-arms it (docs/03 §1.4).
     public static let lastAllInOneMode = SettingKey("capture.lastAllInOneMode", default: "area")
 

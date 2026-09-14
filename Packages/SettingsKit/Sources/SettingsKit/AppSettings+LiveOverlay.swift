@@ -3,6 +3,58 @@ import Shared
 
 /// Live recording overlay and area-selection aspect (computed so they do not grow `init`).
 public extension AppSettings {
+    /// True when a permission request may need a relaunch, so setup returns to that screen.
+    var resumeOnboardingAtPermissions: Bool {
+        get {
+            access(keyPath: \.resumeOnboardingAtPermissions)
+            return store[SettingKeys.resumeOnboardingAtPermissions]
+        }
+        set {
+            withMutation(keyPath: \.resumeOnboardingAtPermissions) {
+                store[SettingKeys.resumeOnboardingAtPermissions] = newValue
+            }
+        }
+    }
+
+    /// Card actions stay visible instead of appearing on hover.
+    var overlayAlwaysShowActions: Bool {
+        get {
+            access(keyPath: \.overlayAlwaysShowActions)
+            return store[SettingKeys.overlayAlwaysShowActions]
+        }
+        set {
+            withMutation(keyPath: \.overlayAlwaysShowActions) {
+                store[SettingKeys.overlayAlwaysShowActions] = newValue
+            }
+        }
+    }
+
+    /// Teaching copy on the idle freeze overlay.
+    var captureShowsOverlayHints: Bool {
+        get {
+            access(keyPath: \.captureShowsOverlayHints)
+            return store[SettingKeys.captureShowsOverlayHints]
+        }
+        set {
+            withMutation(keyPath: \.captureShowsOverlayHints) {
+                store[SettingKeys.captureShowsOverlayHints] = newValue
+            }
+        }
+    }
+
+    /// Open an editable review window after Capture Text.
+    var ocrShowsReview: Bool {
+        get {
+            access(keyPath: \.ocrShowsReview)
+            return store[SettingKeys.ocrShowsReview]
+        }
+        set {
+            withMutation(keyPath: \.ocrShowsReview) {
+                store[SettingKeys.ocrShowsReview] = newValue
+            }
+        }
+    }
+
     var recordingWebcamCircular: Bool {
         get {
             access(keyPath: \.recordingWebcamCircular)

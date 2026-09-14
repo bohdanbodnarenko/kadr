@@ -36,8 +36,7 @@ final class RecordingControlBar {
     static var savedOrigin: CGPoint?
 
     private static let margin: CGFloat = 22
-    static let notchContentHeight: CGFloat = 38
-    private static let notchWindowSize = CGSize(width: 400, height: 52)
+    static let notchContentHeight: CGFloat = RecordingNotchLayout.contentHeight
 
     var isShowing: Bool {
         panel != nil
@@ -70,6 +69,7 @@ final class RecordingControlBar {
         model.chrome = picker.settings.recordingControlChrome
         model.docksToNotch = false
         model.notchVisible = false
+        model.notchExpanded = false
         present(key: true)
     }
 
@@ -138,6 +138,9 @@ final class RecordingControlBar {
             screenHasNotch: RecordingNotchScreen.isAvailable,
             isLiveSession: true
         )
+        if model.docksToNotch {
+            model.notchMetrics = RecordingNotchScreen.metrics
+        }
     }
 
     private func present(key: Bool) {
@@ -197,6 +200,7 @@ final class RecordingControlBar {
         model.preRoll = nil
         model.docksToNotch = false
         model.notchVisible = false
+        model.notchExpanded = false
     }
 
     private func revealNotchIfNeeded() {
@@ -211,13 +215,13 @@ final class RecordingControlBar {
 
     private var windowLevel: NSWindow.Level {
         model.docksToNotch
-            ? NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+            ? NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
             : .floating
     }
 
     private var hostingSize: CGSize {
         if model.docksToNotch {
-            return Self.notchWindowSize
+            return model.notchLayout.windowSize
         }
         return hosting?.fittingSize ?? .zero
     }
@@ -239,7 +243,9 @@ final class RecordingControlBar {
     private func resizeToFittingSize() {
         guard let panel, let hosting else { return }
         if model.docksToNotch {
-            panel.setFrame(notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main), display: true)
+            let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+            panel.setFrame(frame, display: false)
+            hosting.frame = NSRect(origin: .zero, size: frame.size)
             return
         }
         hosting.invalidateIntrinsicContentSize()
@@ -281,7 +287,7 @@ final class RecordingControlBar {
     }
 
     private func notchFrame(on screen: NSScreen?) -> NSRect {
-        let size = Self.notchWindowSize
+        let size = model.notchLayout.windowSize
         guard let screen else {
             return NSRect(origin: .zero, size: size)
         }
@@ -308,6 +314,17 @@ final class RecordingControlBarModel {
     var chrome: RecordingControlChrome = .island
     var docksToNotch = false
     var notchVisible = false
+    var notchExpanded = false
+    var notchMetrics = RecordingNotchMetrics.fallback
+
+    var notchLayout: RecordingNotchLayout {
+        RecordingNotchLayout(
+            hardware: notchMetrics,
+            isExpanded: notchExpanded || microphoneIsSilent,
+            hasPreRoll: preRoll != nil,
+            isVisible: notchVisible
+        )
+    }
 
     @ObservationIgnored var stop: () -> Void = {}
     @ObservationIgnored var togglePause: () -> Void = {}
@@ -342,6 +359,11 @@ struct RecordingControlBarView: View {
                 liveBar
             }
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity,
+            alignment: model.docksToNotch ? .top : .center
+        )
         .animation(.snappy(duration: 0.22), value: model.session != nil)
         .animation(.snappy(duration: 0.22), value: model.preRoll != nil)
         .animation(.snappy(duration: 0.22), value: model.docksToNotch)

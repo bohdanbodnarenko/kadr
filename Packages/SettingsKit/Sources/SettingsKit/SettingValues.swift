@@ -135,6 +135,21 @@ public enum RecordingQuality: Int, CaseIterable, SettingValue {
     }
 }
 
+/// Where the on-screen recording controls live while a take is running.
+public enum RecordingControlChrome: String, CaseIterable, SettingValue {
+    /// The existing floating capsule, draggable anywhere.
+    case island
+    /// Dynamic Island-style strip that grows out of the MacBook camera notch.
+    case notch
+
+    public var title: String {
+        switch self {
+        case .island: "Floating island"
+        case .notch: "Menu bar notch"
+        }
+    }
+}
+
 public enum RecordingVideoCodec: String, CaseIterable, SettingValue {
     case hevc
     case h264

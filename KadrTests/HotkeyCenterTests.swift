@@ -90,12 +90,13 @@ struct CaptureCommandTests {
         #expect(CaptureCommand.utilityCommands.contains(.freezeScreen))
     }
 
-    @Test("Overlay commands cover close, save and hide")
+    @Test("Overlay commands cover close, save, hide and pin clipboard")
     func overlayCommands() {
         #expect(CaptureCommand.overlayCommands == [
             .saveAllOverlays,
             .closeAllOverlays,
-            .hideOverlays
+            .hideOverlays,
+            .pinClipboard
         ])
     }
 }

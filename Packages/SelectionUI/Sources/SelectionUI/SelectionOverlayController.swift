@@ -65,6 +65,8 @@ public struct WindowSelection: Sendable {
 public enum SelectionOutcome: Sendable {
     case region(SelectionResult)
     case window(WindowSelection)
+    /// `F` on the area overlay, this display at full size (docs/03 §1.3).
+    case fullscreen(CGDirectDisplayID)
 }
 
 /// What the user chose.
@@ -173,6 +175,12 @@ public final class SelectionOverlayController {
     public var lockedAspect: CGSize? {
         didSet { applyLockedAspect() }
     }
+
+    /// Teaching copy while the overlay is idle (docs/03 §1.1).
+    public var showsCaptureHints = true
+
+    /// The previous area capture, drawn as a dashed ghost on that display.
+    public var lastRegion: (rect: DisplayRect, displayID: CGDirectDisplayID)?
     /// How close an edge has to be before the selection takes it, in points.
     public var snapTolerance: CGFloat = 6
     /// The detection pass, so a second hotkey abandons the first one's work.
@@ -188,7 +196,9 @@ public final class SelectionOverlayController {
     }
 
     /// Why the overlay is up. Freeze inspect stays `.inspect` until it is dismissed.
-    public var currentPurpose: SelectionPurpose { purpose }
+    public var currentPurpose: SelectionPurpose {
+        purpose
+    }
 
     /// Shows the frozen screen and resolves with the user's selection, or `nil` on Esc.
     ///
@@ -353,6 +363,10 @@ public final class SelectionOverlayController {
         panel.view.setSnapping(snapping[descriptor.displayID])
         panel.view.setPrecisionMode(isPrecisionMode)
         panel.view.interaction.lockedAspect = lockedAspect
+        panel.view.showsCaptureHints = showsCaptureHints
+        panel.view.onCaptureDisplay = { [weak self] in
+            self?.dismiss(result: .fullscreen(descriptor.displayID))
+        }
 
         panel.view.onPrecisionModeChanged = { [weak self] enabled in
             guard let self else { return }
@@ -379,6 +393,11 @@ public final class SelectionOverlayController {
         }
 
         configureEyedropper(on: panel)
+
+        if let lastRegion, lastRegion.displayID == descriptor.displayID {
+            panel.view.lastRegionGhost = frozen.geometry.localRect(for: lastRegion.rect).cgRect
+            panel.view.redraw()
+        }
 
         panel.view.onCancel = { [weak self] in
             self?.dismiss(result: nil)
@@ -456,27 +475,5 @@ public final class SelectionOverlayController {
             result[display.displayID] = descriptors.compactMap { $0.mapped(onto: display) }
         }
         return result
-    }
-}
-
-public extension FrozenDisplay {
-    /// Crops the selection straight out of the frozen bitmap.
-    ///
-    /// This is what makes area capture WYSIWYG (docs/03 §1.1). Re-capturing the region
-    /// after the user releases the mouse would photograph whatever the screen shows
-    /// *then* — a video that has advanced, a menu that has closed, a notification that
-    /// arrived — instead of the frozen frame they actually selected on.
-    ///
-    /// - Parameter localRect: the selection in display-local points.
-    func croppedImage(localRect: CGRect) -> CGImage? {
-        guard !localRect.isEmpty else { return nil }
-        let pixels = geometry.pixels(for: DisplayRect(cgRect: localRect))
-        guard !pixels.isEmpty else { return nil }
-
-        let clamped = pixels.cgRect.intersection(
-            CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        )
-        guard !clamped.isEmpty else { return nil }
-        return image.cropping(to: clamped)
     }
 }

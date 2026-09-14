@@ -48,6 +48,7 @@ struct EditorInspector: View {
                     case .spotlight: spotlightOptions
                     case .text: textOptions
                     case .measure: measureOptions
+                    case .counter: counterOptions
                     default: EmptyView()
                     }
                 }
@@ -226,23 +227,45 @@ struct EditorInspector: View {
     private var redactionOptions: some View {
         let style = inspectedRedactionStyle
         Picker("Style", selection: Binding(
-            get: { style.isPixelate },
-            set: { model.applyRedactionStyle(style.togglingKind(pixelate: $0)) }
+            get: { style.kind },
+            set: { model.applyRedactionStyle(style.withKind($0)) }
         )) {
-            Text("Blur").tag(false)
-            Text("Pixelate").tag(true)
+            ForEach(RedactionKind.allCases, id: \.self) { kind in
+                Text(kind.title).tag(kind)
+            }
         }
         .pickerStyle(.segmented)
 
-        InspectorSlider(
-            title: "Strength",
-            value: Binding(
-                get: { Double(style.density) },
-                set: { model.applyRedactionStyle(style.withDensity(CGFloat($0))) }
-            ),
-            range: 0.15 ... 1,
-            format: .percent
-        )
+        if style.kind != .erase {
+            InspectorSlider(
+                title: "Strength",
+                value: Binding(
+                    get: { Double(style.density) },
+                    set: { model.applyRedactionStyle(style.withDensity(CGFloat($0))) }
+                ),
+                range: 0.15 ... 1,
+                format: .percent
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var counterOptions: some View {
+        Picker("Numbering", selection: Binding(
+            get: { inspectedCounterNumbering },
+            set: { model.applyCounterNumbering($0) }
+        )) {
+            ForEach(CounterNumbering.allCases, id: \.self) { numbering in
+                Text(numbering.title).tag(numbering)
+            }
+        }
+    }
+
+    private var inspectedCounterNumbering: CounterNumbering {
+        if let id = model.selection.first, case let .counter(spec)? = model.document.command(id) {
+            return spec.numberingStyle
+        }
+        return model.styleMemory.lastCounterNumbering
     }
 
     /// The redaction the inspector is editing: the selection's, or the armed tool's memory.

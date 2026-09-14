@@ -173,6 +173,11 @@ public final class AppSettings {
         didSet { store[SettingKeys.recordingShowsControlBar] = recordingShowsControlBar }
     }
 
+    /// Floating island or camera-notch strip while recording.
+    public var recordingControlChrome: RecordingControlChrome {
+        didSet { store[SettingKeys.recordingControlChrome] = recordingControlChrome }
+    }
+
     /// Seconds counted down before a recording starts (docs/03 §1.8).
     public var recordingCountdownSeconds: Int {
         didSet { store[SettingKeys.recordingCountdownSeconds] = recordingCountdownSeconds }
@@ -391,8 +396,7 @@ public final class AppSettings {
     }
 
     /// Every key is assigned from the store; splitting the list would hide a missed load.
-    // swiftlint:disable:next function_body_length
-    public init(store: UserDefaults = .standard) {
+    public init(store: UserDefaults = .standard) { // swiftlint:disable:this function_body_length
         SettingsMigrator.migrate(store)
         self.store = store
         hasCompletedOnboarding = store[SettingKeys.hasCompletedOnboarding]
@@ -416,6 +420,7 @@ public final class AppSettings {
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
         hasSeenQuickAccessTip = store[SettingKeys.hasSeenQuickAccessTip]
         recordingShowsControlBar = store[SettingKeys.recordingShowsControlBar]
+        recordingControlChrome = store[SettingKeys.recordingControlChrome]
         recordingCountdownSeconds = store[SettingKeys.recordingCountdownSeconds]
         recordingShowsClicks = store[SettingKeys.recordingShowsClicks]
         recordingShowsKeystrokes = store[SettingKeys.recordingShowsKeystrokes]

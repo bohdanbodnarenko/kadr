@@ -157,6 +157,8 @@ struct AnnotationLayerFactoryTests {
         #expect(layer.contents != nil, "the layer must show sampled pixels")
         #expect(layer.backgroundColor == nil)
         #expect(layer.frame == spec.rect)
+        #expect(layer.magnificationFilter == .linear, "a nearest-neighbour Gaussian looks pixelated")
+        #expect(layer.minificationFilter == .linear)
     }
 
     @Test("Moving a redaction re-samples the pixels under the new box")
@@ -178,6 +180,24 @@ struct AnnotationLayerFactoryTests {
 
         #expect(layer.frame == spec.rect)
         #expect(layer.contents != nil)
+    }
+
+    @Test("Erase fills with the colour of the region's edge")
+    func eraseFillsFromTheEdge() throws {
+        let image = splitToneImage(width: 64, height: 64)
+        let spec = RedactionSpec(
+            rect: CGRect(x: 40, y: 16, width: 16, height: 16),
+            style: .erase
+        )
+        let preview = try #require(RedactionRasterizer().preview(spec, from: image, scale: 1))
+        let sample = pixel(preview, x: 8, y: 8)
+        #expect(sample.red > 200, "a box on the white half should erase to white, not the black half")
+
+        let burned = RedactionRasterizer().apply([spec], to: image, scale: 1)
+        let inside = pixel(burned, x: 48, y: 24)
+        #expect(inside.red > 200)
+        let left = pixel(burned, x: 8, y: 24)
+        #expect(left.red < 40, "pixels outside the box stay the original black")
     }
 }
 

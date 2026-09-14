@@ -8,13 +8,13 @@ import Shared
 /// The three onboarding screens (docs/03 §8.2).
 enum OnboardingStep: Int, CaseIterable, Sendable {
     case welcome
-    case screenRecording
+    case permissions
     case defaults
 
     var title: String {
         switch self {
         case .welcome: "Welcome to Kadr"
-        case .screenRecording: "Let Kadr see your screen"
+        case .permissions: "Set up permissions"
         case .defaults: "How should captures behave?"
         }
     }
@@ -26,6 +26,7 @@ enum OnboardingStep: Int, CaseIterable, Sendable {
 @Observable
 final class OnboardingModel {
     @ObservationIgnored private let permissions: PermissionCoordinator
+    @ObservationIgnored let appPermissions: AppPermissionTracker
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let loginItem: LoginItemController
     @ObservationIgnored private let relauncher: RelaunchHelper
@@ -34,20 +35,32 @@ final class OnboardingModel {
     var step: OnboardingStep = .welcome
     /// Set when the grant arrived mid-session and the app has to restart to use it.
     private(set) var needsRelaunch = false
+    var practiceError: String?
 
     /// Called when the user finishes or skips.
     var onFinish: (() -> Void)?
+    /// Opens a practice PNG in the editor. Optional so tests do not launch one.
+    var onOpenPractice: ((URL) -> Void)?
 
     init(
         permissions: PermissionCoordinator,
         settings: AppSettings,
         loginItem: LoginItemController,
+        appPermissions: AppPermissionTracker? = nil,
         relauncher: RelaunchHelper = RelaunchHelper()
     ) {
         self.permissions = permissions
         self.settings = settings
         self.loginItem = loginItem
         self.relauncher = relauncher
+        self.appPermissions = appPermissions ?? AppPermissionTracker(
+            screen: permissions,
+            settings: settings,
+            resumesOnboarding: true
+        )
+        if settings.resumeOnboardingAtPermissions {
+            step = .permissions
+        }
     }
 
     var permissionState: ScreenRecordingPermission {
@@ -66,58 +79,67 @@ final class OnboardingModel {
         step == OnboardingStep.allCases.last
     }
 
+    var canGoBack: Bool {
+        step != .welcome
+    }
+
+    func goBack() {
+        guard let previous = OnboardingStep(rawValue: step.rawValue - 1) else { return }
+        step = previous
+        syncPermissionWatching()
+    }
+
     func advance() {
         guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
             finish()
             return
         }
         step = next
-        // Polling happens only while this screen is on show — the app's one poll
-        // (docs/04 §4.1).
-        if next == .screenRecording {
-            startWatchingForGrant()
-        } else {
-            permissions.endProbing()
-        }
+        syncPermissionWatching()
     }
 
     func skip() {
         finish()
     }
 
-    private func finish() {
+    func finish() {
         permissions.endProbing()
+        settings.resumeOnboardingAtPermissions = false
         settings.hasCompletedOnboarding = true
         onFinish?()
     }
 
-    // MARK: - Screen Recording
-
-    /// Asks macOS for the grant, which shows the system prompt exactly once per app.
-    func requestScreenRecording() {
-        permissions.requestAccess()
-        startWatchingForGrant()
+    /// Asks macOS for one grant. Screen Recording still goes through the coordinator
+    /// so the relaunch flag stays accurate.
+    func request(_ permission: AppPermission) {
+        if permission == .screen {
+            startWatchingForGrant()
+        }
+        Task { await appPermissions.request(permission) }
     }
 
-    /// Deep-links to the exact System Settings pane, because "open System Settings and
-    /// find it" is where most people give up.
-    func openSystemSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-        guard let url else { return }
-        NSWorkspace.shared.open(url)
-        startWatchingForGrant()
+    func openSystemSettings(_ permission: AppPermission) {
+        if permission == .screen {
+            startWatchingForGrant()
+        }
+        appPermissions.openSettings(permission)
+    }
+
+    func refreshPermissions() {
+        permissions.refresh()
+        appPermissions.refresh()
+        needsRelaunch = permissions.needsRelaunchAfterGrant
     }
 
     /// Watches for the grant appearing while the user is in System Settings.
     ///
     /// macOS sends no notification when the switch is flipped, so this is the one place
     /// in the app that polls — and it stops the moment the answer arrives or the screen
-    /// goes away (PRD §8: zero timers at idle).
+    /// goes away (PRD §8: zero timers at idle). Returning to the app also refreshes,
+    /// which is how Allow flips to Allowed without waiting for the probe tick.
     func startWatchingForGrant() {
-        // Read the current answer before polling for a change in it: without this, a
-        // grant arriving during onboarding looks like the state it launched in, and the
-        // relaunch that macOS requires never gets offered.
         permissions.refresh()
+        appPermissions.refresh()
         guard permissions.state != .granted else {
             needsRelaunch = permissions.needsRelaunchAfterGrant
             return
@@ -125,11 +147,10 @@ final class OnboardingModel {
 
         permissions.beginProbing()
         Task { [weak self] in
-            // The coordinator stops its own probe the moment it succeeds, so this watches
-            // the state rather than the probe, and checks once more after it stops.
             while let self {
                 if permissions.state == .granted {
                     needsRelaunch = permissions.needsRelaunchAfterGrant
+                    appPermissions.refresh()
                     return
                 }
                 guard permissions.isProbing else {
@@ -146,8 +167,11 @@ final class OnboardingModel {
     }
 
     /// Restarts so the new grant takes effect (docs/04 §4.1).
+    ///
+    /// Setup is *not* marked complete: the resume flag brings the user back to
+    /// Permissions so they see Allowed and can finish the last screen.
     func relaunch() {
-        settings.hasCompletedOnboarding = true
+        settings.resumeOnboardingAtPermissions = true
         Task {
             do {
                 try await relauncher.relaunchForNewGrant()
@@ -156,8 +180,6 @@ final class OnboardingModel {
             }
         }
     }
-
-    // MARK: - Defaults
 
     func setLaunchAtLogin(_ enabled: Bool) {
         do {
@@ -176,5 +198,25 @@ final class OnboardingModel {
         panel.directoryURL = settings.saveFolder
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.saveFolderPath = url.path
+    }
+
+    func openPracticeImage() {
+        practiceError = nil
+        do {
+            let url = try OnboardingPracticeImage.makeWorkingCopy()
+            finish()
+            onOpenPractice?(url)
+        } catch {
+            practiceError = "Couldn’t prepare the sample. Check that this Mac has free space, then try again."
+            logger.error("Practice image failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func syncPermissionWatching() {
+        if step == .permissions {
+            startWatchingForGrant()
+        } else {
+            permissions.endProbing()
+        }
     }
 }

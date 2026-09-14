@@ -118,6 +118,12 @@ public extension EditorDocumentModel {
         rewriteSelection { $0.applying(redactionStyle: style) }
     }
 
+    func applyCounterNumbering(_ numbering: CounterNumbering) {
+        endInspectorStyleEdit()
+        styleMemory.lastCounterNumbering = numbering
+        rewriteSelection { $0.applying(counterNumbering: numbering) }
+    }
+
     func applySpotlightDimOpacity(_ opacity: CGFloat) {
         styleMemory.lastSpotlightDimOpacity = opacity
         rewriteSelectionLive { $0.applying(spotlightDimOpacity: opacity) }

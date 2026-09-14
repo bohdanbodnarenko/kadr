@@ -19,6 +19,9 @@ final class SelectionOverlayView: NSView {
     private let crosshairLayer = CAShapeLayer()
     private let badgeBackgroundLayer = CALayer()
     private let badgeTextLayer = CATextLayer()
+    /// Internal: the last-region ghost lives in `SelectionOverlayView+Ghost.swift`.
+    let ghostLayer = CAShapeLayer()
+    let ghostLabelLayer = CATextLayer()
 
     // MARK: State
 
@@ -29,7 +32,7 @@ final class SelectionOverlayView: NSView {
     }
 
     private(set) var mode: Mode
-    private let purpose: SelectionPurpose
+    let purpose: SelectionPurpose
     var interaction: SelectionInteraction
     var windowPick = WindowPickInteraction()
     var sizeEntry = NumericSizeEntry()
@@ -38,7 +41,9 @@ final class SelectionOverlayView: NSView {
     let loupe: LoupeLayerGroup
     private let ruler: RulerLayerGroup
     private let windowHighlight: WindowHighlightLayerGroup
-    private let displayScale: DisplayScale
+    /// Internal: the last-region ghost lives in `SelectionOverlayView+Ghost.swift`.
+    let displayScale: DisplayScale
+    let hints: HintLayerGroup
     private let logger = KadrLog.logger(.overlay)
     private var trackingArea: NSTrackingArea?
     var isSpaceDown = false
@@ -73,6 +78,12 @@ final class SelectionOverlayView: NSView {
     var onPickColor: ((ColorPick) -> Void)?
     /// The eyedropper was toggled, so every other display's overlay can follow.
     var onEyedropperModeChanged: ((Bool) -> Void)?
+    /// Last area on this display, drawn as a dashed ghost until the user starts dragging.
+    var lastRegionGhost: CGRect?
+    /// Teaching copy on the idle overlay (docs/03 §1.1). Off from Settings → Capture.
+    var showsCaptureHints = true
+    /// `F` captures this display from area mode (docs/03 §1.3).
+    var onCaptureDisplay: (() -> Void)?
 
     // MARK: Geometry constants
 
@@ -85,11 +96,11 @@ final class SelectionOverlayView: NSView {
     private static let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
 
     /// How wide the badge needs to be for some text.
-    private static func badgeWidth(for text: String) -> CGFloat {
+    static func badgeWidth(for text: String) -> CGFloat {
         ceil(NSAttributedString(string: text, attributes: [.font: badgeFont]).size().width) + 16
     }
 
-    private static let badgeHeight: CGFloat = 22
+    static let badgeHeight: CGFloat = 22
 
     init(
         frozenImage: CGImage,
@@ -104,6 +115,7 @@ final class SelectionOverlayView: NSView {
         windowHighlight = WindowHighlightLayerGroup(scale: scale)
         loupe = LoupeLayerGroup(sampler: LoupeSampler(image: frozenImage, scale: scale), scale: scale)
         ruler = RulerLayerGroup(scale: scale)
+        hints = HintLayerGroup(scale: scale)
         displayScale = scale
         super.init(frame: bounds)
 
@@ -166,6 +178,8 @@ final class SelectionOverlayView: NSView {
         selectionBorderLayer.lineDashPattern = [4, 4]
         root.addSublayer(selectionBorderLayer)
 
+        addGhostLayers(to: root)
+
         badgeBackgroundLayer.backgroundColor = NSColor.black.withAlphaComponent(0.75).cgColor
         badgeBackgroundLayer.cornerRadius = 4
         badgeBackgroundLayer.isHidden = true
@@ -181,6 +195,7 @@ final class SelectionOverlayView: NSView {
 
         root.addSublayer(ruler.container)
         root.addSublayer(windowHighlight.container)
+        root.addSublayer(hints.container)
         root.addSublayer(loupe.container)
         startMarchingAnts()
     }
@@ -310,12 +325,16 @@ final class SelectionOverlayView: NSView {
         case .area:
             windowHighlight.hide()
             updateDimming()
+            updateGhost()
             updateCrosshair()
             updateRuler()
             updateBadge()
             updateLoupe()
+            updateHints()
         case .window:
             updateWindowHighlight()
+            hideGhost()
+            updateHints()
         }
     }
 

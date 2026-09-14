@@ -346,17 +346,6 @@ struct AutomationParserTests {
         #expect(try AutomationParser.command(from: show) == .toggleDesktopIcons(.off))
     }
 
-    @Test("CleanShot settings tabs land on a Kadr pane", arguments: [
-        ("wallpaper", SettingsTab.capture),
-        ("screenshots", SettingsTab.capture),
-        ("quickaccess", SettingsTab.overlay),
-        ("about", SettingsTab.updates)
-    ])
-    func cleanshotSettingsTabs(pair: (String, SettingsTab)) throws {
-        let url = try #require(URL(string: "kadr://open-settings?tab=\(pair.0)"))
-        #expect(try AutomationParser.command(from: url) == .openSettings(pair.1))
-    }
-
     @Test("capture-text accepts linebreaks")
     func captureTextLinebreaks() throws {
         let url = try #require(URL(string: "kadr://capture-text?linebreaks=false"))
@@ -424,5 +413,20 @@ struct AutomationParserTests {
         #expect(throws: AutomationError.self) {
             _ = try AutomationParser.command(from: url)
         }
+    }
+}
+
+@Suite("Automation settings tabs")
+struct AutomationSettingsTabTests {
+    @Test("CleanShot settings tabs land on a Kadr pane", arguments: [
+        ("wallpaper", SettingsTab.capture),
+        ("screenshots", SettingsTab.capture),
+        ("quickaccess", SettingsTab.overlay),
+        ("privacy", SettingsTab.permissions),
+        ("about", SettingsTab.updates)
+    ])
+    func cleanshotSettingsTabs(pair: (String, SettingsTab)) throws {
+        let url = try #require(URL(string: "kadr://open-settings?tab=\(pair.0)"))
+        #expect(try AutomationParser.command(from: url) == .openSettings(pair.1))
     }
 }

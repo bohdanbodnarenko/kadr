@@ -19,8 +19,8 @@ extension AreaCaptureCoordinator {
                 )
                 vision.copyToClipboard(recognition)
                 logger.info("Recognised \(recognition.text.count, privacy: .public) characters from a file")
-                toast.show(
-                    text: recognition.text,
+                presentTextResult(
+                    recognition.text,
                     codes: recognition.codes,
                     table: recognition.table,
                     on: NSScreen.main
@@ -30,6 +30,20 @@ extension AreaCaptureCoordinator {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
                 automation.report(.failed(error.localizedDescription))
             }
+        }
+    }
+
+    /// Copies already happened. The toast confirms; the review window is for editing.
+    func presentTextResult(
+        _ text: String,
+        codes: [DetectedCode],
+        table: RecognizedTable?,
+        on screen: NSScreen?
+    ) {
+        if settings.ocrShowsReview {
+            textReview.show(text: text, codes: codes, table: table)
+        } else {
+            toast.show(text: text, codes: codes, table: table, on: screen)
         }
     }
 }

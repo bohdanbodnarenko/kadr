@@ -68,6 +68,8 @@ struct QuickAccessCardView: View {
     var showsNewestIndicator = false
     /// Trash control for captures already on disk (CleanShot §6.2).
     var showsTrashButton = false
+    /// Actions stay visible instead of appearing on hover.
+    var alwaysShowActions = false
 
     @State private var isHovering = false
 
@@ -130,7 +132,7 @@ struct QuickAccessCardView: View {
 
     /// Hover chrome is suppressed while the stack is moving.
     private var showsChrome: Bool {
-        isHovering && !suppressHoverChrome
+        (isHovering || alwaysShowActions) && !suppressHoverChrome
     }
 
     /// Chrome fades for hover, and simply goes when the stack starts moving.

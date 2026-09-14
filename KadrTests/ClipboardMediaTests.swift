@@ -38,6 +38,16 @@ struct ClipboardMediaTests {
     func empty() {
         let pasteboard = namedPasteboard()
         #expect(ClipboardMedia.fileURL(from: pasteboard) == nil)
+        #expect(ClipboardMedia.stillPNG(from: pasteboard) == nil)
+    }
+
+    @Test("Plain text becomes a PNG card")
+    func textCard() throws {
+        let pasteboard = namedPasteboard()
+        pasteboard.setString("Pin this note", forType: .string)
+        let png = try #require(ClipboardMedia.stillPNG(from: pasteboard))
+        #expect(png.count > 32)
+        #expect(NSImage(data: png) != nil)
     }
 
     private func namedPasteboard() -> NSPasteboard {

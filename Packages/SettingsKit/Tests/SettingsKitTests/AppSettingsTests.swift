@@ -126,6 +126,10 @@ struct AppSettingsTests {
         settings.askForSaveDestination = true
         settings.lockCanvasByDefault = true
         settings.recordingControlChrome = .notch
+        settings.resumeOnboardingAtPermissions = true
+        settings.overlayAlwaysShowActions = true
+        settings.captureShowsOverlayHints = false
+        settings.ocrShowsReview = false
         settings.resetToDefaults()
 
         #expect(settings.defaultAction == .copyToClipboard)
@@ -137,6 +141,10 @@ struct AppSettingsTests {
         #expect(settings.askForSaveDestination == false)
         #expect(settings.lockCanvasByDefault == false)
         #expect(settings.recordingControlChrome == .island)
+        #expect(!settings.resumeOnboardingAtPermissions)
+        #expect(!settings.overlayAlwaysShowActions)
+        #expect(settings.captureShowsOverlayHints)
+        #expect(settings.ocrShowsReview)
         #expect(AppSettings(store: store).defaultAction == .copyToClipboard)
     }
 
@@ -247,6 +255,7 @@ struct OverlaySettingsTests {
         #expect(settings.overlayTimeout == .never)
         #expect(settings.overlayMaxVisibleCards == 5)
         #expect(settings.overlayDismissOnDrag)
+        #expect(!settings.overlayAlwaysShowActions)
     }
 
     @Test("Card width is clamped to something usable")

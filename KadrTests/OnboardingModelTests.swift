@@ -1,4 +1,5 @@
 import CaptureCore
+import CoreGraphics
 import Foundation
 import SettingsKit
 import Testing
@@ -68,7 +69,7 @@ struct OnboardingModelTests {
 
         #expect(model.step == .welcome)
         model.advance()
-        #expect(model.step == .screenRecording)
+        #expect(model.step == .permissions)
         model.advance()
         #expect(model.step == .defaults)
         #expect(model.isLastStep)
@@ -110,7 +111,7 @@ struct OnboardingModelTests {
         model.startWatchingForGrant()
         model.stopWatchingForGrant()
         model.advance()
-        #expect(model.step == .screenRecording)
+        #expect(model.step == .permissions)
     }
 
     @Test("A grant that arrives mid-session is reported as needing a restart")
@@ -138,5 +139,53 @@ struct OnboardingModelTests {
         let (model, _) = makeModel(access)
 
         #expect(model.needsRelaunch == false)
+    }
+
+    @Test("A permission restart reopens on the permissions screen")
+    func resumesAtPermissions() {
+        let access = FakeAccess()
+        let (model, settings) = makeModel(access)
+        settings.resumeOnboardingAtPermissions = true
+        let resumed = OnboardingModel(
+            permissions: PermissionCoordinator(access: access),
+            settings: settings,
+            loginItem: LoginItemController()
+        )
+        #expect(resumed.step == .permissions)
+        #expect(model.step == .welcome, "a model created before the flag stays put")
+    }
+
+    @Test("Back walks toward welcome")
+    func goBack() {
+        let (model, _) = makeModel(FakeAccess())
+        model.advance()
+        #expect(model.step == .permissions)
+        model.goBack()
+        #expect(model.step == .welcome)
+        #expect(!model.canGoBack)
+    }
+
+    @Test("Restarting for a grant does not mark setup complete")
+    func relaunchKeepsSetupOpen() {
+        let (model, settings) = makeModel(FakeAccess())
+        model.relaunch()
+        #expect(settings.resumeOnboardingAtPermissions)
+        #expect(!settings.hasCompletedOnboarding)
+    }
+
+    @Test("After an ask, a still-off grant that needs a relaunch routes to System Settings")
+    func deniedAskNeedsSettings() {
+        #expect(AppPermission.screen.needsSettings(status: .notEnabled, attempted: true))
+        #expect(!AppPermission.screen.needsSettings(status: .notEnabled, attempted: false))
+        #expect(!AppPermission.microphone.needsSettings(status: .notEnabled, attempted: true))
+        #expect(AppPermission.microphone.needsSettings(status: .denied, attempted: false))
+        #expect(!AppPermission.camera.needsSettings(status: .allowed, attempted: true))
+    }
+
+    @Test("The practice image is a real photograph-sized PNG")
+    func practiceImageRenders() throws {
+        let image = try #require(OnboardingPracticeImage.render())
+        #expect(image.width == 1600)
+        #expect(image.height == 1000)
     }
 }

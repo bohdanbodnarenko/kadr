@@ -17,6 +17,7 @@ public extension AppSettings {
 
     private func resetGeneral() {
         defaultAction = SettingKeys.defaultAction.defaultValue
+        resumeOnboardingAtPermissions = SettingKeys.resumeOnboardingAtPermissions.defaultValue
         afterCapture = SettingKeys.afterCapture.defaultValue
         compressionTargetBytes = SettingKeys.compressionTargetBytes.defaultValue
         compressionFormat = SettingKeys.compressionFormat.defaultValue
@@ -42,6 +43,8 @@ public extension AppSettings {
         objectShadowsEnabled = SettingKeys.objectShadowsEnabled.defaultValue
         keepOriginalWhenAnnotating = SettingKeys.keepOriginalWhenAnnotating.defaultValue
         ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
+        ocrShowsReview = SettingKeys.ocrShowsReview.defaultValue
+        captureShowsOverlayHints = SettingKeys.captureShowsOverlayHints.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
@@ -66,6 +69,9 @@ public extension AppSettings {
         recordingShowsClicks = SettingKeys.recordingShowsClicks.defaultValue
         recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
         recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue
+        recordingShowsControlBar = SettingKeys.recordingShowsControlBar.defaultValue
+        recordingControlChrome = SettingKeys.recordingControlChrome.defaultValue
+        recordingCountdownSeconds = SettingKeys.recordingCountdownSeconds.defaultValue
         recordingShowsWebcam = SettingKeys.recordingShowsWebcam.defaultValue
         recordingWebcamCircular = SettingKeys.recordingWebcamCircular.defaultValue
         recordingWebcamFillsFrame = SettingKeys.recordingWebcamFillsFrame.defaultValue
@@ -101,6 +107,7 @@ public extension AppSettings {
         overlayOnPrimaryDisplay = SettingKeys.overlayOnPrimaryDisplay.defaultValue
         overlayDismissOnDrag = SettingKeys.overlayDismissOnDrag.defaultValue
         overlayReturnSaves = SettingKeys.overlayReturnSaves.defaultValue
+        overlayAlwaysShowActions = SettingKeys.overlayAlwaysShowActions.defaultValue
         lastAllInOneMode = SettingKeys.lastAllInOneMode.defaultValue
         historyRetention = SettingKeys.historyRetention.defaultValue
         historySizeCap = SettingKeys.historySizeCap.defaultValue

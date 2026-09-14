@@ -10,9 +10,18 @@ enum RecordingNotchScreen {
     static var notchScreen: NSScreen? {
         NSScreen.screens.first { $0.safeAreaInsets.top > 0 }
     }
+
+    static var metrics: RecordingNotchMetrics {
+        guard let screen = notchScreen else { return .fallback }
+        return .hardware(on: screen)
+    }
 }
 
 /// Dynamic Island silhouette: concave ears at the top, convex corners at the bottom.
+///
+/// The top edge is flat against the display so the shell continues the hardware notch
+/// without a gap. Corner radii scale with total height so the ears stay subtle on a
+/// short strip and read clearly when the shell extends below the camera.
 struct RecordingNotchShape: Shape {
     var topCornerRadius: CGFloat
     var bottomCornerRadius: CGFloat
@@ -20,6 +29,13 @@ struct RecordingNotchShape: Shape {
     init(topCornerRadius: CGFloat = 10, bottomCornerRadius: CGFloat = 16) {
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
+    }
+
+    static func forShell(height: CGFloat) -> RecordingNotchShape {
+        RecordingNotchShape(
+            topCornerRadius: min(10, height * 0.14),
+            bottomCornerRadius: min(16, height * 0.24)
+        )
     }
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
