@@ -186,7 +186,7 @@ struct EditorStyleTests {
     }
 
     @Test("Plus and minus keys change the armed tool's stroke width")
-    func toolSizeKeysAdjustStroke() throws {
+    func toolSizeKeysAdjustStroke() {
         let model = makeModel()
         model.tool = .arrow
         let before = model.styleMemory.stroke(for: .arrow).width

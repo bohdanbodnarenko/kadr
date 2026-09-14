@@ -129,10 +129,27 @@ extension AppDelegate {
         }
     }
 
+    /// Whether a capture surface is on screen, so the menu bar can say so (docs/14 UX-08A).
+    ///
+    /// Reads `areaCaptureStorage` rather than `areaCapture`: an agent that has never
+    /// captured anything must not build the capture layer to answer this. The picker is
+    /// read off the control bar for the same reason — `recordSetup` is lazy.
+    var isCaptureArmed: Bool {
+        areaCaptureStorage?.isArmed == true
+            || recordingControlBar.isShowingPicker
+            || allInOne.isShowing
+            || recordingStorage?.isCountingDown == true
+    }
+
     /// Keeps the menu bar and the floating controls in step with the recording.
     func refreshStatusItemIcon() {
         guard let recording = recordingStorage, recording.isRecording else {
-            statusItemController?.showIdleIcon()
+            // Recording always wins; armed is what is left when a capture surface is up.
+            if isCaptureArmed {
+                statusItemController?.showArmedIcon()
+            } else {
+                statusItemController?.showIdleIcon()
+            }
             if !recordingControlBar.isShowingPicker {
                 recordingControlBar.dismiss()
             }

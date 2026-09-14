@@ -174,7 +174,7 @@ struct FrameCompositor: Sendable {
         let appearance = overlay.keystrokeAppearance
         let fontSize = max(20, size.height * 0.035) * scale
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
-        let ink: CGColor = switch appearance {
+        let ink = switch appearance {
         case .dark: CGColor(gray: 1, alpha: 1)
         case .light: CGColor(gray: 0.08, alpha: 1)
         }

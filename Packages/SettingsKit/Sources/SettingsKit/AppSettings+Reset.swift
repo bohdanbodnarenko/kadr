@@ -45,6 +45,7 @@ public extension AppSettings {
         ocrPreservesLineBreaks = SettingKeys.ocrPreservesLineBreaks.defaultValue
         ocrShowsReview = SettingKeys.ocrShowsReview.defaultValue
         captureShowsOverlayHints = SettingKeys.captureShowsOverlayHints.defaultValue
+        captureConfirmsSelection = SettingKeys.captureConfirmsSelection.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
         scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue

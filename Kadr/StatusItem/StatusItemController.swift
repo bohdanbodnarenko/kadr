@@ -12,11 +12,11 @@ import Shared
 /// there is — nothing is built until the user actually opens it.
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
-    private let statusItem: NSStatusItem
-    private let menu = NSMenu()
+    let statusItem: NSStatusItem
+    let menu = NSMenu()
     private let logger = KadrLog.logger(.app)
 
-    private let perform: (CaptureCommand) -> Void
+    let perform: (CaptureCommand) -> Void
     private let openSettings: () -> Void
     private let restoreRecentlyClosed: () -> Void
     private let closeAllPins: () -> Void
@@ -29,7 +29,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Extra menu items contributed by debug builds; empty in release.
     private let additionalItems: () -> [NSMenuItem]
     /// Whether the status item is currently showing the recording icon (click = stop).
-    private var showsRecordingIcon = false
+    var showsRecordingIcon = false
     private let history: HistoryController?
     private let reopenFromHistory: (HistoryRecord) -> Void
     /// Overlay-menu items live in `StatusItemController+Overlay.swift`, so these
@@ -114,80 +114,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         button.addSubview(drop)
     }
 
-    // MARK: - Icon states (docs/03 §8.1)
-
-    /// The resting icon: a template image, so it follows the menu bar's appearance.
-    func showIdleIcon() {
-        showsRecordingIcon = false
-        let icon = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Kadr")
-        icon?.isTemplate = true
-        statusItem.button?.image = icon
-        statusItem.button?.title = ""
-        statusItem.length = NSStatusItem.squareLength
-        statusItem.button?.toolTip = "Kadr"
-        attachIdleMenu()
-    }
-
-    /// While recording: a red dot and the elapsed time, so the state is unmistakable from
-    /// across the room (docs/03 §8.1).
-    ///
-    /// Deliberately *not* a template image — red is the point, and a template would be
-    /// rendered monochrome like everything else in the menu bar.
-    func showRecordingIcon(elapsed: String, isPaused: Bool) {
-        showsRecordingIcon = true
-        let name = isPaused ? "pause.circle.fill" : "record.circle"
-        let configuration = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
-        let icon = NSImage(systemSymbolName: name, accessibilityDescription: "Recording")?
-            .withSymbolConfiguration(configuration)
-        icon?.isTemplate = false
-
-        statusItem.button?.image = icon
-        statusItem.button?.title = " \(elapsed)"
-        statusItem.button?.imagePosition = .imageLeading
-        statusItem.length = NSStatusItem.variableLength
-        statusItem.button?.toolTip = "Click to stop · right-click for pause and discard"
-        attachRecordingClick()
-    }
-
-    /// Idle: Option-click opens All-in-One; otherwise the menu opens (docs/03 §8.1).
-    private func attachIdleMenu() {
-        statusItem.menu = nil
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(didClickIdleStatusItem)
-        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-    }
-
-    /// Recording: a click stops, because that is the only thing the user is likely to want
-    /// (docs/03 §1.8). Right-click still opens the menu for pause and discard.
-    private func attachRecordingClick() {
-        statusItem.menu = nil
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(didClickStatusItem)
-        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-    }
-
     @objc
-    private func didClickIdleStatusItem() {
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
-            popIdleMenu()
-            return
-        }
-        if event?.modifierFlags.contains(.option) == true {
-            perform(.allInOne)
-            return
-        }
-        popIdleMenu()
-    }
-
-    private func popIdleMenu() {
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        attachIdleMenu()
-    }
-
-    @objc
-    private func didClickStatusItem() {
+    func didClickStatusItem() {
         guard showsRecordingIcon else { return }
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp || event?.modifierFlags.contains(.option) == true {
@@ -205,14 +133,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: - NSMenuDelegate
 
+    /// Groups the menu by task, with one separator between groups (docs/14 UX-08).
+    ///
+    /// Capture modes, utilities, the live recording, recent work, the surfaces a capture
+    /// produced, setup, updates, quit. A group whose commands cannot do anything right now
+    /// is absent rather than present and greyed: a disabled row with no explanation is a
+    /// puzzle, and the menu is rebuilt on every open anyway, so absence costs nothing.
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        // A running recording takes over the top of the menu: stopping it is the only
-        // thing the user is likely to want (docs/03 §1.8).
+        addCaptureItems(to: menu)
+        addUtilityItems(to: menu)
         if let controls = recordingControls() {
             addRecordingItems(controls, to: menu)
         }
-        addCaptureItems(to: menu)
         addHistoryItems(to: menu)
         addOverlayItems(to: menu)
         addApplicationItems(to: menu)
@@ -222,62 +155,52 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         history?.purgeStripThumbnails()
     }
 
-    /// Controls for a recording in progress.
-    private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
-        let status = NSMenuItem(title: "Recording — \(controls.elapsedText)", action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        menu.addItem(status)
-
-        let stop = NSMenuItem(title: "Stop Recording", action: #selector(didSelectStopRecording), keyEquivalent: "")
-        stop.target = self
-        menu.addItem(stop)
-
-        let pause = NSMenuItem(
-            title: controls.isPaused ? "Resume Recording" : "Pause Recording",
-            action: #selector(didSelectPauseRecording),
+    /// Builds one command row: title, glyph, target, right-aligned shortcut.
+    ///
+    /// The shortcut goes on through `keyEquivalent`, never into the title. AppKit
+    /// right-aligns a key equivalent and VoiceOver reads it as a shortcut; text in the
+    /// title is read as part of the command's name.
+    func makeCommandItem(_ command: CaptureCommand, title: String? = nil) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: title ?? command.title,
+            action: #selector(didSelectCapture(_:)),
             keyEquivalent: ""
         )
-        pause.target = self
-        menu.addItem(pause)
-
-        let restart = NSMenuItem(
-            title: "Restart Recording",
-            action: #selector(didSelectRestartRecording),
-            keyEquivalent: ""
-        )
-        restart.target = self
-        menu.addItem(restart)
-
-        let cancel = NSMenuItem(
-            title: "Cancel Recording",
-            action: #selector(didSelectCancelRecording),
-            keyEquivalent: ""
-        )
-        cancel.target = self
-        menu.addItem(cancel)
-
-        menu.addItem(.separator())
+        item.target = self
+        item.representedObject = command.rawValue
+        item.setShortcut(for: command.shortcutName)
+        if let symbol = command.menuSymbol {
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        }
+        return item
     }
 
-    /// The capture commands, with their hotkey hints (docs/03 §8.1).
+    /// Group 1 — how to take a capture (docs/03 §8.1).
+    ///
+    /// The two record commands belong here: starting a recording is a capture mode, not a
+    /// recording control. While one is running they are gone, replaced by the group that
+    /// can actually stop it.
     private func addCaptureItems(to menu: NSMenu) {
         for command in CaptureCommand.menuCommands {
-            let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            item.setShortcut(for: command.shortcutName)
-            menu.addItem(item)
+            menu.addItem(makeCommandItem(command))
         }
 
+        guard recordingControls() == nil else { return }
+        for command in CaptureCommand.recordingCommands {
+            menu.addItem(makeCommandItem(command))
+        }
+    }
+
+    /// Group 2 — things done to the screen before or instead of a capture (docs/03 §7).
+    private func addUtilityItems(to menu: NSMenu) {
         menu.addItem(.separator())
+
         for command in CaptureCommand.utilityCommands {
-            let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            item.setShortcut(for: command.shortcutName)
+            let hidden = desktopIconsHidden()
+            let item = command == .toggleDesktopIcons
+                ? makeCommandItem(command, title: hidden ? "Show Desktop Icons" : "Hide Desktop Icons")
+                : makeCommandItem(command)
             if command == .toggleDesktopIcons {
-                let hidden = desktopIconsHidden()
-                item.title = hidden ? "Show Desktop Icons" : "Hide Desktop Icons"
                 item.state = hidden ? .on : .off
             }
             menu.addItem(item)
@@ -291,24 +214,64 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )
         pickerItem.target = self
         menu.addItem(pickerItem)
-
-        menu.addItem(.separator())
-
-        for command in CaptureCommand.recordingCommands {
-            let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            item.setShortcut(for: command.shortcutName)
-            item.isEnabled = recordingControls() == nil
-            menu.addItem(item)
-        }
     }
 
-    /// Last-8 thumbnail strip and the History window command (docs/03 §5, §8.1).
+    /// Group 3 — only while something is recording (docs/03 §1.8, docs/14 UX-08).
+    private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
+        menu.addItem(.separator())
+
+        let status = NSMenuItem(
+            title: controls.isPaused
+                ? "Recording paused — \(controls.elapsedText)"
+                : "Recording — \(controls.elapsedText)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        status.isEnabled = false
+        menu.addItem(status)
+
+        let stop = NSMenuItem(title: "Stop Recording", action: #selector(didSelectStopRecording), keyEquivalent: "")
+        stop.target = self
+        stop.image = NSImage(systemSymbolName: "stop.circle", accessibilityDescription: nil)
+        stop.setShortcut(for: CaptureCommand.stopRecording.shortcutName)
+        menu.addItem(stop)
+
+        let pause = NSMenuItem(
+            title: controls.isPaused ? "Resume Recording" : "Pause Recording",
+            action: #selector(didSelectPauseRecording),
+            keyEquivalent: ""
+        )
+        pause.target = self
+        pause.image = NSImage(
+            systemSymbolName: controls.isPaused ? "play.circle" : "pause.circle",
+            accessibilityDescription: nil
+        )
+        menu.addItem(pause)
+
+        let restart = NSMenuItem(
+            title: "Restart Recording",
+            action: #selector(didSelectRestartRecording),
+            keyEquivalent: ""
+        )
+        restart.target = self
+        menu.addItem(restart)
+
+        let cancel = NSMenuItem(
+            title: "Discard Recording",
+            action: #selector(didSelectCancelRecording),
+            keyEquivalent: ""
+        )
+        cancel.target = self
+        menu.addItem(cancel)
+    }
+
+    /// Group 4 — the last few captures, and the window that holds the rest
+    /// (docs/03 §5, §8.1).
     private func addHistoryItems(to menu: NSMenu) {
         let recent = Array(history?.recent.prefix(HistoryController.menuStripCount) ?? [])
+        menu.addItem(.separator())
+
         if !recent.isEmpty {
-            menu.addItem(.separator())
             let strip = HistoryStripView(frame: .zero)
             strip.update(records: recent) { [weak self] record in
                 guard let cgImage = self?.history?.thumbnail(for: record, maxPixelSize: 112, scope: .strip) else {
@@ -324,8 +287,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             item.view = strip
             menu.addItem(item)
         }
+
+        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "")
+        historyItem.target = self
+        historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
+        menu.addItem(historyItem)
+
+        if canRestore() {
+            let restoreItem = NSMenuItem(
+                title: "Restore Recently Closed",
+                action: #selector(didSelectRestore),
+                keyEquivalent: "t"
+            )
+            restoreItem.keyEquivalentModifierMask = [.command, .shift]
+            restoreItem.target = self
+            menu.addItem(restoreItem)
+        }
+
+        addRecoveryItem(to: menu)
     }
 
+    /// Groups 6–8 — setup, updates, quit.
     private func addApplicationItems(to menu: NSMenu) {
         let extras = additionalItems()
         if !extras.isEmpty {
@@ -340,6 +322,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(didSelectSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
 
         let onboardingItem = NSMenuItem(
@@ -350,16 +333,19 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         onboardingItem.target = self
         menu.addItem(onboardingItem)
 
-        let updatesItem = NSMenuItem(
-            title: "Check for Updates…",
-            action: #selector(didSelectCheckForUpdates),
-            keyEquivalent: ""
-        )
-        updatesItem.target = self
-        // Disabled while a check is already running, and in debug builds, where Sparkle
-        // deliberately does nothing.
-        updatesItem.isEnabled = canCheckForUpdates()
-        menu.addItem(updatesItem)
+        // Absent rather than greyed. It is false in debug builds, where Sparkle does
+        // nothing at all, and for the few seconds one check is already in flight — and
+        // "Check for Updates…" greyed out with no reason given reads as a broken app.
+        if canCheckForUpdates() {
+            menu.addItem(.separator())
+            let updatesItem = NSMenuItem(
+                title: "Check for Updates…",
+                action: #selector(didSelectCheckForUpdates),
+                keyEquivalent: ""
+            )
+            updatesItem.target = self
+            menu.addItem(updatesItem)
+        }
 
         menu.addItem(.separator())
 

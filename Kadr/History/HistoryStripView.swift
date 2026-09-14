@@ -36,6 +36,7 @@ final class HistoryStripView: NSView {
             button.imageScaling = .scaleProportionallyUpOrDown
             button.image = thumbnail(record) ?? placeholder
             button.toolTip = record.originalFilename
+            button.setAccessibilityLabel(Self.accessibilityLabel(for: record))
             button.target = self
             button.action = #selector(didClick(_:))
             button.identifier = NSUserInterfaceItemIdentifier(record.id.uuidString)
@@ -62,6 +63,13 @@ final class HistoryStripView: NSView {
 
     private var placeholder: NSImage {
         NSImage(systemSymbolName: "photo", accessibilityDescription: "Capture") ?? NSImage()
+    }
+
+    static func accessibilityLabel(for record: HistoryRecord) -> String {
+        let kind = record.kind.title
+        let dimensions = "\(record.width) × \(record.height)"
+        let timestamp = record.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(kind), \(record.originalFilename), \(dimensions), \(timestamp)"
     }
 
     @objc

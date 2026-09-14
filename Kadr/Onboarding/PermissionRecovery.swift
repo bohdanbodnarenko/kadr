@@ -23,6 +23,7 @@ struct PermissionRecovery {
     /// An alert rather than a sheet: the agent has no window to attach a sheet to, and a
     /// capture that failed needs an answer now rather than the next time a window opens.
     func present(state: ScreenRecordingPermission, includePicker: Bool = true) -> Choice {
+        guard state.needsUserAction else { return .dismiss }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = state == .revoked

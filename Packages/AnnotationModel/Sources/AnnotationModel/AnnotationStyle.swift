@@ -244,25 +244,71 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
 
 /// One of the text presets from docs/03 §3, or a custom style.
 public struct TextStyle: Codable, Hashable, Sendable {
+    /// How wrapped lines line up inside the annotation's box (docs/03 §3).
+    ///
+    /// Stored on the style rather than on the spec because it is part of what a preset
+    /// means: a Caption is centred and a Body is not, and a user who changes it expects
+    /// the next text they place to keep the change like every other style choice.
+    public enum Alignment: String, Codable, CaseIterable, Sendable {
+        case leading
+        case center
+        case trailing
+
+        public var title: String {
+            switch self {
+            case .leading: "Left"
+            case .center: "Centre"
+            case .trailing: "Right"
+            }
+        }
+
+        public var symbolName: String {
+            switch self {
+            case .leading: "text.alignleft"
+            case .center: "text.aligncenter"
+            case .trailing: "text.alignright"
+            }
+        }
+    }
+
     public var fontName: String
     public var fontSize: CGFloat
     public var isBold: Bool
     public var color: AnnotationColor
     /// A filled pill behind the text; `nil` for plain text.
     public var backgroundColor: AnnotationColor?
+    public var alignment: Alignment
 
     public init(
         fontName: String = "Helvetica Neue",
         fontSize: CGFloat = 24,
         isBold: Bool = true,
         color: AnnotationColor = .annotationRed,
-        backgroundColor: AnnotationColor? = nil
+        backgroundColor: AnnotationColor? = nil,
+        alignment: Alignment = .leading
     ) {
         self.fontName = fontName
         self.fontSize = max(fontSize, 1)
         self.isBold = isBold
         self.color = color
         self.backgroundColor = backgroundColor
+        self.alignment = alignment
+    }
+
+    /// Decoded by hand so a `.kadr` written before alignment existed still opens.
+    ///
+    /// The synthesized initialiser throws on a missing key for a non-optional property,
+    /// and making the property optional instead would mean two styles that lay out
+    /// identically comparing unequal — which the preset picker reads to decide what is
+    /// selected.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        fontName = try container.decode(String.self, forKey: .fontName)
+        fontSize = try max(container.decode(CGFloat.self, forKey: .fontSize), 1)
+        isBold = try container.decode(Bool.self, forKey: .isBold)
+        color = try container.decode(AnnotationColor.self, forKey: .color)
+        backgroundColor = try container.decodeIfPresent(AnnotationColor.self, forKey: .backgroundColor)
+        alignment = try container.decodeIfPresent(Alignment.self, forKey: .alignment) ?? .leading
     }
 
     /// The inspector presets (docs/03 §3, CleanShot §8.2).

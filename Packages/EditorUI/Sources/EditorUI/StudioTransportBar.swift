@@ -15,10 +15,10 @@ struct StudioTransportBar: View {
             HStack(spacing: 2) {
                 trimMenu
                 speedMenu
-                icon("plus.magnifyingglass", help: "Add a zoom at the playhead") {
+                icon("plus.magnifyingglass", label: "Add zoom", help: "Add a zoom at the playhead") {
                     model.addZoom()
                 }
-                icon("wand.and.stars", help: "Plan zooms from where the recording was clicked") {
+                icon("wand.and.stars", label: "Smart zooms", help: "Plan zooms from where the recording was clicked") {
                     model.planSmartZooms()
                 }
                 Menu {
@@ -46,11 +46,15 @@ struct StudioTransportBar: View {
 
             HStack(spacing: 2) {
                 Spacer(minLength: 0)
-                icon("scissors", help: "Cut the clip at the playhead (⌘K)") {
+                icon("scissors", label: "Split clip", help: "Cut the clip at the playhead (⌘K)") {
                     model.splitAtPlayhead()
                 }
                 .keyboardShortcut("k", modifiers: .command)
-                icon("trash", help: "Delete the selected zoom, or the clip under the playhead") {
+                icon(
+                    "trash",
+                    label: "Delete selection",
+                    help: "Delete the selected zoom, or the clip under the playhead"
+                ) {
                     model.deleteTimelineSelection()
                 }
                 .disabled(!model.canDeleteTimelineSelection)
@@ -58,7 +62,7 @@ struct StudioTransportBar: View {
                     .fill(Color.primary.opacity(0.18))
                     .frame(width: 1, height: 14)
                     .padding(.horizontal, 6)
-                icon("arrow.uturn.backward", help: "Undo (⌘Z)") {
+                icon("arrow.uturn.backward", label: "Undo", help: "Undo (⌘Z)") {
                     model.undo()
                 }
                 // The shortcuts live here as well as on the menu. The menu's `undo:` reaches
@@ -66,12 +70,12 @@ struct StudioTransportBar: View {
                 // responder chain for it to arrive at all.
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(!model.canUndo)
-                icon("arrow.uturn.forward", help: "Redo (⇧⌘Z)") {
+                icon("arrow.uturn.forward", label: "Redo", help: "Redo (⇧⌘Z)") {
                     model.redo()
                 }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!model.canRedo)
-                icon("arrow.counterclockwise", help: "Restore the recording to one uncut clip") {
+                icon("arrow.counterclockwise", label: "Reset clips", help: "Restore the recording to one uncut clip") {
                     model.resetClips()
                 }
                 .disabled(!model.hasClipEdits)
@@ -86,14 +90,14 @@ struct StudioTransportBar: View {
             Text(StudioClock.precise(model.playhead))
                 .font(.system(size: 12, weight: .semibold).monospacedDigit())
             HStack(spacing: 2) {
-                icon("backward.end.fill", help: "Go to start") {
+                icon("backward.end.fill", label: "Go to start", help: "Go to start") {
                     model.seekToStart()
                 }
-                icon("gobackward.5", help: "Back 5 seconds (⌥←)") {
+                icon("gobackward.5", label: "Back 5 seconds", help: "Back 5 seconds (⌥←)") {
                     model.step(seconds: -5)
                 }
                 .keyboardShortcut(.leftArrow, modifiers: .option)
-                icon("backward.frame", help: "Back one frame (←)") {
+                icon("backward.frame", label: "Back one frame", help: "Back one frame (←)") {
                     model.step(frames: -1)
                 }
                 .keyboardShortcut(.leftArrow, modifiers: [])
@@ -109,15 +113,17 @@ struct StudioTransportBar: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.space, modifiers: [])
                 .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
-                icon("forward.frame", help: "Forward one frame (→)") {
+                .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+                .accessibilityValue(StudioClock.precise(model.playhead))
+                icon("forward.frame", label: "Forward one frame", help: "Forward one frame (→)") {
                     model.step(frames: 1)
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [])
-                icon("goforward.5", help: "Forward 5 seconds (⌥→)") {
+                icon("goforward.5", label: "Forward 5 seconds", help: "Forward 5 seconds (⌥→)") {
                     model.step(seconds: 5)
                 }
                 .keyboardShortcut(.rightArrow, modifiers: .option)
-                icon("forward.end.fill", help: "Go to end") {
+                icon("forward.end.fill", label: "Go to end", help: "Go to end") {
                     model.seekToEnd()
                 }
             }
@@ -142,6 +148,7 @@ struct StudioTransportBar: View {
         .buttonStyle(StudioTransportIconStyle())
         .disabled(model.playhead <= 0 || model.playhead >= model.edit.duration)
         .help("Drop everything before or after the playhead")
+        .accessibilityLabel("Trim clip")
     }
 
     private var speedMenu: some View {
@@ -160,9 +167,15 @@ struct StudioTransportBar: View {
         .menuStyle(.borderlessButton)
         .buttonStyle(StudioTransportIconStyle())
         .help("Play this clip faster")
+        .accessibilityLabel("Clip speed")
     }
 
-    private func icon(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {
+    private func icon(
+        _ systemName: String,
+        label: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 12, weight: .medium))
@@ -171,6 +184,7 @@ struct StudioTransportBar: View {
         }
         .buttonStyle(StudioTransportIconStyle())
         .help(help)
+        .accessibilityLabel(label)
     }
 
     private func speedLabel(_ speed: Double) -> String {

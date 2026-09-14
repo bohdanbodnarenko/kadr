@@ -275,7 +275,7 @@ struct StudioSpeechTests {
         studio.setSpeedAtPlayhead(2)
         await studio.tidySpeech()
         #expect(stub.calls == 0, "transcription ran despite an edited timeline")
-        #expect(studio.failure == StudioDocumentModel.tidyRefusal)
+        #expect(studio.failure?.message == StudioDocumentModel.tidyRefusal)
     }
 
     @Test("A persisted transcript is reused on reopen")

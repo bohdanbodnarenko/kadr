@@ -72,7 +72,7 @@ public extension StudioDocumentModel {
     func removeClipAtPlayhead() {
         let clips = edit.clips.clips
         guard clips.count > 1 else {
-            failure = "This is the only clip left. Delete the recording itself if that is what you meant."
+            failure = .onlyClipLeft()
             return
         }
         guard let index = clipIndex(at: playhead) else { return }

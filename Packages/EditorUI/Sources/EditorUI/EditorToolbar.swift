@@ -1,7 +1,10 @@
 import AnnotationModel
 import SwiftUI
 
-/// The tool picker and export controls (docs/03 §3).
+/// The tool picker and export controls (docs/03 §3, docs/14 UX-25).
+///
+/// `ViewThatFits` keeps the primary tools visible at the 760 pt minimum and moves rotate,
+/// flip, and ML actions into overflow rather than clipping or shrinking below hit targets.
 struct EditorToolbar: View {
     @Bindable var model: EditorDocumentModel
     @Binding var isInspectorPresented: Bool
@@ -10,39 +13,37 @@ struct EditorToolbar: View {
     var onRemoveBackground: (() -> Void)?
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            toolbarContent(compact: false)
+            toolbarContent(compact: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.bar)
+    }
+
+    private func toolbarContent(compact: Bool) -> some View {
         HStack(spacing: 10) {
             if model.tool == .crop {
-                historyControls
+                historyControlsRow(compact: false)
                 Divider().frame(height: 18)
                 cropControls
             } else {
                 tools
                 Divider().frame(height: 18)
-                historyControls
+                historyControlsRow(compact: compact)
             }
             Spacer(minLength: 8)
             if model.tool != .crop {
-                if onAutoRedact != nil {
-                    autoRedact
-                }
-                if onRemoveBackground != nil {
-                    removeBackground
+                if compact {
+                    overflowMenu
+                } else {
+                    mlActions
                 }
                 exportControls
             }
-            Button {
-                isInspectorPresented.toggle()
-            } label: {
-                Image(systemName: "sidebar.right")
-            }
-            .buttonStyle(.borderless)
-            .keyboardShortcut("i", modifiers: [.command, .option])
-            .help(isInspectorPresented ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
-            .accessibilityLabel(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
+            inspectorToggle
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.bar)
     }
 
     private var cropControls: some View {
@@ -75,6 +76,41 @@ struct EditorToolbar: View {
         }
     }
 
+    @ViewBuilder
+    private var mlActions: some View {
+        if onAutoRedact != nil {
+            autoRedact
+        }
+        if onRemoveBackground != nil {
+            removeBackground
+        }
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            if onAutoRedact != nil {
+                Button("Auto-redact") { onAutoRedact?() }
+                    .disabled(model.isFindingRedactions)
+            }
+            if onRemoveBackground != nil {
+                Button(
+                    model.hasSubjectLift ? "Restore Background" : "Remove Background"
+                ) { onRemoveBackground?() }
+                    .disabled(model.isLiftingSubject)
+            }
+            Divider()
+            Button("Rotate 90° Clockwise") { model.rotateClockwise() }
+            Button("Flip Horizontal") { model.flipHorizontal() }
+            Button("Flip Vertical") { model.flipVertical() }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 28)
+        .help("More tools")
+        .accessibilityLabel("More tools")
+    }
+
     private var autoRedact: some View {
         Button {
             onAutoRedact?()
@@ -82,11 +118,10 @@ struct EditorToolbar: View {
             Label("Auto-redact", systemImage: "eye.slash")
         }
         .help("Find emails, cards, and keys, then review before blurring")
-        .disabled(model.isFindingRedactions)
+        .disabled(model.isFindingRedactions || model.isExporting)
         .controlSize(.small)
     }
 
-    /// One button that both applies and undoes the lift, because it is one decision.
     private var removeBackground: some View {
         Button {
             onRemoveBackground?()
@@ -97,7 +132,7 @@ struct EditorToolbar: View {
             )
         }
         .help("Cut the subject out of the capture, on this Mac, with no network")
-        .disabled(model.isLiftingSubject)
+        .disabled(model.isLiftingSubject || model.isExporting)
         .controlSize(.small)
     }
 
@@ -134,7 +169,7 @@ struct EditorToolbar: View {
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var historyControls: some View {
+    private func historyControlsRow(compact: Bool) -> some View {
         HStack(spacing: 2) {
             Button {
                 model.undo()
@@ -142,7 +177,6 @@ struct EditorToolbar: View {
                 Image(systemName: "arrow.uturn.backward")
             }
             .disabled(!model.canUndo)
-            .keyboardShortcut("z", modifiers: .command)
             .help("Undo")
 
             Button {
@@ -151,7 +185,6 @@ struct EditorToolbar: View {
                 Image(systemName: "arrow.uturn.forward")
             }
             .disabled(!model.canRedo)
-            .keyboardShortcut("z", modifiers: [.command, .shift])
             .help("Redo")
 
             Divider().frame(height: 14)
@@ -164,30 +197,32 @@ struct EditorToolbar: View {
             .help(model.isCanvasLocked ? "Unlock objects (⇧⌘L)" : "Lock objects in place while drawing (⇧⌘L)")
             .accessibilityLabel(model.isCanvasLocked ? "Unlock objects" : "Lock objects")
 
-            Button {
-                model.rotateClockwise()
-            } label: {
-                Image(systemName: "rotate.right")
-            }
-            .help("Rotate 90° Clockwise")
-            .accessibilityLabel("Rotate 90 degrees clockwise")
+            if !compact {
+                Button {
+                    model.rotateClockwise()
+                } label: {
+                    Image(systemName: "rotate.right")
+                }
+                .help("Rotate 90° Clockwise")
+                .accessibilityLabel("Rotate 90 degrees clockwise")
 
-            Button {
-                model.flipHorizontal()
-            } label: {
-                Image(systemName: "flip.horizontal")
-            }
-            .help("Flip Horizontal")
-            .accessibilityLabel("Flip horizontal")
+                Button {
+                    model.flipHorizontal()
+                } label: {
+                    Image(systemName: "flip.horizontal")
+                }
+                .help("Flip Horizontal")
+                .accessibilityLabel("Flip horizontal")
 
-            Button {
-                model.flipVertical()
-            } label: {
-                Image(systemName: "flip.horizontal")
-                    .rotationEffect(.degrees(90))
+                Button {
+                    model.flipVertical()
+                } label: {
+                    Image(systemName: "flip.horizontal")
+                        .rotationEffect(.degrees(90))
+                }
+                .help("Flip Vertical")
+                .accessibilityLabel("Flip vertical")
             }
-            .help("Flip Vertical")
-            .accessibilityLabel("Flip vertical")
         }
         .buttonStyle(.borderless)
     }
@@ -197,13 +232,12 @@ struct EditorToolbar: View {
             Button("Copy") {
                 onExport(.copy)
             }
-            .keyboardShortcut("c", modifiers: .command)
+            .disabled(model.isExporting)
 
             Menu {
                 Button("Copy Flattened Image") {
                     onExport(.copyFlattened)
                 }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
                 Button("Copy Without Annotations") {
                     onExport(.copyWithoutAnnotations)
                 }
@@ -211,7 +245,6 @@ struct EditorToolbar: View {
                 Button("Insert Image…") {
                     onExport(.insertImage)
                 }
-                .keyboardShortcut("i", modifiers: .command)
                 Button("Pin") {
                     onExport(.pin)
                 }
@@ -225,8 +258,6 @@ struct EditorToolbar: View {
                 Button("Save As…") {
                     onExport(.saveAs)
                 }
-                // A project keeps the annotations editable rather than flattening them,
-                // which is the whole point of the `.kadr` format (docs/04 §6).
                 Button("Save Project…") {
                     onExport(.saveProject)
                 }
@@ -235,11 +266,25 @@ struct EditorToolbar: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 36)
+            .disabled(model.isExporting)
 
             Button("Save") {
                 onExport(.save)
             }
             .buttonStyle(.borderedProminent)
+            .disabled(model.isExporting)
         }
+    }
+
+    private var inspectorToggle: some View {
+        Button {
+            isInspectorPresented.toggle()
+        } label: {
+            Image(systemName: "sidebar.right")
+        }
+        .buttonStyle(.borderless)
+        .keyboardShortcut("i", modifiers: [.command, .option])
+        .help(isInspectorPresented ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
+        .accessibilityLabel(isInspectorPresented ? "Hide Inspector" : "Show Inspector")
     }
 }

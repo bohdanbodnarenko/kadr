@@ -6,28 +6,30 @@ import Observation
 /// View state, not document state: pinch, ⌘0 and Fit Canvas must not dirty the file.
 @MainActor
 @Observable
-final class EditorCanvasSession {
+public final class EditorCanvasSession {
     /// When true, the canvas re-fits every time the viewport or the capture size changes.
-    var zoomToFit = true
-    private(set) var magnification: CGFloat = 1
+    public var zoomToFit = true
+    public private(set) var magnification: CGFloat = 1
 
-    var zoomPercent: Int {
+    public var zoomPercent: Int {
         EditorCanvasLayout.zoomPercent(for: magnification)
     }
 
-    func fit() {
+    public init() {}
+
+    public func fit() {
         zoomToFit = true
     }
 
-    func zoomIn() {
+    public func zoomIn() {
         setMagnification(magnification * 1.25)
     }
 
-    func zoomOut() {
+    public func zoomOut() {
         setMagnification(magnification * 0.8)
     }
 
-    func setPercent(_ percent: Int) {
+    public func setPercent(_ percent: Int) {
         setMagnification(CGFloat(percent) / 100)
     }
 

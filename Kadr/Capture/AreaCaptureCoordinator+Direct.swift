@@ -12,13 +12,16 @@ extension AreaCaptureCoordinator {
     /// Captures every display with no overlay at all (docs/03 §1.3).
     func captureAllDisplays() {
         rememberBeautifySkip()
-        if captureHeldFreeze() { return }
+        if captureHeldFreeze() {
+            return
+        }
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
         inFlight?.cancel()
         let seconds = timerSeconds
-        timer.run(seconds: seconds) { [weak self] in
+        // Every display is the target, so the badge goes where the user is looking.
+        timer.run(seconds: seconds, screen: nil, displayID: nil) { [weak self] in
             guard let self else { return }
             inFlight = Task { [weak self] in
                 guard let self else { return }
@@ -46,13 +49,15 @@ extension AreaCaptureCoordinator {
     /// Captures one display with no overlay, the `display=` form of fullscreen.
     func captureDisplay(_ displayID: CGDirectDisplayID) {
         rememberBeautifySkip()
-        if captureHeldFreeze(displayID: displayID) { return }
+        if captureHeldFreeze(displayID: displayID) {
+            return
+        }
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
         inFlight?.cancel()
         let seconds = timerSeconds
-        timer.run(seconds: seconds) { [weak self] in
+        timer.run(seconds: seconds, displayID: displayID) { [weak self] in
             guard let self else { return }
             inFlight = Task { [weak self] in
                 guard let self else { return }
@@ -161,5 +166,27 @@ extension AreaCaptureCoordinator {
                 frontmostApp: frontmost
             )
         )
+    }
+
+    func captureRegionLive(_ rect: DisplayRect, on displayID: CGDirectDisplayID) {
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            do {
+                // Before the pixels, not after (docs/07 H3).
+                await hygiene?.beginCaptureAndSettle()
+                await CaptureExclusionPush.into(engine)
+                let capture = try await engine.captureRegion(
+                    rect,
+                    on: displayID,
+                    includesCursor: includesCursor
+                )
+                permissions.noteCaptureSuccess()
+                await deliver(capture)
+                hygiene?.endCapture()
+            } catch {
+                hygiene?.endCapture()
+                handle(error)
+            }
+        }
     }
 }

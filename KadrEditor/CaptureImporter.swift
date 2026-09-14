@@ -88,6 +88,10 @@ struct CaptureImporter {
         alert.messageText = "Kadr could not open “\(url.lastPathComponent)”."
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
-        alert.runModal()
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
+        }
     }
 }

@@ -19,6 +19,9 @@ extension AreaCaptureCoordinator {
                 )
                 vision.copyToClipboard(recognition)
                 logger.info("Recognised \(recognition.text.count, privacy: .public) characters from a file")
+                FeedbackAnnouncement.post(
+                    KadrText.string("Text copied, \(recognition.text.count) characters")
+                )
                 presentTextResult(
                     recognition.text,
                     codes: recognition.codes,
@@ -28,6 +31,7 @@ extension AreaCaptureCoordinator {
                 automation.report(.text(recognition.text))
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
+                FeedbackAnnouncement.post(ActionUnavailableReason.couldNotReadText.message)
                 automation.report(.failed(error.localizedDescription))
             }
         }

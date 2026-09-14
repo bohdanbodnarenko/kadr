@@ -5,16 +5,16 @@ import Testing
 
 @Suite("User colour palette")
 struct EditorUserPaletteTests {
-    private func isolatedDefaults() -> UserDefaults {
+    private func isolatedDefaults() throws -> UserDefaults {
         let suite = "app.kadr.tests.palette.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         return defaults
     }
 
     @Test("A custom colour is saved and reloaded")
-    func persistsAcrossLoad() {
-        let defaults = isolatedDefaults()
+    func persistsAcrossLoad() throws {
+        let defaults = try isolatedDefaults()
         var palette = EditorUserPalette()
         let teal = AnnotationColor(red: 0.1, green: 0.7, blue: 0.7)
         let added = palette.add(teal)

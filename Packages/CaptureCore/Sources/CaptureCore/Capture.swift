@@ -152,6 +152,16 @@ public struct WindowInfo: Sendable, Hashable, Identifiable {
     public var isUserWindow: Bool {
         layer == 0 && frame.width >= 40 && frame.height >= 40
     }
+
+    /// A child window or panel (layer 1…8) that ⌘ exposes in window-pick mode (docs/03 §1.2).
+    public var isAuxiliaryWindow: Bool {
+        layer >= 1 && layer <= 8 && frame.width >= 40 && frame.height >= 40
+    }
+
+    /// Every window the overlay may offer, before ⌘ narrows the list to top-level only.
+    public var isPickableWindow: Bool {
+        isUserWindow || isAuxiliaryWindow
+    }
 }
 
 /// A `Sendable` snapshot of `SCShareableContent`.

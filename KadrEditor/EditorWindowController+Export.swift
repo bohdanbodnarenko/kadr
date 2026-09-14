@@ -46,11 +46,15 @@ extension EditorWindowController {
         NSWorkspace.shared.open(target)
     }
 
-    func copyToClipboard(_ image: CGImage) {
-        guard let data = try? ImageEncoder().encode(image, options: exportEncodingOptions) else { return }
+    @discardableResult
+    func copyToClipboard(_ image: CGImage) -> Bool {
+        guard let data = try? ImageEncoder().encode(image, options: exportEncodingOptions) else {
+            return false
+        }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(data, forType: .png)
         logger.info("Copied the flattened capture")
+        return true
     }
 
     func save(_ image: CGImage) throws {
@@ -82,7 +86,11 @@ extension EditorWindowController {
     }
 
     /// Flattened image (or a `.kadr`) to a path the user picks (CleanShot §8.5).
-    func saveAs(_ image: CGImage) {
+    func presentSaveAsSheet(for image: CGImage) {
+        guard let window else {
+            model.endExport()
+            return
+        }
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = fileURL.deletingPathExtension().lastPathComponent
@@ -93,21 +101,26 @@ extension EditorWindowController {
             types.append(project)
         }
         panel.allowedContentTypes = types
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
-                try writeProject(to: url)
-            } else {
-                var options = exportEncodingOptions
-                options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
-                try CaptureFileWriter().write(image, to: url, options: options)
-                model.markSaved()
-                autosave.discard(for: fileURL)
-                NSWorkspace.shared.activateFileViewerSelecting([url])
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            defer { self.model.endExport() }
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+                    try writeProject(to: url)
+                } else {
+                    var options = exportEncodingOptions
+                    options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
+                    try CaptureFileWriter().write(image, to: url, options: options)
+                    model.markSaved()
+                    autosave.discard(for: fileURL)
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                logger.info("Saved \(url.lastPathComponent, privacy: .public)")
+            } catch {
+                model.failExport(.saveAs, message: error.localizedDescription)
+                logger.error("Save As failed: \(error.localizedDescription, privacy: .public)")
             }
-            logger.info("Saved \(url.lastPathComponent, privacy: .public)")
-        } catch {
-            logger.error("Save As failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -214,8 +227,12 @@ extension EditorWindowController {
             "general.convertExportsToSRGB" as CFString,
             "app.kadr.Kadr" as CFString
         )
-        if let flag = raw as? Bool { return flag }
-        if let number = raw as? NSNumber { return number.boolValue }
+        if let flag = raw as? Bool {
+            return flag
+        }
+        if let number = raw as? NSNumber {
+            return number.boolValue
+        }
         return false
     }
 
@@ -224,8 +241,12 @@ extension EditorWindowController {
             EditorCanvasPreferences.keepOriginalWhenAnnotatingKey as CFString,
             "app.kadr.Kadr" as CFString
         )
-        if let flag = raw as? Bool { return flag }
-        if let number = raw as? NSNumber { return number.boolValue }
+        if let flag = raw as? Bool {
+            return flag
+        }
+        if let number = raw as? NSNumber {
+            return number.boolValue
+        }
         return true
     }
 }

@@ -81,6 +81,34 @@ enum AppPermission: String, CaseIterable, Identifiable, Sendable {
     func needsSettings(status: AppPermissionStatus, attempted: Bool) -> Bool {
         status == .denied || (mayNeedRelaunch && attempted && status == .notEnabled)
     }
+
+    /// Required or Optional, as a word rather than a colour (docs/14 UX-06).
+    var requirementLabel: String {
+        isRequired ? "Required" : "Optional"
+    }
+
+    /// The one recovery instruction for the current state (docs/14 UX-06).
+    ///
+    /// One sentence, never a stack of them. The relaunch caveat belongs to a single row
+    /// per screen — `includesRelaunchGuidance` — because repeating “reopen Kadr” under
+    /// three rows reads as three separate problems instead of one fact about macOS.
+    func recovery(
+        status: AppPermissionStatus,
+        attempted: Bool,
+        includesRelaunchGuidance: Bool
+    ) -> String? {
+        switch status {
+        case .allowed:
+            return nil
+        case .restricted:
+            return "Restricted by this Mac’s administrator. Kadr works without it."
+        case .notEnabled, .denied:
+            guard needsSettings(status: status, attempted: attempted) else { return nil }
+            let route = "In Privacy & Security → \(title), turn on Kadr."
+            guard includesRelaunchGuidance, mayNeedRelaunch else { return route }
+            return route + " macOS applies it the next time Kadr opens."
+        }
+    }
 }
 
 /// What macOS currently says about one grant.
@@ -151,54 +179,68 @@ struct SystemAppPermissionSampling: AppPermissionSampling {
     }
 }
 
-/// One compact permission row, shared by onboarding and Settings.
+/// Required or Optional as a semantic badge (docs/14 UX-06).
+///
+/// Hidden from VoiceOver on purpose: the same word is folded into the row title's label,
+/// so a reader hears “Screen capture, required” once instead of twice.
+struct AppPermissionBadge: View {
+    let permission: AppPermission
+
+    var body: some View {
+        Text(permission.requirementLabel)
+            .font(.system(size: 10, weight: .semibold))
+            .textCase(.uppercase)
+            .foregroundStyle(permission.isRequired ? Color.accentColor : Color.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(
+                    (permission.isRequired ? Color.accentColor : Color.secondary).opacity(0.14)
+                )
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    (permission.isRequired ? Color.accentColor : Color.secondary).opacity(0.35)
+                )
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// One compact permission row, shared by onboarding and Settings (docs/14 UX-06).
 struct AppPermissionRow: View {
     let permission: AppPermission
     let status: AppPermissionStatus
     var attempted = false
     var isRequesting = false
     var requestsDisabled = false
+    /// True for the one row per screen that carries the “reopen Kadr” caveat.
+    var showsRelaunchGuidance = false
     var errorMessage: String?
     var request: () -> Void
     var openSettings: () -> Void
 
+    /// Narrowest copy column that still reads as a paragraph rather than a column of
+    /// single words. Below that the action moves under the copy instead of compressing
+    /// the title, which is the whole point of the `ViewThatFits` below.
+    private static let copyIdealWidth: CGFloat = 260
+    private static let actionWidth: CGFloat = 88
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: permission.symbol)
-                    .font(.system(size: 18))
-                    .foregroundStyle(permission.isRequired ? Color.accentColor : .secondary)
-                    .frame(width: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(permission.displayTitle)
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(permission.isRequired ? "Required" : "Optional")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(permission.explanation)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                action.frame(minWidth: 88, alignment: .trailing)
+            ViewThatFits(in: .horizontal) {
+                actionBesideCopy
+                actionBelowCopy
             }
-            if status == .restricted {
-                Text("Restricted by this Mac’s settings or administrator. You can continue without this feature.")
+            if let recovery = permission.recovery(
+                status: status,
+                attempted: attempted,
+                includesRelaunchGuidance: showsRelaunchGuidance
+            ) {
+                Text(recovery)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if status != .allowed, permission.needsSettings(status: status, attempted: attempted) {
-                Text("In Privacy & Security → \(permission.title), turn on Kadr, then return here.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if permission.mayNeedRelaunch {
-                    Text("If macOS asks you to quit, save your work and reopen Kadr.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -210,6 +252,56 @@ struct AppPermissionRow: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: - Layouts
+
+    private var actionBesideCopy: some View {
+        HStack(alignment: .center, spacing: 12) {
+            icon
+            copy
+                .frame(idealWidth: Self.copyIdealWidth, alignment: .leading)
+            Spacer(minLength: 12)
+            action
+                .frame(minWidth: Self.actionWidth, alignment: .trailing)
+        }
+    }
+
+    private var actionBelowCopy: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                icon
+                copy
+                Spacer(minLength: 0)
+            }
+            action
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var icon: some View {
+        Image(systemName: permission.symbol)
+            .font(.system(size: 18))
+            .foregroundStyle(permission.isRequired ? Color.accentColor : .secondary)
+            .frame(width: 28)
+            .accessibilityHidden(true)
+    }
+
+    private var copy: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(permission.displayTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                AppPermissionBadge(permission: permission)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("\(permission.displayTitle), \(permission.requirementLabel)")
+            Text(permission.explanation)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder

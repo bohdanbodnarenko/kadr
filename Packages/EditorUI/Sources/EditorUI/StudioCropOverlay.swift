@@ -8,6 +8,8 @@ struct StudioCropOverlay: View {
 
     @State private var drag: (handle: CropHandle, origin: CGRect)?
 
+    private let hitSize: CGFloat = 20
+
     var body: some View {
         let crop = StudioCropGeometry.viewRect(forNormalized: model.workingCrop, inFitted: fitted)
         ZStack {
@@ -23,16 +25,31 @@ struct StudioCropOverlay: View {
                 .contentShape(Rectangle())
                 .gesture(dragGesture(handle: .body))
             ForEach(CropHandle.resizeHandles, id: \.self) { handle in
-                let point = handle.point(in: crop)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 10, height: 10)
-                    .shadow(radius: 1)
-                    .position(x: point.x, y: point.y)
-                    .gesture(dragGesture(handle: handle))
+                cropHandle(handle, crop: crop)
             }
         }
         .contentShape(Rectangle())
+    }
+
+    private func cropHandle(_ handle: CropHandle, crop: CGRect) -> some View {
+        let point = handle.point(in: crop)
+        return Circle()
+            .fill(.white)
+            .frame(width: 10, height: 10)
+            .shadow(radius: 1)
+            .frame(width: hitSize, height: hitSize)
+            .contentShape(Rectangle())
+            .position(x: point.x, y: point.y)
+            .gesture(dragGesture(handle: handle))
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.set()
+                } else {
+                    NSCursor.arrow.set()
+                }
+            }
+            .accessibilityLabel(handle.accessibilityTitle)
+            .accessibilityAddTraits(.isButton)
     }
 
     private func dimmers(around crop: CGRect) -> some View {
@@ -80,5 +97,21 @@ struct StudioCropOverlay: View {
             .onEnded { _ in
                 drag = nil
             }
+    }
+}
+
+private extension CropHandle {
+    var accessibilityTitle: String {
+        switch self {
+        case .topLeading: "Crop top left"
+        case .top: "Crop top edge"
+        case .topTrailing: "Crop top right"
+        case .leading: "Crop left edge"
+        case .body: "Move crop"
+        case .trailing: "Crop right edge"
+        case .bottomLeading: "Crop bottom left"
+        case .bottom: "Crop bottom edge"
+        case .bottomTrailing: "Crop bottom right"
+        }
     }
 }

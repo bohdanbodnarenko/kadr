@@ -60,13 +60,65 @@ public extension EditorDocumentModel {
 
     private func adjustTextSize(by steps: Int) {
         var style = styleMemory.lastTextStyle
-        style.fontSize = min(max(style.fontSize + CGFloat(steps) * 2, 10), 120)
-        styleMemory.lastTextStyle = style
-        rewriteSelectionLive { command in
+        style.fontSize = Self.clampedTextSize(style.fontSize + CGFloat(steps) * 2)
+        applyTextStyleLive(style)
+    }
+
+    /// The range the size control and the `` ` ``/`+` shortcuts both work in.
+    static let textSizeRange: ClosedRange<CGFloat> = 10 ... 120
+
+    static func clampedTextSize(_ size: CGFloat) -> CGFloat {
+        min(max(size, textSizeRange.lowerBound), textSizeRange.upperBound)
+    }
+
+    /// Applies a whole text style to the memory *and* to whatever text is selected, as one
+    /// undoable edit (docs/03 §3, docs/14 UX-30A).
+    ///
+    /// The preset picker used to write `styleMemory.lastTextStyle` directly, which meant
+    /// choosing Heading with a caption selected changed the *next* annotation and left the
+    /// selected one alone — a control that looked like it edited the selection and did not.
+    func applyTextStyle(_ style: TextStyle) {
+        endInspectorStyleEdit()
+        var next = style
+        next.fontSize = Self.clampedTextSize(next.fontSize)
+        styleMemory.lastTextStyle = next
+        // The text tool's stroke memory carries the colour for the swatch strip, which is
+        // shared with every other tool's inspector.
+        var stroke = styleMemory.stroke(for: .text)
+        stroke.color = next.color
+        styleMemory.remember(stroke, for: .text)
+        rewriteSelection { command in
             guard case var .text(spec) = command else { return command }
-            spec.style.fontSize = style.fontSize
+            spec.style = next
             return .text(spec)
         }
+    }
+
+    /// The same edit, coalesced, for the size slider and the size shortcuts.
+    func applyTextStyleLive(_ style: TextStyle) {
+        var next = style
+        next.fontSize = Self.clampedTextSize(next.fontSize)
+        styleMemory.lastTextStyle = next
+        rewriteSelectionLive { command in
+            guard case var .text(spec) = command else { return command }
+            spec.style = next
+            return .text(spec)
+        }
+    }
+
+    /// The style the text inspector is editing: the selection's, or the tool's memory.
+    ///
+    /// Reading the selection first is what makes the inspector describe what is on screen.
+    /// A picker bound only to style memory shows "Callout" over a selected heading.
+    var inspectedTextStyle: TextStyle {
+        // In document order rather than selection order: a `Set` would answer differently
+        // between two runs with the same two captions selected.
+        for command in document.commands where document.selection.contains(command.id) {
+            if case let .text(spec) = command {
+                return spec.style
+            }
+        }
+        return styleMemory.lastTextStyle
     }
 
     func applyShapeKind(_ kind: ShapeKind) {

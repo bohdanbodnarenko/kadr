@@ -14,7 +14,8 @@ struct CardLayoutEditor: View {
     /// Which kind of capture the mock is showing, since one layout serves both and the
     /// actions that apply differ.
     @State private var previewKind: CaptureKind = .screenshot
-    @State private var dragging: CardAction?
+    @State private var focusedSlot: CardSlot = .column
+    @State private var selectedAction: CardAction?
 
     private var layout: CardLayout {
         settings.cardLayout
@@ -30,14 +31,23 @@ struct CardLayoutEditor: View {
             .pickerStyle(.segmented)
 
             mockCard
+            keyboardArrangement
             unplacedActions
 
             HStack {
                 Button("Reset to the standard layout") {
                     settings.cardLayout = .standard
+                    selectedAction = nil
+                    announce("Reset to the standard layout.")
                 }
                 Spacer()
             }
+        }
+        .onChange(of: previewKind) { _, _ in
+            selectedAction = nil
+        }
+        .onChange(of: focusedSlot) { _, _ in
+            selectedAction = nil
         }
     }
 
@@ -120,19 +130,105 @@ struct CardLayoutEditor: View {
     private func chip(_ action: CardAction, in slot: CardSlot) -> some View {
         Image(systemName: action.systemImage)
             .frame(width: 26, height: 26)
-            .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
+            .background(
+                selectedAction == action ? Color.accentColor.opacity(0.35) : Color.accentColor.opacity(0.18),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
             .draggable(action.rawValue) {
                 Image(systemName: action.systemImage)
             }
             .help(action.title)
+            .onTapGesture {
+                selectedAction = action
+                focusedSlot = slot
+            }
             .contextMenu {
                 Button("Remove") {
-                    var updated = layout
-                    updated.remove(action)
-                    settings.cardLayout = updated
+                    remove(action)
                 }
             }
             .accessibilityLabel("\(action.title), \(slot.title)")
+            .accessibilityAddTraits(selectedAction == action ? .isSelected : [])
+    }
+
+    // MARK: - Keyboard arrangement (docs/14 UX-12)
+
+    private var keyboardArrangement: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Keyboard arrangement")
+                .font(.headline)
+
+            Picker("Slot", selection: $focusedSlot) {
+                ForEach(CardSlot.allCases, id: \.self) { slot in
+                    Text(slot.title).tag(slot)
+                }
+            }
+            .pickerStyle(.menu)
+
+            List(selection: $selectedAction) {
+                ForEach(actionsInFocusedSlot, id: \.self) { action in
+                    Label(action.title, systemImage: action.systemImage)
+                        .tag(action)
+                }
+            }
+            .frame(minHeight: 120)
+            .accessibilityLabel("Actions in \(focusedSlot.title)")
+
+            HStack(spacing: 8) {
+                Menu("Add") {
+                    ForEach(availableToAdd, id: \.self) { action in
+                        Button(action.title) {
+                            add(action, to: focusedSlot)
+                        }
+                    }
+                }
+                .disabled(availableToAdd.isEmpty)
+
+                Button("Remove") { removeSelected() }
+                    .disabled(selectedAction == nil || !isSelectedPlaced)
+
+                Button("Move Earlier") { moveSelectedEarlier() }
+                    .disabled(!canMoveSelectedEarlier)
+
+                Button("Move Later") { moveSelectedLater() }
+                    .disabled(!canMoveSelectedLater)
+
+                Menu("Move to Slot") {
+                    ForEach(CardSlot.allCases, id: \.self) { slot in
+                        Button(slot.title) {
+                            moveSelected(to: slot)
+                        }
+                        .disabled(selectedAction == nil)
+                    }
+                }
+                .disabled(selectedAction == nil)
+            }
+        }
+    }
+
+    private var actionsInFocusedSlot: [CardAction] {
+        layout.actions(in: focusedSlot, for: previewKind)
+    }
+
+    private var availableToAdd: [CardAction] {
+        layout.availableActions(for: previewKind)
+    }
+
+    private var isSelectedPlaced: Bool {
+        guard let selectedAction else { return false }
+        return layout.placedActions.contains(selectedAction)
+    }
+
+    private var canMoveSelectedEarlier: Bool {
+        guard let selectedAction, focusedSlot == .column else { return false }
+        guard let index = layout.column.firstIndex(of: selectedAction) else { return false }
+        return index > 0
+    }
+
+    private var canMoveSelectedLater: Bool {
+        guard let selectedAction, focusedSlot == .column else { return false }
+        guard let index = layout.column.firstIndex(of: selectedAction) else { return false }
+        return index < layout.column.count - 1
     }
 
     // MARK: - The palette
@@ -168,18 +264,76 @@ struct CardLayoutEditor: View {
         // people try before they find the context menu.
         .dropDestination(for: String.self) { items, _ in
             guard let action = items.compactMap(CardAction.init(rawValue:)).first else { return false }
-            var updated = layout
-            updated.remove(action)
-            settings.cardLayout = updated
+            remove(action)
             return true
         }
     }
 
+    // MARK: - Editing
+
     private func drop(_ items: [String], into slot: CardSlot) -> Bool {
         guard let action = items.compactMap(CardAction.init(rawValue:)).first else { return false }
+        return place(action, in: slot)
+    }
+
+    private func add(_ action: CardAction, to slot: CardSlot) {
+        guard place(action, in: slot) else { return }
+        selectedAction = action
+        focusedSlot = slot
+    }
+
+    private func remove(_ action: CardAction) {
         var updated = layout
-        updated.place(action, in: slot)
+        updated.remove(action)
         settings.cardLayout = updated
+        if selectedAction == action {
+            selectedAction = nil
+        }
+        announce("\(action.title) removed.")
+    }
+
+    private func removeSelected() {
+        guard let selectedAction else { return }
+        remove(selectedAction)
+    }
+
+    private func moveSelectedEarlier() {
+        guard let selectedAction, let index = layout.column.firstIndex(of: selectedAction) else { return }
+        var updated = layout
+        updated.move(selectedAction, toColumnIndex: index - 1)
+        settings.cardLayout = updated
+        announce("\(selectedAction.title) moved earlier.")
+    }
+
+    private func moveSelectedLater() {
+        guard let selectedAction, let index = layout.column.firstIndex(of: selectedAction) else { return }
+        var updated = layout
+        updated.move(selectedAction, toColumnIndex: index + 1)
+        settings.cardLayout = updated
+        announce("\(selectedAction.title) moved later.")
+    }
+
+    private func moveSelected(to slot: CardSlot) {
+        guard let selectedAction else { return }
+        guard place(selectedAction, in: slot) else { return }
+        focusedSlot = slot
+    }
+
+    @discardableResult
+    private func place(_ action: CardAction, in slot: CardSlot, at index: Int? = nil) -> Bool {
+        var updated = layout
+        let before = updated.placedActions
+        updated.place(action, in: slot, at: index)
+        guard updated.placedActions.contains(action) || before.contains(action) else {
+            announce("No room for \(action.title) in \(slot.title).")
+            return false
+        }
+        settings.cardLayout = updated
+        announce("\(action.title) placed in \(slot.title).")
         return true
+    }
+
+    private func announce(_ message: String) {
+        FeedbackAnnouncement.post(message)
     }
 }

@@ -62,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             history: history,
             hygiene: desktopHygiene
         )
+        created.onArmedStateChanged = { [weak self] in
+            self?.refreshStatusItemIcon()
+        }
         areaCaptureStorage = created
         return created
     }
@@ -118,10 +121,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     /// All-in-One capture HUD (docs/03 §1.4). Built on first use.
-    lazy var allInOne = AllInOneHUD(
-        settings: settings,
-        perform: { [weak self] mode in self?.performAllInOne(mode) }
-    )
+    lazy var allInOne: AllInOneHUD = {
+        let hud = AllInOneHUD(
+            settings: settings,
+            perform: { [weak self] mode in self?.performAllInOne(mode) }
+        )
+        hud.onShowingChanged = { [weak self] in
+            self?.refreshStatusItemIcon()
+        }
+        return hud
+    }()
 
     var recordingStorage: RecordingCoordinator?
     var recording: RecordingCoordinator {

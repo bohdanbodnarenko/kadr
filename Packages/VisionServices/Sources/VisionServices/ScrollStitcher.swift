@@ -6,7 +6,7 @@ import os
 import Shared
 import UniformTypeIdentifiers
 
-// swiftlint:disable file_length type_body_length
+// swiftlint:disable file_length
 
 /// Joins the frames of a scrolling capture into one tall image (docs/03 §1.6, docs/04 §4.4).
 ///
@@ -18,7 +18,7 @@ import UniformTypeIdentifiers
 /// Two passes, deliberately. The first works out where every frame belongs while holding
 /// only the previous frame's row profile — a few hundred kilobytes. Only then is the final
 /// height known, which is what lets the second pass allocate exactly once.
-public struct ScrollStitcher: Sendable {
+public struct ScrollStitcher: Sendable { // swiftlint:disable:this type_body_length
     private let logger = KadrLog.logger(.capture)
 
     public init() {}
@@ -95,9 +95,9 @@ public struct ScrollStitcher: Sendable {
     private func plan(frames: [URL], axis: ScrollAxis) throws -> Plan {
         switch axis {
         case .vertical:
-            return try planVertical(frames: frames)
+            try planVertical(frames: frames)
         case .horizontal:
-            return try planHorizontal(frames: frames)
+            try planHorizontal(frames: frames)
         }
     }
 
@@ -513,3 +513,5 @@ public struct ScrollStitcher: Sendable {
         guard CGImageDestinationFinalize(sink) else { throw Failure.couldNotWrite }
     }
 }
+
+// swiftlint:enable file_length

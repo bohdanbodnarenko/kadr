@@ -246,6 +246,13 @@ public struct SelectionInteraction: Equatable, Sendable {
         phase = .selected
     }
 
+    /// Replaces the current rect, keeping the selection committed.
+    public mutating func setRect(_ newRect: CGRect) {
+        guard !newRect.isEmpty else { return }
+        rect = keepInsideBounds(newRect)
+        phase = .selected
+    }
+
     // MARK: - Geometry helpers
 
     private func clampToBounds(_ point: CGPoint) -> CGPoint {

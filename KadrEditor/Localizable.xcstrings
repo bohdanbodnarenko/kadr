@@ -1,0 +1,48 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Pin": {
+      "comment": "Keep a screenshot floating on screen as a reference. Not a map pin.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin"
+          }
+        }
+      }
+    },
+    "Studio": {
+      "comment": "The video editor for screen recordings.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Studio"
+          }
+        }
+      }
+    },
+    "Flatten": {
+      "comment": "Burn annotations into the image so they can no longer be edited.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flatten"
+          }
+        }
+      }
+    },
+    "Copy Original": {
+      "comment": "Copy the unedited recording file, not the current preview."
+    },
+    "Share Original": {
+      "comment": "Share the unedited recording file, not the current preview."
+    }
+  },
+  "version": "1.0"
+}

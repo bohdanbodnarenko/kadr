@@ -211,8 +211,13 @@ final class ScrollPreviewStrip {
     }
 }
 
-// Backward-compatible names for existing tests.
+/// Backward-compatible names for existing tests.
 extension ScrollPreviewStrip {
-    static var width: Int { fixedExtent }
-    static var maximumHeight: Int { maximumExtent }
+    static var width: Int {
+        fixedExtent
+    }
+
+    static var maximumHeight: Int {
+        maximumExtent
+    }
 }

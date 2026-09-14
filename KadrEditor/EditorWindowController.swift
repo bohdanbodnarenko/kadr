@@ -10,7 +10,9 @@ import UniformTypeIdentifiers
 
 /// One editor window over one capture (docs/03 §3).
 @MainActor
-final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisting, SubjectLifting {
+final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation, RedactionAssisting,
+    SubjectLifting
+{
     enum OpenError: LocalizedError {
         case unreadableImage(URL)
 
@@ -28,6 +30,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     /// image every 1.5 s (docs/10 R2.6).
     let cachedBasePNG: Data
     let model: EditorDocumentModel
+    let canvasSession = EditorCanvasSession()
     let renderer = AnnotationExportRenderer()
     let logger = KadrLog.logger(.app)
     let vision = VisionClient()
@@ -81,15 +84,29 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         super.init()
     }
 
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     func show() {
         let root = EditorRootView(
             model: model,
             baseImage: baseImage,
+            canvasSession: canvasSession,
             redactionAssist: self,
-            subjectLift: self
-        ) { [weak self] action in
-            self?.export(action)
-        }
+            subjectLift: self,
+            onExport: { [weak self] action in
+                self?.export(action)
+            },
+            onRetryExport: { [weak self] action in
+                self?.retryExport(action)
+            },
+            onChooseExportLocation: { [weak self] _ in
+                self?.model.exportFailure = nil
+                self?.export(.saveAs)
+            }
+        )
         let hosting = NSHostingView(rootView: root)
 
         let window = NSWindow(
@@ -121,6 +138,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
 
         self.window = window
         hostingView = hosting
+        installResponderChain()
         window.makeKeyAndOrderFront(nil)
 
         offerRecoveryIfAny()
@@ -142,26 +160,28 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            saveProject()
-            // A failed save leaves the work unsaved, and closing anyway would throw it
-            // away — exactly what the prompt exists to prevent.
-            guard !model.hasUnsavedChanges else { return false }
-            isClosingConfirmed = true
-            return true
-        case .alertSecondButtonReturn:
-            autosave.discard(for: fileURL)
-            isClosingConfirmed = true
-            return true
-        default:
-            return false
+        alert.beginSheetModal(for: sender) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .alertFirstButtonReturn:
+                saveProject()
+                guard !model.hasUnsavedChanges else { return }
+                isClosingConfirmed = true
+                sender.close()
+            case .alertSecondButtonReturn:
+                autosave.discard(for: fileURL)
+                isClosingConfirmed = true
+                sender.close()
+            default:
+                break
+            }
         }
+        return false
     }
 
     /// Offers work a previous session left behind — a crash, a force quit, a power cut.
     private func offerRecoveryIfAny() {
-        guard let recovered = autosave.read(for: fileURL) else { return }
+        guard let window, let recovered = autosave.read(for: fileURL) else { return }
         guard recovered.document.commands != model.document.commands else {
             autosave.discard(for: fileURL)
             return
@@ -174,11 +194,14 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
         alert.addButton(withTitle: "Discard")
         alert.alertStyle = .informational
 
-        if alert.runModal() == .alertFirstButtonReturn {
-            model.replaceDocument(recovered.document)
-            logger.info("Restored autosaved annotations")
-        } else {
-            autosave.discard(for: fileURL)
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            if response == .alertFirstButtonReturn {
+                model.replaceDocument(recovered.document)
+                logger.info("Restored autosaved annotations")
+            } else {
+                autosave.discard(for: fileURL)
+            }
         }
     }
 
@@ -255,20 +278,54 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
     }
 
     func exportRendered(_ action: EditorRootView.ExportAction) {
+        guard model.runningExport == nil else { return }
+        let exportAction = action.exportAction
+        model.beginExport(exportAction)
+
+        let baseImage = baseImage
+        let document = model.document
+        let exportScale = model.exportScale
+        let includeAnnotations = action != .copyWithoutAnnotations
+        let renderer = renderer
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let image = try renderer.render(
+                    baseImage: baseImage,
+                    document: document,
+                    includeAnnotations: includeAnnotations,
+                    exportScale: exportScale
+                )
+                await MainActor.run {
+                    guard let self else { return }
+                    self.finishRenderedExport(action, image: image)
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.model.failExport(exportAction, message: error.localizedDescription)
+                    self?.logger.error(
+                        "Export failed: \(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+        }
+    }
+
+    private func finishRenderedExport(_ action: EditorRootView.ExportAction, image: CGImage) {
+        defer { model.endExport() }
         do {
-            let image = try renderer.render(
-                baseImage: baseImage,
-                document: model.document,
-                includeAnnotations: action != .copyWithoutAnnotations,
-                exportScale: model.exportScale
-            )
             switch action {
             case .copy, .copyFlattened, .copyWithoutAnnotations:
-                copyToClipboard(image)
+                guard copyToClipboard(image) else {
+                    model.failExport(action.exportAction, message: "The clipboard rejected the image.")
+                    return
+                }
+                model.requestCopyToast()
             case .save:
                 try save(image)
             case .saveAs:
-                saveAs(image)
+                presentSaveAsSheet(for: image)
+                return
             case .print:
                 printImage(image)
             case .pin:
@@ -279,7 +336,13 @@ final class EditorWindowController: NSObject, NSWindowDelegate, RedactionAssisti
                 break
             }
         } catch {
+            model.failExport(action.exportAction, message: error.localizedDescription)
             logger.error("Export failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    func retryExport(_ action: EditorExportAction) {
+        model.exportFailure = nil
+        export(action.rootAction)
     }
 }

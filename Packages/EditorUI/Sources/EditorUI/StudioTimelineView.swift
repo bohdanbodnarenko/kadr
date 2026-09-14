@@ -25,26 +25,26 @@ struct StudioTimelineView: View {
 
     /// The height of the clip band. Taller than a label strip so a filmstrip of frames
     /// can sit in it the way a trim actually happens in Screendrop.
-    private let clipHeight: CGFloat = 44
-    private let cueHeight: CGFloat = 22
-    private let rulerHeight: CGFloat = 13
-    private let handleWidth: CGFloat = 8
-    private let crownLane = StudioTimelinePlayhead.crownLaneHeight
+    let clipHeight: CGFloat = 44
+    let cueHeight: CGFloat = 22
+    let rulerHeight: CGFloat = 13
+    let handleWidth: CGFloat = 20
+    let crownLane = StudioTimelinePlayhead.crownLaneHeight
 
     /// How many times wider than the window the timeline is drawn. 1 is fit-to-window.
-    @State private var zoom: CGFloat = 1
+    @State var zoom: CGFloat = 1
     /// Edited time `ScrollViewReader` should keep under `zoomAnchorFraction` of the viewport.
-    @State private var zoomAnchorTime: TimeInterval = 0
+    @State var zoomAnchorTime: TimeInterval = 0
     /// 0…1 horizontal place in the viewport the zoom is pinned to.
-    @State private var zoomAnchorFraction: CGFloat = 0.5
+    @State var zoomAnchorFraction: CGFloat = 0.5
     /// The cue being dragged, and where it started.
-    @State private var dragging: (id: ZoomCue.ID, start: TimeInterval)?
+    @State var dragging: (id: ZoomCue.ID, start: TimeInterval)?
     /// A zoom being drawn on the lane, in edited time.
-    @State private var creating: (start: TimeInterval, end: TimeInterval)?
+    @State var creating: (start: TimeInterval, end: TimeInterval)?
     /// Edited time under the pointer, for skim and hover-C.
-    @State private var hoverTime: TimeInterval?
+    @State var hoverTime: TimeInterval?
     /// Latest timeline viewport width, so the zoom buttons can pin around the same axis.
-    @State private var viewportWidth: CGFloat = 1
+    @State var viewportWidth: CGFloat = 1
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -101,6 +101,21 @@ struct StudioTimelineView: View {
             .onKeyPress("c") {
                 if let hoverTime {
                     model.split(at: hoverTime)
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.leftArrow, phases: .down) { press in
+                nudgePlayhead(press, frames: -1)
+            }
+            .onKeyPress(.rightArrow, phases: .down) { press in
+                nudgePlayhead(press, frames: 1)
+            }
+            .onKeyPress(.return) {
+                if model.selectedZoom != nil {
+                    return .handled
+                }
+                if model.selectedClip != nil {
                     return .handled
                 }
                 return .ignored
@@ -207,72 +222,6 @@ struct StudioTimelineView: View {
     private static let playheadAnchor = "studio.timeline.playhead"
     private static let zoomAnchor = "studio.timeline.zoom"
 
-    // MARK: - Zoom
-
-    private func zoomControls(viewportWidth: CGFloat) -> some View {
-        HStack(spacing: 2) {
-            zoomIcon("minus.magnifyingglass", help: "Show more of the recording (⌘-)") {
-                applyZoom(factor: 1 / StudioTimelineZoom.step, pointerX: nil, viewportWidth: viewportWidth)
-            }
-            .keyboardShortcut("-", modifiers: .command)
-            .disabled(zoom <= 1.0001)
-
-            zoomIcon("plus.magnifyingglass", help: "Stretch the timeline for a closer cut (⌘=)") {
-                applyZoom(factor: StudioTimelineZoom.step, pointerX: nil, viewportWidth: viewportWidth)
-            }
-            .keyboardShortcut("=", modifiers: .command)
-            .disabled(zoom >= StudioTimelineZoom.maximum - 0.0001)
-
-            zoomIcon("arrow.left.and.right", help: "Fit the whole recording (⌘0)") {
-                applyZoom(factor: 1 / max(zoom, 1), pointerX: nil, viewportWidth: viewportWidth)
-            }
-            .keyboardShortcut("0", modifiers: .command)
-            .disabled(zoom <= 1.0001)
-
-            if zoom > 1.0001 {
-                Text(String(format: "%.1f×", zoom))
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 2)
-            }
-
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func zoomIcon(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
-                .frame(width: 26, height: 22)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        }
-        .buttonStyle(.borderless)
-        .help(help)
-    }
-
-    /// Stretches around the pointer when we know it, otherwise around the hovered time or
-    /// the playhead — so pinch / ⌘-scroll / ⌘= do not shove the cut off the screen.
-    private func applyZoom(factor: CGFloat, pointerX: CGFloat?, viewportWidth: CGFloat) {
-        let next = StudioTimelineZoom.clamp(zoom * factor)
-        guard abs(next - zoom) > 0.0001 else { return }
-        if next <= 1 {
-            zoomAnchorTime = 0
-            zoomAnchorFraction = 0
-        } else {
-            zoomAnchorTime = hoverTime ?? model.playhead
-            if let pointerX {
-                zoomAnchorFraction = StudioTimelineZoom.viewportFraction(
-                    pointerX: pointerX,
-                    viewportWidth: viewportWidth
-                )
-            } else {
-                zoomAnchorFraction = 0.5
-            }
-        }
-        zoom = next
-    }
-
     // MARK: - Bands
 
     private func ruler(scale: CGFloat, width: CGFloat) -> some View {
@@ -287,7 +236,7 @@ struct StudioTimelineView: View {
                             .fill(Color.secondary.opacity(0.4))
                             .frame(width: 1, height: 4)
                         Text(Self.tickLabel(time, step: step))
-                            .font(.system(size: 9).monospacedDigit())
+                            .font(.system(size: 10).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     .fixedSize()
@@ -356,36 +305,6 @@ struct StudioTimelineView: View {
         .help("Drag the ends to trim. Hover and press C to split.")
     }
 
-    private func handle(isLeading: Bool, clip: Clip, index: Int, scale: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 1)
-            .fill(Color.white.opacity(0.85))
-            .frame(width: 3, height: clipHeight - 12)
-            .padding(.horizontal, 3)
-            .frame(width: handleWidth, height: clipHeight)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        model.selectedClip = clip.id
-                        model.pausePlayback()
-                        let start = model.edit.clips.editedStartTime(ofClipAt: index)
-                        let time = start + (isLeading ? 0 : clip.editedDuration) + value.translation.width / scale
-                        if isLeading {
-                            model.trimClipStart(clip.id, toEdited: time)
-                        } else {
-                            model.trimClipEnd(clip.id, toEdited: time)
-                        }
-                    }
-            )
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeLeftRight.set()
-                } else {
-                    NSCursor.arrow.set()
-                }
-            }
-    }
-
     // MARK: - Formatting
 
     static func tickInterval(forDuration duration: TimeInterval, width: CGFloat) -> TimeInterval {
@@ -411,47 +330,5 @@ struct StudioTimelineView: View {
         speed == speed.rounded()
             ? "\(Int(speed))×"
             : String(format: "%.1f×", speed)
-    }
-}
-
-/// Frames of one clip, decoded lazily as the lane's width changes.
-private struct ClipFilmstripLane: View {
-    let url: URL
-    let clip: Clip
-    let width: CGFloat
-    let height: CGFloat
-
-    @State private var images: [CGImage] = []
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(images.enumerated()), id: \.offset) { _, image in
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: tileWidth, height: height)
-                    .clipped()
-            }
-        }
-        .frame(width: width, height: height, alignment: .leading)
-        .clipped()
-        .allowsHitTesting(false)
-        .task(id: loadKey) {
-            let count = StudioFilmstrip.tileCount(forWidth: width)
-            let times = StudioFilmstrip.sampleTimes(
-                start: clip.sourceStart,
-                duration: clip.sourceDuration,
-                count: count
-            )
-            images = await StudioFilmstrip.images(from: url, times: times)
-        }
-    }
-
-    private var tileWidth: CGFloat {
-        max(width / CGFloat(max(images.count, 1)), 1)
-    }
-
-    private var loadKey: String {
-        "\(clip.id.uuidString)-\(clip.sourceStart)-\(clip.sourceDuration)-\(Int(width))"
     }
 }

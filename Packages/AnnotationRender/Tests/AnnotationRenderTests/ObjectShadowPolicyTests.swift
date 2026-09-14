@@ -6,9 +6,9 @@ import Testing
 @Suite("Object shadow policy")
 struct ObjectShadowPolicyTests {
     @Test("Shadows are on by default")
-    func enabledByDefault() {
+    func enabledByDefault() throws {
         let suite = "ObjectShadowPolicyTests-default-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         defer { defaults.removePersistentDomain(forName: suite) }
 
@@ -16,18 +16,18 @@ struct ObjectShadowPolicyTests {
     }
 
     @Test("A disabled preference suppresses shadow drawing")
-    func disabledSuppressesShadow() {
-        let store = makeDefaults(enabled: false)
+    func disabledSuppressesShadow() throws {
+        let store = try makeDefaults(enabled: false)
         defer { store.removePersistentDomain(forName: store.description) }
 
         let spec = ImageSpec(pngData: Data(), rect: .zero, hasShadow: true)
         #expect(!ObjectShadowPolicy.drawsShadow(for: spec, defaults: store))
-        #expect(ObjectShadowPolicy.drawsShadow(for: spec, defaults: makeDefaults(enabled: true)))
+        #expect(try ObjectShadowPolicy.drawsShadow(for: spec, defaults: makeDefaults(enabled: true)))
     }
 
-    private func makeDefaults(enabled: Bool) -> UserDefaults {
+    private func makeDefaults(enabled: Bool) throws -> UserDefaults {
         let suite = "ObjectShadowPolicyTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         defaults.set(enabled, forKey: ObjectShadowPolicy.userDefaultsKey)
         return defaults

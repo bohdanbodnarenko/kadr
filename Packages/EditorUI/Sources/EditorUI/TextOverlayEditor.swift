@@ -48,6 +48,7 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
             ?? .systemFont(ofSize: spec.style.fontSize)
         view.textColor = NSColor(spec.style.color)
         view.insertionPointColor = NSColor(spec.style.color)
+        view.alignment = Self.alignment(for: spec.style)
         view.string = spec.string
         view.wantsLayer = true
         view.layer?.cornerRadius = spec.style.backgroundColor == nil
@@ -122,6 +123,15 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     /// would.
     private func resolvedFontName(for style: TextStyle) -> String {
         style.isBold ? TextLayout.boldName(for: style.fontName) : style.fontName
+    }
+
+    /// The field lines its text up the way the exporter's paragraph style will.
+    static func alignment(for style: TextStyle) -> NSTextAlignment {
+        switch style.alignment {
+        case .leading: .left
+        case .center: .center
+        case .trailing: .right
+        }
     }
 }
 

@@ -42,6 +42,20 @@ final class AppPermissionTracker {
         statuses[permission] ?? .notEnabled
     }
 
+    /// The one row that carries the “reopen Kadr” caveat (docs/14 UX-06).
+    ///
+    /// It is a fact about macOS, not about the grant, so the first row that needs it says
+    /// it and the rest stay quiet — otherwise three rows each look separately broken.
+    var relaunchGuidanceOwner: AppPermission? {
+        AppPermission.allCases.first { permission in
+            permission.mayNeedRelaunch
+                && permission.needsSettings(
+                    status: status(permission),
+                    attempted: attempted.contains(permission)
+                )
+        }
+    }
+
     func refresh() {
         var next: [AppPermission: AppPermissionStatus] = [:]
         for permission in AppPermission.allCases {

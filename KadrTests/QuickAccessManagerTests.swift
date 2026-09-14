@@ -10,6 +10,8 @@ import Testing
 import UniformTypeIdentifiers
 @testable import Kadr
 
+// swiftlint:disable file_length
+
 @MainActor
 @Suite("Quick Access Overlay", .serialized)
 struct QuickAccessManagerTests {
@@ -505,7 +507,7 @@ struct QuickAccessDragTests {
     }
 
     @Test("A recording cannot be rotated from the overlay")
-    func videoSkipsRotate() throws {
+    func videoSkipsRotate() {
         let item = QuickAccessItem(
             fileURL: URL(fileURLWithPath: "/tmp/clip.mp4"),
             isStaged: false,
@@ -523,3 +525,5 @@ struct QuickAccessDragTests {
         #expect(harness.manager.items.isEmpty)
     }
 }
+
+// swiftlint:enable file_length

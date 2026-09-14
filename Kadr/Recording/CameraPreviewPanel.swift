@@ -68,7 +68,7 @@ final class CameraPreviewPanel {
 
         panel.contentView = chrome
         self.panel = panel
-        self.previewLayer = preview
+        previewLayer = preview
         self.chrome = chrome
         applyChrome()
         panel.orderFrontRegardless()

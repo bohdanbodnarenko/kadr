@@ -39,6 +39,10 @@ final class RecordSetupHUD {
         bar.isShowingPicker
     }
 
+    /// Fired when the picker appears or goes away, so the menu bar can show the
+    /// capture-armed state (docs/14 UX-08A).
+    var onShowingChanged: (() -> Void)?
+
     func toggle() {
         if isShowing {
             model.cancel()
@@ -63,11 +67,13 @@ final class RecordSetupHUD {
         if model.settings.recordingShowsWebcam {
             model.onCameraPreview(true)
         }
+        onShowingChanged?()
     }
 
     func dismiss() {
         composer.hide()
         bar.dismissPicker()
+        onShowingChanged?()
     }
 }
 
@@ -156,24 +162,105 @@ struct RecordSetupView: View {
     private static let timerOptions = [0, 1, 3, 5, 10]
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            fullStrip
+            twoRowStrip
+            compactStrip
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(RecordingBarBackground())
+        .padding(10)
+        .onExitCommand { model.cancel() }
+        .onAppear { model.refreshDevices() }
+    }
+
+    private var fullStrip: some View {
         HStack(spacing: 6) {
             sources
             RecordingBarDivider()
             inputs
             RecordingBarDivider()
             timerMenu
-            RecordingBarCircleButton(symbol: "xmark", help: "Close the recorder (Esc)") {
-                model.cancel()
-            }
-            .accessibilityLabel("Close")
+            closeButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RecordingBarBackground())
-        .padding(10)
-        .fixedSize()
-        .onExitCommand { model.cancel() }
-        .onAppear { model.refreshDevices() }
+    }
+
+    private var twoRowStrip: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                sources
+                Spacer(minLength: 0)
+                closeButton
+            }
+            HStack(spacing: 6) {
+                inputs
+                RecordingBarDivider()
+                timerMenu
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var compactStrip: some View {
+        HStack(spacing: 6) {
+            sources
+            overflowInputsMenu
+            RecordingBarDivider()
+            timerMenu
+            closeButton
+        }
+    }
+
+    private var closeButton: some View {
+        RecordingBarCircleButton(symbol: "xmark", help: "Close the recorder (Esc)") {
+            model.cancel()
+        }
+        .accessibilityLabel("Close")
+    }
+
+    private var overflowInputsMenu: some View {
+        Menu {
+            Button {
+                toggleCamera()
+            } label: {
+                Text(model.settings.recordingShowsWebcam ? "Camera on" : "Camera off")
+            }
+            if RecordingOptions.microphoneIsAvailable {
+                Button {
+                    model.settings.recordsMicrophone.toggle()
+                } label: {
+                    Text(model.settings.recordsMicrophone ? "Microphone on" : "Microphone off")
+                }
+            }
+            Button {
+                model.settings.recordsSystemAudio.toggle()
+            } label: {
+                Text(model.settings.recordsSystemAudio ? "System sound on" : "System sound off")
+            }
+            Button {
+                model.settings.recordingShowsClicks.toggle()
+            } label: {
+                Text(model.settings.recordingShowsClicks ? "Click highlights on" : "Click highlights off")
+            }
+            Button {
+                model.settings.recordingShowsKeystrokes.toggle()
+            } label: {
+                Text(model.settings.recordingShowsKeystrokes ? "Keystrokes on" : "Keystrokes off")
+            }
+            Button {
+                model.onTeleprompterComposer()
+            } label: {
+                Text(model.settings.teleprompterEnabled ? "Teleprompter on" : "Teleprompter off")
+            }
+        } label: {
+            RecordingBarIcon(symbol: "slider.horizontal.3")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .help("Recording options")
+        .accessibilityLabel("Recording options")
     }
 
     @ViewBuilder

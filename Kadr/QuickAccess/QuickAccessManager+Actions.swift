@@ -71,6 +71,18 @@ extension QuickAccessManager {
         actions.studioAvailable = item.isVideo
             && editor.isAvailable
             && StudioSessionRecorder.session(forRecordingAt: item.fileURL) != nil
+        actions.unavailableReason = { [weak self] cardAction in
+            guard let self else { return nil }
+            switch cardAction {
+            case .annotate, .trim, .studio:
+                return editor.isAvailable ? nil : .editorNotInstalled
+            default:
+                return nil
+            }
+        }
+        actions.reportUnavailable = { [weak self] reason in
+            self?.presentFeedback(.unavailable(reason))
+        }
         return actions
     }
 
@@ -121,6 +133,11 @@ extension QuickAccessManager {
                 NSWorkspace.shared.activateFileViewerSelecting([gifURL])
             } catch {
                 logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
+                presentFeedback(.failure(
+                    String(localized: "GIF export failed"),
+                    retryTitle: String(localized: "Retry"),
+                    retry: { [weak self] in self?.exportGIF(item, confirm: confirm) }
+                ))
             }
         }
     }
@@ -169,13 +186,16 @@ extension QuickAccessManager {
     func pin(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        pins.pin(
+        guard pins.pin(
             url,
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
             save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
             annotate: { [weak self] fileURL in self?.openInEditor(fileURL) },
             copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) }
-        )
+        ) else {
+            presentFeedback(.unavailable(.missingFile))
+            return
+        }
     }
 
     /// Opens the capture in the editor. Annotating counts as acting on a staged file, so
@@ -386,6 +406,11 @@ extension QuickAccessManager {
                 logger.error("Compression failed: \(error.localizedDescription, privacy: .public)")
                 try? FileManager.default.removeItem(at: destination)
                 showCompressionResult(nil, for: item)
+                presentFeedback(.failure(
+                    String(localized: "Compression failed"),
+                    retryTitle: String(localized: "Retry"),
+                    retry: { [weak self] in self?.compress(item) }
+                ))
             }
         }
     }
@@ -425,6 +450,10 @@ extension QuickAccessManager {
                 textRecognizer.copyToClipboard(recognition)
                 let characters = recognition.text.count
                 logger.info("Recognised \(characters, privacy: .public) characters from a card")
+                let announcement = KadrText.string(
+                    "Text copied, \(recognition.text.count) characters"
+                )
+                FeedbackAnnouncement.post(announcement)
                 textToast.show(
                     text: recognition.text,
                     codes: recognition.codes,
@@ -433,6 +462,11 @@ extension QuickAccessManager {
                 )
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
+                presentFeedback(.failure(
+                    ActionUnavailableReason.couldNotReadText.message,
+                    retryTitle: String(localized: "Retry"),
+                    retry: { [weak self] in self?.recognizeText(at: url, on: screen) }
+                ))
             }
         }
     }

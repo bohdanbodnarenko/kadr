@@ -29,6 +29,19 @@ public extension AppSettings {
         }
     }
 
+    /// Keep the selection on screen after mouse-up until Enter commits it.
+    var captureConfirmsSelection: Bool {
+        get {
+            access(keyPath: \.captureConfirmsSelection)
+            return store[SettingKeys.captureConfirmsSelection]
+        }
+        set {
+            withMutation(keyPath: \.captureConfirmsSelection) {
+                store[SettingKeys.captureConfirmsSelection] = newValue
+            }
+        }
+    }
+
     /// Teaching copy on the idle freeze overlay.
     var captureShowsOverlayHints: Bool {
         get {

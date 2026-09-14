@@ -121,6 +121,21 @@ struct SettingsWindowControllerTests {
         await settle()
     }
 
+    @Test("The window minimum matches the single geometry source (docs/14 UX-09)")
+    func minimumSizeMatchesGeometry() async {
+        let app = FakeApplication()
+        let controller = makeController(app)
+        controller.show()
+
+        // Width is exact. Height is a floor: the split-view toolbar sits in the content
+        // area, so AppKit's contentMinSize is a little taller than the form's 540 pt.
+        #expect(controller.window?.contentMinSize.width == SettingsWindowGeometry.minimumWidth)
+        #expect((controller.window?.contentMinSize.height ?? 0) >= SettingsWindowGeometry.minimumHeight)
+
+        controller.close()
+        await settle()
+    }
+
     @Test("The SwiftUI view tree is deallocated on close, and the window is let go (PRD §8)")
     func closeDeallocatesTheViewTree() async {
         let app = FakeApplication()

@@ -86,10 +86,10 @@ struct CaptionCanvasTests {
         }
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         var count = 0
-        for index in stride(from: 0, to: pixels.count, by: 4)
-            where pixels[index] > 180 && pixels[index + 1] > 140 && pixels[index + 2] < 120
-        {
-            count += 1
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            if pixels[index] > 180, pixels[index + 1] > 140, pixels[index + 2] < 120 {
+                count += 1
+            }
         }
         return count
     }

@@ -32,7 +32,7 @@ struct EditorBeautifyInspector: View {
     }
 
     var body: some View {
-        Section("Beautify") {
+        EditorInspectorSection(title: "Beautify", key: "beautify", startsOpen: false) {
             Toggle("Add a background", isOn: enabledBinding)
 
             if isEnabled {

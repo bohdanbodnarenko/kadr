@@ -3,8 +3,8 @@ import AppKit
 import QuartzCore
 
 /// Hover preview for the smart highlighter (docs/03 §3 P2).
-extension AnnotationCanvasView {
-    override public func updateTrackingAreas() {
+public extension AnnotationCanvasView {
+    override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach { removeTrackingArea($0) }
         addTrackingArea(NSTrackingArea(
@@ -15,7 +15,7 @@ extension AnnotationCanvasView {
         ))
     }
 
-    override public func mouseMoved(with event: NSEvent) {
+    override func mouseMoved(with event: NSEvent) {
         model.pointerMoved(
             to: imagePoint(fromWindowPoint: event.locationInWindow),
             modifiers: modifiers(from: event)
@@ -24,7 +24,7 @@ extension AnnotationCanvasView {
     }
 
     /// A translucent book-style stroke over the word under the pointer.
-    func updateHighlightPreview() {
+    internal func updateHighlightPreview() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }

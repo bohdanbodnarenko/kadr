@@ -54,9 +54,9 @@ public extension StudioDocumentModel {
             } catch is CancellationError {
                 // Silent: the user cancelled it, so they already know.
             } catch VisionServiceError.insufficientDiskSpace {
-                failure = "There is not enough free space on this Mac to download the language model."
+                failure = .speechModelStorageFull()
             } catch {
-                failure = "The language model could not be downloaded: \(error.localizedDescription)"
+                failure = .speechModelDownloadFailed(error.localizedDescription)
             }
         }
     }
@@ -75,12 +75,11 @@ public extension StudioDocumentModel {
         guard !isTranscribing else { return }
         // Guard first, before minutes of transcription (docs/13 T-M1).
         guard !edit.clips.isEdited(ofRecordingLasting: manifest.duration) else {
-            failure = Self.tidyRefusal
+            failure = .tidyRefused()
             return
         }
         guard await transcriber.requestAuthorization() else {
-            failure = "Kadr needs permission to use speech recognition. Grant it in System Settings ▸ "
-                + "Privacy & Security ▸ Speech Recognition."
+            failure = .speechPermissionNeeded()
             return
         }
 
@@ -115,56 +114,66 @@ public extension StudioDocumentModel {
                 Task { @MainActor in self?.transcriptionProgress = fraction }
             }
             try Task.checkCancellation()
-
-            if produced.timingsLookCollapsed(relativeTo: manifest.duration) {
-                failure = "The transcript had no usable timings, so nothing was cut. "
-                    + "This can happen when dictation is not enabled on this Mac."
-                return
-            }
-            guard produced.spanLooksPlausible(relativeTo: manifest.duration) else {
-                failure = "The transcript did not match the length of this recording, so nothing was cut."
-                return
-            }
-
-            let processed = TranscriptPostProcessor().processed(produced)
-            transcript = processed
-            chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
-            try? document.write(processed)
-
-            let planner = TranscriptCutPlanner()
-            let cuts = planner.cuts(for: processed, duration: manifest.duration)
-            guard !cuts.isEmpty else {
-                notice = "There were no filler words or long pauses to remove."
-                pendingCuts = []
-                selectedCutIDs = []
-                requiresCutConfirmation = false
-                return
-            }
-
-            pendingCuts = cuts
-            selectedCutIDs = Set(cuts.map(\.id))
-            requiresCutConfirmation = planner.exceedsRemovalCap(cuts, duration: manifest.duration)
-            notice = requiresCutConfirmation
-                ? "This would remove more than 40% of the recording. Review the list and confirm before applying."
-                : "Review the proposed cuts, then apply. Nothing has been changed yet."
+            adopt(produced)
         } catch is CancellationError {
             logger.info("Transcription cancelled")
         } catch TranscriptionError.unavailableOnDevice {
             await refreshSpeechStatus()
             if dictationSettingsNeeded {
-                failure = "On-device dictation is not enabled for this language. Turn it on in "
-                    + "System Settings ▸ Keyboard ▸ Dictation, then try again."
+                failure = .transcriptionFailed(
+                    "On-device dictation is not enabled for this language. Turn it on in "
+                        + "System Settings ▸ Keyboard ▸ Dictation, then try again."
+                )
             } else {
-                failure = "There is no speech model on this Mac for your language yet."
+                failure = .transcriptionFailed(
+                    "There is no speech model on this Mac for your language yet."
+                )
             }
         } catch TranscriptionError.noAudioTrack {
-            failure = "This recording has no sound in it."
+            failure = .transcriptionFailed("This recording has no sound in it.")
         } catch TranscriptionError.notAuthorized {
-            failure = "Kadr needs permission to use speech recognition. Grant it in System Settings ▸ "
-                + "Privacy & Security ▸ Speech Recognition."
+            failure = .speechPermissionNeeded()
         } catch {
-            failure = "The recording could not be transcribed: \(error.localizedDescription)"
+            failure = .transcriptionFailed(error.localizedDescription)
         }
+    }
+
+    private func adopt(_ produced: Transcript) {
+        if produced.timingsLookCollapsed(relativeTo: manifest.duration) {
+            failure = .transcriptionFailed(
+                "The transcript had no usable timings, so nothing was cut. "
+                    + "This can happen when dictation is not enabled on this Mac."
+            )
+            return
+        }
+        guard produced.spanLooksPlausible(relativeTo: manifest.duration) else {
+            failure = .transcriptionFailed(
+                "The transcript did not match the length of this recording, so nothing was cut."
+            )
+            return
+        }
+
+        let processed = TranscriptPostProcessor().processed(produced)
+        transcript = processed
+        chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
+        try? document.write(processed)
+
+        let planner = TranscriptCutPlanner()
+        let cuts = planner.cuts(for: processed, duration: manifest.duration)
+        guard !cuts.isEmpty else {
+            notice = "There were no filler words or long pauses to remove."
+            pendingCuts = []
+            selectedCutIDs = []
+            requiresCutConfirmation = false
+            return
+        }
+
+        pendingCuts = cuts
+        selectedCutIDs = Set(cuts.map(\.id))
+        requiresCutConfirmation = planner.exceedsRemovalCap(cuts, duration: manifest.duration)
+        notice = requiresCutConfirmation
+            ? "This would remove more than 40% of the recording. Review the list and confirm before applying."
+            : "Review the proposed cuts, then apply. Nothing has been changed yet."
     }
 
     /// Applies the selected cuts as clip boundaries.
@@ -175,13 +184,19 @@ public extension StudioDocumentModel {
             return
         }
         guard !edit.clips.isEdited(ofRecordingLasting: manifest.duration) else {
-            failure = Self.tidyRefusal
+            failure = .tidyRefused()
             return
         }
         let planner = TranscriptCutPlanner()
         if planner.exceedsRemovalCap(cuts, duration: manifest.duration), !confirmingLargeRemoval {
             requiresCutConfirmation = true
-            failure = "This would remove more than 40% of the recording. Confirm to apply it anyway."
+            failure = StudioFailurePresentation(
+                title: "Remove more than 40% of this recording?",
+                message: "Confirm to apply the selected cuts anyway.",
+                style: .sheet,
+                primaryAction: .retry,
+                secondaryAction: .dismiss
+            )
             return
         }
         let timeline = planner.applying(cuts, to: manifest.duration)

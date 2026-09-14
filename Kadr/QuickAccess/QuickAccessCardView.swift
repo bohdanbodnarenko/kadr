@@ -4,48 +4,6 @@ import SettingsKit
 import Shared
 import SwiftUI
 
-/// What a card can do (docs/03 §2). Stubs are wired to the milestones that fill them in.
-struct QuickAccessCardActions {
-    var copy: () -> Void = {}
-    var save: () -> Void = {}
-    var saveAs: () -> Void = {}
-    var rotate: () -> Void = {}
-    var flipHorizontal: () -> Void = {}
-    var flipVertical: () -> Void = {}
-    var scaleRetina: () -> Void = {}
-    var annotate: () -> Void = {}
-    var pin: () -> Void = {}
-    var recognizeText: () -> Void = {}
-    var delete: () -> Void = {}
-    var dismiss: () -> Void = {}
-    /// Resolves the file to hand to a receiver, finalising a staged capture on the way.
-    /// Called when the drop asks for the bytes, never when the drag starts (docs/07 C1).
-    var resolveForDrag: @MainActor @Sendable () -> URL? = { nil }
-    /// The drag ended; `true` when a receiver took the file.
-    var dragCompleted: @MainActor @Sendable (Bool) -> Void = { _ in }
-    /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
-    var exportGIF: () -> Void = {}
-    /// Re-encodes the capture smaller and copies it (docs/09 U2.4).
-    var compress: () -> Void = {}
-    /// Opens a recording in the trim window (docs/03 §1.8). Only offered on a recording.
-    var trim: () -> Void = {}
-    var trimAvailable = false
-    /// Opens a recording in the studio (docs/09 U3). Offered only when the recording still
-    /// has a session beside it — without one there is nothing to edit but the trim.
-    var studio: () -> Void = {}
-    var studioAvailable = false
-    /// Hover pauses auto-dismiss; it does not claim the card (docs/03 §2).
-    var setHovered: (Bool) -> Void = { _ in }
-    /// Dragging pauses auto-dismiss until the drop finishes.
-    var beginDrag: () -> Void = {}
-    /// Tucks the stack into the peek tab (swipe toward the screen edge).
-    var peek: () -> Void = {}
-    /// Whether Annotate, Pin and OCR do anything yet.
-    var annotateAvailable = false
-    var pinAvailable = false
-    var textAvailable = false
-}
-
 /// The card (docs/03 §2): a thumbnail at rest, everything else on hover.
 ///
 /// At rest it is only the capture. It used to be a material panel wrapping the thumbnail
@@ -72,6 +30,9 @@ struct QuickAccessCardView: View {
     var alwaysShowActions = false
 
     @State private var isHovering = false
+    /// Sticky single-click expansion (docs/03 §2, docs/14 UX-18).
+    @State private var isExpanded = false
+    @FocusState private var isFocused: Bool
 
     /// The scale of the screen this card is on.
     ///
@@ -132,7 +93,16 @@ struct QuickAccessCardView: View {
 
     /// Hover chrome is suppressed while the stack is moving.
     private var showsChrome: Bool {
-        (isHovering || alwaysShowActions) && !suppressHoverChrome
+        (isHovering || alwaysShowActions || isExpanded || isFocused) && !suppressHoverChrome
+    }
+
+    var isCompact: Bool {
+        width <= 160
+    }
+
+    /// Every action this card's layout offers, in stable order.
+    private var configuredActions: [CardAction] {
+        CardSlot.allCases.flatMap { layout.actions(in: $0, for: item.captureKind) }
     }
 
     /// Chrome fades for hover, and simply goes when the stack starts moving.
@@ -149,33 +119,69 @@ struct QuickAccessCardView: View {
     var body: some View {
         card
             .animation(chromeAnimation, value: showsChrome)
+            .focusable()
+            .focused($isFocused)
             .onHover { hovering in
                 isHovering = hovering
                 actions.setHovered(hovering)
             }
-            .contextMenu {
-                Button("Copy", action: actions.copy)
-                Button("Save As…", action: actions.saveAs)
-                if !item.isVideo {
-                    Button("Rotate 90°", action: actions.rotate)
-                    Button("Flip Horizontal", action: actions.flipHorizontal)
-                    Button("Flip Vertical", action: actions.flipVertical)
-                    if item.canScaleRetina {
-                        Button("Scale Retina to 1×", action: actions.scaleRetina)
-                    }
-                }
-                Divider()
-                Text(item.dimensionsText)
-                if let size = item.fileSizeText {
-                    Text(size)
-                }
-                Divider()
-                Button("Hide", action: actions.dismiss)
-                Button("Delete", role: .destructive, action: actions.delete)
-            }
+            .contextMenu { contextMenu }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Capture \(item.filename), \(item.dimensionsText)")
-            .accessibilityHint("Hover for the actions, double-tap to open, or drag to another app")
+            .accessibilityHint(accessibilityHint)
+            .accessibilityActions { accessibilityActions }
+    }
+
+    private var accessibilityHint: String {
+        if showsChrome {
+            return "Actions shown. Double-tap to open, or drag to another app."
+        }
+        return "Single-tap to show actions, double-tap to open, or drag to another app."
+    }
+
+    @ViewBuilder
+    private var contextMenu: some View {
+        ForEach(configuredActions, id: \.self) { cardAction in
+            switch cardAction {
+            case .share:
+                ShareLink(item: item.fileURL) {
+                    Text("Share")
+                }
+                .accessibilityLabel("Share \(item.filename)")
+            default:
+                Button(cardAction.title) {
+                    perform(cardAction)
+                }
+            }
+        }
+        if !item.isVideo {
+            Divider()
+            Button("Rotate 90°", action: actions.rotate)
+            Button("Flip Horizontal", action: actions.flipHorizontal)
+            Button("Flip Vertical", action: actions.flipVertical)
+            if item.canScaleRetina {
+                Button("Scale Retina to 1×", action: actions.scaleRetina)
+            }
+        }
+        Divider()
+        Text(item.dimensionsText)
+        if let size = item.fileSizeText {
+            Text(size)
+        }
+        Divider()
+        Button("Hide", action: actions.dismiss)
+        Button("Delete", role: .destructive, action: actions.delete)
+    }
+
+    @ViewBuilder
+    private var accessibilityActions: some View {
+        ForEach(configuredActions, id: \.self) { cardAction in
+            Button(cardAction.title) {
+                perform(cardAction)
+            }
+        }
+        Button("Hide", action: actions.dismiss)
+        Button("Delete", action: actions.delete)
     }
 
     /// The capture, the chrome over it, and the border and shadow around the pair.
@@ -248,12 +254,20 @@ struct QuickAccessCardView: View {
                 )
             },
             dragImage: { NSImage(contentsOf: item.fileURL) },
-            onTap: {},
+            onTap: {
+                isExpanded.toggle()
+            },
             onDoubleTap: {
-                if item.isVideo, actions.studioAvailable {
-                    actions.studio()
+                if item.isVideo {
+                    if actions.studioAvailable {
+                        actions.studio()
+                    } else if let reason = actions.unavailableReason(.studio) {
+                        actions.reportUnavailable(reason)
+                    }
                 } else if actions.annotateAvailable {
                     actions.annotate()
+                } else if let reason = actions.unavailableReason(.annotate) {
+                    actions.reportUnavailable(reason)
                 }
             },
             onDragBegan: { actions.beginDrag() }
@@ -303,52 +317,6 @@ struct QuickAccessCardView: View {
         }
     }
 
-    /// Filename, dimensions and size — the things docs/03 §2 asks hover to show.
-    private var details: some View {
-        HStack(spacing: 6) {
-            Text(item.filename)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 0)
-            Text(item.dimensionsText)
-                .foregroundStyle(.secondary)
-            if let size = item.fileSizeText {
-                Text(size)
-                    .foregroundStyle(.secondary)
-            }
-            if item.wasCompressed {
-                compressionBadge
-            }
-            if item.isStaged {
-                Image(systemName: "tray")
-                    .help("Kept in the overlay only. Saved when you act on it.")
-            }
-        }
-        .font(.caption2)
-        .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.6), radius: 2)
-    }
-
-    /// What the last compression achieved (docs/09 U2.4).
-    ///
-    /// Shown even when it achieved nothing: a flat screenshot re-encodes larger than its
-    /// PNG, and a badge that only ever appears on success would leave the user pressing
-    /// the button again wondering whether it worked.
-    @ViewBuilder
-    private var compressionBadge: some View {
-        if let savings = item.compressionSavings, savings > 0 {
-            Text("−\(Int((savings * 100).rounded()))%")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1)
-                .background(Color.green.opacity(0.35), in: Capsule())
-                .help("The compressed copy is on the clipboard.")
-        } else {
-            Text("no smaller")
-                .help("This capture is already about as small as it gets.")
-        }
-    }
-
     /// The actions the user put in the column slot, across the middle of the card.
     ///
     /// Wrapped to the card's width rather than run off both edges — see `actionsPerRow`.
@@ -374,9 +342,10 @@ struct QuickAccessCardView: View {
         Button(action: actions.dismiss) {
             Image(systemName: "xmark")
                 .font(.system(size: 9, weight: .bold))
-                .frame(width: 18, height: 18)
+                .frame(width: 14, height: 14)
         }
         .buttonStyle(CardCloseButtonStyle())
+        .kadrHitTarget(minSize: 20)
         .help("Hide — the file stays")
         .accessibilityLabel("Hide card")
     }
@@ -386,9 +355,10 @@ struct QuickAccessCardView: View {
         Button(action: actions.delete) {
             Image(systemName: "trash")
                 .font(.system(size: 9, weight: .semibold))
-                .frame(width: 18, height: 18)
+                .frame(width: 14, height: 14)
         }
         .buttonStyle(CardCloseButtonStyle())
+        .kadrHitTarget(minSize: 20)
         .help("Move to Trash")
         .accessibilityLabel("Delete capture")
     }
@@ -414,29 +384,27 @@ struct QuickAccessCardView: View {
             // system picker can offer the right services for the file.
             ShareLink(item: item.fileURL) {
                 Image(systemName: cardAction.systemImage)
-                    .frame(width: Self.actionButtonSize, height: Self.actionButtonSize)
+                    .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(CardActionButtonStyle())
+            .kadrHitTarget(minSize: 20)
             .help("Share")
+            .accessibilityLabel("Share \(item.filename)")
         default:
             action(
                 cardAction.title,
                 systemImage: cardAction.systemImage,
-                enabled: isEnabled(cardAction),
-                action: handler(for: cardAction)
+                action: { perform(cardAction) }
             )
         }
     }
 
-    private func isEnabled(_ cardAction: CardAction) -> Bool {
-        switch cardAction {
-        case .annotate: actions.annotateAvailable
-        case .pin: actions.pinAvailable
-        case .recognizeText: actions.textAvailable
-        case .trim: actions.trimAvailable
-        case .studio: actions.studioAvailable
-        default: true
+    private func perform(_ cardAction: CardAction) {
+        if let reason = actions.unavailableReason(cardAction) {
+            actions.reportUnavailable(reason)
+            return
         }
+        handler(for: cardAction)()
     }
 
     /// What each button does.
@@ -470,7 +438,6 @@ struct QuickAccessCardView: View {
     private func action(
         _ title: String,
         systemImage: String,
-        enabled: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -480,8 +447,8 @@ struct QuickAccessCardView: View {
                 .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
         }
         .buttonStyle(CardActionButtonStyle())
-        .disabled(!enabled)
-        .help(enabled ? title : "\(title) — coming soon")
+        .kadrHitTarget(minSize: 20)
+        .help(title)
         .accessibilityLabel(title)
     }
 }

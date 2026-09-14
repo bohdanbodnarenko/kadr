@@ -168,7 +168,7 @@ public extension StudioDocumentModel {
         )
         let rebased = edit.clips.rebasing(planned)
         guard !rebased.isEmpty else {
-            failure = "There were no click clusters to zoom to in this recording."
+            failure = .noClickClusters()
             return
         }
         change { $0.zooms = $0.clips.rebasing(planned) }

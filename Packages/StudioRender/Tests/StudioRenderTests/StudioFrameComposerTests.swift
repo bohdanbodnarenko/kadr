@@ -12,7 +12,7 @@ import Testing
 /// top-left instead of its hotspot, a bubble in the wrong corner — is invisible to a test
 /// that checks which filters were applied and obvious to one that reads a pixel.
 @Suite("Studio frame composer")
-struct StudioFrameComposerTests {
+struct StudioFrameComposerTests { // swiftlint:disable:this type_body_length
     // MARK: - Fixtures
 
     private let sourceSize = CGSize(width: 400, height: 200)

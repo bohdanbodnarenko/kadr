@@ -73,6 +73,7 @@ struct AppSettingsTests {
         #expect(settings.keepOriginalWhenAnnotating == true)
         #expect(settings.overlayReturnSaves == true)
         #expect(settings.recordingControlChrome == .island)
+        #expect(!settings.captureConfirmsSelection)
         #expect(settings.saveFolderPath.isEmpty)
         #expect(settings.saveFolder == AppSettings.defaultSaveFolder)
     }
@@ -144,6 +145,7 @@ struct AppSettingsTests {
         #expect(!settings.resumeOnboardingAtPermissions)
         #expect(!settings.overlayAlwaysShowActions)
         #expect(settings.captureShowsOverlayHints)
+        #expect(!settings.captureConfirmsSelection)
         #expect(settings.ocrShowsReview)
         #expect(AppSettings(store: store).defaultAction == .copyToClipboard)
     }

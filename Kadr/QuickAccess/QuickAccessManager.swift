@@ -49,6 +49,8 @@ final class QuickAccessManager {
     var items: [QuickAccessItem] = []
     /// Whether the cards are collapsed to the peek tab (docs/03 §2).
     var isPeeking = false
+    /// Anchored status for user-initiated work on a card (docs/14 UX-24).
+    var feedbackStatus: FeedbackStatus?
 
     /// Whether the stack is ordered out so it does not appear in the next capture.
     @ObservationIgnored var areHidden = false
@@ -244,20 +246,18 @@ final class QuickAccessManager {
             guard let self else { return }
             for item in pending {
                 guard !Task.isCancelled else { return }
-                guard self.items.contains(where: { $0.id == item.id }) else { continue }
+                guard items.contains(where: { $0.id == item.id }) else { continue }
                 if finalizeBeforeDismiss {
-                    self.finalizeIfStaged(item)
+                    finalizeIfStaged(item)
                 }
-                self.dismiss(item)
-                guard !self.items.isEmpty else { break }
+                dismiss(item)
+                guard !items.isEmpty else { break }
                 try? await Task.sleep(for: Self.dismissCascadeInterval)
             }
-            self.areHidden = false
-            self.dismissCascadeTask = nil
+            areHidden = false
+            dismissCascadeTask = nil
         }
     }
-
-    // MARK: - Presenting
 
     func present(_ item: QuickAccessItem) {
         // A new capture should be seen, even if the stack was tucked into the peek tab
@@ -491,30 +491,5 @@ final class QuickAccessManager {
             // it once its own copy is written (docs/07 LOW).
             thumbnailSourceIsTemporary: thumbnailSourceURL != nil
         ))
-    }
-
-    /// Recordings need a still ImageIO can thumbnail; the poster is that still.
-    func ingestRecording(_ item: QuickAccessItem) {
-        Task { [weak self] in
-            guard let self else { return }
-            let poster = await writePoster(for: item.fileURL)
-            ingest(item, thumbnailSourceURL: poster)
-        }
-    }
-
-    func writePoster(for video: URL) async -> URL? {
-        guard let image = await VideoPosterFrame.posterFrame(
-            of: video,
-            maxPixelSize: HistoryThumbnailWriter.maxPixelSize
-        ) else { return nil }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-poster-\(UUID().uuidString).jpg")
-        do {
-            try HistoryThumbnailWriter.write(image, to: url)
-            return url
-        } catch {
-            logger.error("Could not write a recording poster: \(error.localizedDescription, privacy: .public)")
-            return nil
-        }
     }
 }

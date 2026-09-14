@@ -68,6 +68,20 @@ struct QuickAccessStackView: View {
     }
 
     var body: some View {
+        ZStack(alignment: .top) {
+            stackBody
+            if let status = manager.feedbackStatus {
+                FeedbackBanner(status: status) {
+                    manager.dismissFeedback()
+                }
+                .padding(.top, 12)
+                .padding(.horizontal, QuickAccessManager.screenMargin)
+                .frame(maxWidth: CGFloat(manager.settings.overlayCardWidth))
+            }
+        }
+    }
+
+    private var stackBody: some View {
         GeometryReader { proxy in
             let alignment = QuickAccessStackLayout.alignment(for: corner)
             let direction = QuickAccessStackLayout.hideDirection(for: corner)

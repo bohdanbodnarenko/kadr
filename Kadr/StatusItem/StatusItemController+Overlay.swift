@@ -4,42 +4,42 @@ import KeyboardShortcuts
 /// Overlay-stack and recovery items, split from the status item because the idle menu
 /// grew past the file-length budget when CleanShot §6.3 actions landed.
 extension StatusItemController {
-    /// Commands over the surfaces a capture produces (docs/03 §2, §4).
+    /// Group 5 — commands over the surfaces a capture produced (docs/03 §2, §4).
+    ///
+    /// Absent when there is nothing on screen to act on. Pin Clipboard is the exception:
+    /// it needs no card, only something on the clipboard, so it stands alone when the
+    /// stack is empty (docs/14 UX-08).
     func addOverlayItems(to menu: NSMenu) {
+        let overlayCount = overlayCardCount()
+        let pins = pinCount()
+        let overlaysHidden = overlaysAreHidden()
+        let pinsHidden = pinsAreHidden()
+
         menu.addItem(.separator())
 
-        let restoreItem = NSMenuItem(
-            title: "Restore Recently Closed",
-            action: #selector(didSelectRestore),
-            keyEquivalent: "t"
-        )
-        restoreItem.keyEquivalentModifierMask = [.command, .shift]
-        restoreItem.target = self
-        restoreItem.isEnabled = canRestore()
-        menu.addItem(restoreItem)
-
-        let overlayCount = overlayCardCount()
-        let overlaysHidden = overlaysAreHidden()
         for command in CaptureCommand.overlayCommands {
-            let item = NSMenuItem(title: command.title, action: #selector(didSelectCapture(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = command.rawValue
-            item.setShortcut(for: command.shortcutName)
-            if command == .hideOverlays {
-                item.title = overlaysHidden ? "Show Overlays" : "Hide Overlays"
-                item.state = overlaysHidden ? .on : .off
+            if command == .pinClipboard {
+                menu.addItem(makeCommandItem(command))
+                continue
             }
-            item.isEnabled = overlayCount > 0
-            menu.addItem(item)
+            guard overlayCount > 0 else { continue }
+            if command == .hideOverlays {
+                let item = makeCommandItem(command, title: overlaysHidden ? "Show Overlays" : "Hide Overlays")
+                item.state = overlaysHidden ? .on : .off
+                menu.addItem(item)
+            } else {
+                menu.addItem(makeCommandItem(command))
+            }
         }
 
-        let historyItem = NSMenuItem(
-            title: "History…",
-            action: #selector(didSelectHistory),
-            keyEquivalent: ""
+        guard pins > 0 else { return }
+
+        let hidePinsItem = makeCommandItem(
+            .hidePins,
+            title: pinsHidden ? "Show Pins" : CaptureCommand.hidePins.title
         )
-        historyItem.target = self
-        menu.addItem(historyItem)
+        hidePinsItem.state = pinsHidden ? .on : .off
+        menu.addItem(hidePinsItem)
 
         let closePinsItem = NSMenuItem(
             title: "Close All Pins",
@@ -47,23 +47,7 @@ extension StatusItemController {
             keyEquivalent: ""
         )
         closePinsItem.target = self
-        closePinsItem.isEnabled = pinCount() > 0
         menu.addItem(closePinsItem)
-
-        let hidePins = CaptureCommand.hidePins
-        let hidePinsItem = NSMenuItem(
-            title: pinsAreHidden() ? "Show Pins" : hidePins.title,
-            action: #selector(didSelectCapture(_:)),
-            keyEquivalent: ""
-        )
-        hidePinsItem.target = self
-        hidePinsItem.representedObject = hidePins.rawValue
-        hidePinsItem.setShortcut(for: hidePins.shortcutName)
-        hidePinsItem.state = pinsAreHidden() ? .on : .off
-        hidePinsItem.isEnabled = pinCount() > 0
-        menu.addItem(hidePinsItem)
-
-        addRecoveryItem(to: menu)
     }
 
     /// Offers to reopen recordings a crash left mid-edit (docs/09 U3.1).

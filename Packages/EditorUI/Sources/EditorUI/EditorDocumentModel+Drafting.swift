@@ -15,10 +15,13 @@ extension EditorDocumentModel {
         to point: CGPoint,
         modifiers: EditorModifiers
     ) {
-        if updatePath(&draft, from: origin, to: point, modifiers: modifiers) { return }
+        if updatePath(&draft, from: origin, to: point, modifiers: modifiers) {
+            return
+        }
         updateBox(&draft, from: origin, to: point, modifiers: modifiers)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     func rememberStyle(of command: AnnotationCommand) {
         switch command {
         case let .arrow(spec):
@@ -97,10 +100,9 @@ extension EditorDocumentModel {
             return length >= minimum
         }
         if let rect = boxRect(command) {
-            let bothAxes = command.tool == .shape
+            return command.tool == .shape
                 ? (rect.width >= minimum || rect.height >= minimum)
                 : (rect.width >= minimum && rect.height >= minimum)
-            return bothAxes
         }
         if let count = strokePointCount(command) {
             return count > 1

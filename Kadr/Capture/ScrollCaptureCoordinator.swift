@@ -16,7 +16,7 @@ import Shared
 /// helper, so the agent never holds a long page.
 @MainActor
 @Observable
-final class ScrollCaptureCoordinator {
+final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_length
     enum State: Equatable {
         case idle
         /// Frames are being grabbed while the page scrolls.
@@ -294,7 +294,10 @@ final class ScrollCaptureCoordinator {
     // MARK: - The auto tier
 
     /// Scrolls the target itself, stopping when the page stops changing (docs/04 §4.4).
-    private func startAutoScroll(in rect: DisplayRect, on display: DisplayGeometry) {
+    private func startAutoScroll( // swiftlint:disable:this cyclomatic_complexity
+        in rect: DisplayRect,
+        on display: DisplayGeometry
+    ) {
         guard AutoScroller.isTrusted else {
             // Asking now rather than at launch is the whole policy (docs/04 §3.2). The
             // grant only takes effect next time, so this run stays assisted.
@@ -341,28 +344,6 @@ final class ScrollCaptureCoordinator {
             isAutoScrolling = false
             stop()
         }
-    }
-
-    /// The middle of the captured region, in screen points, which is where a synthesized
-    /// scroll has to land to reach the right window.
-    private func centrePoint(of rect: DisplayRect, on display: DisplayGeometry) -> CGPoint {
-        let screenRect = rect.inScreenSpace(GlobalCoordinateSpace.current)
-        // CGEvent locations are in display space, top-left origin, which is what the rect
-        // already is — the round trip is here only to make the space explicit.
-        _ = screenRect
-        return CGPoint(x: rect.minX + rect.width / 2, y: rect.minY + rect.height / 2)
-    }
-
-    private func explainAccessibility() {
-        let alert = NSAlert()
-        alert.messageText = "Kadr needs Accessibility to scroll for you"
-        alert.informativeText = "Auto-scroll works by sending scroll events to the window "
-            + "you picked, which macOS only allows with Accessibility permission. Grant it "
-            + "in System Settings and try again — this capture will carry on with you doing "
-            + "the scrolling."
-        alert.addButton(withTitle: "OK")
-        NSApp.activate()
-        alert.runModal()
     }
 
     // MARK: - Stopping

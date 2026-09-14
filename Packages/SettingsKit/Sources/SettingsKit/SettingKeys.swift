@@ -64,6 +64,8 @@ public enum SettingKeys {
     public static let ocrShowsReview = SettingKey("capture.ocrShowsReview", default: true)
     /// Teaching copy on the idle freeze overlay (docs/03 §1.1).
     public static let captureShowsOverlayHints = SettingKey("capture.showsOverlayHints", default: true)
+    /// Keep the selection on screen after mouse-up until Enter commits it (docs/03 §1.1).
+    public static let captureConfirmsSelection = SettingKey("capture.confirmsSelection", default: false)
     /// Pull the selection onto the edges Kadr finds in the frozen screen (docs/06 M21).
     public static let captureSnapsToEdges = SettingKey("capture.snapsToEdges", default: true)
     public static let captureSelectionAspect = SettingKey(

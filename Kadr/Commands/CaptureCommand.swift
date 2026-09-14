@@ -79,6 +79,28 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         }
     }
 
+    /// The glyph the status menu draws beside this command, or `nil` (docs/14 UX-08).
+    ///
+    /// Deliberately sparse. A symbol beside every row is wallpaper: the eye stops using
+    /// them to find anything and the menu reads as a texture. These are the ones that
+    /// distinguish a mode from its neighbours at a glance.
+    var menuSymbol: String? {
+        switch self {
+        case .allInOne: "square.on.square.dashed"
+        case .captureArea: "rectangle.dashed"
+        case .captureWindow: "macwindow"
+        case .captureFullscreen: "display"
+        case .captureScrolling: "arrow.down.doc"
+        case .captureText: "text.viewfinder"
+        case .pickColor: "eyedropper"
+        case .recordRegion: "rectangle.badge.record"
+        case .recordDisplay: "record.circle"
+        case .selfTimer: "timer"
+        case .freezeScreen: "snowflake"
+        default: nil
+        }
+    }
+
     /// Commands the menu offers directly. Repeat-the-last-region and the capture-and-action
     /// family are hotkey-only, so they stay off the menu (docs/03 §8.1).
     static var menuCommands: [CaptureCommand] {

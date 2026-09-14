@@ -4,95 +4,72 @@ import StudioSession
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Date presets for the history browser (docs/03 §5).
-enum HistoryDateFilter: String, CaseIterable, Identifiable {
-    case all
-    case today
-    case lastSevenDays
-    case lastThirtyDays
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .all: "Any time"
-        case .today: "Today"
-        case .lastSevenDays: "Last 7 days"
-        case .lastThirtyDays: "Last 30 days"
-        }
-    }
-
-    var capturedAfter: Date? {
-        let calendar = Calendar.current
-        switch self {
-        case .all: return nil
-        case .today: return calendar.startOfDay(for: Date())
-        case .lastSevenDays: return calendar.date(byAdding: .day, value: -7, to: Date())
-        case .lastThirtyDays: return calendar.date(byAdding: .day, value: -30, to: Date())
-        }
-    }
-}
-
 /// Grid browser: type/date filters, drag-out, batch select, reveal, delete, storage meter.
 struct HistoryView: View {
     @Bindable var controller: HistoryController
     let open: (HistoryRecord) -> Void
     let openAsCard: (HistoryRecord) -> Void
 
-    @State private var selection: Set<UUID> = []
-    @State private var kindFilter: HistoryItemKind?
-    @State private var dateFilter: HistoryDateFilter = .all
+    @State var selection = HistorySelection()
+    @State var kindFilter: HistoryItemKind?
+    @State var dateFilter: HistoryDateFilter = .all
     /// The search field's text (docs/03 §5 P3). Debounced before it reaches SQLite so a
     /// fast typist does not queue a query per keystroke.
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
     /// Project titles from `.kadrrec` sidecars, keyed by the footage path.
     @State private var recordingTitles: [String: String] = [:]
-    @State private var renaming: HistoryRecord?
+    @State var renaming: HistoryRecord?
     @State private var renameText = ""
+    @State private var pendingBatchDelete = false
+    @FocusState private var gridFocused: Bool
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
     var body: some View {
         VStack(spacing: 0) {
-            filterBar
-            Divider()
             grid
             Divider()
             footer
         }
         .frame(minWidth: 560, minHeight: 360)
         .background(.background)
+        .searchable(text: $searchText, prompt: "Search captures")
+        .toolbar { toolbarContent }
         .onDeleteCommand { Task { await deleteSelected() } }
+        .focusable()
+        .focused($gridFocused)
+        .onKeyPress { handleKey($0) }
         .task { await controller.reload(filter: currentFilter) }
         .onChange(of: kindFilter) { _, _ in Task { await applyFilters() } }
         .onChange(of: dateFilter) { _, _ in Task { await applyFilters() } }
         .onChange(of: searchText) { _, text in scheduleSearch(text) }
         .onChange(of: controller.records) { _, _ in refreshRecordingTitles() }
-        .onAppear { refreshRecordingTitles() }
+        .onAppear {
+            refreshRecordingTitles()
+            gridFocused = true
+        }
         .onDisappear { searchTask?.cancel() }
         .alert("Rename Recording", isPresented: renameAlertPresented) {
             TextField("Name", text: $renameText)
             Button("Rename") { applyRename() }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
-    }
-
-    private var currentFilter: HistoryFilter {
-        HistoryFilter(kind: kindFilter, capturedAfter: dateFilter.capturedAfter)
-    }
-
-    private var renameAlertPresented: Binding<Bool> {
-        Binding(
-            get: { renaming != nil },
-            set: {
-                if !$0 {
-                    renaming = nil
-                }
+        .confirmationDialog(
+            "Move to Trash?",
+            isPresented: $pendingBatchDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Move \(selection.selected.count) Items to Trash", role: .destructive) {
+                Task { await performDelete(Array(selection.selected)) }
             }
-        )
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                KadrPlural.files(selection.selected.count)
+                    + ". You can recover them from the Trash."
+            )
+        }
     }
 
     private func title(for record: HistoryRecord) -> String {
@@ -146,39 +123,6 @@ struct HistoryView: View {
         return "\(trimmed).\(ext)"
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 12) {
-            Picker("Type", selection: $kindFilter) {
-                Text("All types").tag(nil as HistoryItemKind?)
-                ForEach(HistoryItemKind.allCases, id: \.self) { kind in
-                    Text(kind.title).tag(kind as HistoryItemKind?)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 360)
-
-            Picker("Date", selection: $dateFilter) {
-                ForEach(HistoryDateFilter.allCases) { filter in
-                    Text(filter.title).tag(filter)
-                }
-            }
-            .frame(maxWidth: 160)
-
-            Spacer()
-
-            SearchField(text: $searchText)
-                .frame(width: 200)
-
-            Button("Reveal in Finder") { revealSelected() }
-                .disabled(selection.count != 1)
-            Button("Delete", role: .destructive) { Task { await deleteSelected() } }
-                .disabled(selection.isEmpty)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-    }
-
     /// Waits for the typing to settle, then searches.
     ///
     /// 250 ms: long enough that a word is one query rather than five, short enough that
@@ -193,58 +137,111 @@ struct HistoryView: View {
     }
 
     private var grid: some View {
-        ScrollView {
-            if controller.records.isEmpty, !controller.isLoading {
-                ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: controller.isSearching ? "magnifyingglass" : "clock",
-                    description: Text(emptyDescription)
-                )
-                .frame(maxWidth: .infinity, minHeight: 280)
+        ZStack {
+            if controller.records.isEmpty, controller.isLoading {
+                ProgressView("Loading history…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(controller.records) { record in
-                        HistoryCell(
-                            record: record,
-                            title: title(for: record),
-                            image: controller.thumbnail(for: record, maxPixelSize: 280),
-                            isSelected: selection.contains(record.id)
+                ScrollView {
+                    if controller.records.isEmpty, !controller.isLoading {
+                        ContentUnavailableView(
+                            emptyTitle,
+                            systemImage: controller.isSearching ? "magnifyingglass" : "clock",
+                            description: Text(emptyDescription)
                         )
-                        // A promise, not a URL: library files are content-addressed, so
-                        // dragging one out as a URL hands the receiver a file named after
-                        // its hash. The promise carries the name the capture was given
-                        // (docs/03 §6, docs/09 U0.1).
-                        .overlay(
-                            FilePromiseDragView(
-                                payload: {
-                                    FilePromisePayload(
-                                        suggestedName: record.originalFilename,
-                                        contentType: UTType(filenameExtension:
-                                            (record.originalFilename as NSString).pathExtension) ?? .png,
-                                        resolve: {
-                                            controller.markAccessed(record)
-                                            return controller.fileURL(for: record)
-                                        }
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(controller.records) { record in
+                                HistoryCell(
+                                    record: record,
+                                    title: title(for: record),
+                                    image: controller.thumbnail(for: record, maxPixelSize: 280),
+                                    isSelected: selection.contains(record.id),
+                                    isFocused: selection.isFocused(record.id)
+                                )
+                                // A promise, not a URL: library files are content-addressed, so
+                                // dragging one out as a URL hands the receiver a file named after
+                                // its hash. The promise carries the name the capture was given
+                                // (docs/03 §6, docs/09 U0.1).
+                                .overlay(
+                                    FilePromiseDragView(
+                                        payload: {
+                                            FilePromisePayload(
+                                                suggestedName: record.originalFilename,
+                                                contentType: UTType(filenameExtension:
+                                                    (record.originalFilename as NSString).pathExtension) ?? .png,
+                                                resolve: {
+                                                    controller.markAccessed(record)
+                                                    return controller.fileURL(for: record)
+                                                }
+                                            )
+                                        },
+                                        dragImage: {
+                                            controller.thumbnail(for: record, maxPixelSize: 160)
+                                                .map { NSImage(cgImage: $0, size: .zero) }
+                                        },
+                                        onTap: { handleTap(record.id) },
+                                        onDoubleTap: { open(record) }
                                     )
-                                },
-                                dragImage: {
-                                    controller.thumbnail(for: record, maxPixelSize: 160)
-                                        .map { NSImage(cgImage: $0, size: .zero) }
-                                },
-                                onTap: { toggleSelection(record.id) },
-                                onDoubleTap: { open(record) }
-                            )
-                        )
-                        .contextMenu { cellMenu(record) }
-                        .onAppear {
-                            if record.id == controller.records.last?.id {
-                                Task { await controller.loadMore() }
+                                )
+                                .contextMenu { cellMenu(record) }
+                                .onAppear {
+                                    if record.id == controller.records.last?.id {
+                                        Task { await controller.loadMore() }
+                                    }
+                                }
                             }
                         }
+                        .padding(16)
                     }
                 }
-                .padding(16)
             }
+        }
+    }
+
+    private func handleTap(_ id: UUID) {
+        let flags = NSEvent.modifierFlags
+        selection.click(
+            id,
+            in: controller.records,
+            command: flags.contains(.command),
+            shift: flags.contains(.shift)
+        )
+        gridFocused = true
+    }
+
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        if press.modifiers.contains(.command), press.characters == "a" {
+            selection.selectAll(in: controller.records)
+            return .handled
+        }
+
+        switch press.key {
+        case .upArrow:
+            selection.moveFocus(.up, in: controller.records, extending: press.modifiers.contains(.shift))
+            return .handled
+        case .downArrow:
+            selection.moveFocus(.down, in: controller.records, extending: press.modifiers.contains(.shift))
+            return .handled
+        case .leftArrow:
+            selection.moveFocus(.left, in: controller.records, extending: press.modifiers.contains(.shift))
+            return .handled
+        case .rightArrow:
+            selection.moveFocus(.right, in: controller.records, extending: press.modifiers.contains(.shift))
+            return .handled
+        case .space:
+            if let id = selection.focused ?? selection.anchor, let record = controller.record(id: id) {
+                openAsCard(record)
+            }
+            return .handled
+        case .return:
+            if let id = selection.focused ?? selection.anchor, let record = controller.record(id: id) {
+                open(record)
+            }
+            return .handled
+        default:
+            return .ignored
         }
     }
 
@@ -261,18 +258,20 @@ struct HistoryView: View {
         }
         Button("Open in Overlay") { openAsCard(record) }
         Button("Reveal in Finder") {
-            selection = [record.id]
+            selection.selected = [record.id]
+            selection.anchor = record.id
+            selection.focused = record.id
             revealSelected()
         }
         if let url = controller.fileURL(for: record) {
             ShareLink(item: url) {
                 Text("Share…")
             }
+            .accessibilityLabel("Share \(record.originalFilename)")
         }
         Divider()
         Button("Delete", role: .destructive) {
-            Task { await controller.delete(ids: [record.id]) }
-            selection.remove(record.id)
+            Task { await performDelete([record.id]) }
         }
     }
 
@@ -297,18 +296,38 @@ struct HistoryView: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 12) {
             storageMeter
             Spacer()
+            if controller.isPaging {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading more…")
+                    .foregroundStyle(.secondary)
+            }
+            if let error = controller.loadError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Button("Retry") {
+                    Task {
+                        if controller.records.isEmpty {
+                            await controller.reload(filter: currentFilter)
+                        } else {
+                            await controller.loadMore()
+                        }
+                    }
+                }
+            }
             if controller.indexing.isRunning {
                 Label("Indexing…", systemImage: "text.magnifyingglass")
                     .foregroundStyle(.secondary)
             }
             if !selection.isEmpty {
-                Text("\(selection.count) selected")
+                Text(KadrPlural.files(selection.selected.count) + " selected")
                     .foregroundStyle(.secondary)
             }
-            Text("\(controller.usage.itemCount) items")
+            Text(KadrPlural.captures(controller.usage.itemCount))
                 .foregroundStyle(.secondary)
         }
         .font(.callout)
@@ -333,32 +352,8 @@ struct HistoryView: View {
         .help("Space used by the History library")
     }
 
-    private func toggleSelection(_ id: UUID) {
-        if NSEvent.modifierFlags.contains(.command) {
-            if selection.contains(id) {
-                selection.remove(id)
-            } else {
-                selection.insert(id)
-            }
-        } else if NSEvent.modifierFlags.contains(.shift), let last = selection.first {
-            selectRange(from: last, to: id)
-        } else {
-            selection = [id]
-        }
-    }
-
-    private func selectRange(from: UUID, to: UUID) {
-        let ids = controller.records.map(\.id)
-        guard let start = ids.firstIndex(of: from), let end = ids.firstIndex(of: to) else {
-            selection = [to]
-            return
-        }
-        let range = start <= end ? start ... end : end ... start
-        selection.formUnion(ids[range])
-    }
-
-    private func revealSelected() {
-        guard let id = selection.first,
+    func revealSelected() {
+        guard let id = selection.selected.first ?? selection.focused,
               let record = controller.record(id: id),
               let url = controller.fileURL(for: record)
         else { return }
@@ -366,15 +361,24 @@ struct HistoryView: View {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    private func deleteSelected() async {
-        let ids = Array(selection)
+    func deleteSelected() async {
+        let ids = Array(selection.selected)
         guard !ids.isEmpty else { return }
-        await controller.delete(ids: ids)
-        selection.subtract(ids)
+        if ids.count > 1 {
+            pendingBatchDelete = true
+            return
+        }
+        await performDelete(ids)
+    }
+
+    private func performDelete(_ ids: [UUID]) async {
+        let removed = Set(ids)
+        await controller.moveToTrash(ids: ids)
+        selection.focusAfterDeletion(removed: removed, in: controller.records)
     }
 
     private func applyFilters() async {
-        selection.removeAll()
+        selection.clear()
         await controller.reload(filter: currentFilter)
     }
 }
@@ -384,6 +388,7 @@ private struct HistoryCell: View {
     let title: String
     let image: CGImage?
     let isSelected: Bool
+    let isFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -417,6 +422,13 @@ private struct HistoryCell: View {
                         lineWidth: isSelected ? 3 : 1
                     )
             )
+            .overlay {
+                if isFocused {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.primary.opacity(0.55), lineWidth: 1, antialiased: true)
+                        .padding(2)
+                }
+            }
 
             Text(title)
                 .font(.caption)
@@ -427,7 +439,14 @@ private struct HistoryCell: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilityLabel: String {
+        let kind = record.kind.title
+        let dimensions = "\(record.width) × \(record.height)"
+        let timestamp = record.capturedAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(kind), \(title), \(dimensions), \(timestamp)"
     }
 }

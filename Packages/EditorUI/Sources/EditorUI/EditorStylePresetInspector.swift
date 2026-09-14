@@ -22,7 +22,7 @@ struct EditorStylePresetInspector: View {
     private let store = StylePresetStore()
 
     var body: some View {
-        Section("Look") {
+        EditorInspectorSection(title: "Look", key: "look") {
             HStack {
                 Text(statusText)
                     .font(.caption)

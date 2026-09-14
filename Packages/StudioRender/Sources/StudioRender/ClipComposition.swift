@@ -50,11 +50,10 @@ public struct ClipCompositionBuilder: Sendable {
             throw BuildError.noVideoTrack
         }
         let replacement = includeAudio ? await soundtrackFile(at: soundtrack) : nil
-        let sourceAudio: AVAssetTrack?
-        if includeAudio, replacement == nil {
-            sourceAudio = try? await asset.loadTracks(withMediaType: .audio).first
+        let sourceAudio: AVAssetTrack? = if includeAudio, replacement == nil {
+            try? await asset.loadTracks(withMediaType: .audio).first
         } else {
-            sourceAudio = nil
+            nil
         }
 
         let composition = AVMutableComposition()

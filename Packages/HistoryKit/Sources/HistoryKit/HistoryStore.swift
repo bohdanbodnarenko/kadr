@@ -192,11 +192,22 @@ public actor HistoryStore {
         }
     }
 
+    /// What happens to bytes on disk when a record goes away.
+    public enum FileDisposition: Sendable {
+        /// Retention and privacy-correct eviction — bytes are destroyed.
+        case permanent
+        /// User-initiated delete — recoverable from the Trash (docs/14 UX-22).
+        case trash
+    }
+
     /// Deletes the records and, when nothing else shares the bytes, the files (docs/03 §5).
-    public func delete(ids: [UUID]) async throws -> EvictionReport {
+    public func delete(
+        ids: [UUID],
+        fileDisposition: FileDisposition = .permanent
+    ) async throws -> EvictionReport {
         var report = EvictionReport()
         for id in ids {
-            let piece = try await deleteOne(id: id)
+            let piece = try await deleteOne(id: id, fileDisposition: fileDisposition)
             report.deletedCount += piece.deletedCount
             report.freedBytes += piece.freedBytes
         }
@@ -346,7 +357,10 @@ public actor HistoryStore {
         return report
     }
 
-    private func deleteOne(id: UUID) async throws -> EvictionReport {
+    private func deleteOne(
+        id: UUID,
+        fileDisposition: FileDisposition = .permanent
+    ) async throws -> EvictionReport {
         guard let record = try await record(id: id) else { return .empty }
 
         try await dbPool.write { db in
@@ -369,8 +383,14 @@ public actor HistoryStore {
             let file = fileURL(for: record)
             let thumb = thumbnailFileURL(for: record)
             freed = record.byteSize
-            try? FileManager.default.removeItem(at: file)
-            try? FileManager.default.removeItem(at: thumb)
+            switch fileDisposition {
+            case .permanent:
+                try? FileManager.default.removeItem(at: file)
+                try? FileManager.default.removeItem(at: thumb)
+            case .trash:
+                try? FileManager.default.trashItem(at: file, resultingItemURL: nil)
+                try? FileManager.default.trashItem(at: thumb, resultingItemURL: nil)
+            }
         }
 
         logger.info("Deleted \(record.originalFilename, privacy: .public)")

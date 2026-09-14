@@ -86,7 +86,7 @@ struct StudioExportStateTests {
         #expect(!stamp.matches(editDigest: changed, pixelSize: size))
     }
 
-    @Test("Copy puts the original recording on the clipboard as a file")
+    @Test("Copy Original puts the source recording on the clipboard as a file")
     func copyOriginalPutsTheFileOnTheClipboard() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -94,5 +94,27 @@ struct StudioExportStateTests {
         studio.copyOriginalToClipboard()
         let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self]) as? [URL]
         #expect(urls?.map(\.standardizedFileURL).contains(studio.session.screenURL.standardizedFileURL) == true)
+    }
+
+    @Test("Copy reuses a stamped render without re-exporting")
+    func copyEditedReusesStampedRender() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+
+        let rendered = folder.appendingPathComponent("already.mov")
+        try Data("edited export".utf8).write(to: rendered)
+        let digest = try #require(RenderStamp.digest(of: studio.edit))
+        let size = StudioRenderPlan(edit: studio.edit, sourceSize: studio.manifest.pixelSize).outputSize
+        try SessionDocument(session: studio.session).write(RenderStamp(
+            editDigest: digest,
+            outputPath: rendered.path,
+            pixelSize: size
+        ))
+
+        await studio.copyEditedToClipboard()
+        let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self]) as? [URL]
+        #expect(urls?.isEmpty == false)
+        #expect(studio.notice?.contains("Copied") == true)
     }
 }

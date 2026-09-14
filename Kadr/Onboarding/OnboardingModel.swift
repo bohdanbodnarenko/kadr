@@ -36,6 +36,9 @@ final class OnboardingModel {
     /// Set when the grant arrived mid-session and the app has to restart to use it.
     private(set) var needsRelaunch = false
     var practiceError: String?
+    /// Drives the “you can finish setup later” explanation Escape has to pass through
+    /// when capture is not going to work yet (docs/14 UX-07).
+    var showsCloseExplanation = false
 
     /// Called when the user finishes or skips.
     var onFinish: (() -> Void)?
@@ -100,6 +103,48 @@ final class OnboardingModel {
 
     func skip() {
         finish()
+    }
+
+    /// Whether leaving now needs a word first (docs/14 UX-07).
+    ///
+    /// Only when the required grant is missing. Somebody who has already allowed screen
+    /// capture has finished the part that matters, and an explanation would be noise.
+    var requiresCloseExplanation: Bool {
+        appPermissions.status(.screen) != .allowed
+    }
+
+    /// Escape, the window's close button and Skip for Now all arrive here.
+    ///
+    /// Escape is *not* wired to Skip as a cancel action: on a three-step wizard with a
+    /// Back button present, a key that looks like “go back” must not silently end setup
+    /// (docs/14 UX-07).
+    func requestClose() {
+        if requiresCloseExplanation {
+            showsCloseExplanation = true
+        } else {
+            skip()
+        }
+    }
+
+    func confirmClose() {
+        showsCloseExplanation = false
+        skip()
+    }
+
+    func cancelClose() {
+        showsCloseExplanation = false
+    }
+
+    /// The primary button's title. Stable position, state-dependent words (docs/14 UX-07).
+    var primaryActionTitle: String {
+        switch step {
+        case .welcome:
+            "Get Started"
+        case .permissions:
+            appPermissions.status(.screen) == .allowed ? "Continue" : "Continue Without Screen Access"
+        case .defaults:
+            "Done"
+        }
     }
 
     func finish() {
@@ -200,7 +245,24 @@ final class OnboardingModel {
         settings.saveFolderPath = url.path
     }
 
+    /// Opens the sample in the editor and leaves setup exactly where it was.
+    ///
+    /// It used to call `finish()` first, which meant trying the editor silently accepted
+    /// whatever defaults happened to be on screen and marked setup complete. Closing the
+    /// editor now returns to this step with those choices still unmade (docs/14 UX-08B).
     func openPracticeImage() {
+        practiceError = nil
+        do {
+            let url = try OnboardingPracticeImage.makeWorkingCopy()
+            onOpenPractice?(url)
+        } catch {
+            practiceError = "Couldn’t prepare the sample. Check that this Mac has free space, then try again."
+            logger.error("Practice image failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The explicit version, for somebody who is done with setup and wants the editor.
+    func finishAndOpenPracticeImage() {
         practiceError = nil
         do {
             let url = try OnboardingPracticeImage.makeWorkingCopy()

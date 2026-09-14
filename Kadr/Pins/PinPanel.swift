@@ -85,6 +85,7 @@ final class PinPanel: NonActivatingPanel {
         contentView = container
 
         reloadBackingImage()
+        configureAccessibility()
     }
 
     /// A pin never takes focus when it appears (docs/03 §4 accept list).
@@ -184,6 +185,7 @@ final class PinPanel: NonActivatingPanel {
             setZoom(zoom * (1 + event.scrollingDeltaY / 200))
         } else {
             alphaValue = min(max(alphaValue + event.scrollingDeltaY / 200, 0.2), 1)
+            updateAccessibilityDescription()
             onGeometryChanged?()
         }
     }
@@ -212,6 +214,7 @@ final class PinPanel: NonActivatingPanel {
             CGRect(origin: frame.origin, size: CGSize(width: width, height: height)),
             display: true
         )
+        updateAccessibilityDescription()
     }
 
     /// Arrow keys nudge the pin, ⇧ by ten points (docs/03 §4).
@@ -261,11 +264,84 @@ final class PinPanel: NonActivatingPanel {
             clickThroughBadge = nil
         }
         logger.info("Pin click-through \(self.isClickThrough ? "on" : "off", privacy: .public)")
+        updateAccessibilityDescription()
+        refreshAccessibilityActions()
+        let announcement = isClickThrough
+            ? String(localized: "Click-through on. Press Command Option L to interact.")
+            : String(localized: "Click-through off.")
+        FeedbackAnnouncement.post(announcement)
         onGeometryChanged?()
     }
 
     var clickThroughEnabled: Bool {
         isClickThrough
+    }
+
+    private func configureAccessibility() {
+        imageView.setAccessibilityElement(true)
+        imageView.setAccessibilityRole(.image)
+        imageView.setAccessibilityHelp(
+            String(localized: "Press Command Option L to toggle click-through.")
+        )
+        updateAccessibilityDescription()
+        refreshAccessibilityActions()
+    }
+
+    private func refreshAccessibilityActions() {
+        let clickThroughTitle = isClickThrough
+            ? String(localized: "Stop Click-Through")
+            : String(localized: "Toggle Click-Through")
+        imageView.setAccessibilityCustomActions([
+            NSAccessibilityCustomAction(name: "Copy", target: self, selector: #selector(accessibilityCopy)),
+            NSAccessibilityCustomAction(name: "Save", target: self, selector: #selector(accessibilitySave)),
+            NSAccessibilityCustomAction(name: "Annotate", target: self, selector: #selector(accessibilityAnnotate)),
+            NSAccessibilityCustomAction(name: "Copy Text", target: self, selector: #selector(accessibilityCopyText)),
+            NSAccessibilityCustomAction(
+                name: clickThroughTitle,
+                target: self,
+                selector: #selector(accessibilityToggleClickThrough)
+            ),
+            NSAccessibilityCustomAction(name: "Close", target: self, selector: #selector(accessibilityClose))
+        ])
+    }
+
+    @objc private func accessibilityCopy() {
+        onCopy?()
+    }
+
+    @objc private func accessibilitySave() {
+        onSave?()
+    }
+
+    @objc private func accessibilityAnnotate() {
+        onAnnotate?()
+    }
+
+    @objc private func accessibilityCopyText() {
+        onCopyText?()
+    }
+
+    @objc private func accessibilityToggleClickThrough() {
+        toggleClickThrough()
+    }
+
+    @objc private func accessibilityClose() {
+        onClose?()
+    }
+
+    private func updateAccessibilityDescription() {
+        let filename = fileURL.lastPathComponent
+        let dimensions = "\(pixelSize.width) × \(pixelSize.height)"
+        let zoomPercent = Int((zoom * 100).rounded())
+        let opacityPercent = Int((alphaValue * 100).rounded())
+        let clickThrough = isClickThrough
+            ? String(localized: "click-through on")
+            : String(localized: "click-through off")
+        imageView.setAccessibilityLabel(
+            "\(filename), \(dimensions), \(zoomPercent) percent zoom, "
+                + "\(opacityPercent) percent opacity, \(clickThrough)"
+        )
+        imageView.setAccessibilityValue(clickThrough)
     }
 
     private func showClickThroughBadge() {
@@ -309,7 +385,7 @@ private final class PinContentView: NSView {
         panel?.handleScroll(event)
     }
 
-        override func mouseDown(with event: NSEvent) {
+    override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             panel?.resetZoom()
         } else if event.modifierFlags.contains(.option) {

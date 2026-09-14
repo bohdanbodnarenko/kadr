@@ -27,13 +27,20 @@ struct SettingsView: View {
     @State private var navigationHistory: [SettingsTab] = []
     @State private var historyIndex = 0
     @State private var isHistoryNavigation = false
+    /// Real state, not `.constant(.all)`: the system sidebar toggle writes here, and a
+    /// constant binding made it a control that did nothing (docs/14 UX-09). Width and
+    /// visibility persist through AppKit's frame autosave on the window, so there is no
+    /// `AppStorage` key to keep in step with it.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SettingsSidebarView(selectedTab: $navigation.selectedTab)
-                .frame(width: 200)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 200, max: 200)
-                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(
+                    min: SettingsWindowGeometry.sidebarMinimumWidth,
+                    ideal: SettingsWindowGeometry.sidebarIdealWidth,
+                    max: SettingsWindowGeometry.sidebarMaximumWidth
+                )
         } detail: {
             SettingsDetailView(
                 tab: navigation.selectedTab,
@@ -44,7 +51,10 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 660, minHeight: 540)
+        .frame(
+            minWidth: SettingsWindowGeometry.minimumWidth,
+            minHeight: SettingsWindowGeometry.minimumHeight
+        )
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button {
@@ -54,6 +64,7 @@ struct SettingsView: View {
                 }
                 .disabled(!canGoBack)
                 .help("Back")
+                .accessibilityLabel("Back")
 
                 Button {
                     goForward()
@@ -62,6 +73,7 @@ struct SettingsView: View {
                 }
                 .disabled(!canGoForward)
                 .help("Forward")
+                .accessibilityLabel("Forward")
             }
         }
         .onAppear {

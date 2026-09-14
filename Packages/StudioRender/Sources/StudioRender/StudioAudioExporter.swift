@@ -184,7 +184,7 @@ public struct StudioAudioExporter: Sendable {
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 48000,
             AVNumberOfChannelsKey: channels,
-            AVEncoderBitRateKey: channels == 1 ? 96_000 : 128_000
+            AVEncoderBitRateKey: channels == 1 ? 96000 : 128_000
         ]
     }
 

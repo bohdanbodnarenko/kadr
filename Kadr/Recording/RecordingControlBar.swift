@@ -364,9 +364,14 @@ struct RecordingControlBarView: View {
             maxHeight: .infinity,
             alignment: model.docksToNotch ? .top : .center
         )
-        .animation(.snappy(duration: 0.22), value: model.session != nil)
-        .animation(.snappy(duration: 0.22), value: model.preRoll != nil)
-        .animation(.snappy(duration: 0.22), value: model.docksToNotch)
+        .kadrAnimation(.snappy(duration: 0.22), value: model.session != nil)
+        .kadrAnimation(.snappy(duration: 0.22), value: model.preRoll != nil)
+        .kadrAnimation(.snappy(duration: 0.22), value: model.docksToNotch)
+        .onExitCommand {
+            if model.preRoll != nil {
+                model.preRoll?.cancel()
+            }
+        }
     }
 
     private var liveBar: some View {
@@ -433,8 +438,8 @@ struct RecordingControlBarView: View {
         .background(RecordingBarBackground())
         .padding(10)
         .fixedSize()
-        .animation(.snappy(duration: 0.22), value: model.isPaused)
-        .animation(.snappy(duration: 0.22), value: model.microphoneIsSilent)
+        .kadrAnimation(.snappy(duration: 0.22), value: model.isPaused)
+        .kadrAnimation(.snappy(duration: 0.22), value: model.microphoneIsSilent)
     }
 
     /// Red and steady while recording, amber while paused.

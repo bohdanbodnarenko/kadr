@@ -38,4 +38,38 @@ public extension EditorDocumentModel {
         guard native > 0 else { return }
         exportScale = width / native
     }
+
+    // MARK: - Export lifecycle (docs/14 UX-26)
+
+    /// Marks an export as started, clearing whatever the previous one left behind.
+    func beginExport(_ action: EditorExportAction) {
+        exportFailure = nil
+        runningExport = action
+    }
+
+    /// Marks an export as finished, however it finished.
+    func endExport() {
+        runningExport = nil
+    }
+
+    /// Reports an export that did not happen. The chrome offers Retry from here.
+    func failExport(_ action: EditorExportAction, message: String) {
+        runningExport = nil
+        exportFailure = EditorExportFailure(action: action, message: message)
+    }
+
+    /// Whether the toolbar should show its progress chip and disable conflicting commands.
+    var isExporting: Bool {
+        runningExport != nil
+    }
+
+    /// Arms the copied toast after a pasteboard write succeeds (docs/14 UX-26).
+    func requestCopyToast() {
+        showsCopiedToast = true
+    }
+
+    /// Clears the toast flag once the chrome has shown it.
+    func clearCopyToast() {
+        showsCopiedToast = false
+    }
 }

@@ -67,8 +67,18 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Closes for real. `close()` rather than `performClose(_:)` on purpose: this is
+    /// called *after* the explanation has been accepted, and `performClose` would send it
+    /// back through `windowShouldClose` and ask again (docs/14 UX-07).
     func close() {
-        window?.performClose(nil)
+        window?.close()
+    }
+
+    /// The red close button gets the same explanation Escape does (docs/14 UX-07).
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard model.requiresCloseExplanation else { return true }
+        model.requestClose()
+        return false
     }
 
     func windowWillClose(_ notification: Notification) {

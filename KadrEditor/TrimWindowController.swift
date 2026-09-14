@@ -34,6 +34,7 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
     private let logger = KadrLog.logger(.app)
 
     private var window: NSWindow?
+    private var isExportingTrim = false
 
     var onClose: (() -> Void)?
 
@@ -119,8 +120,16 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
         }
 
         let destination = PassthroughVideoTrimmer.destination(trimming: fileURL)
+        isExportingTrim = true
+        window?.title = "Trimming “\(fileURL.lastPathComponent)”…"
         Task { [weak self] in
             guard let self else { return }
+            defer {
+                Task { @MainActor in
+                    self.isExportingTrim = false
+                    self.window?.title = self.fileURL.lastPathComponent
+                }
+            }
             do {
                 let written = try await trimmer.trim(movieAt: fileURL, to: range, destination: destination)
                 logger.info("Wrote \(written.lastPathComponent, privacy: .public)")
@@ -136,7 +145,11 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
         alert.messageText = "Kadr could not trim “\(fileURL.lastPathComponent)”."
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
-        alert.runModal()
+        if let window {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
+        }
     }
 
     // MARK: - Chrome

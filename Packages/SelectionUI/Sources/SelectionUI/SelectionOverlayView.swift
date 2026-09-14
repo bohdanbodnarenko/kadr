@@ -13,12 +13,12 @@ import Shared
 final class SelectionOverlayView: NSView {
     // MARK: Layers
 
-    private let frozenLayer = CALayer()
-    private let dimLayer = CAShapeLayer()
-    private let selectionBorderLayer = CAShapeLayer()
-    private let crosshairLayer = CAShapeLayer()
-    private let badgeBackgroundLayer = CALayer()
-    private let badgeTextLayer = CATextLayer()
+    let frozenLayer = CALayer()
+    let dimLayer = CAShapeLayer()
+    let selectionBorderLayer = CAShapeLayer()
+    let crosshairLayer = CAShapeLayer()
+    let badgeBackgroundLayer = CALayer()
+    let badgeTextLayer = CATextLayer()
     /// Internal: the last-region ghost lives in `SelectionOverlayView+Ghost.swift`.
     let ghostLayer = CAShapeLayer()
     let ghostLabelLayer = CATextLayer()
@@ -39,8 +39,9 @@ final class SelectionOverlayView: NSView {
     /// Internal, not private: the eyedropper half lives in
     /// `SelectionOverlayView+Eyedropper.swift`, and `private` is file-scoped.
     let loupe: LoupeLayerGroup
-    private let ruler: RulerLayerGroup
-    private let windowHighlight: WindowHighlightLayerGroup
+    let ruler: RulerLayerGroup
+    let windowHighlight: WindowHighlightLayerGroup
+    let handles = SelectionHandleLayerGroup()
     /// Internal: the last-region ghost lives in `SelectionOverlayView+Ghost.swift`.
     let displayScale: DisplayScale
     let hints: HintLayerGroup
@@ -82,8 +83,18 @@ final class SelectionOverlayView: NSView {
     var lastRegionGhost: CGRect?
     /// Teaching copy on the idle overlay (docs/03 §1.1). Off from Settings → Capture.
     var showsCaptureHints = true
+    /// When true, mouse-up leaves handles until Enter commits (docs/03 §1.1, docs/14 UX-17C).
+    var confirmsSelection = false
     /// `F` captures this display from area mode (docs/03 §1.3).
     var onCaptureDisplay: (() -> Void)?
+
+    var activeHandle: SelectionHandleLayerGroup.Corner?
+    var handleAnchor: CGPoint?
+    /// Internal: keyboard extension toggles Command child-window picking (docs/03 §1.2).
+    var isCommandDown = false
+    var lastAccessibilityRect: CGRect?
+    var accessibilityAnnouncedPhase = ""
+    var accessibilityProxy: SelectionOverlayAccessibilityElement?
 
     // MARK: Geometry constants
 
@@ -122,6 +133,8 @@ final class SelectionOverlayView: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
         buildLayers(frozenImage: frozenImage)
+        installAccessibilityElement()
+        refreshAccessibilityElement()
         redraw()
     }
 
@@ -197,6 +210,7 @@ final class SelectionOverlayView: NSView {
         root.addSublayer(windowHighlight.container)
         root.addSublayer(hints.container)
         root.addSublayer(loupe.container)
+        root.addSublayer(handles.container)
         startMarchingAnts()
     }
 
@@ -262,15 +276,42 @@ final class SelectionOverlayView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        guard mode == .area else { return }
+        if mode == .window {
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        if confirmsSelection, interaction.phase == .selected, let rect = interaction.rect {
+            if let corner = handles.corner(at: point, in: rect, scale: displayScale) {
+                activeHandle = corner
+                handleAnchor = oppositePoint(for: corner, in: rect)
+                return
+            }
+            if rect.contains(point) {
+                sizeEntry.reset()
+                interaction.begin(at: point)
+                interaction.beginMovingSelection()
+                redraw()
+                return
+            }
+            commitCurrentSelection()
+            return
+        }
+
         sizeEntry.reset()
-        interaction.begin(at: convert(event.locationInWindow, from: nil))
+        interaction.begin(at: point)
         redraw()
     }
 
     override func mouseDragged(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if mode == .area, let corner = activeHandle, let anchor = handleAnchor {
+            interaction.setRect(resizedRect(from: corner, anchor: anchor, to: point))
+            redraw()
+            return
+        }
         guard mode == .area else { return }
-        interaction.drag(to: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
+        interaction.drag(to: point, modifiers: modifiers(from: event))
         redraw()
     }
 
@@ -284,11 +325,16 @@ final class SelectionOverlayView: NSView {
 
         interaction.drag(to: convert(event.locationInWindow, from: nil), modifiers: modifiers(from: event))
         interaction.end()
+        activeHandle = nil
+        handleAnchor = nil
         redraw()
 
-        if let rect = interaction.rect, interaction.phase == .selected {
-            onCommit?(rect)
+        guard let rect = interaction.rect, interaction.phase == .selected else { return }
+        if confirmsSelection {
+            refreshAccessibilityElement(announcePhaseChange: true)
+            return
         }
+        onCommit?(rect)
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -325,6 +371,7 @@ final class SelectionOverlayView: NSView {
         case .area:
             windowHighlight.hide()
             updateDimming()
+            updateHandles()
             updateGhost()
             updateCrosshair()
             updateRuler()
@@ -336,124 +383,21 @@ final class SelectionOverlayView: NSView {
             hideGhost()
             updateHints()
         }
-    }
-
-    /// Window mode dims everything and lifts the hovered window out of it.
-    private func updateWindowHighlight() {
-        crosshairLayer.path = nil
-        selectionBorderLayer.path = nil
-        badgeBackgroundLayer.isHidden = true
-        badgeTextLayer.isHidden = true
-        loupe.hide()
-        ruler.hide()
-
-        let path = CGMutablePath()
-        path.addRect(bounds)
-        if let window = windowPick.hovered {
-            let frame = window.frame.intersection(bounds)
-            if !frame.isEmpty {
-                path.addRoundedRect(in: frame, cornerWidth: 6, cornerHeight: 6)
-            }
-            windowHighlight.show(window, within: bounds)
-        } else {
-            windowHighlight.hide()
-        }
-        dimLayer.path = path
-    }
-
-    private func updateDimming() {
-        let path = CGMutablePath()
-        path.addRect(bounds)
-        if let rect = interaction.rect, !rect.isEmpty {
-            // Even-odd fill turns the second rect into a hole, so the selection shows
-            // through at full brightness (docs/03 §1.1).
-            path.addRect(rect)
-            selectionBorderLayer.path = CGPath(rect: rect, transform: nil)
-        } else {
-            selectionBorderLayer.path = nil
-        }
-        dimLayer.path = path
-    }
-
-    private func updateCrosshair() {
-        guard isPrecisionMode, interaction.phase != .selected, let pointer = interaction.pointer else {
-            crosshairLayer.path = nil
-            return
-        }
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: pointer.x, y: bounds.minY))
-        path.addLine(to: CGPoint(x: pointer.x, y: bounds.maxY))
-        path.move(to: CGPoint(x: bounds.minX, y: pointer.y))
-        path.addLine(to: CGPoint(x: bounds.maxX, y: pointer.y))
-        crosshairLayer.path = path
-    }
-
-    /// The pixel ruler, which rides along with precision mode (docs/06 M21).
-    private func updateRuler() {
-        guard isPrecisionMode, let rect = interaction.rect, !rect.isEmpty else {
-            ruler.hide()
-            return
-        }
-        ruler.show(along: rect)
-    }
-
-    private func updateBadge() {
-        let measurement: String? = if !sizeEntry.isEmpty {
-            sizeEntry.displayText
-        } else if let rect = interaction.rect, !rect.isEmpty {
-            DimensionFormatter.text(for: rect, scale: displayScale)
-        } else if isPrecisionMode, let pointer = interaction.pointer {
-            String(format: "%.0f, %.0f", pointer.x, pointer.y)
-        } else {
-            nil
-        }
-        // The badge names the mode as well as the size, so Capture Text is unmistakable.
-        // The eyedropper says so too, and lists its own keys — nobody guesses `F` and `X`.
-        let modeBadge = isEyedropperMode ? "COLOUR  F: format  X: compare" : purpose.badge
-        let text = [modeBadge, isEyedropperMode ? nil : measurement].compactMap(\.self)
-            .joined(separator: "  ")
-            .nilIfEmpty
-
-        guard let text, let rect = interaction.rect ?? interaction.pointer.map({
-            CGRect(origin: $0, size: .zero)
-        }) else {
-            badgeTextLayer.isHidden = true
-            badgeBackgroundLayer.isHidden = true
-            return
-        }
-
-        // Set only when it changed. Assigning `string` re-rasterises the layer, and a drag
-        // along one axis leaves the text identical for most of its length.
-        if badgeTextLayer.string as? String != text {
-            badgeTextLayer.string = text
-        }
-        let width = Self.badgeWidth(for: text)
-
-        // Below the selection by default, above it when there is no room.
-        var origin = CGPoint(x: rect.midX - width / 2, y: rect.maxY + 8)
-        if origin.y + Self.badgeHeight > bounds.maxY {
-            origin.y = max(bounds.minY, rect.minY - Self.badgeHeight - 8)
-        }
-        origin.x = min(max(origin.x, bounds.minX + 4), bounds.maxX - width - 4)
-
-        let frame = CGRect(origin: origin, size: CGSize(width: width, height: Self.badgeHeight))
-        badgeBackgroundLayer.frame = frame
-        badgeTextLayer.frame = frame.insetBy(dx: 0, dy: 3)
-        badgeBackgroundLayer.isHidden = false
-        badgeTextLayer.isHidden = false
-    }
-
-    private func updateLoupe() {
-        guard interaction.phase != .selected, let pointer = interaction.pointer else {
-            loupe.hide()
-            return
-        }
-        loupe.update(pointer: pointer, within: bounds, readout: eyedropperReadout)
+        refreshAccessibilityIfNeeded()
     }
 
     /// The windows this display can offer for picking (docs/03 §1.2).
     func setPickableWindows(_ windows: [PickableWindow]) {
         windowPick.setWindows(windows)
+        redraw()
+    }
+
+    func setIncludesAuxiliaryWindows(_ includes: Bool) {
+        guard windowPick.includesAuxiliaryWindows != includes else { return }
+        windowPick.includesAuxiliaryWindows = includes
+        if let pointer = interaction.pointer {
+            windowPick.pointerMoved(to: pointer)
+        }
         redraw()
     }
 
@@ -490,7 +434,7 @@ final class SelectionOverlayView: NSView {
     }
 }
 
-private extension String {
+extension String {
     /// Empty strings read as "nothing to show" rather than an empty badge.
     var nilIfEmpty: String? {
         isEmpty ? nil : self

@@ -33,8 +33,36 @@ public enum TextLayout {
     public static func attributedString(_ spec: TextSpec) -> NSAttributedString {
         NSAttributedString(string: spec.string, attributes: [
             .init(kCTFontAttributeName as String): font(for: spec.style),
-            .init(kCTForegroundColorAttributeName as String): spec.style.color.cgColor
+            .init(kCTForegroundColorAttributeName as String): spec.style.color.cgColor,
+            .init(kCTParagraphStyleAttributeName as String): paragraphStyle(for: spec.style)
         ])
+    }
+
+    /// The paragraph style a text annotation's alignment resolves to.
+    ///
+    /// `CTParagraphStyleCreate` rather than `NSMutableParagraphStyle`, so this file keeps
+    /// its promise of running without a UI framework.
+    public static func paragraphStyle(for style: TextStyle) -> CTParagraphStyle {
+        var alignment = ctAlignment(for: style.alignment)
+        return withUnsafeBytes(of: &alignment) { buffer in
+            guard let address = buffer.baseAddress else {
+                return CTParagraphStyleCreate(nil, 0)
+            }
+            let setting = CTParagraphStyleSetting(
+                spec: .alignment,
+                valueSize: buffer.count,
+                value: address
+            )
+            return CTParagraphStyleCreate([setting], 1)
+        }
+    }
+
+    static func ctAlignment(for alignment: TextStyle.Alignment) -> CTTextAlignment {
+        switch alignment {
+        case .leading: .left
+        case .center: .center
+        case .trailing: .right
+        }
     }
 
     /// The size the text needs when wrapped to `maxWidth`.

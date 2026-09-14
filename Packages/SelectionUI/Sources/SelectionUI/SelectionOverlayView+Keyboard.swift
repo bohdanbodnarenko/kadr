@@ -185,6 +185,11 @@ extension SelectionOverlayView {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        let commandDown = event.modifierFlags.contains(.command)
+        if mode == .window, commandDown != isCommandDown {
+            isCommandDown = commandDown
+            setIncludesAuxiliaryWindows(commandDown)
+        }
         // Re-run the drag so ⌥ and ⇧ take effect without waiting for the next move.
         if interaction.phase == .dragging, let pointer = interaction.pointer {
             interaction.drag(to: pointer, modifiers: modifiers(from: event))
@@ -205,8 +210,13 @@ extension SelectionOverlayView {
             sizeEntry.reset()
             redraw()
         }
-        if let rect = interaction.rect, !rect.isEmpty {
-            onCommit?(rect)
+        guard let rect = interaction.rect, !rect.isEmpty else { return }
+        if confirmsSelection, interaction.phase != .selected {
+            interaction.setRect(rect)
+            redraw()
+            refreshAccessibilityElement(announcePhaseChange: true)
+            return
         }
+        onCommit?(rect)
     }
 }

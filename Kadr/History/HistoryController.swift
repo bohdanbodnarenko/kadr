@@ -18,6 +18,10 @@ final class HistoryController {
     private(set) var usage: HistoryStorageUsage = .zero
     private(set) var hasMore = false
     private(set) var isLoading = false
+    /// True while the next page is being fetched; the grid stays visible (docs/14 UX-23).
+    private(set) var isPaging = false
+    /// The last load or page failure, for inline Retry (docs/14 UX-23).
+    private(set) var loadError: String?
 
     let cache = ThumbnailCache()
     private(set) var store: HistoryStore?
@@ -122,6 +126,7 @@ final class HistoryController {
 
         let interval = signposter.beginInterval("historyColdOpen")
         isLoading = true
+        loadError = nil
         defer {
             isLoading = false
             signposter.endInterval("historyColdOpen", interval)
@@ -141,6 +146,7 @@ final class HistoryController {
             usage = try await store.storageUsage()
             recent = try await store.recent(limit: Self.menuStripCount)
         } catch {
+            loadError = error.localizedDescription
             logger.error("Could not load history: \(error.localizedDescription, privacy: .public)")
         }
 
@@ -162,28 +168,34 @@ final class HistoryController {
     }
 
     func loadMore() async {
-        guard hasMore, let store, !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+        guard hasMore, let store, !isLoading, !isPaging else { return }
+        isPaging = true
+        defer { isPaging = false }
         pageOffset += Self.pageSize
         do {
             let page = try await store.loadPage(filter: filter, offset: pageOffset, limit: Self.pageSize)
             records.append(contentsOf: page)
             hasMore = page.count == Self.pageSize
+            loadError = nil
         } catch {
+            pageOffset = max(0, pageOffset - Self.pageSize)
+            loadError = error.localizedDescription
             logger.error("Could not page history: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    func delete(ids: [UUID]) async {
+    /// Moves library items to the Trash. Retention eviction stays permanent (docs/14 UX-22).
+    func moveToTrash(ids: [UUID]) async {
         await openIfNeeded()
         guard let store, !ids.isEmpty else { return }
         do {
-            _ = try await store.delete(ids: ids)
+            _ = try await store.delete(ids: ids, fileDisposition: .trash)
             records.removeAll { ids.contains($0.id) }
             recent.removeAll { ids.contains($0.id) }
             usage = try await store.storageUsage()
+            loadError = nil
         } catch {
+            loadError = error.localizedDescription
             logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
         }
     }

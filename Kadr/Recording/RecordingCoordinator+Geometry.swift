@@ -170,7 +170,7 @@ extension RecordingCoordinator {
                     )
                 }
             } catch {
-                self.wantsGIFExport = false
+                wantsGIFExport = false
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
                 presentPermissionRecoveryIfNeeded(error)

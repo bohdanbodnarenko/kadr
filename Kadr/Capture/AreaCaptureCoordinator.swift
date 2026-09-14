@@ -85,6 +85,15 @@ final class AreaCaptureCoordinator {
     /// `action=` into the next one the user takes by hand.
     let automation = AutomationCaptureRequest()
 
+    /// Fired whenever a capture surface appears or goes away, so the menu bar can show
+    /// the capture-armed icon (docs/14 UX-08A).
+    var onArmedStateChanged: (() -> Void)?
+
+    /// Whether a capture surface is on screen: the selection overlay, or a timer badge.
+    var isArmed: Bool {
+        overlay.isPresented || timer.isRunning
+    }
+
     init(
         engine: CaptureEngine,
         permissions: PermissionCoordinator,
@@ -101,6 +110,18 @@ final class AreaCaptureCoordinator {
         let output = CaptureOutput(settings: settings)
         self.output = output
         quickAccess = QuickAccessManager(settings: settings, output: output, pins: pins, history: history)
+        timer.onRunningChanged = { [weak self] _ in
+            self?.onArmedStateChanged?()
+        }
+        // Escape during the wait abandons the capture rather than skipping to it
+        // (docs/03 §1.5, docs/14 UX-17A).
+        timer.onCancel = { [weak self] in
+            guard let self else { return }
+            logger.info("Capture countdown cancelled")
+            inFlight?.cancel()
+            inFlight = nil
+            automation.report(.cancelled)
+        }
     }
 
     var hasPreviousRegion: Bool {
@@ -141,7 +162,9 @@ final class AreaCaptureCoordinator {
         rememberBeautifySkip()
         let seconds = timerSeconds > 0 ? timerSeconds : SelfTimer.threeSeconds.seconds
         inFlight?.cancel()
-        timer.run(seconds: seconds) { [weak self] in
+        // No region has been chosen yet, so the display under the pointer is the one the
+        // user is arranging — `resolveScreen` falls back to it rather than to main.
+        timer.run(seconds: seconds, screen: nil, displayID: nil) { [weak self] in
             self?.beginOverlayCapture(mode: .area)
         }
     }
@@ -198,13 +221,14 @@ final class AreaCaptureCoordinator {
 
                 let windows: [PickableWindowDescriptor] = if mode == .window {
                     try await engine.shareableContent().windows
-                        .filter(\.isUserWindow)
+                        .filter(\.isPickableWindow)
                         .map {
                             PickableWindowDescriptor(
                                 id: $0.id,
                                 title: $0.title,
                                 applicationName: $0.applicationName,
                                 bundleIdentifier: $0.bundleIdentifier,
+                                layer: $0.layer,
                                 globalFrame: $0.frame
                             )
                         }
@@ -225,8 +249,10 @@ final class AreaCaptureCoordinator {
                 ) { [weak self] outcome in
                     self?.hygiene?.endCapture()
                     self?.finish(with: outcome, freezes: freezes)
+                    self?.onArmedStateChanged?()
                 }
                 hygiene?.beginCapture()
+                onArmedStateChanged?()
             } catch {
                 signposter.endInterval("hotkeyToOverlay", interval)
                 handle(error)
@@ -239,6 +265,7 @@ final class AreaCaptureCoordinator {
         overlay.snapsToEdges = settings.captureSnapsToEdges
         overlay.lockedAspect = settings.captureSelectionAspect.ratio
         overlay.showsCaptureHints = settings.captureShowsOverlayHints
+        overlay.confirmsSelection = settings.captureConfirmsSelection
         overlay.onColorPicked = { [weak self] pick in
             self?.deliver(pick)
         }
@@ -273,7 +300,7 @@ final class AreaCaptureCoordinator {
         }
         lastRegion = (global, displayID)
 
-        timer.run(seconds: timerSeconds) { [weak self] in
+        timer.run(seconds: timerSeconds, displayID: displayID) { [weak self] in
             self?.captureRegionLive(global, on: displayID)
         }
     }
@@ -293,7 +320,7 @@ final class AreaCaptureCoordinator {
 
         inFlight?.cancel()
         let region = lastRegion
-        timer.run(seconds: timerSeconds) { [weak self] in
+        timer.run(seconds: timerSeconds, displayID: region.displayID) { [weak self] in
             self?.captureRegionLive(region.rect, on: region.displayID)
         }
     }
@@ -303,6 +330,7 @@ final class AreaCaptureCoordinator {
         inFlight = nil
         timer.cancel()
         overlay.cancel()
+        onArmedStateChanged?()
     }
 
     // MARK: - Completion
@@ -350,7 +378,7 @@ final class AreaCaptureCoordinator {
             includesCursor: includesCursor
         )
 
-        timer.run(seconds: timerSeconds) { [weak self] in
+        timer.run(seconds: timerSeconds, displayID: selection.display.displayID) { [weak self] in
             guard let self else { return }
             inFlight = Task { [weak self] in
                 guard let self else { return }
@@ -391,7 +419,7 @@ final class AreaCaptureCoordinator {
         // re-captured live (docs/03 §1.5). Without a timer, cropping the freeze is both
         // faster and the only way to guarantee WYSIWYG (docs/03 §1.1).
         guard timerSeconds == 0 else {
-            timer.run(seconds: timerSeconds) { [weak self] in
+            timer.run(seconds: timerSeconds, displayID: result.display.displayID) { [weak self] in
                 self?.captureRegionLive(result.rect, on: result.display.displayID)
             }
             return
@@ -455,28 +483,6 @@ final class AreaCaptureCoordinator {
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
                 automation.report(.failed(error.localizedDescription))
-            }
-        }
-    }
-
-    private func captureRegionLive(_ rect: DisplayRect, on displayID: CGDirectDisplayID) {
-        inFlight = Task { [weak self] in
-            guard let self else { return }
-            do {
-                // Before the pixels, not after (docs/07 H3).
-                await hygiene?.beginCaptureAndSettle()
-                await CaptureExclusionPush.into(engine)
-                let capture = try await engine.captureRegion(
-                    rect,
-                    on: displayID,
-                    includesCursor: includesCursor
-                )
-                permissions.noteCaptureSuccess()
-                await deliver(capture)
-                hygiene?.endCapture()
-            } catch {
-                hygiene?.endCapture()
-                handle(error)
             }
         }
     }

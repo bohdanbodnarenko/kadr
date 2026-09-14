@@ -188,4 +188,19 @@ struct OnboardingModelTests {
         #expect(image.width == 1600)
         #expect(image.height == 1000)
     }
+
+    @Test("Trying the practice image leaves setup open (docs/14 UX-08B)")
+    func practiceImageDoesNotFinish() {
+        let (model, settings) = makeModel(FakeAccess())
+        model.advance()
+        model.advance()
+        var opened = false
+        model.onOpenPractice = { _ in opened = true }
+
+        model.openPracticeImage()
+
+        #expect(opened)
+        #expect(!settings.hasCompletedOnboarding)
+        #expect(model.step == .defaults)
+    }
 }

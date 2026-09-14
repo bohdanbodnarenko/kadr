@@ -157,7 +157,7 @@ public struct RecordingOptions: Sendable, Hashable {
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 48000,
             AVNumberOfChannelsKey: recordsMono ? 1 : 2,
-            AVEncoderBitRateKey: recordsMono ? 96_000 : 128_000
+            AVEncoderBitRateKey: recordsMono ? 96000 : 128_000
         ]
     }
 }

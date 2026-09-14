@@ -6,6 +6,28 @@ import SettingsKit
 import Shared
 import SwiftUI
 
+/// The one declared minimum for the Settings window (docs/14 UX-09).
+///
+/// There used to be two: the window said 620×460 and the view said 660×540, so the window
+/// could be dragged to a size its own content refused to fit in. Both read this now.
+///
+/// 700×540 is the tested floor: a 200 pt sidebar plus the widest pane's controls, and tall
+/// enough for the longest visible group without the form scrolling on arrival.
+enum SettingsWindowGeometry {
+    static let minimumWidth: CGFloat = 700
+    static let minimumHeight: CGFloat = 540
+
+    static var minimumSize: NSSize {
+        NSSize(width: minimumWidth, height: minimumHeight)
+    }
+
+    /// Sidebar bounds. Ranged rather than pinned, so the system toggle and the divider
+    /// both do something, and AppKit's frame autosave remembers where it was left.
+    static let sidebarMinimumWidth: CGFloat = 180
+    static let sidebarIdealWidth: CGFloat = 200
+    static let sidebarMaximumWidth: CGFloat = 280
+}
+
 /// Owns the one and only Settings window (docs/04 §3.1).
 ///
 /// The window is built on demand and torn down on close: SwiftUI, its hosting view
@@ -78,7 +100,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             )
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 540),
+            contentRect: NSRect(origin: .zero, size: SettingsWindowGeometry.minimumSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -90,7 +112,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.contentViewController = hosting
         window.delegate = self
-        window.minSize = NSSize(width: 620, height: 460)
+        window.contentMinSize = SettingsWindowGeometry.minimumSize
+        window.minSize = SettingsWindowGeometry.minimumSize
         // AppKit would otherwise release the window out from under ARC on close.
         window.isReleasedWhenClosed = false
         window.center()

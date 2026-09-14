@@ -42,6 +42,22 @@ struct OnboardingView: View {
                 model.refreshPermissions()
             }
         }
+        // Escape asks to leave; it is not bound to Skip Setup as a cancel action, and it
+        // never means Back (docs/14 UX-07).
+        .onExitCommand { model.requestClose() }
+        .alert(
+            "You can finish setup later from the menu bar",
+            isPresented: $model.showsCloseExplanation
+        ) {
+            Button("Finish Later") { model.confirmClose() }
+            Button("Keep Setting Up", role: .cancel) { model.cancelClose() }
+        } message: {
+            Text(
+                "Screen capture is not allowed yet, so screenshots and recordings will not "
+                    + "work. Choose Setup & Permissions from the Kadr menu whenever you want "
+                    + "to pick this up again."
+            )
+        }
     }
 
     @ViewBuilder
@@ -121,6 +137,7 @@ struct OnboardingView: View {
                         attempted: model.appPermissions.attempted.contains(permission),
                         isRequesting: model.appPermissions.requesting == permission,
                         requestsDisabled: model.appPermissions.requesting != nil,
+                        showsRelaunchGuidance: model.appPermissions.relaunchGuidanceOwner == permission,
                         errorMessage: model.appPermissions.settingsErrorPermission == permission
                             ? model.appPermissions.settingsError
                             : nil,
@@ -215,7 +232,13 @@ struct OnboardingView: View {
                 .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Opens a separate copy in the image editor.")
+            .accessibilityHint("Opens a separate copy in the image editor. Setup stays open.")
+
+            // The optional shortcut for somebody who is done here. The card above
+            // deliberately does not finish setup (docs/14 UX-08B).
+            Button("Finish Setup and Try the Editor", action: model.finishAndOpenPracticeImage)
+                .buttonStyle(.link)
+                .font(.callout)
 
             if let practiceError = model.practiceError {
                 Label(practiceError, systemImage: "exclamationmark.triangle")
@@ -280,20 +303,16 @@ struct OnboardingView: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Button("Skip Setup", action: model.skip)
-                .keyboardShortcut(.cancelAction)
-            Button(model.isLastStep ? "Done" : nextTitle, action: model.advance)
+            // A secondary text button with no shortcut. Escape used to be bound here,
+            // which made the key that reads as “go back” end setup (docs/14 UX-07).
+            Button("Skip for Now", action: model.requestClose)
+                .buttonStyle(.link)
+                .accessibilityHint("Closes setup. You can finish it later from the menu bar.")
+            // Always last in the row, so its position never moves between steps.
+            Button(model.primaryActionTitle, action: model.advance)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.appPermissions.requesting != nil)
-        }
-    }
-
-    private var nextTitle: String {
-        switch model.step {
-        case .welcome: "Get Started"
-        case .permissions: "Continue"
-        case .defaults: "Done"
         }
     }
 

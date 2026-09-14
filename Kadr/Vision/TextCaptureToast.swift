@@ -74,6 +74,8 @@ private struct TextCaptureToastView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Dismiss")
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(title)
 
             if text.isEmpty {
                 Text("No text found in that region.")
@@ -115,16 +117,20 @@ private struct TextCaptureToastView: View {
                         NSWorkspace.shared.open(url)
                         onDismiss()
                     }
+                    .accessibilityLabel("Open link \(url.absoluteString)")
                     Button("Copy Link") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(url.absoluteString, forType: .string)
                         onDismiss()
                     }
+                    .accessibilityLabel("Copy link")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -138,9 +144,8 @@ private struct TextCaptureToastView: View {
 
     private var title: String {
         if text.isEmpty, !codes.isEmpty {
-            return "\(codes.count) code\(codes.count == 1 ? "" : "s") found"
+            return KadrPlural.codes(codes.count) + " found"
         }
-        let count = text.count
-        return "Copied \(count) character\(count == 1 ? "" : "s")"
+        return KadrText.string("Text copied, \(text.count) characters")
     }
 }

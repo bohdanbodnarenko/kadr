@@ -41,10 +41,20 @@ extension RecordingCoordinator {
         countdown.onTick = { [weak self] remaining in
             self?.countdownRemaining = remaining
         }
-        countdown.run(seconds: seconds, placement: .center) { [weak self] in
+        // Escape during the wait is a cancellation, not a skip: nothing has been recorded
+        // yet, so the only thing to undo is the promise to begin (docs/14 UX-17D).
+        countdown.onCancel = { [weak self] in
+            _ = self?.cancelCountdown()
+        }
+        countdown.run(
+            seconds: seconds,
+            placement: .center,
+            displayID: Self.countdownDisplayID(for: target)
+        ) { [weak self] in
             guard let self else { return }
             countdownRemaining = 0
             countdown.onTick = nil
+            countdown.onCancel = nil
             pendingTarget = nil
             // `.starting` was claimed when the countdown began, so a second hotkey press
             // could not start a second recording while the numbers were on screen. It stays
@@ -58,6 +68,18 @@ extension RecordingCoordinator {
         countdown.isRunning
     }
 
+    /// The display the numbers belong on: the one about to be recorded (docs/14 UX-17A).
+    ///
+    /// A window target names no display, so the badge falls back to the pointer's screen
+    /// — which is where the user just clicked the window.
+    static func countdownDisplayID(for target: RecordingTarget) -> CGDirectDisplayID? {
+        switch target {
+        case let .display(displayID): displayID
+        case let .region(_, display): display
+        case .window: nil
+        }
+    }
+
     /// Skips the rest of the countdown and starts now.
     ///
     /// The wait exists so somebody can get into position; the moment they are, waiting out
@@ -66,6 +88,7 @@ extension RecordingCoordinator {
         guard let target = pendingTarget, countdown.isRunning else { return }
         countdownRemaining = 0
         countdown.onTick = nil
+        countdown.onCancel = nil
         countdown.cancel()
         pendingTarget = nil
         start(target: target, alreadyClaimed: true)
@@ -81,6 +104,7 @@ extension RecordingCoordinator {
         guard countdown.isRunning else { return false }
         countdownRemaining = 0
         countdown.onTick = nil
+        countdown.onCancel = nil
         countdown.cancel()
         windowHighlightHole = nil
         windowHighlightDisplayID = nil

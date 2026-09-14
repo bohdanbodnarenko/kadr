@@ -15,6 +15,7 @@ struct PermissionsPane: View {
                             attempted: tracker.attempted.contains(permission),
                             isRequesting: tracker.requesting == permission,
                             requestsDisabled: tracker.requesting != nil,
+                            showsRelaunchGuidance: tracker.relaunchGuidanceOwner == permission,
                             errorMessage: tracker.settingsErrorPermission == permission
                                 ? tracker.settingsError
                                 : nil,

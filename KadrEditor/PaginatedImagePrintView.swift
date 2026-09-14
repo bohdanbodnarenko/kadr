@@ -26,7 +26,9 @@ final class PaginatedImagePrintView: NSView {
         nil
     }
 
-    override var isFlipped: Bool { true }
+    override var isFlipped: Bool {
+        true
+    }
 
     override func knowsPageRange(_ range: NSRangePointer) -> Bool {
         range.pointee = NSRange(location: 1, length: plan.pageCount)

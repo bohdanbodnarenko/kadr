@@ -70,7 +70,7 @@ public final class StudioDocumentModel {
     public internal(set) var exportProgress: Double?
 
     /// Set when something went wrong that the user should see.
-    public var failure: String?
+    public var failure: StudioFailurePresentation?
 
     /// Set when something worked and saying so is the whole feedback.
     public var notice: String?
@@ -349,10 +349,10 @@ public final class StudioDocumentModel {
     /// is exactly the split that let the bug through in the first place.
     func refuseTidyIfEditedForTesting() {
         guard edit.clips.isEdited(ofRecordingLasting: manifest.duration) else { return }
-        failure = Self.tidyRefusal
+        failure = .tidyRefused()
     }
 
-    static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
+    nonisolated static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
         + "Undo your clip edits first, or trim the pauses by hand."
 
     /// Records that the window closed on purpose (docs/09 U3.1).

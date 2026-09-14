@@ -11,16 +11,21 @@ struct GeneralPane: View {
     @Bindable var settings: AppSettings
     let loginItem: LoginItemController
 
+    @State private var loginItemStatus: FeedbackStatus?
+
     private let logger = KadrLog.logger(.settings)
 
     var body: some View {
         Form {
             Section {
-                Toggle("Launch Kadr at login", isOn: launchAtLoginBinding)
+                Toggle("Launch Kadr at login", isOn: loginAtLoginBinding)
                 if let explanation = loginItem.state.explanation {
                     Text(explanation)
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                }
+                ControlInlineStatus(status: loginItemStatus) {
+                    loginItemStatus = nil
                 }
             }
 
@@ -84,17 +89,52 @@ struct GeneralPane: View {
         .settingsFormChrome()
     }
 
-    private var launchAtLoginBinding: Binding<Bool> {
+    private var loginAtLoginBinding: Binding<Bool> {
         Binding(
             get: { loginItem.state.isOn },
-            set: { isOn in
-                do {
-                    try loginItem.setEnabled(isOn)
-                } catch {
-                    logger.error("Could not \(isOn ? "enable" : "disable") the login item: \(error)")
-                }
+            set: { requested in
+                setLaunchAtLogin(requested)
             }
         )
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        loginItemStatus = nil
+        do {
+            try loginItem.setEnabled(enabled)
+            if loginItem.state.isOn == enabled {
+                let message = enabled
+                    ? "Kadr will open at login."
+                    : "Kadr will no longer open at login."
+                loginItemStatus = .done(message)
+                FeedbackAnnouncement.post(message)
+            } else if let explanation = loginItem.state.explanation {
+                loginItemStatus = FeedbackStatus(
+                    kind: .warning,
+                    message: explanation,
+                    recoveryTitle: "Open Login Items",
+                    recovery: openLoginItemsSettings
+                )
+                FeedbackAnnouncement.post(explanation)
+            }
+        } catch {
+            let message = enabled
+                ? "Could not register Kadr to open at login."
+                : "Could not remove Kadr from login items."
+            loginItemStatus = .failure(
+                message,
+                retryTitle: "Try Again",
+                retry: { setLaunchAtLogin(enabled) }
+            )
+            FeedbackAnnouncement.post(message)
+            logger.error("Could not \(enabled ? "enable" : "disable") the login item: \(error)")
+        }
+    }
+
+    private func openLoginItemsSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
+            ?? URL(fileURLWithPath: "/System/Library/PreferencePanes/Security.prefPane")
+        NSWorkspace.shared.open(url)
     }
 
     private func chooseSaveFolder() {

@@ -120,37 +120,40 @@ struct StudioZoomLane: View {
     }
 
     private func handle(for cue: ZoomCue, leading: Bool) -> some View {
-        Capsule()
-            .fill(Color.white.opacity(model.selectedZoom == cue.id ? 0.9 : 0.45))
-            .frame(width: 2.5, height: 10)
-            .padding(.horizontal, 4)
-            .frame(width: 10, height: height)
-            .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        model.selectedZoom = cue.id
-                        model.pausePlayback()
-                        let origin = resizing ?? ResizeOrigin(id: cue.id, start: cue.start, end: cue.end)
-                        if resizing == nil {
-                            resizing = origin
-                        }
-                        let delta = value.translation.width / scale
-                        if leading {
-                            model.setZoomRange(cue.id, start: origin.start + delta, end: origin.end)
-                        } else {
-                            model.setZoomRange(cue.id, start: origin.start, end: origin.end + delta)
-                        }
+        ZStack {
+            Capsule()
+                .fill(Color.white.opacity(model.selectedZoom == cue.id ? 0.9 : 0.45))
+                .frame(width: 2.5, height: 10)
+        }
+        .frame(width: 20, height: height)
+        .contentShape(Rectangle())
+        .accessibilityLabel(leading ? "Zoom start" : "Zoom end")
+        .accessibilityAddTraits(.isButton)
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    model.selectedZoom = cue.id
+                    model.pausePlayback()
+                    let origin = resizing ?? ResizeOrigin(id: cue.id, start: cue.start, end: cue.end)
+                    if resizing == nil {
+                        resizing = origin
                     }
-                    .onEnded { _ in resizing = nil }
-            )
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeLeftRight.set()
-                } else {
-                    NSCursor.arrow.set()
+                    let delta = value.translation.width / scale
+                    if leading {
+                        model.setZoomRange(cue.id, start: origin.start + delta, end: origin.end)
+                    } else {
+                        model.setZoomRange(cue.id, start: origin.start, end: origin.end + delta)
+                    }
                 }
+                .onEnded { _ in resizing = nil }
+        )
+        .onHover { hovering in
+            if hovering {
+                NSCursor.resizeLeftRight.set()
+            } else {
+                NSCursor.arrow.set()
             }
+        }
     }
 
     private func moveGesture(for cue: ZoomCue) -> some Gesture {

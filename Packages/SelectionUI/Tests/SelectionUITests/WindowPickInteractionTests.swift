@@ -110,6 +110,25 @@ struct WindowPickInteractionTests {
         #expect(pick.hovered == nil)
     }
 
+    @Test("Auxiliary windows stay hidden until Command is held")
+    func auxiliaryWindowsNeedCommand() {
+        let auxiliary = PickableWindow(
+            id: 4,
+            title: "Panel",
+            applicationName: "Safari",
+            bundleIdentifier: "com.apple.Safari",
+            layer: 3,
+            frame: CGRect(x: 120, y: 120, width: 80, height: 80)
+        )
+        var pick = WindowPickInteraction(windows: [front, auxiliary])
+        #expect(pick.window(at: CGPoint(x: 150, y: 150))?.id == front.id)
+        pick.setWindows([auxiliary])
+        pick.includesAuxiliaryWindows = false
+        #expect(pick.window(at: CGPoint(x: 150, y: 150)) == nil)
+        pick.includesAuxiliaryWindows = true
+        #expect(pick.window(at: CGPoint(x: 150, y: 150))?.id == auxiliary.id)
+    }
+
     @Test("The title chip reads app and title, without repeating itself", arguments: [
         ("Safari", "Apple", "Safari — Apple"),
         ("Safari", nil, "Safari"),

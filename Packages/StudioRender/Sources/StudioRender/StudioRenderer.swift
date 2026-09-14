@@ -77,7 +77,7 @@ public struct StudioRenderer: Sendable {
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVNumberOfChannelsKey: audioChannelCount,
                 AVSampleRateKey: 48000,
-                AVEncoderBitRateKey: audioChannelCount == 1 ? 96_000 : 128_000
+                AVEncoderBitRateKey: audioChannelCount == 1 ? 96000 : 128_000
             ]
         }
     }

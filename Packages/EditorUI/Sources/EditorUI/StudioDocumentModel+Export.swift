@@ -26,6 +26,56 @@ public extension StudioDocumentModel {
         pasteboard.writeObjects([url as NSURL])
     }
 
+    /// Renders the current edit, or reuses a stamped render, then copies it (docs/14 UX-31).
+    func copyEditedToClipboard() async {
+        guard exportTask == nil else { return }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-copy-\(UUID().uuidString)")
+            .appendingPathExtension(exportSettings.filenameExtension)
+        do {
+            try await writeEditedRecording(to: destination)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([destination as NSURL])
+            notice = "Copied the edit to the clipboard."
+        } catch is CancellationError {
+            return
+        } catch {
+            failure = .copyEditedFailed(error.localizedDescription)
+        }
+    }
+
+    /// Renders the current edit for sharing (docs/14 UX-31).
+    func shareEdited() async {
+        guard exportTask == nil else { return }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-share-\(UUID().uuidString)")
+            .appendingPathExtension(exportSettings.filenameExtension)
+        do {
+            try await writeEditedRecording(to: destination)
+            guard let window = NSApp.keyWindow, let view = window.contentView else { return }
+            let picker = NSSharingServicePicker(items: [destination])
+            let anchor = NSRect(x: view.bounds.midX, y: view.bounds.maxY - 12, width: 1, height: 1)
+            picker.show(relativeTo: anchor, of: view, preferredEdge: .minY)
+        } catch is CancellationError {
+            return
+        } catch {
+            failure = .shareEditedFailed(error.localizedDescription)
+        }
+    }
+
+    /// Writes the current edit to `destination`, reusing a stamped render when possible.
+    private func writeEditedRecording(to destination: URL) async throws {
+        if reuseRenderedFile(at: destination) {
+            return
+        }
+        exportProgress = 0
+        flushDraft()
+        try? document.commit(edit)
+        defer { exportProgress = nil }
+        let output = try await exportMedia(to: destination)
+        recordStamp(output, at: destination)
+    }
+
     /// Renders the edit to `destination`.
     ///
     /// The edit is committed first, so a finished export is also the point the draft is
@@ -128,7 +178,7 @@ public extension StudioDocumentModel {
             logger.info("Studio export cancelled")
         } catch {
             exportProgress = nil
-            failure = "The export failed: \(error.localizedDescription)"
+            failure = .exportFailed(error.localizedDescription)
             logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
     }

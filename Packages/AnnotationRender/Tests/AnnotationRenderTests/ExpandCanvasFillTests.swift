@@ -5,6 +5,12 @@ import Testing
 
 @Suite("Expand-canvas fill colour")
 struct ExpandCanvasFillTests {
+    private struct RGB {
+        let red: Double
+        let green: Double
+        let blue: Double
+    }
+
     private func solidImage(red: UInt8, green: UInt8, blue: UInt8, width: Int = 80, height: Int = 60) -> CGImage {
         guard let context = CGContext(
             data: nil,
@@ -17,19 +23,27 @@ struct ExpandCanvasFillTests {
         ) else {
             fatalError("Could not create a test bitmap context")
         }
-        context.setFillColor(CGColor(red: CGFloat(red) / 255, green: CGFloat(green) / 255, blue: CGFloat(blue) / 255, alpha: 1))
+        context.setFillColor(CGColor(
+            red: CGFloat(red) / 255,
+            green: CGFloat(green) / 255,
+            blue: CGFloat(blue) / 255,
+            alpha: 1
+        ))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        return context.makeImage()!
+        guard let image = context.makeImage() else {
+            fatalError("Could not create a test bitmap")
+        }
+        return image
     }
 
-    private func components(of color: CGColor) -> (red: Double, green: Double, blue: Double) {
+    private func components(of color: CGColor) -> RGB {
         let converted = color.converted(
             to: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
             intent: .defaultIntent,
             options: nil
         ) ?? color
         let parts = converted.components ?? [1, 1, 1, 1]
-        return (parts[0], parts[1], parts[2])
+        return RGB(red: parts[0], green: parts[1], blue: parts[2])
     }
 
     @Test("A dark capture yields a dark edge fill")

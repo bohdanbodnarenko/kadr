@@ -41,7 +41,9 @@ public final class EditorDocumentModel {
     public var exportScale: CGFloat = 1 {
         didSet {
             let clamped = min(max(exportScale, 0.25), 1)
-            if exportScale != clamped { exportScale = clamped }
+            if exportScale != clamped {
+                exportScale = clamped
+            }
         }
     }
 
@@ -79,9 +81,29 @@ public final class EditorDocumentModel {
     public internal(set) var isLiftingSubject = false
     public internal(set) var subjectLiftError: String?
 
+    /// The export running right now, if one is (docs/14 UX-26).
+    ///
+    /// A 5K render takes long enough that "nothing happened" is a reasonable thing for the
+    /// user to conclude, so the chrome says what is happening while the work is off the
+    /// main actor and the window still takes input.
+    public internal(set) var runningExport: EditorExportAction?
+
+    /// An export that did not happen, until the user retries or dismisses it.
+    public var exportFailure: EditorExportFailure?
+
+    /// Set when the smart highlighter could not read the capture and fell back to
+    /// freehand (docs/14 UX-30B). Cleared by the chrome after it has been read.
+    public var highlighterFallback: String?
+
+    /// Set after a successful pasteboard write so the toast appears only then (docs/14 UX-26).
+    public internal(set) var showsCopiedToast = false
+
     /// When on, existing annotations stay put so drawing tools do not accidentally grab
     /// them (CleanShot §8.1, docs/03 §3 P2).
     public var isCanvasLocked = false
+
+    /// Whether the inspector column is visible (docs/14 UX-28).
+    public var isInspectorPresented = true
 
     /// The annotation being drawn right now. It lives outside the document until the
     /// mouse comes up, so a half-drawn arrow never lands in the undo history.

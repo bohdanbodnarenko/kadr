@@ -10,6 +10,8 @@ public struct PickableWindow: Sendable, Hashable, Identifiable {
     public let title: String?
     public let applicationName: String?
     public let bundleIdentifier: String?
+    /// ScreenCaptureKit window layer. Zero is a normal window; 1…8 are panels (docs/03 §1.2).
+    public let layer: Int
     /// The window's frame in display-local points.
     public let frame: CGRect
 
@@ -18,13 +20,20 @@ public struct PickableWindow: Sendable, Hashable, Identifiable {
         title: String?,
         applicationName: String?,
         bundleIdentifier: String?,
+        layer: Int = 0,
         frame: CGRect
     ) {
         self.id = id
         self.title = title
         self.applicationName = applicationName
         self.bundleIdentifier = bundleIdentifier
+        self.layer = layer
         self.frame = frame
+    }
+
+    /// A child window or panel, offered only while ⌘ is held (docs/03 §1.2).
+    public var isAuxiliary: Bool {
+        layer >= 1 && layer <= 8
     }
 
     /// What the title chip shows: the app name, plus the window title when it adds
@@ -49,9 +58,18 @@ public struct WindowPickInteraction: Equatable, Sendable {
     /// them in and the order hit-testing must respect.
     public private(set) var windows: [PickableWindow]
     public private(set) var hoveredID: CGWindowID?
+    /// When false, auxiliary windows (layer 1…8) are hidden until ⌘ is held.
+    public var includesAuxiliaryWindows = false
 
     public init(windows: [PickableWindow] = []) {
         self.windows = windows
+    }
+
+    private var visibleWindows: [PickableWindow] {
+        guard includesAuxiliaryWindows else {
+            return windows.filter { !$0.isAuxiliary }
+        }
+        return windows
     }
 
     public var hovered: PickableWindow? {
@@ -80,7 +98,7 @@ public struct WindowPickInteraction: Equatable, Sendable {
 
     /// The frontmost window containing a point.
     public func window(at point: CGPoint) -> PickableWindow? {
-        windows.first { $0.frame.contains(point) }
+        visibleWindows.first { $0.frame.contains(point) }
     }
 
     /// ⇥ moves to the next window of the same app (docs/03 §1.2).
@@ -89,15 +107,16 @@ public struct WindowPickInteraction: Equatable, Sendable {
     /// every window instead — otherwise Tab would appear broken.
     @discardableResult
     public mutating func cycle(reverse: Bool = false) -> PickableWindow? {
-        guard !windows.isEmpty else { return nil }
+        let visible = visibleWindows
+        guard !visible.isEmpty else { return nil }
 
         guard let hovered else {
-            hoveredID = windows.first?.id
+            hoveredID = visible.first?.id
             return hovered
         }
 
-        let sameApp = windows.filter { $0.bundleIdentifier == hovered.bundleIdentifier }
-        let pool = sameApp.count > 1 ? sameApp : windows
+        let sameApp = visible.filter { $0.bundleIdentifier == hovered.bundleIdentifier }
+        let pool = sameApp.count > 1 ? sameApp : visible
         guard let index = pool.firstIndex(of: hovered) else {
             hoveredID = pool.first?.id
             return self.hovered
@@ -123,6 +142,7 @@ public struct PickableWindowDescriptor: Sendable, Hashable {
     public let title: String?
     public let applicationName: String?
     public let bundleIdentifier: String?
+    public let layer: Int
     public let globalFrame: DisplayRect
 
     public init(
@@ -130,12 +150,14 @@ public struct PickableWindowDescriptor: Sendable, Hashable {
         title: String?,
         applicationName: String?,
         bundleIdentifier: String?,
+        layer: Int = 0,
         globalFrame: DisplayRect
     ) {
         self.id = id
         self.title = title
         self.applicationName = applicationName
         self.bundleIdentifier = bundleIdentifier
+        self.layer = layer
         self.globalFrame = globalFrame
     }
 
@@ -151,6 +173,7 @@ public struct PickableWindowDescriptor: Sendable, Hashable {
             title: title,
             applicationName: applicationName,
             bundleIdentifier: bundleIdentifier,
+            layer: layer,
             frame: display.localRect(for: globalFrame).cgRect
         )
     }

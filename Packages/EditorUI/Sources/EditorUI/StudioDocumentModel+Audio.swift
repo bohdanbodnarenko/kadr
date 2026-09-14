@@ -30,7 +30,7 @@ public extension StudioDocumentModel {
     /// Copies `url` into the session and uses it as the soundtrack.
     func importSoundtrack(from url: URL) async {
         guard await StudioAudioExporter.durationIfAudio(at: url) != nil else {
-            failure = "That file has no audio track."
+            failure = .noAudioTrack()
             return
         }
         do {
@@ -42,7 +42,7 @@ public extension StudioDocumentModel {
             }
             notice = "Using \(url.lastPathComponent) as the soundtrack."
         } catch {
-            failure = "Could not import that file: \(error.localizedDescription)"
+            failure = .importFailed(error.localizedDescription)
         }
     }
 
@@ -81,11 +81,11 @@ public extension StudioDocumentModel {
             )
             notice = "Saved the soundtrack."
         } catch StudioAudioExporter.ExportError.noAudioTrack {
-            failure = "This recording has no audio to export."
+            failure = .noAudioTrack()
         } catch StudioAudioExporter.ExportError.cancelled {
             return
         } catch {
-            failure = "Could not export the soundtrack: \(error.localizedDescription)"
+            failure = .audioExportFailed(error.localizedDescription)
         }
     }
 }

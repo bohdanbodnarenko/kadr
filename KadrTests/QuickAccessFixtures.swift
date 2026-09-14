@@ -111,10 +111,12 @@ func throwawayDefaults() -> UserDefaults {
 
 /// Waits for a sequential dismiss cascade to finish (CleanShot §6.3 / 4.7.5).
 @MainActor
-func waitForEmptyStack(_ manager: QuickAccessManager, timeoutMs: Int = 2_500) async throws {
+func waitForEmptyStack(_ manager: QuickAccessManager, timeoutMs: Int = 2500) async throws {
     let steps = max(1, timeoutMs / 50)
     for _ in 0 ..< steps {
-        if manager.items.isEmpty { return }
+        if manager.items.isEmpty {
+            return
+        }
         try await Task.sleep(for: .milliseconds(50))
     }
     Issue.record("Overlay stack did not empty within \(timeoutMs)ms (count=\(manager.items.count))")

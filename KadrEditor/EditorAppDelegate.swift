@@ -89,7 +89,12 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             alert.messageText = "Imported “\(preset.name)”."
             alert.informativeText = "The look is in the editor’s Look list. Open a capture to apply it."
             alert.alertStyle = .informational
-            alert.runModal()
+            alert.addButton(withTitle: "OK")
+            if let window = NSApp.keyWindow {
+                alert.beginSheetModal(for: window) { _ in }
+            } else {
+                alert.runModal()
+            }
             logger.info("Imported look \(preset.name, privacy: .public)")
         } catch {
             presentOpenFailure(for: url, error: error)
@@ -123,12 +128,6 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     @MainActor
-    @objc func toggleCanvasLock(_ sender: Any?) {
-        guard let editor = keyEditor() else { return }
-        editor.model.isCanvasLocked.toggle()
-    }
-
-    @MainActor
     private func keyEditor() -> EditorWindowController? {
         windows.first { $0.window?.isKeyWindow == true } ?? windows.last
     }
@@ -139,15 +138,10 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         case #selector(saveDocument(_:)),
              #selector(saveDocumentAs(_:)),
              #selector(saveProjectDocument(_:)),
-             #selector(printDocument(_:)),
-             #selector(toggleCanvasLock(_:)):
-            guard let editor = keyEditor() else { return menuItem.action != #selector(toggleCanvasLock(_:)) }
-            if menuItem.action == #selector(toggleCanvasLock(_:)) {
-                menuItem.state = editor.model.isCanvasLocked ? .on : .off
-            }
-            return true
+             #selector(printDocument(_:)):
+            keyEditor() != nil
         default:
-            return true
+            true
         }
     }
 
@@ -301,7 +295,29 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: "About Kadr Editor",
+            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(.separator())
+        appMenu.addItem(
+            withTitle: "Services",
+            action: nil,
+            keyEquivalent: ""
+        ).submenu = NSApp.servicesMenu
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Kadr Editor", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(
+            withTitle: "Hide Others",
+            action: #selector(NSApplication.hideOtherApplications(_:)),
+            keyEquivalent: "h"
+        ).keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(
+            withTitle: "Show All",
+            action: #selector(NSApplication.unhideAllApplications(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: "Quit Kadr Editor",
@@ -337,25 +353,135 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
         let editItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Undo", action: #selector(EditorWindowController.undo(_:)), keyEquivalent: "z")
+        let redo = editMenu.addItem(
+            withTitle: "Redo",
+            action: #selector(EditorWindowController.redo(_:)),
+            keyEquivalent: "z"
+        )
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: "Cut", action: #selector(EditorWindowController.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(EditorWindowController.copy(_:)), keyEquivalent: "c")
+        let copyFlattened = editMenu.addItem(
+            withTitle: "Copy Flattened Image",
+            action: #selector(copyFlattenedImage(_:)),
+            keyEquivalent: "c"
+        )
+        copyFlattened.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(withTitle: "Paste", action: #selector(EditorWindowController.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(
+            withTitle: "Select All",
+            action: #selector(EditorWindowController.selectAll(_:)),
+            keyEquivalent: "a"
+        )
+        editMenu.addItem(
+            withTitle: "Duplicate",
+            action: #selector(EditorWindowController.duplicate(_:)),
+            keyEquivalent: "d"
+        )
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            withTitle: "Bring to Front",
+            action: #selector(EditorWindowController.bringToFront(_:)),
+            keyEquivalent: ""
+        )
+        editMenu.addItem(
+            withTitle: "Bring Forward",
+            action: #selector(EditorWindowController.bringForward(_:)),
+            keyEquivalent: "]"
+        )
+        editMenu.addItem(
+            withTitle: "Send Backward",
+            action: #selector(EditorWindowController.sendBackward(_:)),
+            keyEquivalent: "["
+        )
+        editMenu.addItem(
+            withTitle: "Send to Back",
+            action: #selector(EditorWindowController.sendToBack(_:)),
+            keyEquivalent: ""
+        )
         editMenu.addItem(.separator())
         let lock = editMenu.addItem(
             withTitle: "Lock Objects",
-            action: #selector(toggleCanvasLock(_:)),
+            action: #selector(EditorWindowController.toggleCanvasLock(_:)),
             keyEquivalent: "l"
         )
         lock.keyEquivalentModifierMask = [.command, .shift]
         editItem.submenu = editMenu
         main.addItem(editItem)
 
+        let viewItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(
+            withTitle: "Show Inspector",
+            action: #selector(EditorWindowController.toggleInspector(_:)),
+            keyEquivalent: "i"
+        )
+        viewMenu.addItem(.separator())
+        viewMenu.addItem(withTitle: "Zoom In", action: #selector(EditorWindowController.zoomIn(_:)), keyEquivalent: "=")
+        viewMenu.addItem(
+            withTitle: "Zoom Out",
+            action: #selector(EditorWindowController.zoomOut(_:)),
+            keyEquivalent: "-"
+        )
+        viewMenu.addItem(
+            withTitle: "Fit Canvas",
+            action: #selector(EditorWindowController.zoomToFit(_:)),
+            keyEquivalent: "1"
+        )
+        viewMenu.addItem(
+            withTitle: "Actual Size",
+            action: #selector(EditorWindowController.zoomActualSize(_:)),
+            keyEquivalent: "0"
+        )
+        viewMenu.addItem(.separator())
+        let increaseTool = viewMenu.addItem(
+            withTitle: "Increase Tool Size",
+            action: #selector(EditorWindowController.increaseToolSize(_:)),
+            keyEquivalent: "="
+        )
+        increaseTool.keyEquivalentModifierMask = [.shift]
+        viewMenu.addItem(
+            withTitle: "Decrease Tool Size",
+            action: #selector(EditorWindowController.decreaseToolSize(_:)),
+            keyEquivalent: "`"
+        )
+        viewItem.submenu = viewMenu
+        main.addItem(viewItem)
+
+        let windowItem = NSMenuItem()
+        windowItem.submenu = NSApp.windowsMenu
+        main.addItem(windowItem)
+
+        let helpItem = NSMenuItem()
+        let helpMenu = NSMenu(title: "Help")
+        helpMenu.addItem(withTitle: "Kadr Help", action: #selector(openHelp(_:)), keyEquivalent: "?")
+        helpMenu.addItem(
+            withTitle: "Keyboard Shortcuts",
+            action: #selector(openKeyboardShortcuts(_:)),
+            keyEquivalent: ""
+        )
+        helpItem.submenu = helpMenu
+        main.addItem(helpItem)
+
         return main
+    }
+
+    @objc private func copyFlattenedImage(_ sender: Any?) {
+        keyEditor()?.export(.copyFlattened)
+    }
+
+    @objc private func openHelp(_ sender: Any?) {
+        if let url = URL(string: "https://github.com/kadr-app/Kadr#readme") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func openKeyboardShortcuts(_ sender: Any?) {
+        if let url = URL(string: "https://github.com/kadr-app/Kadr/blob/main/docs/03-features.md") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private func presentOpenFailure(for url: URL, error: any Error) {
@@ -363,6 +489,11 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.messageText = "Kadr could not open “\(url.lastPathComponent)”."
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
-        alert.runModal()
+        alert.addButton(withTitle: "OK")
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window) { _ in }
+        } else {
+            alert.runModal()
+        }
     }
 }

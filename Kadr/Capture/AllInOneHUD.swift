@@ -29,6 +29,9 @@ final class AllInOneHUD {
         panel != nil
     }
 
+    /// Fired when the HUD appears or goes away, so the menu bar can show the armed state.
+    var onShowingChanged: (() -> Void)?
+
     func toggle() {
         if isShowing {
             dismiss()
@@ -62,6 +65,7 @@ final class AllInOneHUD {
         NSApp.activate(ignoringOtherApps: true)
         self.panel = panel
         self.hosting = hosting
+        onShowingChanged?()
     }
 
     func dismiss() {
@@ -71,6 +75,7 @@ final class AllInOneHUD {
         panel.contentView = nil
         self.panel = nil
         hosting = nil
+        onShowingChanged?()
     }
 
     /// Bottom-centre of the active screen, clear of the menu bar and most window chrome.
@@ -188,37 +193,20 @@ final class AllInOneModel {
 struct AllInOneView: View {
     @Bindable var model: AllInOneModel
 
-    private static let timerOptions = [0, 3, 5, 10]
+    private static let presetTimerOptions = [0, 3, 5, 10]
+    private static let primaryModes: [AllInOneMode] = [.area, .window, .screen, .record]
+    private static let overflowModes: [AllInOneMode] = [.gif, .scrolling, .ocr, .color]
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(AllInOneMode.allCases, id: \.self) { mode in
-                RecordingBarCircleButton(
-                    symbol: mode.symbol,
-                    help: mode.help,
-                    isOn: true,
-                    tint: mode == model.lastMode ? Color.accentColor : nil
-                ) {
-                    model.pick(mode)
-                }
-                .accessibilityLabel(mode.title)
-                .accessibilityAddTraits(mode == model.lastMode ? .isSelected : [])
-            }
-
-            RecordingBarDivider()
-            timerMenu
-            aspectMenu
-
-            RecordingBarCircleButton(symbol: "xmark", help: "Close (Esc)") {
-                model.cancel()
-            }
-            .accessibilityLabel("Close")
+        ViewThatFits(in: .horizontal) {
+            fullStrip
+            twoRowStrip
+            compactStrip
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
         .background(RecordingBarBackground())
         .padding(10)
-        .fixedSize()
         .focusable()
         .onExitCommand { model.cancel() }
         .onKeyPress { press in
@@ -228,17 +216,108 @@ struct AllInOneView: View {
         .accessibilityHint("Pick a capture mode, or press Return for the last one.")
     }
 
+    private var fullStrip: some View {
+        HStack(spacing: 6) {
+            modeButtons(for: AllInOneMode.allCases)
+            RecordingBarDivider()
+            timerMenu
+            aspectMenu
+            closeButton
+        }
+    }
+
+    private var twoRowStrip: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                modeButtons(for: Self.primaryModes)
+                overflowMenu
+                Spacer(minLength: 0)
+                closeButton
+            }
+            HStack(spacing: 6) {
+                timerMenu
+                aspectMenu
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var compactStrip: some View {
+        HStack(spacing: 6) {
+            modeButtons(for: Self.primaryModes)
+            overflowMenu
+            RecordingBarDivider()
+            timerMenu
+            closeButton
+        }
+    }
+
+    private func modeButtons(for modes: [AllInOneMode]) -> some View {
+        ForEach(modes, id: \.self) { mode in
+            modeButton(mode)
+        }
+    }
+
+    private var overflowMenu: some View {
+        Menu {
+            ForEach(Self.overflowModes, id: \.self) { mode in
+                Button(mode.title) { model.pick(mode) }
+            }
+        } label: {
+            RecordingBarIcon(symbol: "ellipsis.circle")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .help("More capture modes")
+        .accessibilityLabel("More capture modes")
+    }
+
+    private func modeButton(_ mode: AllInOneMode) -> some View {
+        RecordingBarCircleButton(
+            symbol: mode.symbol,
+            help: mode.help,
+            isOn: true,
+            tint: mode == model.lastMode ? Color.accentColor : nil
+        ) {
+            model.pick(mode)
+        }
+        .accessibilityLabel(mode.title)
+        .accessibilityAddTraits(mode == model.lastMode ? .isSelected : [])
+    }
+
+    private var closeButton: some View {
+        RecordingBarCircleButton(symbol: "xmark", help: "Close (Esc)") {
+            model.cancel()
+        }
+        .accessibilityLabel("Close")
+    }
+
+    private var timerOptions: [Int] {
+        var options = Self.presetTimerOptions
+        let custom = model.settings.customTimerSeconds
+        if custom > 0, !options.contains(custom) {
+            options.append(custom)
+            options.sort()
+        }
+        return options
+    }
+
     private var timerMenu: some View {
         Menu {
-            ForEach(Self.timerOptions, id: \.self) { seconds in
-                Button(seconds == 0 ? "No delay" : "\(seconds) seconds") {
-                    model.settings.customTimerSeconds = 0
-                    model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
+            ForEach(timerOptions, id: \.self) { seconds in
+                Button(timerLabel(seconds)) {
+                    if seconds == model.settings.customTimerSeconds, seconds > 0 {
+                        model.settings.selfTimer = .off
+                    } else {
+                        model.settings.customTimerSeconds = 0
+                        model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
+                    }
                 }
             }
         } label: {
             RecordingBarIcon(
-                symbol: model.settings.timerSeconds > 0 ? "timer" : "timer",
+                symbol: "timer",
                 isOn: model.settings.timerSeconds > 0
             )
         }
@@ -291,6 +370,16 @@ struct AllInOneView: View {
             return "Self-timer off — wait before capturing hover states"
         }
         return "Self-timer \(seconds)s — click to change"
+    }
+
+    private func timerLabel(_ seconds: Int) -> String {
+        if seconds == 0 {
+            return "No delay"
+        }
+        if seconds == model.settings.customTimerSeconds, seconds > 0 {
+            return "Custom: \(seconds)s"
+        }
+        return "\(seconds) seconds"
     }
 
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {

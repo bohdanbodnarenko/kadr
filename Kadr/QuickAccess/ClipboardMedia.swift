@@ -19,30 +19,28 @@ enum ClipboardMedia {
 
     /// Image bytes, or a card rendered from text / RTF / HTML.
     static func stillPNG(from pasteboard: NSPasteboard) -> Data? {
-        if let image = NSImage(pasteboard: pasteboard),
-           let tiff = image.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: tiff),
-           let png = bitmap.representation(using: .png, properties: [:]) {
-            return png
+        guard let image = NSImage(pasteboard: pasteboard),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:])
+        else {
+            return textCardPNG(from: pasteboard)
         }
-        return textCardPNG(from: pasteboard)
+        return png
     }
 
     /// Draws clipboard text as a padded card so it can be pinned like a screenshot.
     static func textCardPNG(from pasteboard: NSPasteboard) -> Data? {
-        let attributed: NSAttributedString?
-        if let data = pasteboard.data(forType: .rtf) {
-            attributed = NSAttributedString(rtf: data, documentAttributes: nil)
+        let attributed: NSAttributedString? = if let data = pasteboard.data(forType: .rtf) {
+            NSAttributedString(rtf: data, documentAttributes: nil)
         } else if let data = pasteboard.data(forType: .html) {
-            attributed = try? NSAttributedString(
+            try? NSAttributedString(
                 data: data,
                 options: [.documentType: NSAttributedString.DocumentType.html],
                 documentAttributes: nil
             )
-        } else if let string = pasteboard.string(forType: .string)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-            !string.isEmpty {
-            attributed = NSAttributedString(
+        } else if let string = plainText(from: pasteboard) {
+            NSAttributedString(
                 string: string,
                 attributes: [
                     .font: NSFont.systemFont(ofSize: 15),
@@ -50,17 +48,24 @@ enum ClipboardMedia {
                 ]
             )
         } else {
-            attributed = nil
+            nil
         }
         guard let attributed, attributed.length > 0 else { return nil }
         return renderCard(attributed)
+    }
+
+    private static func plainText(from pasteboard: NSPasteboard) -> String? {
+        let string = pasteboard.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let string, !string.isEmpty else { return nil }
+        return string
     }
 
     static func renderCard(_ attributed: NSAttributedString) -> Data? {
         let maxWidth: CGFloat = 480
         let padding: CGFloat = 24
         let bounds = attributed.boundingRect(
-            with: CGSize(width: maxWidth, height: 10_000),
+            with: CGSize(width: maxWidth, height: 10000),
             options: [.usesLineFragmentOrigin, .usesFontLeading]
         )
         let size = CGSize(
@@ -87,13 +92,14 @@ enum ClipboardMedia {
 
     /// A file URL already on the pasteboard, or movie bytes written to a temp file.
     static func fileURL(from pasteboard: NSPasteboard) -> URL? {
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
-           let url = urls.first,
-           url.isFileURL,
-           FileManager.default.fileExists(atPath: url.path) {
-            return url
+        guard let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL],
+              let url = urls.first,
+              url.isFileURL,
+              FileManager.default.fileExists(atPath: url.path)
+        else {
+            return movieFile(from: pasteboard)
         }
-        return movieFile(from: pasteboard)
+        return url
     }
 
     /// Movie data (QuickTime copy, some browsers) written next to other clipboard imports.

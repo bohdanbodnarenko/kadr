@@ -56,13 +56,12 @@ extension QuickAccessManager {
     @discardableResult
     func moveCapture(_ item: QuickAccessItem, to destination: URL) -> URL? {
         let original = item.fileURL
-        let moved: URL?
-        if item.isStaged, output.isStaged(original) {
-            moved = output.finalizeStaged(original, to: destination)
+        let moved: URL? = if item.isStaged, output.isStaged(original) {
+            output.finalizeStaged(original, to: destination)
         } else if original.standardizedFileURL == destination.standardizedFileURL {
-            moved = original
+            original
         } else {
-            moved = moveFile(original, to: destination)
+            moveFile(original, to: destination)
         }
         guard let moved else { return nil }
         CaptureProject.move(from: original, to: moved)

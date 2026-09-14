@@ -17,7 +17,7 @@ struct EditorCameraInspector: View {
     }
 
     var body: some View {
-        Section("Perspective") {
+        EditorInspectorSection(title: "Perspective", key: "perspective", startsOpen: false) {
             Toggle("Tilt the capture", isOn: enabledBinding)
 
             if isEnabled {

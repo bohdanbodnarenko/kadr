@@ -19,7 +19,7 @@ struct EditorBlurInspector: View {
     }
 
     var body: some View {
-        Section("Depth of Field") {
+        EditorInspectorSection(title: "Depth of Field", key: "depthOfField", startsOpen: false) {
             Toggle("Soften part of the image", isOn: enabledBinding)
 
             if isEnabled {

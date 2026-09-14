@@ -30,6 +30,8 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     private let logger = KadrLog.logger(.app)
     private var window: NSWindow?
     private var hostingView: NSView?
+    /// True once the user has confirmed a close that was interrupted by speech or export.
+    private var isClosingConfirmed = false
 
     var onClose: (() -> Void)?
 
@@ -109,7 +111,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// Copies the original footage. A focused text field still gets ⌘C first because it
     /// sits earlier in the responder chain than this controller.
     @objc func copy(_ sender: Any?) {
-        model.copyOriginalToClipboard()
+        Task { await model.copyEditedToClipboard() }
     }
 
     /// Greys the menu items out when there is nothing to undo, rather than letting them
@@ -167,6 +169,10 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// ten-minute recording — worse than no file, because one of those is obviously missing
     /// and the other is quietly wrong.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isClosingConfirmed {
+            return true
+        }
+
         if model.isSpeechBusy {
             let alert = NSAlert()
             alert.messageText = "Stop speech work on “\(sender.title)”?"
@@ -175,10 +181,14 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Stop and Close")
             alert.addButton(withTitle: "Keep Working")
-            guard alert.runModal() == .alertFirstButtonReturn else { return false }
-            model.cancelTidySpeech()
-            model.cancelSpeechModelInstall()
-            return true
+            alert.beginSheetModal(for: sender) { [weak self] response in
+                guard let self, response == .alertFirstButtonReturn else { return }
+                model.cancelTidySpeech()
+                model.cancelSpeechModelInstall()
+                isClosingConfirmed = true
+                sender.close()
+            }
+            return false
         }
         guard model.isExporting else { return true }
 
@@ -189,14 +199,16 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Stop Exporting")
         alert.addButton(withTitle: "Keep Exporting")
-        guard alert.runModal() == .alertFirstButtonReturn else { return false }
-
-        // Closed once the render has actually unwound, not once it has been told to. The
-        // renderer deletes the partial file on its way out, and a window that vanished
-        // first would let the process quit before that ran.
-        Task { @MainActor [weak self] in
-            await self?.model.cancelExport()
-            self?.window?.close()
+        alert.beginSheetModal(for: sender) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            // Closed once the render has actually unwound, not once it has been told to. The
+            // renderer deletes the partial file on its way out, and a window that vanished
+            // first would let the process quit before that ran.
+            Task { @MainActor [weak self] in
+                await self?.model.cancelExport()
+                self?.isClosingConfirmed = true
+                self?.window?.close()
+            }
         }
         return false
     }

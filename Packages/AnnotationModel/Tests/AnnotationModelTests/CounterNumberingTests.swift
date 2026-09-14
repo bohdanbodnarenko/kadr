@@ -22,13 +22,21 @@ struct CounterNumberingTests {
     }
 
     @Test("Latin letters wrap past Z", arguments: [
-        (1, "A", "a"),
-        (26, "Z", "z"),
-        (27, "AA", "aa")
+        (1, "A"),
+        (26, "Z"),
+        (27, "AA")
     ])
-    func latin(triple: (Int, String, String)) {
-        #expect(CounterNumbering.latinUpper.label(for: triple.0) == triple.1)
-        #expect(CounterNumbering.latinLower.label(for: triple.0) == triple.2)
+    func latinUpper(pair: (Int, String)) {
+        #expect(CounterNumbering.latinUpper.label(for: pair.0) == pair.1)
+    }
+
+    @Test("Latin lowercase wraps past z", arguments: [
+        (1, "a"),
+        (26, "z"),
+        (27, "aa")
+    ])
+    func latinLower(pair: (Int, String)) {
+        #expect(CounterNumbering.latinLower.label(for: pair.0) == pair.1)
     }
 
     @Test("A missing numbering on an old document is arabic")

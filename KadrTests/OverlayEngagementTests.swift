@@ -10,7 +10,7 @@ import Testing
 /// The card overlay's manners (docs/03 §2, docs/09 U2.1).
 @MainActor
 @Suite("Overlay engagement", .serialized)
-struct OverlayEngagementTests {
+struct OverlayEngagementTests { // swiftlint:disable:this type_body_length
     private func showCard(_ harness: TestHarness) throws -> QuickAccessItem {
         let capture = makeCapture()
         let result = try #require(harness.output.deliver(capture))
@@ -373,7 +373,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(53), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(53), canStealCommandKeys: true))
         #expect(harness.manager.items.isEmpty)
         #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
     }
@@ -384,7 +384,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(36), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(36), canStealCommandKeys: true))
         #expect(harness.manager.items.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
     }
@@ -396,7 +396,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(!harness.manager.handleHoverKey(try keyDown(36), canStealCommandKeys: true))
+        #expect(try !harness.manager.handleHoverKey(keyDown(36), canStealCommandKeys: true))
         #expect(harness.manager.items.contains { $0.id == item.id })
         harness.manager.dismissAll()
     }
@@ -407,7 +407,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(1, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(1, modifiers: .command), canStealCommandKeys: true))
         #expect(harness.manager.items.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
     }
@@ -418,7 +418,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(!harness.manager.handleHoverKey(try keyDown(1, modifiers: .command), canStealCommandKeys: false))
+        #expect(try !harness.manager.handleHoverKey(keyDown(1, modifiers: .command), canStealCommandKeys: false))
         #expect(harness.manager.items.contains { $0.id == item.id })
         harness.manager.dismissAll()
     }
@@ -429,7 +429,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(8, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(8, modifiers: .command), canStealCommandKeys: true))
         #expect(harness.manager.items.first?.isStaged == false)
         harness.manager.dismissAll()
     }
@@ -440,7 +440,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(35, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(35, modifiers: .command), canStealCommandKeys: true))
         #expect(harness.manager.pins.count == 1)
         harness.manager.pins.closeAll()
         harness.manager.dismissAll()
@@ -453,7 +453,7 @@ struct OverlayEngagementTests {
         harness.manager.editor = EditorLauncher(editorURL: nil)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(14, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(14, modifiers: .command), canStealCommandKeys: true))
         #expect(harness.manager.isEngaged(item))
         harness.manager.dismissAll()
     }
@@ -464,7 +464,7 @@ struct OverlayEngagementTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(harness.manager.handleHoverKey(try keyDown(13, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleHoverKey(keyDown(13, modifiers: .command), canStealCommandKeys: true))
         #expect(harness.manager.items.isEmpty)
         #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
     }

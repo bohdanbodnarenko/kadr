@@ -8,7 +8,7 @@ struct EditorResizeInspector: View {
     @Bindable var model: EditorDocumentModel
 
     var body: some View {
-        Section("Resize") {
+        EditorInspectorSection(title: "Resize", key: "resize", startsOpen: false) {
             Text(sizeLabel)
                 .font(.callout)
                 .foregroundStyle(.secondary)

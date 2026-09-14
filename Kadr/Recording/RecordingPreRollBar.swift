@@ -18,7 +18,7 @@ struct RecordingPreRollBar: View {
                 .foregroundStyle(.primary)
                 .frame(minWidth: 28, alignment: .center)
                 .contentTransition(.numericText(countsDown: true))
-                .animation(.snappy, value: preRoll.remaining)
+                .kadrAnimation(.snappy, value: preRoll.remaining)
                 .accessibilityLabel("Starting in \(preRoll.remaining) seconds")
 
             RecordingBarDivider()
@@ -32,6 +32,7 @@ struct RecordingPreRollBar: View {
                     settings.recordsMicrophone.toggle()
                 }
                 .accessibilityLabel("Microphone")
+                .accessibilityValue(settings.recordsMicrophone ? "On" : "Off")
             }
             RecordingBarCircleButton(
                 symbol: settings.recordsSystemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill",
@@ -41,6 +42,7 @@ struct RecordingPreRollBar: View {
                 settings.recordsSystemAudio.toggle()
             }
             .accessibilityLabel("System sound")
+            .accessibilityValue(settings.recordsSystemAudio ? "On" : "Off")
             RecordingBarCircleButton(
                 symbol: settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
                 help: settings.recordingShowsWebcam ? "Camera is on" : "Camera is off",
@@ -49,6 +51,7 @@ struct RecordingPreRollBar: View {
                 settings.recordingShowsWebcam.toggle()
             }
             .accessibilityLabel("Camera")
+            .accessibilityValue(settings.recordingShowsWebcam ? "On" : "Off")
 
             RecordingBarDivider()
 
@@ -69,6 +72,6 @@ struct RecordingPreRollBar: View {
         .padding(.vertical, 7)
         .background(RecordingBarBackground())
         .padding(10)
-        .fixedSize()
+        .onExitCommand { preRoll.cancel() }
     }
 }

@@ -50,7 +50,9 @@ final class StatusItemDropView: NSView {
 
     /// Images and `.kadr` projects; recordings go through the overlay, not this drop.
     static func accepts(_ url: URL) -> Bool {
-        if url.pathExtension.lowercased() == "kadr" { return true }
+        if url.pathExtension.lowercased() == "kadr" {
+            return true
+        }
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return type.conforms(to: .image)
     }

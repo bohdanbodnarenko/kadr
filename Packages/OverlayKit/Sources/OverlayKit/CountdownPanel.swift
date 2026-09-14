@@ -39,6 +39,14 @@ public final class CountdownPanel {
         panel != nil
     }
 
+    /// The badge's content view, for `NSAccessibility.post` announcements (docs/14 UX-17B).
+    ///
+    /// The drawing stays CALayer-only; this is the element an announcement can be hung
+    /// off, and the one VoiceOver reads when it lands on the panel.
+    public var accessibilityElement: NSView? {
+        panel?.contentView
+    }
+
     /// Shows the badge on a screen, starting at `seconds`.
     public func show(
         on screen: NSScreen,
@@ -65,6 +73,13 @@ public final class CountdownPanel {
         CATransaction.setDisableActions(true)
         textLayer.string = "\(max(0, seconds))"
         CATransaction.commit()
+        panel?.contentView?.setAccessibilityValue(Self.accessibilityValue(seconds: seconds))
+    }
+
+    /// What VoiceOver reads for a given number, kept here so it can be tested without a panel.
+    static func accessibilityValue(seconds: Int) -> String {
+        let remaining = max(0, seconds)
+        return remaining == 1 ? "1 second" : "\(remaining) seconds"
     }
 
     public func dismiss() {
@@ -111,10 +126,22 @@ public final class CountdownPanel {
         view.wantsLayer = true
         guard let root = view.layer else { return }
         installChrome(in: root, size: size, scale: scale)
+        configureAccessibility(of: view)
 
         panel.contentView = view
         panel.orderFrontRegardless()
         self.panel = panel
+    }
+
+    /// A one-element semantic sibling for a layer-drawn badge (docs/14 UX-17B).
+    ///
+    /// Static text rather than a button: the badge is not clickable — the panel ignores
+    /// mouse events entirely — and the way out is the key named in the help.
+    private func configureAccessibility(of view: NSView) {
+        view.setAccessibilityElement(true)
+        view.setAccessibilityRole(.staticText)
+        view.setAccessibilityLabel("Countdown")
+        view.setAccessibilityHelp("Press Escape to cancel")
     }
 
     private func installChrome(in root: CALayer, size: CGSize, scale: CGFloat) {

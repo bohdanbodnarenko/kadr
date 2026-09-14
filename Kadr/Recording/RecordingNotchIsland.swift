@@ -32,8 +32,13 @@ struct RecordingNotchIsland: View {
         .clipShape(shape)
         .contentShape(shape)
         .frame(maxWidth: layout.windowSize.width, maxHeight: layout.windowSize.height, alignment: .top)
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: layout.islandWidth)
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: model.notchVisible)
+        .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: layout.islandWidth)
+        .kadrAnimation(.spring(response: 0.35, dampingFraction: 0.82), value: model.notchVisible)
+        .onExitCommand {
+            if model.preRoll != nil {
+                model.preRoll?.cancel()
+            }
+        }
         .ignoresSafeArea(.container, edges: .top)
         .onHover { hovering in
             collapseTask?.cancel()
@@ -86,7 +91,11 @@ struct RecordingNotchIsland: View {
                             .foregroundStyle(.orange)
                             .accessibilityLabel("Microphone is silent")
                     }
+                }
 
+                notchMoreButton
+
+                if layout.isExpanded {
                     notchCircleButton(
                         symbol: "arrow.counterclockwise",
                         help: "Start over — discard what's recorded and record again"
@@ -162,6 +171,8 @@ struct RecordingNotchIsland: View {
                     settings.recordsMicrophone.toggle()
                 }
                 .disabled(!RecordingOptions.microphoneIsAvailable)
+                .accessibilityLabel("Microphone")
+                .accessibilityValue(settings.recordsMicrophone ? "On" : "Off")
 
                 notchCircleButton(
                     symbol: settings.recordsSystemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill",
@@ -170,6 +181,8 @@ struct RecordingNotchIsland: View {
                 ) {
                     settings.recordsSystemAudio.toggle()
                 }
+                .accessibilityLabel("System sound")
+                .accessibilityValue(settings.recordsSystemAudio ? "On" : "Off")
 
                 notchCircleButton(
                     symbol: settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
@@ -178,6 +191,8 @@ struct RecordingNotchIsland: View {
                 ) {
                     settings.recordingShowsWebcam.toggle()
                 }
+                .accessibilityLabel("Camera")
+                .accessibilityValue(settings.recordingShowsWebcam ? "On" : "Off")
 
             case .trailing:
                 notchFilledButton(symbol: "play.fill", help: "Skip countdown and start now") {
@@ -222,5 +237,22 @@ struct RecordingNotchIsland: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+
+    private var notchMoreButton: some View {
+        Menu {
+            Button("Restart recording") { model.restart() }
+            Button("Discard recording", role: .destructive) { isConfirmingCancel = true }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+                .background(Circle().fill(Color.white.opacity(0.14)))
+        }
+        .menuStyle(.borderlessButton)
+        .help("More recording actions")
+        .accessibilityLabel("More recording actions")
     }
 }

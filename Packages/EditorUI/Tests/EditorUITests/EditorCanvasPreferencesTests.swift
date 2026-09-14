@@ -5,8 +5,8 @@ import Testing
 @Suite("Editor canvas preferences")
 struct EditorCanvasPreferencesTests {
     @Test("The editor reads the shared lock-by-default key")
-    func lockByDefault() {
-        let defaults = UserDefaults(suiteName: "EditorCanvasPreferencesTests")!
+    func lockByDefault() throws {
+        let defaults = try #require(UserDefaults(suiteName: "EditorCanvasPreferencesTests"))
         defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests")
         defer { defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests") }
 
@@ -17,8 +17,8 @@ struct EditorCanvasPreferencesTests {
     }
 
     @Test("The editor reads the shared object-shadow key")
-    func objectShadows() {
-        let defaults = UserDefaults(suiteName: "EditorCanvasPreferencesTests-shadow")!
+    func objectShadows() throws {
+        let defaults = try #require(UserDefaults(suiteName: "EditorCanvasPreferencesTests-shadow"))
         defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests-shadow")
         defer { defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests-shadow") }
 
@@ -29,8 +29,8 @@ struct EditorCanvasPreferencesTests {
     }
 
     @Test("Keep original defaults on and changes the flattened save stem")
-    func keepOriginal() {
-        let defaults = UserDefaults(suiteName: "EditorCanvasPreferencesTests-keep")!
+    func keepOriginal() throws {
+        let defaults = try #require(UserDefaults(suiteName: "EditorCanvasPreferencesTests-keep"))
         defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests-keep")
         defer { defaults.removePersistentDomain(forName: "EditorCanvasPreferencesTests-keep") }
 

@@ -20,9 +20,13 @@ public struct AudioMeter: Sendable, Hashable {
         self.system = Self.clamped(system)
     }
 
-    public var microphoneIsSilent: Bool { microphone < Self.silence }
+    public var microphoneIsSilent: Bool {
+        microphone < Self.silence
+    }
 
-    public var peak: Float { max(microphone, system) }
+    public var peak: Float {
+        max(microphone, system)
+    }
 
     static func clamped(_ value: Float) -> Float {
         min(max(value.isFinite ? value : 0, 0), 1)

@@ -142,7 +142,9 @@ public struct ImageEncoder: Sendable {
     /// opposite of why they were captured. Already-sRGB images are returned as-is.
     func convertToSRGB(_ image: CGImage) -> CGImage {
         let sRGB = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        if image.colorSpace?.name == sRGB.name { return image }
+        if image.colorSpace?.name == sRGB.name {
+            return image
+        }
         guard image.bitsPerComponent <= 8 else { return image }
 
         guard let context = CGContext(

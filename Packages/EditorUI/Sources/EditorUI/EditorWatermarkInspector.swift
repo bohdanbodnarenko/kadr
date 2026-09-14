@@ -18,7 +18,7 @@ struct EditorWatermarkInspector: View {
     }
 
     var body: some View {
-        Section("Watermark") {
+        EditorInspectorSection(title: "Watermark", key: "watermark", startsOpen: false) {
             Toggle("Mark the image", isOn: enabledBinding)
 
             if isEnabled {

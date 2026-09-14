@@ -27,7 +27,7 @@ public extension StudioDocumentModel {
             }
             notice = "Using \(url.lastPathComponent) as the wallpaper."
         } catch {
-            failure = "Could not import that image: \(error.localizedDescription)"
+            failure = .importFailed(error.localizedDescription)
         }
     }
 

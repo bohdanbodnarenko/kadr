@@ -28,13 +28,14 @@ extension RecordingCoordinator {
                 await CaptureExclusionPush.into(captureEngine)
                 let freezes = try await captureEngine.freezeAllDisplays()
                 let windows = try await captureEngine.shareableContent().windows
-                    .filter(\.isUserWindow)
+                    .filter(\.isPickableWindow)
                     .map {
                         PickableWindowDescriptor(
                             id: $0.id,
                             title: $0.title,
                             applicationName: $0.applicationName,
                             bundleIdentifier: $0.bundleIdentifier,
+                            layer: $0.layer,
                             globalFrame: $0.frame
                         )
                     }

@@ -54,23 +54,23 @@ public struct StudioRootView: View {
         .frame(minWidth: 820, minHeight: 520)
         .animation(motion(.easeOut(duration: 0.2)), value: model.notice)
         .overlay(alignment: .top) { banner }
-        // A failure still stops the user, because it means the thing they asked for did not
-        // happen. Everything else is a banner (docs/08 §2 item 13).
-        .alert(
-            "The studio could not do that",
-            isPresented: Binding(
-                get: { model.failure != nil },
-                set: {
-                    if !$0 {
-                        model.failure = nil
-                    }
-                }
-            )
-        ) {
-            Button("OK") { model.failure = nil }
-        } message: {
-            Text(model.failure ?? "")
+        .overlay(alignment: .top) { failureBanner }
+        .sheet(item: sheetFailure) { failure in
+            StudioFailureSheet(failure: failure) { action in
+                handleFailureAction(action, for: failure)
+            }
         }
+    }
+
+    private var sheetFailure: Binding<StudioFailurePresentation?> {
+        Binding(
+            get: { model.failure?.style == .sheet ? model.failure : nil },
+            set: {
+                if $0 == nil {
+                    model.failure = nil
+                }
+            }
+        )
     }
 
     /// Good news, and news that changes nothing the user has to decide.
@@ -155,19 +155,25 @@ public struct StudioRootView: View {
     private var controls: some View {
         VStack(spacing: 8) {
             StudioTimelineView(model: model)
-            HStack(spacing: 12) {
-                if model.isCropping {
-                    cropBar
-                } else {
+            ZStack(alignment: .leading) {
+                HStack(spacing: 12) {
                     StudioTransportBar(model: model)
                         .frame(maxWidth: .infinity)
+                        .opacity(model.isCropping ? 0.25 : 1)
+                        .allowsHitTesting(!model.isCropping)
                     cropButton
                     inspectorToggle
                     copyButton
                     shareControl
                     exportControl
+                        .frame(minWidth: 168, alignment: .trailing)
+                }
+                if model.isCropping {
+                    cropBar
+                        .background(.bar)
                 }
             }
+            .frame(minHeight: 36)
         }
         .padding(12)
         .background(.bar)
@@ -224,38 +230,50 @@ public struct StudioRootView: View {
     }
 
     private var copyButton: some View {
-        Button("Copy") { model.copyOriginalToClipboard() }
-            .help("Copy the original recording. Export first to copy the edit.")
-            .disabled(model.exportProgress != nil)
-    }
-
-    private var shareControl: some View {
-        ShareLink(item: model.session.screenURL) {
-            Label("Share", systemImage: "square.and.arrow.up")
+        Menu {
+            Button("Copy") {
+                Task { await model.copyEditedToClipboard() }
+            }
+            Button("Copy Original") {
+                model.copyOriginalToClipboard()
+            }
+        } label: {
+            Text("Copy")
         }
-        .labelStyle(.titleOnly)
-        .help("Share the original recording. Export first to share the edit.")
+        .help("Copy the edited recording shown in the preview")
         .disabled(model.exportProgress != nil)
     }
 
-    @ViewBuilder
+    private var shareControl: some View {
+        Menu {
+            Button("Share") {
+                Task { await model.shareEdited() }
+            }
+            ShareLink(item: model.session.screenURL) {
+                Text("Share Original")
+            }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+        .labelStyle(.titleOnly)
+        .help("Share the edited recording shown in the preview")
+        .disabled(model.exportProgress != nil)
+    }
+
     private var exportControl: some View {
-        if let progress = model.exportProgress {
-            // A ten-minute recording takes minutes to render, and without this the only way
-            // out was ⌘Q — which killed the process mid-write and left the partial file at
-            // the destination the user had chosen (docs/11 S0.4).
-            HStack(spacing: 8) {
+        HStack(spacing: 8) {
+            if let progress = model.exportProgress {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .frame(width: 140)
+                    .frame(width: 120)
                 Button("Cancel") {
                     Task { await model.cancelExport() }
                 }
                 .help("Stop the export and delete the partly-written file")
             }
-        } else {
             Button("Export…") { showsExportOptions = true }
                 .keyboardShortcut("e")
+                .disabled(model.exportProgress != nil)
                 .popover(isPresented: $showsExportOptions, arrowEdge: .top) {
                     StudioExportOptionsView(
                         model: model,
@@ -267,6 +285,42 @@ public struct StudioRootView: View {
                         onCancel: { showsExportOptions = false }
                     )
                 }
+        }
+    }
+
+    @ViewBuilder
+    private var failureBanner: some View {
+        if let failure = model.failure, failure.style == .inlineBanner {
+            StudioFailureBanner(failure: failure) { action in
+                handleFailureAction(action, for: failure)
+            }
+            .padding(.top, model.notice == nil ? 10 : 52)
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func handleFailureAction(
+        _ action: StudioFailurePresentation.Action,
+        for failure: StudioFailurePresentation
+    ) {
+        switch action {
+        case .dismiss:
+            model.failure = nil
+        case .retry:
+            model.failure = nil
+            if failure.title.contains("40%") {
+                model.applyPendingCuts(confirmingLargeRemoval: true)
+            }
+        case .openSpeechSettings:
+            if let url = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
+            ) {
+                NSWorkspace.shared.open(url)
+            }
+            model.failure = nil
+        case .chooseExportLocation:
+            model.failure = nil
+            showsExportOptions = true
         }
     }
 

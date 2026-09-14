@@ -26,13 +26,13 @@ public struct ImageTransformer: Sendable {
     public func apply(_ transform: ImageTransform, to image: CGImage) throws -> CGImage {
         switch transform {
         case .rotateClockwise:
-            return try rotateClockwise(image)
+            try rotateClockwise(image)
         case .flipHorizontal:
-            return try flipHorizontal(image)
+            try flipHorizontal(image)
         case .flipVertical:
-            return try flipVertical(image)
+            try flipVertical(image)
         case let .downscaleRetina(scale):
-            return try encoder.downscale(image, by: scale.factor)
+            try encoder.downscale(image, by: scale.factor)
         }
     }
 

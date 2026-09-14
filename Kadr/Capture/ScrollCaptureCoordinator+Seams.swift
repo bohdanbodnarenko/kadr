@@ -90,4 +90,26 @@ extension ScrollCaptureCoordinator {
         formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         return formatter
     }()
+
+    /// The middle of the captured region, in screen points, which is where a synthesized
+    /// scroll has to land to reach the right window.
+    func centrePoint(of rect: DisplayRect, on display: DisplayGeometry) -> CGPoint {
+        let screenRect = rect.inScreenSpace(GlobalCoordinateSpace.current)
+        // CGEvent locations are in display space, top-left origin, which is what the rect
+        // already is — the round trip is here only to make the space explicit.
+        _ = screenRect
+        return CGPoint(x: rect.minX + rect.width / 2, y: rect.minY + rect.height / 2)
+    }
+
+    func explainAccessibility() {
+        let alert = NSAlert()
+        alert.messageText = "Kadr needs Accessibility to scroll for you"
+        alert.informativeText = "Auto-scroll works by sending scroll events to the window "
+            + "you picked, which macOS only allows with Accessibility permission. Grant it "
+            + "in System Settings and try again — this capture will carry on with you doing "
+            + "the scrolling."
+        alert.addButton(withTitle: "OK")
+        NSApp.activate()
+        alert.runModal()
+    }
 }

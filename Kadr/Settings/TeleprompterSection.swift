@@ -7,7 +7,7 @@ struct TeleprompterSection: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
-        Section("Teleprompter") {
+        Section {
             Toggle("Show a script while recording", isOn: $settings.teleprompterEnabled)
 
             TextEditor(text: $settings.teleprompterScript)
@@ -26,44 +26,38 @@ struct TeleprompterSection: View {
 
             LabeledContent("Reading time", value: readingTime)
 
-            LabeledContent("Pace") {
-                Slider(
-                    value: $settings.teleprompterWordsPerMinute,
-                    in: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
-                    step: 5
-                ) {
-                    Text("Pace")
-                } minimumValueLabel: {
-                    Text("Slow")
-                } maximumValueLabel: {
-                    Text("Fast")
-                }
-            }
+            SettingsValueRow(
+                title: "Pace",
+                value: $settings.teleprompterWordsPerMinute,
+                range: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
+                step: 5,
+                unit: .wordsPerMinute
+            )
             .disabled(!settings.teleprompterEnabled)
 
-            LabeledContent("Text size") {
-                Slider(
-                    value: $settings.teleprompterFontSize,
-                    in: TeleprompterAppearance.smallestFont ... TeleprompterAppearance.largestFont,
-                    step: 1
-                )
-            }
+            SettingsValueRow(
+                title: "Text size",
+                value: $settings.teleprompterFontSize,
+                range: TeleprompterAppearance.smallestFont ... TeleprompterAppearance.largestFont,
+                step: 1,
+                unit: .points
+            )
             .disabled(!settings.teleprompterEnabled)
 
             Toggle("Follow my voice", isOn: $settings.teleprompterFollowsSpeech)
                 .disabled(!settings.teleprompterEnabled)
-            Text("Listens on this Mac while you read and keeps your place, instead of "
-                + "scrolling at a set pace. Nothing is uploaded, and if there is no "
-                + "microphone or no speech model the script simply scrolls at the pace above.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
 
             Toggle("Mirror the text", isOn: $settings.teleprompterMirrored)
                 .disabled(!settings.teleprompterEnabled)
-            Text("For reading off a beam-splitter glass in front of the camera. "
-                + "Drag the panel where you want it while recording; it stays out of the file.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+        } header: {
+            Text("Teleprompter")
+        } footer: {
+            Text(
+                "Voice follow listens on this Mac only. Without a microphone or speech model, "
+                    + "the script scrolls at the pace above."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 

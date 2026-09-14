@@ -9,6 +9,7 @@ struct StudioTranscriptPanel: View {
     let model: StudioDocumentModel
     @State private var selectedIDs: Set<String> = []
     @State private var anchor: TranscriptWord?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -151,8 +152,12 @@ struct StudioTranscriptPanel: View {
         guard model.isPlaying, selectedIDs.isEmpty,
               let active = model.activeTranscriptWord(in: displayedWords)
         else { return }
-        withAnimation(.easeOut(duration: 0.2)) {
+        if reduceMotion {
             proxy.scrollTo(active.id, anchor: .center)
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(active.id, anchor: .center)
+            }
         }
     }
 }
@@ -171,18 +176,25 @@ private struct FlowWords: View {
     var body: some View {
         FlexibleWordWrap(words: words) { word in
             let isCut = !survives(word)
-            Text(word.text)
-                .underline(isFiller(word) && !isCut, pattern: .dot, color: .orange)
-                .strikethrough(isCut, color: .secondary.opacity(0.6))
-                .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(background(for: word, isCut: isCut), in: RoundedRectangle(cornerRadius: 4))
-                .id(word.id)
-                .onTapGesture { onSelect(word) }
-                .contextMenu {
-                    Button("Cut this sentence") { onCutSentence(word) }
-                }
+            Button {
+                onSelect(word)
+            } label: {
+                Text(word.text)
+                    .underline(isFiller(word) && !isCut, pattern: .dot, color: .orange)
+                    .strikethrough(isCut, color: .secondary.opacity(0.6))
+                    .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(background(for: word, isCut: isCut), in: RoundedRectangle(cornerRadius: 4))
+            }
+            .buttonStyle(.plain)
+            .id(word.id)
+            .accessibilityLabel(word.text)
+            .accessibilityAddTraits(selectedIDs.contains(word.id) ? .isSelected : [])
+            .accessibilityHint("Seek to this word. Shift-click to select a range.")
+            .contextMenu {
+                Button("Cut this sentence") { onCutSentence(word) }
+            }
         }
     }
 

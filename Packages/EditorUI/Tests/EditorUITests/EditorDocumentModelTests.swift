@@ -3,6 +3,8 @@ import CoreGraphics
 import Testing
 @testable import EditorUI
 
+// swiftlint:disable file_length
+
 @MainActor
 private func makeModel(_ commands: [AnnotationCommand] = []) -> EditorDocumentModel {
     EditorDocumentModel(document: AnnotationDocument(
@@ -376,7 +378,13 @@ struct EditorSelectionTests {
         model.pointerDown(at: CGPoint(x: 0, y: 0))
         model.pointerDragged(to: CGPoint(x: 40, y: 40))
         model.pointerUp(at: CGPoint(x: 40, y: 40))
-        #expect(model.document.commands.contains { if case .arrow = $0 { true } else { false } })
+        #expect(model.document.commands.contains {
+            if case .arrow = $0 {
+                true
+            } else {
+                false
+            }
+        })
     }
 
     @Test("Locking the canvas blocks nudging and duplicating")
@@ -524,3 +532,5 @@ struct EditorToolTests {
         }
     }
 }
+
+// swiftlint:enable file_length

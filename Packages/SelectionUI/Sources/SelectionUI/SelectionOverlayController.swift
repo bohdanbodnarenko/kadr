@@ -178,6 +178,8 @@ public final class SelectionOverlayController {
 
     /// Teaching copy while the overlay is idle (docs/03 §1.1).
     public var showsCaptureHints = true
+    /// When true, mouse-up leaves handles until Enter commits (docs/03 §1.1).
+    public var confirmsSelection = false
 
     /// The previous area capture, drawn as a dashed ghost on that display.
     public var lastRegion: (rect: DisplayRect, displayID: CGDirectDisplayID)?
@@ -364,6 +366,7 @@ public final class SelectionOverlayController {
         panel.view.setPrecisionMode(isPrecisionMode)
         panel.view.interaction.lockedAspect = lockedAspect
         panel.view.showsCaptureHints = showsCaptureHints
+        panel.view.confirmsSelection = confirmsSelection
         panel.view.onCaptureDisplay = { [weak self] in
             self?.dismiss(result: .fullscreen(descriptor.displayID))
         }
