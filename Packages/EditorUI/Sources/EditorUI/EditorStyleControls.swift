@@ -3,6 +3,9 @@ import AppKit
 import SwiftUI
 
 /// One-click colour, the way CleanShot and Screendrop lay out style.
+///
+/// A wrapping grid rather than a fixed row: at the inspector's narrowest width the old row
+/// ran the colour well off the trailing edge.
 struct EditorSwatchStrip: View {
     let selected: AnnotationColor
     let onSelect: (AnnotationColor) -> Void
@@ -10,13 +13,20 @@ struct EditorSwatchStrip: View {
 
     @State private var palette = EditorUserPalette()
 
+    private static let columns = [GridItem(.adaptive(minimum: 24, maximum: 28), spacing: 4)]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 4) {
                 ForEach(Array(AnnotationColor.annotationSwatches.enumerated()), id: \.offset) { _, colour in
                     swatch(colour, removable: false)
                 }
+                ForEach(Array(palette.colors.enumerated()), id: \.offset) { _, colour in
+                    swatch(colour, removable: true)
+                }
+            }
 
+            HStack(spacing: 8) {
                 ColorPicker(
                     "Custom colour",
                     selection: Binding(
@@ -26,23 +36,17 @@ struct EditorSwatchStrip: View {
                     supportsOpacity: false
                 )
                 .labelsHidden()
-                .frame(width: 28, height: 22)
-            }
 
-            HStack(spacing: 6) {
-                ForEach(Array(palette.colors.enumerated()), id: \.offset) { _, colour in
-                    swatch(colour, removable: true)
-                }
                 Button {
                     addSelectedToPalette()
                 } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 14))
+                    Label("Add to Palette", systemImage: "plus")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(InspectorButtonStyle(fillsWidth: false))
                 .disabled(!palette.canAdd(selected))
-                .help("Save colour to palette")
-                .accessibilityLabel("Save colour to palette")
+                .help("Save this colour to your palette. Option-click a saved colour to remove it.")
+
+                Spacer(minLength: 0)
             }
         }
         .onAppear {
@@ -51,7 +55,8 @@ struct EditorSwatchStrip: View {
     }
 
     private func swatch(_ colour: AnnotationColor, removable: Bool) -> some View {
-        Button {
+        let isSelected = isSelected(colour)
+        return Button {
             if removable, NSEvent.modifierFlags.contains(.option) {
                 removeFromPalette(colour)
             } else {
@@ -60,24 +65,21 @@ struct EditorSwatchStrip: View {
         } label: {
             Circle()
                 .fill(Color(colour))
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5))
                 .frame(width: 18, height: 18)
+                .padding(3)
                 .overlay {
-                    Circle()
-                        .strokeBorder(
-                            isSelected(colour) ? Color.accentColor : Color.primary.opacity(0.15),
-                            lineWidth: isSelected(colour) ? 2 : 1
-                        )
-                }
-                .overlay {
-                    if colour == .white {
-                        Circle().strokeBorder(Color.primary.opacity(0.35), lineWidth: 0.5)
+                    if isSelected {
+                        Circle().strokeBorder(Color.accentColor, lineWidth: 2)
                     }
                 }
+                .frame(width: 24, height: 24)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .help(removable ? "Option-click to remove" : "Colour")
         .accessibilityLabel("Colour")
-        .accessibilityAddTraits(isSelected(colour) ? .isSelected : [])
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func addSelectedToPalette() {
@@ -107,48 +109,60 @@ struct EditorCopiedToast: View {
             .padding(.vertical, 8)
             .background(.regularMaterial, in: Capsule())
             .overlay {
-                Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
             }
             .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }
 }
 
-/// The stroke-width presets from docs/03 §3, as one row of dots.
+/// The stroke-width presets from docs/03 §3, as a segmented track of dots.
 ///
-/// The spec lists 2/4/6/10/16 and the constant for them shipped with no caller, so the only
-/// way to a round stroke width was to land a slider on one — which on a 1–32 track is a
-/// three-pixel target for the value people actually want. Every annotation tool in every
-/// other editor offers these directly, and a dot drawn at the width it sets says what it
-/// does without a label.
-///
-/// The slider stays: the presets are the common answers, not the only ones.
+/// The spec lists 2/4/6/10/16. A dot drawn at a fraction of the width it sets says what it
+/// does without a label; the slider below stays for everything in between.
 struct EditorWidthPresets: View {
     let selected: CGFloat
     let onSelect: (CGFloat) -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        HStack(spacing: 6) {
+        let shape = RoundedRectangle(cornerRadius: InspectorMetrics.controlRadius, style: .continuous)
+        HStack(spacing: 0) {
             ForEach(StrokeStyle.widthPresets, id: \.self) { width in
-                Button {
-                    onSelect(width)
-                } label: {
-                    Circle()
-                        .fill(Color.primary.opacity(isSelected(width) ? 0.95 : 0.55))
-                        // Drawn at a fraction of the width it sets, so the row reads as a
-                        // scale rather than five identical buttons.
-                        .frame(width: dotSize(for: width), height: dotSize(for: width))
-                        .frame(width: 22, height: 22)
-                        .background {
-                            RoundedRectangle(cornerRadius: 5)
-                                .fill(Color.primary.opacity(isSelected(width) ? 0.12 : 0))
-                        }
-                }
-                .buttonStyle(.plain)
-                .help("\(Int(width)) pt")
-                .accessibilityLabel("Stroke width \(Int(width)) points")
-                .accessibilityAddTraits(isSelected(width) ? .isSelected : [])
+                preset(width)
             }
         }
+        .padding(InspectorMetrics.controlInset)
+        .frame(height: InspectorMetrics.controlHeight)
+        .background(shape.fill(InspectorControlPalette.trackFill(for: colorScheme)))
+        .overlay(shape.strokeBorder(InspectorControlPalette.border, lineWidth: 0.5))
+    }
+
+    private func preset(_ width: CGFloat) -> some View {
+        let isSelected = isSelected(width)
+        let radius = InspectorMetrics.controlRadius - InspectorMetrics.controlInset
+        return Button {
+            onSelect(width)
+        } label: {
+            Circle()
+                .fill(Color.primary.opacity(isSelected ? 0.9 : 0.5))
+                .frame(width: dotSize(for: width), height: dotSize(for: width))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background {
+                    RoundedRectangle(cornerRadius: radius, style: .continuous)
+                        .fill(isSelected ? InspectorControlPalette.segmentSelectedFill(for: colorScheme) : .clear)
+                        .shadow(
+                            color: .black.opacity(isSelected && colorScheme == .light ? 0.08 : 0),
+                            radius: 1,
+                            y: 0.5
+                        )
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(Int(width)) pt")
+        .accessibilityLabel("Stroke width \(Int(width)) points")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// Within half a point, because the slider produces fractional values and a preset that

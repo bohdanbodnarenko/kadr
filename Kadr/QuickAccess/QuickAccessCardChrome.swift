@@ -16,6 +16,8 @@ struct ThumbnailImage: View {
     let maxPixelSize: Int
     let isVideo: Bool
     var revision = 0
+    /// Off for the peek tab's miniatures, where a play glyph would cover the whole picture.
+    var showsPlayBadge = true
 
     @State private var image: CGImage?
 
@@ -26,15 +28,16 @@ struct ThumbnailImage: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: 8)
+                Rectangle()
                     .fill(Color.secondary.opacity(0.15))
             }
         }
         .overlay {
-            if isVideo {
+            if isVideo, showsPlayBadge {
                 Image(systemName: "play.circle.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.white, .black.opacity(0.4))
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.94), .black.opacity(0.32))
+                    .shadow(color: .black.opacity(0.28), radius: 8, y: 2)
             }
         }
         .task(id: "\(url.path)-\(revision)") {
@@ -45,59 +48,83 @@ struct ThumbnailImage: View {
     }
 }
 
-/// A card action that answers the pointer.
+/// The dark glass the card's controls sit on.
 ///
-/// The action row was `.borderless`, which on macOS draws an icon and nothing else — no
-/// hover, no press, no hit area beyond the glyph. On a floating card that is a row of
-/// symbols the user cannot tell are buttons until one of them works. This gives each a
-/// target, a fill that arrives under the pointer, and a press that reads as a press.
-struct CardActionButtonStyle: ButtonStyle {
+/// A fixed translucent fill rather than a system material: the overlay panel is almost
+/// never the key window, and a vibrancy material there renders in its flat inactive state —
+/// grey on one capture, invisible on the next. This reads the same over any picture.
+enum CardGlass {
+    static let fill = Color(white: 0.08, opacity: 0.62)
+    static let hoverFill = Color(white: 0.08, opacity: 0.8)
+    static let edge = Color.white.opacity(0.16)
+}
+
+/// A glyph in the card's action bar: white on the bar's glass, a soft disc under the pointer.
+struct CardBarButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        CardBarButtonBody(configuration: configuration)
+    }
+}
+
+private struct CardBarButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    var body: some View {
         configuration.label
-            .foregroundStyle(isEnabled ? Color.primary : Color.secondary.opacity(0.5))
-            .padding(3)
-            .background {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(fill(for: configuration)))
-            }
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(isEnabled ? 1 : 0.4))
+            .frame(width: QuickAccessCardView.actionButtonSize, height: QuickAccessCardView.actionButtonSize)
+            .background(Circle().fill(Color.white.opacity(fill)))
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
             .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
             .onHover { isHovering = $0 && isEnabled }
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    private func fill(for configuration: Configuration) -> Double {
+    private var fill: Double {
         guard isEnabled else { return 0 }
         if configuration.isPressed {
-            return 0.22
+            return 0.28
         }
-        return isHovering ? 0.12 : 0
+        return isHovering ? 0.16 : 0
     }
 }
 
-/// The close, which has to read over any capture and answer the pointer.
-struct CardCloseButtonStyle: ButtonStyle {
+/// A free-standing round control on the picture: Hide, Trash, and the layout's corners.
+struct CardCircleButtonStyle: ButtonStyle {
+    var diameter: CGFloat = 22
+    var glyphSize: CGFloat = 9
+
+    func makeBody(configuration: Configuration) -> some View {
+        CardCircleButtonBody(configuration: configuration, diameter: diameter, glyphSize: glyphSize)
+    }
+}
+
+private struct CardCircleButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let diameter: CGFloat
+    let glyphSize: CGFloat
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    var body: some View {
         configuration.label
-            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
-            .background {
-                Circle()
-                    .fill(.regularMaterial)
-                    .overlay(Circle().fill(Color.primary.opacity(isHovering ? 0.14 : 0)))
-            }
-            .scaleEffect(configuration.isPressed ? 0.9 : (isHovering ? 1.08 : 1))
-            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .font(.system(size: glyphSize, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: diameter, height: diameter)
+            .background(Circle().fill(isHovering ? CardGlass.hoverFill : CardGlass.fill))
+            .overlay(Circle().strokeBorder(CardGlass.edge, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
             .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
             .onHover { isHovering = $0 }
-            .contentShape(Circle())
     }
 }

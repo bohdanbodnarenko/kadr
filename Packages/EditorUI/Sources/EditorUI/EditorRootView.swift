@@ -16,6 +16,8 @@ public struct EditorRootView: View {
     private let onExport: (ExportAction) -> Void
     private let onRetryExport: (EditorExportAction) -> Void
     private let onChooseExportLocation: (EditorExportAction) -> Void
+    /// Moves the capture to the Trash; the host asks first. Nil hides the button.
+    private let onDelete: (() -> Void)?
 
     private let canvasSession: EditorCanvasSession
 
@@ -45,7 +47,8 @@ public struct EditorRootView: View {
         subjectLift: (any SubjectLifting)? = nil,
         onExport: @escaping (ExportAction) -> Void,
         onRetryExport: @escaping (EditorExportAction) -> Void = { _ in },
-        onChooseExportLocation: @escaping (EditorExportAction) -> Void = { _ in }
+        onChooseExportLocation: @escaping (EditorExportAction) -> Void = { _ in },
+        onDelete: (() -> Void)? = nil
     ) {
         self.model = model
         self.baseImage = baseImage
@@ -55,6 +58,7 @@ public struct EditorRootView: View {
         self.onExport = onExport
         self.onRetryExport = onRetryExport
         self.onChooseExportLocation = onChooseExportLocation
+        self.onDelete = onDelete
     }
 
     public var body: some View {
@@ -64,19 +68,9 @@ public struct EditorRootView: View {
                 isInspectorPresented: $model.isInspectorPresented,
                 onExport: handleExport,
                 onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } },
-                onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } }
+                onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } },
+                onDelete: onDelete
             )
-            EditorExportChrome(
-                model: model,
-                onRetry: onRetryExport,
-                onChooseAnotherLocation: onChooseExportLocation
-            )
-            if model.hasRedactionReviewChrome {
-                Divider()
-                EditorRedactionReviewStrip(model: model) {
-                    Task { await runFind() }
-                }
-            }
             Divider()
             workspace
                 .inspector(isPresented: $model.isInspectorPresented) {
@@ -124,26 +118,28 @@ public struct EditorRootView: View {
             .transaction { $0.animation = nil }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Everything transient floats over the canvas. Nothing here takes layout space from
+        // it, so no banner, crop bar or progress message can shrink the viewport and re-fit
+        // the capture under the user.
+        .overlay(alignment: .top) {
+            EditorWorkspaceBanners(
+                model: model,
+                onRetry: onRetryExport,
+                onChooseAnotherLocation: onChooseExportLocation,
+                onFind: { Task { await runFind() } }
+            )
+            .padding(.top, 12)
+            .padding(.horizontal, 16)
+        }
         .overlay(alignment: .bottomLeading) {
             EditorZoomControl(session: canvasSession)
                 .padding(.leading, 16)
                 .padding(.bottom, 16)
         }
-        .overlay(alignment: .bottomTrailing) {
-            if model.tool == .crop {
-                EditorCanvasSizeBadge(size: cropBadgeSize)
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 16)
-                    .transition(EditorMotion.transition(.opacity))
-                    .editorAnimation(.easeInOut(duration: 0.15), value: model.tool)
-            }
+        .overlay(alignment: .bottom) {
+            EditorCropChrome(model: model)
+                .padding(.bottom, 14)
         }
-    }
-
-    private var cropBadgeSize: CGSize {
-        let points = model.cropWorkingRect.size
-        let scale = model.document.baseImage.scale
-        return CGSize(width: points.width * scale, height: points.height * scale)
     }
 
     private func handleExport(_ action: ExportAction) {

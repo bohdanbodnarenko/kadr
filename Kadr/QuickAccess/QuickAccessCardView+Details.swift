@@ -1,16 +1,24 @@
 import SwiftUI
 
 extension QuickAccessCardView {
-    /// Filename and size — enough to recognise the capture, not a status dashboard.
+    /// The capture's size on a small glass pill — enough to recognise it, not a status
+    /// dashboard. A wide card has room for the name too; the full details are in the tooltip.
     var details: some View {
-        Text(isCompact ? item.dimensionsText : "\(item.filename)  \(item.dimensionsText)")
+        Text(detailsText)
+            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.94))
             .lineLimit(1)
             .truncationMode(.middle)
-            .font(.caption)
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.7), radius: 2)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Capsule().fill(CardGlass.fill))
+            .overlay(Capsule().strokeBorder(CardGlass.edge, lineWidth: 0.5))
             .help(fullDetailsHelp)
             .accessibilityLabel(fullDetailsHelp)
+    }
+
+    private var detailsText: String {
+        width >= 260 ? "\(item.filename) · \(item.dimensionsText)" : item.dimensionsText
     }
 
     var fullDetailsHelp: String {

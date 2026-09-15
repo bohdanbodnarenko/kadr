@@ -27,7 +27,7 @@ struct BeautifyBackdropPicker: View {
     private func swatches(_ title: String, items: [BeautifyBackdrop]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
+                .font(.inspectorNote)
                 .foregroundStyle(.secondary)
             LazyVGrid(columns: Self.columns, spacing: 6) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
@@ -49,12 +49,12 @@ struct BeautifyBackdropPicker: View {
     private var custom: some View {
         switch backdrop {
         case let .solid(colour):
-            ColorPicker("Custom colour", selection: Binding(
+            InspectorColorRow("Custom colour", selection: Binding(
                 get: { Color(colour) },
                 set: { onChoose(.solid(AnnotationColor($0))) }
             ))
         case let .gradient(ramp):
-            ColorPicker("From", selection: Binding(
+            InspectorColorRow("From", selection: Binding(
                 get: { Color(ramp.start) },
                 set: { newValue in
                     var next = ramp
@@ -62,7 +62,7 @@ struct BeautifyBackdropPicker: View {
                     onChoose(.gradient(next))
                 }
             ))
-            ColorPicker("To", selection: Binding(
+            InspectorColorRow("To", selection: Binding(
                 get: { Color(ramp.end) },
                 set: { newValue in
                     var next = ramp
@@ -84,8 +84,9 @@ struct BeautifyBackdropPicker: View {
                 format: .degrees
             )
         case let .image(path):
-            HStack {
+            HStack(spacing: 8) {
                 Button("Choose Image…") { pickImage() }
+                    .buttonStyle(InspectorButtonStyle(fillsWidth: false))
                 if !path.isEmpty {
                     Text(URL(fileURLWithPath: path).lastPathComponent)
                         .font(.caption)

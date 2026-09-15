@@ -42,7 +42,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     let autosave = EditorAutosave()
     private var autosaveTask: Task<Void, Never>?
     /// True once the user has been asked about closing, so the second close goes through.
-    private var isClosingConfirmed = false
+    var isClosingConfirmed = false
     /// How long the document has to be still before a copy is written.
     private static let autosaveSettleMilliseconds = 1500
 
@@ -59,7 +59,15 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             }
             baseImage = image
             cachedBasePNG = contents.baseImagePNG
-            model = EditorDocumentModel(document: contents.document)
+            // Documents saved before the window was measured, and the agent's auto-beautify
+            // projects (the agent cannot read pixels this way), are measured on open.
+            var document = contents.document
+            if document.baseImage.visibleBounds == nil {
+                document.adoptVisibleBounds(
+                    CaptureVisibleBounds.find(in: image, scale: document.baseImage.scale)
+                )
+            }
+            model = EditorDocumentModel(document: document)
         } else {
             guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
@@ -76,8 +84,14 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 width: CGFloat(image.width) / scale,
                 height: CGFloat(image.height) / scale
             )
+            // A window captured with its shadow is the window plus a transparent margin;
+            // Beautify composes the window, not the margin (docs/03 §3 P2).
             model = EditorDocumentModel(document: AnnotationDocument(
-                baseImage: BaseImageReference(size: size, scale: scale)
+                baseImage: BaseImageReference(
+                    size: size,
+                    scale: scale,
+                    visibleBounds: CaptureVisibleBounds.find(in: image, scale: scale)
+                )
             ))
         }
         model.isCanvasLocked = EditorCanvasPreferences.lockCanvasByDefault()
@@ -105,6 +119,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             onChooseExportLocation: { [weak self] _ in
                 self?.model.exportFailure = nil
                 self?.export(.saveAs)
+            },
+            onDelete: { [weak self] in
+                self?.confirmMoveToTrash()
             }
         )
         let hosting = NSHostingView(rootView: root)

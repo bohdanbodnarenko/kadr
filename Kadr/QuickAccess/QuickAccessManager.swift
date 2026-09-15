@@ -59,6 +59,8 @@ final class QuickAccessManager {
     @ObservationIgnored var engagedItems: Set<UUID> = []
     /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
     @ObservationIgnored var editorExitObserver: (any NSObjectProtocol)?
+    /// Hears about captures the editor moved to the Trash, for the agent's whole life.
+    @ObservationIgnored var editorDeletionObserver: (any NSObjectProtocol)?
     @ObservationIgnored var dismissTasks: [UUID: Task<Void, Never>] = [:]
     /// Cascades multi-card dismiss so each reflow animates (CleanShot §6.3 / 4.7.5).
     @ObservationIgnored private var dismissCascadeTask: Task<Void, Never>?
@@ -91,6 +93,7 @@ final class QuickAccessManager {
         self.output = output
         self.pins = pins
         self.history = history
+        watchForEditorDeletions()
     }
 
     var hasRecentlyClosed: Bool {

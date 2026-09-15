@@ -17,61 +17,79 @@ struct EditorCameraInspector: View {
     }
 
     var body: some View {
-        EditorInspectorSection(title: "Perspective", key: "perspective", startsOpen: false) {
-            Toggle("Tilt the capture", isOn: enabledBinding)
+        EditorInspectorSection(
+            title: "Perspective",
+            key: "perspective",
+            startsOpen: false,
+            isEnabled: enabledBinding,
+            accessory: {
+                if isEnabled {
+                    InspectorIconButton(systemName: "arrow.counterclockwise", help: "Reset perspective") {
+                        model.applyCamera(.identity)
+                    }
+                }
+            },
+            content: { controls }
+        )
+    }
 
-            if isEnabled {
-                presets
-                InspectorSlider(
-                    title: "Tilt",
-                    value: tiltBinding,
-                    range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
-                    format: .degrees(signed: true)
-                )
-                InspectorSlider(
-                    title: "Orbit",
-                    value: orbitBinding,
-                    range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
-                    format: .degrees(signed: true)
-                )
-                InspectorSlider(
-                    title: "Roll",
-                    value: rollBinding,
-                    range: -180 ... 180,
-                    format: .degrees(signed: true)
-                )
-                InspectorSlider(
-                    title: "Lens",
-                    value: fieldOfViewBinding,
-                    range: AnnotationCameraSpec.minimumFieldOfView
-                        ... AnnotationCameraSpec.maximumFieldOfView,
-                    format: .degrees
-                )
-                .help("A narrow lens flattens the perspective; a wide one exaggerates it.")
-                InspectorSlider(
-                    title: "Zoom",
-                    value: zoomBinding,
-                    range: AnnotationCameraSpec.minimumZoom ... AnnotationCameraSpec.maximumZoom,
-                    format: .multiplier
-                )
-                InspectorSlider(
-                    title: "Pan X",
-                    value: panXBinding,
-                    range: -0.5 ... 0.5,
-                    format: .percent(signed: true)
-                )
-                InspectorSlider(
-                    title: "Pan Y",
-                    value: panYBinding,
-                    range: -0.5 ... 0.5,
-                    format: .percent(signed: true)
-                )
-                Button("Reset") { model.applyCamera(.identity) }
-            }
-        }
+    @ViewBuilder
+    private var controls: some View {
+        presets
+        InspectorSlider(
+            title: "Tilt",
+            value: tiltBinding,
+            range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
+            format: .degrees(signed: true)
+        )
+        InspectorSlider(
+            title: "Orbit",
+            value: orbitBinding,
+            range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
+            format: .degrees(signed: true)
+        )
+        InspectorSlider(
+            title: "Roll",
+            value: rollBinding,
+            range: -180 ... 180,
+            format: .degrees(signed: true)
+        )
+        InspectorSlider(
+            title: "Lens",
+            value: fieldOfViewBinding,
+            range: AnnotationCameraSpec.minimumFieldOfView
+                ... AnnotationCameraSpec.maximumFieldOfView,
+            format: .degrees
+        )
+        .help("A narrow lens flattens the perspective; a wide one exaggerates it.")
+        InspectorSlider(
+            title: "Zoom",
+            value: zoomBinding,
+            range: AnnotationCameraSpec.minimumZoom ... AnnotationCameraSpec.maximumZoom,
+            format: .multiplier
+        )
+        InspectorSlider(
+            title: "Pan X",
+            value: panXBinding,
+            range: -0.5 ... 0.5,
+            format: .percent(signed: true)
+        )
+        InspectorSlider(
+            title: "Pan Y",
+            value: panYBinding,
+            range: -0.5 ... 0.5,
+            format: .percent(signed: true)
+        )
     }
 
     private var presets: some View {
+        InspectorRow("Preset") {
+            anglePicker
+                .inspectorMenuPicker()
+        }
+    }
+
+    private var anglePicker: some View {
         Picker("Angle", selection: Binding(
             get: { "" },
             set: { id in

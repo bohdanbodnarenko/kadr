@@ -32,20 +32,26 @@ struct EditorBeautifyInspector: View {
     }
 
     var body: some View {
-        EditorInspectorSection(title: "Beautify", key: "beautify", startsOpen: false) {
-            Toggle("Add a background", isOn: enabledBinding)
-
-            if isEnabled {
-                InspectorSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
-                InspectorSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
-                Toggle("Shadow", isOn: shadowBinding)
+        EditorInspectorSection(
+            title: "Beautify",
+            key: "beautify",
+            startsOpen: false,
+            isEnabled: enabledBinding
+        ) {
+            InspectorSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
+            InspectorSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
+            InspectorToggleRow("Shadow", isOn: shadowBinding)
+            InspectorRow("Aspect") {
                 Picker("Aspect", selection: aspectBinding) {
                     ForEach(BeautifyAspect.allCases, id: \.self) { aspect in
                         Text(aspect.title).tag(aspect)
                     }
                 }
-                placement
-                border
+                .inspectorMenuPicker()
+            }
+            placement
+            border
+            InspectorStackedRow("Backdrop") {
                 BeautifyBackdropPicker(backdrop: spec.backdrop) { backdrop in
                     commit { $0.backdrop = backdrop }
                 }
@@ -54,26 +60,23 @@ struct EditorBeautifyInspector: View {
     }
 
     /// Where the capture sits, and whether it runs off the edge when it gets there.
+    @ViewBuilder
     private var placement: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top) {
-                Text("Placement")
-                Spacer()
-                BeautifyAlignmentPicker(alignment: alignmentBinding)
-            }
-            Toggle("Bleed off the edge", isOn: sticksBinding)
-                .disabled(spec.alignment == .center)
-                .help("Removes the padding on the edges the capture touches, and squares the corners there.")
+        InspectorRow("Placement") {
+            BeautifyAlignmentPicker(alignment: alignmentBinding)
         }
+        InspectorToggleRow("Bleed off the edge", isOn: sticksBinding)
+            .disabled(spec.alignment == .center)
+            .help("Removes the padding on the edges the capture touches, and squares the corners there.")
     }
 
     /// The ring around the capture. Part of the card, so it lives with the card's controls.
     @ViewBuilder
     private var border: some View {
-        Toggle("Border", isOn: borderBinding)
+        InspectorToggleRow("Border", isOn: borderBinding)
         if spec.border.isEnabled {
             InspectorSlider(title: "Thickness", value: borderThicknessBinding, range: 0.002 ... 0.06)
-            ColorPicker("Border colour", selection: borderColourBinding)
+            InspectorColorRow("Border colour", selection: borderColourBinding)
         }
     }
 
@@ -84,7 +87,10 @@ struct EditorBeautifyInspector: View {
             get: { isEnabled },
             set: { on in
                 if on {
-                    model.applyBeautify(.cleanWhite)
+                    // A soft gradient rather than Clean White: flat white padding on the
+                    // light workspace read as a stray container behind the screenshot, not
+                    // as a background. Clean White is still one click away under Look.
+                    model.applyBeautify(BeautifySpec(backdrop: .gradient(BeautifyPalette.gradients[5])))
                 } else {
                     model.clearBeautify()
                 }

@@ -23,9 +23,9 @@ struct EditorRedactionReviewStrip: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .editorFloatingCard()
     }
 
     private var header: some View {

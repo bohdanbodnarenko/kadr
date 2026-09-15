@@ -1,52 +1,6 @@
 import CoreGraphics
 import Foundation
 
-/// The immutable image an annotation document sits on (docs/04 §6).
-public struct BaseImageReference: Codable, Hashable, Sendable {
-    /// Size in points; the pixel size is this multiplied by `scale`.
-    public var size: CGSize
-    public var scale: CGFloat
-    /// How the capture is shown and exported. The pixels themselves never rotate.
-    public var orientation: CanvasOrientation
-
-    public init(size: CGSize, scale: CGFloat = 2, orientation: CanvasOrientation = .identity) {
-        self.size = size
-        self.scale = max(scale, 1)
-        self.orientation = orientation
-    }
-
-    public var pixelSize: CGSize {
-        CGSize(width: size.width * scale, height: size.height * scale)
-    }
-
-    public var bounds: CGRect {
-        CGRect(origin: .zero, size: size)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case size
-        case scale
-        case orientation
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        size = try container.decode(CGSize.self, forKey: .size)
-        scale = try max(container.decode(CGFloat.self, forKey: .scale), 1)
-        orientation = try container.decodeIfPresent(CanvasOrientation.self, forKey: .orientation)
-            ?? .identity
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(size, forKey: .size)
-        try container.encode(scale, forKey: .scale)
-        if !orientation.isIdentity {
-            try container.encode(orientation, forKey: .orientation)
-        }
-    }
-}
-
 /// An annotated capture (docs/04 §6).
 ///
 /// The base image never changes; every annotation is a value in an ordered list, and
@@ -57,7 +11,9 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     /// list is a few hundred bytes.
     public static let undoDepth = 128
 
-    public let baseImage: BaseImageReference
+    /// Settable inside the module only: the decoder assigns it, and `adoptVisibleBounds`
+    /// records a measurement. The capture itself never changes.
+    public internal(set) var baseImage: BaseImageReference
 
     /// Every version of the command list, oldest first, with `historyIndex` pointing at
     /// the current one.
@@ -124,9 +80,27 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         }.first
     }
 
-    /// The capture area that is composed onto the canvas: the crop, or the whole image.
+    /// The capture area that is composed onto the canvas: the crop, or — once beautified —
+    /// the visible window inside a shadowed capture, or the whole image.
+    ///
+    /// Only beautify trims to `visibleBounds`. A plain export is the capture as it was taken,
+    /// shadow included; a beautified one draws its own card and shadow, and composing the
+    /// transparent margin too put that card on an invisible box around the window.
     public var contentRect: CGRect {
-        crop?.rect ?? baseImage.bounds
+        if let crop {
+            return crop.rect
+        }
+        if beautify != nil, let visible = baseImage.visibleBounds {
+            return visible
+        }
+        return baseImage.bounds
+    }
+
+    /// Records where the opaque capture sits, for a document saved before it was measured.
+    ///
+    /// Not an edit and not undoable: it describes the pixels, which never change.
+    public mutating func adoptVisibleBounds(_ rect: CGRect?) {
+        baseImage.visibleBounds = BaseImageReference.validated(rect, size: baseImage.size)
     }
 
     /// The canvas the export will produce: beautify's frame, or the crop, or the image.

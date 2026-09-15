@@ -166,9 +166,12 @@ struct QuickAccessStackView: View {
                 showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item),
                 alwaysShowActions: manager.settings.overlayAlwaysShowActions
             )
+            // Slides in from the docked edge and settles from a touch smaller, so the card
+            // arrives rather than appears. Reduce Motion drops the animation entirely.
             .transition(
                 .move(edge: QuickAccessStackLayout.slideEdge(for: corner))
                     .combined(with: .opacity)
+                    .combined(with: .scale(scale: 0.94, anchor: corner.isBottom ? .bottom : .top))
             )
         }
     }
@@ -181,21 +184,30 @@ struct QuickAccessStackView: View {
     @ViewBuilder
     private func slivers(_ items: [QuickAccessItem]) -> some View {
         if !items.isEmpty {
-            VStack(spacing: 0) {
-                ForEach(items) { item in
-                    RoundedRectangle(cornerRadius: 4)
+            // Capped: past a few, more edges only make a ladder. Each recedes — narrower
+            // and fainter the further it is from the cards — so it reads as depth.
+            let edges = Array(items.prefix(Self.maxSlivers).enumerated())
+            VStack(spacing: 2) {
+                ForEach(edges, id: \.element.id) { index, _ in
+                    let depth = corner.isBottom ? edges.count - index : index + 1
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(.regularMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 4)
-                                .strokeBorder(Color.primary.opacity(0.12))
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
                         )
                         .frame(height: QuickAccessCardView.sliverHeight)
-                        .opacity(0.55)
-                        .accessibilityLabel("Older capture \(item.filename)")
+                        .padding(.horizontal, CGFloat(depth) * 10)
+                        .opacity(max(0.3, 0.75 - Double(depth - 1) * 0.18))
+                        .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(items.count == 1 ? "1 older capture" : "\(items.count) older captures")
         }
     }
+
+    private static let maxSlivers = 3
 
     // MARK: - The peek tab
 
@@ -206,6 +218,7 @@ struct QuickAccessStackView: View {
                 hasVideo: manager.items.contains(where: \.isVideo)
             ),
             corner: corner,
+            items: manager.items,
             onExpand: { manager.setPeeking(false) },
             onDismissAll: { manager.dismissAll() }
         )

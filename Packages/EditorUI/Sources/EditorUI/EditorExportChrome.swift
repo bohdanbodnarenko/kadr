@@ -7,7 +7,7 @@ struct EditorExportChrome: View {
     let onChooseAnotherLocation: (EditorExportAction) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             if let action = model.runningExport {
                 exportProgress(action)
             }
@@ -33,7 +33,7 @@ struct EditorExportChrome: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .editorFloatingCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(action.progressTitle)
     }
@@ -69,7 +69,7 @@ struct EditorExportChrome: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .editorFloatingCard()
     }
 
     private func highlighterNotice(_ message: String) -> some View {
@@ -90,7 +90,7 @@ struct EditorExportChrome: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .editorFloatingCard()
         .task {
             try? await Task.sleep(for: .seconds(4))
             if model.highlighterFallback == message {
@@ -109,7 +109,7 @@ struct EditorExportChrome: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .editorFloatingCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Removing the background")
     }

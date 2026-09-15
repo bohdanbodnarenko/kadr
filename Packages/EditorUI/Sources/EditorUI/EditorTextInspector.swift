@@ -19,24 +19,26 @@ struct EditorTextInspector: View {
     }
 
     var body: some View {
-        Picker("Preset", selection: presetBinding) {
-            Text("Custom").tag(-1)
-            ForEach(Array(TextStyle.presets.enumerated()), id: \.offset) { index, preset in
-                Text(preset.name).tag(index)
+        InspectorRow("Preset") {
+            Picker("Preset", selection: presetBinding) {
+                Text("Custom").tag(-1)
+                ForEach(Array(TextStyle.presets.enumerated()), id: \.offset) { index, preset in
+                    Text(preset.name).tag(index)
+                }
             }
+            .inspectorMenuPicker()
         }
 
-        Picker("Font", selection: fontBinding) {
-            ForEach(EditorFontCatalog.families(including: style.fontName), id: \.self) { family in
-                Text(family).tag(family)
+        InspectorRow("Font") {
+            Picker("Font", selection: fontBinding) {
+                ForEach(EditorFontCatalog.families(including: style.fontName), id: \.self) { family in
+                    Text(family).tag(family)
+                }
             }
+            .inspectorMenuPicker()
         }
 
-        Picker("Weight", selection: weightBinding) {
-            Text("Regular").tag(false)
-            Text("Bold").tag(true)
-        }
-        .pickerStyle(.segmented)
+        InspectorSegmented([false, true], selection: weightBinding, title: { $0 ? "Bold" : "Regular" })
 
         InspectorSlider(
             title: "Size",
@@ -54,28 +56,29 @@ struct EditorTextInspector: View {
             onEditingEnded: { model.endInspectorStyleEdit() }
         )
 
-        EditorSwatchStrip(
-            selected: style.color,
-            onSelect: { colour in
-                var next = style
-                next.color = colour
-                model.applyTextStyle(next)
-            }
-        )
-
-        Picker("Alignment", selection: alignmentBinding) {
-            ForEach(TextStyle.Alignment.allCases, id: \.self) { alignment in
-                Image(systemName: alignment.symbolName)
-                    .accessibilityLabel(alignment.title)
-                    .tag(alignment)
-            }
+        InspectorStackedRow("Colour") {
+            EditorSwatchStrip(
+                selected: style.color,
+                onSelect: { colour in
+                    var next = style
+                    next.color = colour
+                    model.applyTextStyle(next)
+                }
+            )
         }
-        .pickerStyle(.segmented)
 
-        Toggle("Background pill", isOn: pillBinding)
+        InspectorSegmented(
+            options: Array(TextStyle.Alignment.allCases),
+            selection: alignmentBinding,
+            accessibilityTitle: \.title
+        ) { alignment in
+            Image(systemName: alignment.symbolName)
+        }
+
+        InspectorToggleRow("Background pill", isOn: pillBinding)
 
         if let background = style.backgroundColor {
-            ColorPicker("Pill colour", selection: Binding(
+            InspectorColorRow("Pill colour", selection: Binding(
                 get: { Color(background) },
                 set: { colour in
                     var next = style

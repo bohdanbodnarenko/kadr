@@ -1,48 +1,54 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "Pin": {
-      "comment": "Keep a screenshot floating on screen as a reference. Not a map pin.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pin"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Annotation editor" : {
+
+    },
+    "Flatten" : {
+      "comment" : "Burn annotations into the image so they can no longer be edited.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flatten"
           }
         }
       }
     },
-    "Studio": {
-      "comment": "The video editor for screen recordings.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Studio"
+    "Help" : {
+
+    },
+    "Keyboard shortcuts" : {
+
+    },
+    "Pin" : {
+      "comment" : "Keep a screenshot floating on screen as a reference. Not a map pin.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
           }
         }
       }
     },
-    "Flatten": {
-      "comment": "Burn annotations into the image so they can no longer be edited.",
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flatten"
+    "Recording studio" : {
+
+    },
+    "Studio" : {
+      "comment" : "The video editor for screen recordings.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Studio"
           }
         }
       }
-    },
-    "Copy Original": {
-      "comment": "Copy the unedited recording file, not the current preview."
-    },
-    "Share Original": {
-      "comment": "Share the unedited recording file, not the current preview."
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

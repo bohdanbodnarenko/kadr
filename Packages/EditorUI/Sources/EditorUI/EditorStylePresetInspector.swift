@@ -22,43 +22,23 @@ struct EditorStylePresetInspector: View {
     private let store = StylePresetStore()
 
     var body: some View {
-        EditorInspectorSection(title: "Look", key: "look") {
-            HStack {
-                Text(statusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Save…") {
-                    draftName = matchedPreset?.name ?? ""
-                    isNaming = true
+        EditorInspectorSection(title: "Look", key: "look", accessory: { headerAccessory }, content: {
+            VStack(spacing: 0) {
+                EditorLookRow(
+                    name: "None",
+                    isActive: matchedPreset == nil && !hasAnyChrome,
+                    onDelete: nil
+                ) {
+                    model.clearStylePreset()
+                    appliedID = nil
                 }
-                .disabled(!hasAnyChrome)
-                Button("Export…") { exportCurrent() }
-                    .disabled(!hasAnyChrome)
-                Button("Import…") { importPreset() }
-            }
+                .help("Remove the current look")
 
-            Button {
-                model.clearStylePreset()
-                appliedID = nil
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: matchedPreset == nil && !hasAnyChrome
-                        ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(matchedPreset == nil && !hasAnyChrome
-                            ? Color.accentColor : .secondary)
-                    Text("None")
-                    Spacer()
+                ForEach(presets) { preset in
+                    row(preset)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Remove the current look")
-
-            ForEach(presets) { preset in
-                row(preset)
-            }
-        }
+        })
         .onAppear { presets = store.all() }
         .alert("Save this look", isPresented: $isNaming) {
             TextField("Name", text: $draftName)
@@ -69,35 +49,51 @@ struct EditorStylePresetInspector: View {
         }
     }
 
-    private func row(_ preset: StylePreset) -> some View {
-        HStack {
-            Button {
-                if preset.id == matchedPreset?.id {
-                    model.clearStylePreset()
-                    appliedID = nil
-                } else {
-                    model.applyStylePreset(preset)
-                    appliedID = preset.id
+    /// What is being worn, and the save / export / import actions in one menu rather than
+    /// three buttons squeezed into a row.
+    private var headerAccessory: some View {
+        HStack(spacing: 2) {
+            Text(statusText)
+                .font(.inspectorNote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Menu {
+                Button("Save Look…") {
+                    draftName = matchedPreset?.name ?? ""
+                    isNaming = true
                 }
+                .disabled(!hasAnyChrome)
+                Button("Export Look…") { exportCurrent() }
+                    .disabled(!hasAnyChrome)
+                Divider()
+                Button("Import Look…") { importPreset() }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: preset.id == matchedPreset?.id ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(preset.id == matchedPreset?.id ? Color.accentColor : .secondary)
-                    Text(preset.name)
-                    Spacer()
-                }
-                .contentShape(Rectangle())
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 13))
             }
-            .buttonStyle(.plain)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Save, export or import looks")
+            .accessibilityLabel("Look actions")
+        }
+    }
 
-            if isUserPreset(preset) {
-                Button(role: .destructive) {
-                    presets = StylePreset.builtIn + store.remove(id: preset.id)
-                } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .help("Delete this look")
+    private func row(_ preset: StylePreset) -> some View {
+        EditorLookRow(
+            name: preset.name,
+            isActive: preset.id == matchedPreset?.id,
+            onDelete: isUserPreset(preset)
+                ? { presets = StylePreset.builtIn + store.remove(id: preset.id) }
+                : nil
+        ) {
+            if preset.id == matchedPreset?.id {
+                model.clearStylePreset()
+                appliedID = nil
+            } else {
+                model.applyStylePreset(preset)
+                appliedID = preset.id
             }
         }
     }
@@ -158,5 +154,51 @@ struct EditorStylePresetInspector: View {
         presets = StylePreset.builtIn + store.add(preset)
         model.applyStylePreset(preset)
         appliedID = preset.id
+    }
+}
+
+/// One look in the list: a checkmark for the one being worn, a hover wash, and delete for
+/// the user's own.
+private struct EditorLookRow: View {
+    let name: String
+    let isActive: Bool
+    let onDelete: (() -> Void)?
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .opacity(isActive ? 1 : 0)
+                        .frame(width: 14)
+                    Text(name)
+                        .font(.inspectorLabel)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .frame(height: InspectorMetrics.controlHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isActive ? .isSelected : [])
+
+            if let onDelete {
+                InspectorIconButton(systemName: "trash", help: "Delete this look", action: onDelete)
+                    .opacity(isHovering ? 1 : 0)
+            }
+        }
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isHovering ? InspectorControlPalette.hoverFill : .clear)
+        )
+        .padding(.horizontal, -6)
+        .onHover { isHovering = $0 }
     }
 }

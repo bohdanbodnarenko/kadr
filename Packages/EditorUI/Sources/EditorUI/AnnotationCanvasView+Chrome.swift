@@ -187,11 +187,18 @@ extension AnnotationCanvasView {
         layer?.masksToBounds = !showsFullCapture
         backdropLayer.isHidden = true
         shadowLayer.isHidden = true
+        canvasEdgeLayer.isHidden = true
         contentHost.mask = nil
+        contentHost.backgroundColor = nil
+        baseLayer.mask = nil
         contentHost.frame = bounds
         contentHost.cornerRadius = 0
         contentHost.masksToBounds = !showsFullCapture
-        contentHost.borderWidth = 1
+        // A hairline marks where the image ends — except round a window captured with its
+        // shadow, where the image ends in transparent margin and the line drew a box around
+        // nothing. Crop mode keeps it: there the image's edge is what the handles run to.
+        let edgesAreInvisible = model.document.baseImage.visibleBounds != nil && !showsFullCapture
+        contentHost.borderWidth = edgesAreInvisible ? 0 : 1
         contentHost.borderColor = NSColor.separatorColor.cgColor
         let drawing = showsFullCapture
             ? CGRect(origin: .zero, size: imageBounds.size)
@@ -208,6 +215,7 @@ extension AnnotationCanvasView {
         backdropLayer.isHidden = false
         backdropLayer.frame = bounds
         applyBackdrop(spec.backdrop)
+        layoutCanvasEdge()
 
         let cardPath = RoundedCornerPath.path(
             in: CGRect(origin: .zero, size: layout.cardRect.size),
@@ -224,15 +232,62 @@ extension AnnotationCanvasView {
         cardMask.frame = CGRect(origin: .zero, size: layout.cardRect.size)
         cardMask.path = cardPath
         contentHost.mask = cardMask
+        // The border ring is the card's own fill showing around an inset capture, the way the
+        // export draws it. The canvas used to skip the ring and pin the capture to the card's
+        // corner, so a bordered look lost its ring and shifted the screenshot.
+        contentHost.backgroundColor = spec.border.isEnabled ? spec.border.color.cgColor : nil
 
+        let imageOrigin = CGPoint(
+            x: layout.imageRect.minX - layout.cardRect.minX,
+            y: layout.imageRect.minY - layout.cardRect.minY
+        )
         baseLayer.frame = CGRect(
-            x: -content.minX,
-            y: -content.minY,
+            x: imageOrigin.x - content.minX,
+            y: imageOrigin.y - content.minY,
             width: imageBounds.width,
             height: imageBounds.height
         )
+        baseLayer.mask = spec.border.isEnabled ? imageMask(layout: layout, content: content) : nil
         applyDrawingFrames(model.document.imageSpaceFrame)
         updateExpensiveChrome()
+    }
+
+    /// The capture's inner rounded edge, in the base layer's own image-space coordinates.
+    private func imageMask(layout: BeautifyLayout, content: CGRect) -> CAShapeLayer {
+        let mask = baseLayer.mask as? CAShapeLayer ?? CAShapeLayer()
+        mask.frame = baseLayer.bounds
+        mask.path = RoundedCornerPath.path(
+            in: CGRect(origin: content.origin, size: layout.imageRect.size),
+            corners: layout.imageCorners
+        )
+        return mask
+    }
+
+    /// Puts the edge shadow around the canvas. Drawn from a shadow path with no fill, so
+    /// nothing opaque sits under a transparent backdrop.
+    private func layoutCanvasEdge() {
+        canvasEdgeLayer.isHidden = false
+        canvasEdgeLayer.frame = bounds
+        canvasEdgeLayer.shadowPath = CGPath(rect: canvasEdgeLayer.bounds, transform: nil)
+        canvasEdgeLayer.shadowColor = NSColor.black.cgColor
+        canvasEdgeLayer.shadowOpacity = 0.24
+        applyCanvasEdgeScale()
+    }
+
+    /// Keeps the edge the same on screen at Fit on a 5K capture as at 100%.
+    func updateCanvasEdge(forMagnification magnification: CGFloat) {
+        guard abs(magnification - canvasEdgeMagnification) > 0.001 else { return }
+        canvasEdgeMagnification = magnification
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        applyCanvasEdgeScale()
+    }
+
+    private func applyCanvasEdgeScale() {
+        let zoom = max(canvasEdgeMagnification, 0.05)
+        canvasEdgeLayer.shadowRadius = 8 / zoom
+        canvasEdgeLayer.shadowOffset = CGSize(width: 0, height: 2 / zoom)
     }
 
     private func applyDrawingFrames(_ drawing: CGRect) {

@@ -20,30 +20,32 @@ struct EditorCropInspector: View {
     }
 
     var body: some View {
-        Section("Crop") {
-            Picker("Ratio", selection: aspectBinding) {
-                ForEach(CropAspectPreset.allCases, id: \.self) { preset in
-                    Text(preset.title).tag(preset)
+        InspectorGroup("Crop") {
+            InspectorRow("Ratio") {
+                Picker("Ratio", selection: aspectBinding) {
+                    ForEach(CropAspectPreset.allCases, id: \.self) { preset in
+                        Text(preset.title).tag(preset)
+                    }
                 }
+                .inspectorMenuPicker()
             }
 
-            Toggle("Allow the canvas to grow", isOn: expandBinding)
+            InspectorToggleRow("Allow the canvas to grow", isOn: expandBinding)
                 .help("Lets the crop extend past the capture, adding blank space rather than cutting.")
 
             if let crop {
-                Text(size(of: crop))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                InspectorNote(size(of: crop))
             }
 
-            HStack {
-                Button("Done") { model.selectTool(.select) }
-                    .keyboardShortcut(.defaultAction)
-                    .help("Finish cropping (Return). The crop stays editable — reopen Crop to change it.")
-                Spacer()
+            // Return is bound on the canvas crop bar, which is on screen whenever this is.
+            HStack(spacing: 8) {
                 Button("Reset") { model.clearCrop() }
+                    .buttonStyle(InspectorButtonStyle())
                     .disabled(crop == nil)
                     .help("Put the crop back to the whole capture")
+                Button("Done") { model.selectTool(.select) }
+                    .buttonStyle(InspectorButtonStyle(isProminent: true))
+                    .help("Finish cropping (Return). The crop stays editable — reopen Crop to change it.")
             }
         }
     }

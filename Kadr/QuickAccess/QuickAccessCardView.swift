@@ -38,7 +38,7 @@ struct QuickAccessCardView: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let cornerRadius: CGFloat = 12
+    static let cornerRadius: CGFloat = 14
     /// What is left of an older card once the stack runs out of room.
     static let sliverHeight: CGFloat = 6
 
@@ -132,6 +132,8 @@ struct QuickAccessCardView: View {
         card
             .animation(chromeAnimation, value: showsChrome)
             .focusable()
+            // The system ring is a rectangle around a rounded picture; the card draws its own.
+            .focusEffectDisabled()
             .focused($isFocused)
             .onHover { hovering in
                 isHovering = hovering
@@ -225,18 +227,35 @@ struct QuickAccessCardView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        // Two hairlines: a dark one that holds the edge against a light desktop, and a faint
+        // light one inside it that holds the edge of a dark capture against a dark desktop.
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.22))
+                .strokeBorder(Color.black.opacity(0.16), lineWidth: 0.5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Self.cornerRadius - 0.5, style: .continuous)
+                .inset(by: 0.5)
+                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
         )
         // Flattened first, so the shadow is cast by the rounded result rather than by the
         // square image inside it.
         .compositingGroup()
-        .shadow(color: .black.opacity(0.20), radius: 14, y: 6)
-        .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
+        .shadow(color: .black.opacity(0.24), radius: 18, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        .overlay {
+            if isFocused {
+                RoundedRectangle(cornerRadius: Self.cornerRadius + 3, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2.5)
+                    .padding(-3)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .topLeading) {
-            if showsNewestIndicator {
+            // The hover chrome puts the size pill in this corner, so the dot steps aside.
+            if showsNewestIndicator, !showsChrome {
                 newestIndicator
+                    .transition(.opacity)
             }
         }
     }
@@ -245,12 +264,13 @@ struct QuickAccessCardView: View {
     private var newestIndicator: some View {
         Circle()
             .fill(Color.accentColor)
-            .frame(width: 8, height: 8)
+            .frame(width: 9, height: 9)
             .overlay(
                 Circle()
-                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.5)
+                    .strokeBorder(Color.white, lineWidth: 1.5)
             )
-            .padding(7)
+            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            .padding(9)
             .accessibilityLabel("Newest capture")
             .help("Your most recent capture")
     }

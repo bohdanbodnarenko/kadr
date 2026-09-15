@@ -196,6 +196,7 @@ struct EditorCanvasHost: NSViewRepresentable {
             (scrollView.contentView as? CenteringClipView)?.recenterDocument()
             // Rasterise the vector chrome for the density it is now being seen at.
             canvas.updateContentsScale(forMagnification: scrollView.magnification)
+            canvas.updateCanvasEdge(forMagnification: scrollView.magnification)
 
             // Toggling scrollers mid-drag resizes the content view and fights the
             // divider. Overlay scrollers can wait until the live resize ends.

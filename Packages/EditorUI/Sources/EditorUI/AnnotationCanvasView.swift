@@ -19,6 +19,11 @@ public final class AnnotationCanvasView: NSView {
     let backdropLayer = CALayer()
     let gradientLayer = CAGradientLayer()
     let shadowLayer = CALayer()
+    /// The exported image's edge: a soft shadow under the backdrop, so a white Beautify
+    /// background reads as the picture rather than as a flat slab on the workspace.
+    let canvasEdgeLayer = CALayer()
+    /// The zoom the edge shadow was last sized for; it is held constant on screen.
+    var canvasEdgeMagnification: CGFloat = 1
     /// Shows the whole canvas rendered through the export path, for the chrome that
     /// cannot be drawn as layers: the perspective camera and the progressive blur
     /// (docs/09 U1.2, U1.3).
@@ -106,6 +111,8 @@ public final class AnnotationCanvasView: NSView {
         drawingHost.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         root.addSublayer(drawingHost)
 
+        canvasEdgeLayer.isHidden = true
+        drawingHost.addSublayer(canvasEdgeLayer)
         backdropLayer.addSublayer(gradientLayer)
         drawingHost.addSublayer(backdropLayer)
         drawingHost.addSublayer(shadowLayer)

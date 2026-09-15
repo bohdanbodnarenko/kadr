@@ -10,79 +10,139 @@ enum OverlayPeekCopy {
     }
 }
 
-/// A pill the same width as the cards, docked to the configured corner.
+/// The stack, tucked away while the editor is open: a glass pill the width of the cards,
+/// in the same corner (docs/03 §2).
+///
+/// It shows the captures themselves — the newest few, fanned like a stack — rather than a
+/// count beside a chevron, so what is waiting here is recognisable at a glance. Fully rounded:
+/// it floats inset from the screen edge, and square corners on one side read as a tab stuck
+/// to an edge it is not touching.
 struct QuickAccessPeekTabView: View {
-    static let pillHeight: CGFloat = 42
+    static let pillHeight: CGFloat = 50
+    private static let thumbnailSize = CGSize(width: 34, height: 26)
+    private static let maxThumbnails = 3
 
     let title: String
     let corner: OverlayCorner
+    /// Newest first.
+    let items: [QuickAccessItem]
     let onExpand: () -> Void
     let onDismissAll: () -> Void
 
+    @State private var isHovering = false
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+    }
+
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 6) {
             Button(action: onExpand) {
-                HStack(spacing: 7) {
-                    Image(systemName: corner.isBottom ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
+                HStack(spacing: 9) {
+                    thumbnails
+                    VStack(alignment: .leading, spacing: 1) {
+                        // Scales a touch before it truncates: "3 Screenshots" has to fit the
+                        // narrowest card width, and a clipped count is the one thing it says.
+                        Text(title)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        HStack(spacing: 3) {
+                            Text("Show")
+                            Image(systemName: corner.isBottom ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 8.5, weight: .bold))
+                        }
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    }
                     Spacer(minLength: 0)
                 }
-                .foregroundStyle(.secondary)
-                .padding(.leading, 14)
-                .padding(.trailing, 8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.leading, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Show recent captures")
 
-            Divider()
-                .frame(height: 14)
-
-            peekDismissButton
-                .padding(.trailing, 6)
+            PeekDismissButton(action: onDismissAll)
+                .padding(.trailing, 8)
         }
-        // Its own height, not its container's.
-        //
-        // The button inside asks for `maxHeight: .infinity` so its click target fills the
-        // pill. That used to be bounded by the pill's own 42-point panel; in the shared
-        // full-screen overlay panel nothing bounds it, so the pill grew into a full-height
-        // slab down the side of the screen — one that took clicks, too, because the overlay
-        // publishes it as interactive.
+        // Its own height, not its container's: the button's click target asks for all the
+        // height it can get, and in the full-screen overlay panel nothing else bounds it.
         .frame(height: Self.pillHeight)
-        .background(.regularMaterial, in: shape)
+        .background(shape.fill(.regularMaterial))
         .overlay {
             shape
-                .strokeBorder(Color.primary.opacity(0.12))
+                .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
                 .allowsHitTesting(false)
+        }
+        .overlay {
+            shape
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        }
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
+                isHovering = hovering
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title). Show recent captures")
     }
 
-    private var peekDismissButton: some View {
-        Button(action: onDismissAll) {
+    /// The newest captures, fanned: the newest upright on top, older ones tilting out
+    /// behind it.
+    private var thumbnails: some View {
+        let shown = Array(items.prefix(Self.maxThumbnails).enumerated())
+        return ZStack {
+            ForEach(shown.reversed(), id: \.element.id) { index, item in
+                ThumbnailImage(
+                    url: item.fileURL,
+                    maxPixelSize: Int((Self.thumbnailSize.width * displayScale).rounded()),
+                    isVideo: item.isVideo,
+                    revision: item.contentRevision,
+                    showsPlayBadge: false
+                )
+                .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                .rotationEffect(.degrees(Double(index) * -7), anchor: .bottom)
+                .offset(x: CGFloat(index) * -3)
+            }
+        }
+        .frame(width: Self.thumbnailSize.width + 6, height: Self.thumbnailSize.height + 6)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Hide-all, with a generous round target that shows itself under the pointer.
+private struct PeekDismissButton: View {
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
             Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Color.primary.opacity(isHovering ? 0.1 : 0)))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
         .help("Hide all — files stay")
         .accessibilityLabel("Hide all cards")
-    }
-
-    private var shape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: corner.isBottom ? 14 : 0,
-            bottomLeadingRadius: corner.isBottom ? 0 : 14,
-            bottomTrailingRadius: corner.isBottom ? 0 : 14,
-            topTrailingRadius: corner.isBottom ? 14 : 0,
-            style: .continuous
-        )
     }
 }

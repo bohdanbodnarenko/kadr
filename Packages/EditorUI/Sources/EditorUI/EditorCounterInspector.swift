@@ -9,32 +9,37 @@ struct EditorCounterInspector: View {
     @Bindable var model: EditorDocumentModel
 
     var body: some View {
-        EditorSwatchStrip(
-            selected: inspectedFill,
-            onSelect: { model.applyCounterFill($0) }
-        )
-
-        Picker("Size", selection: Binding(
-            get: { inspectedSize },
-            set: { model.applyCounterSize($0) }
-        )) {
-            ForEach(CounterBadgeSize.allCases, id: \.self) { size in
-                Text(size.shortTitle)
-                    .tag(size)
-                    .accessibilityLabel(size.title)
-            }
+        InspectorStackedRow("Colour") {
+            EditorSwatchStrip(
+                selected: inspectedFill,
+                onSelect: { model.applyCounterFill($0) }
+            )
         }
-        .pickerStyle(.segmented)
-        .help("Badge size")
-        .accessibilityLabel("Badge size")
 
-        Picker("Numbering", selection: Binding(
-            get: { inspectedNumbering },
-            set: { model.applyCounterNumbering($0) }
-        )) {
-            ForEach(CounterNumbering.allCases, id: \.self) { numbering in
-                Text(numbering.title).tag(numbering)
+        InspectorRow("Size") {
+            InspectorSegmented(
+                options: Array(CounterBadgeSize.allCases),
+                selection: Binding(
+                    get: { inspectedSize },
+                    set: { model.applyCounterSize($0) }
+                ),
+                accessibilityTitle: \.title
+            ) { size in
+                Text(size.shortTitle)
             }
+            .help("Badge size")
+        }
+
+        InspectorRow("Numbering") {
+            Picker("Numbering", selection: Binding(
+                get: { inspectedNumbering },
+                set: { model.applyCounterNumbering($0) }
+            )) {
+                ForEach(CounterNumbering.allCases, id: \.self) { numbering in
+                    Text(numbering.title).tag(numbering)
+                }
+            }
+            .inspectorMenuPicker()
         }
     }
 

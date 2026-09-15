@@ -19,39 +19,49 @@ struct EditorBlurInspector: View {
     }
 
     var body: some View {
-        EditorInspectorSection(title: "Depth of Field", key: "depthOfField", startsOpen: false) {
-            Toggle("Soften part of the image", isOn: enabledBinding)
-
-            if isEnabled {
-                Picker("Falloff", selection: shapeBinding) {
-                    ForEach(ProgressiveBlurShape.allCases, id: \.self) { shape in
-                        Text(shape.title).tag(shape)
+        EditorInspectorSection(
+            title: "Depth of Field",
+            key: "depthOfField",
+            startsOpen: false,
+            isEnabled: enabledBinding,
+            accessory: {
+                if isEnabled {
+                    InspectorIconButton(systemName: "arrow.counterclockwise", help: "Reset depth of field") {
+                        model.applyProgressiveBlur(.focus)
                     }
                 }
-                .pickerStyle(.segmented)
+            },
+            content: { controls }
+        )
+    }
 
-                Picker("Covers", selection: extentBinding) {
-                    ForEach(ProgressiveBlurExtent.allCases, id: \.self) { extent in
-                        Text(extent.title).tag(extent)
-                    }
-                }
+    @ViewBuilder
+    private var controls: some View {
+        InspectorSegmented(Array(ProgressiveBlurShape.allCases), selection: shapeBinding, title: \.title)
 
-                InspectorSlider(title: "Strength", value: radiusBinding, range: 0 ... 0.2)
-                InspectorSlider(title: "Sharp area", value: focusBinding, range: 0 ... 1)
-                InspectorSlider(title: "Falloff", value: falloffBinding, range: 0 ... 1.5)
-                if spec.shape == .directional {
-                    InspectorSlider(
-                        title: "Direction",
-                        value: angleBinding,
-                        range: 0 ... 360,
-                        format: .degrees
-                    )
+        InspectorRow("Covers") {
+            Picker("Covers", selection: extentBinding) {
+                ForEach(ProgressiveBlurExtent.allCases, id: \.self) { extent in
+                    Text(extent.title).tag(extent)
                 }
-                Toggle("Soften the middle instead", isOn: invertedBinding)
-                Button("Reset") { model.applyProgressiveBlur(.focus) }
-                Button("Obscure centre") { model.applyProgressiveBlur(.obscureCentre) }
             }
+            .inspectorMenuPicker()
         }
+
+        InspectorSlider(title: "Strength", value: radiusBinding, range: 0 ... 0.2)
+        InspectorSlider(title: "Sharp area", value: focusBinding, range: 0 ... 1)
+        InspectorSlider(title: "Falloff", value: falloffBinding, range: 0 ... 1.5)
+        if spec.shape == .directional {
+            InspectorSlider(
+                title: "Direction",
+                value: angleBinding,
+                range: 0 ... 360,
+                format: .degrees
+            )
+        }
+        InspectorToggleRow("Soften the middle instead", isOn: invertedBinding)
+        Button("Obscure Centre") { model.applyProgressiveBlur(.obscureCentre) }
+            .buttonStyle(InspectorButtonStyle())
     }
 
     /// What the metrics resolve against — the same rule the beautify panel uses.

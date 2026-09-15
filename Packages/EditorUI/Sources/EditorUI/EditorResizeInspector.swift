@@ -8,11 +8,14 @@ struct EditorResizeInspector: View {
     @Bindable var model: EditorDocumentModel
 
     var body: some View {
-        EditorInspectorSection(title: "Resize", key: "resize", startsOpen: false) {
-            Text(sizeLabel)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+        EditorInspectorSection(title: "Export Size", key: "resize", startsOpen: false) {
+            InspectorRow("Output") {
+                Text(sizeLabel)
+                    .font(.inspectorNumeric)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
 
             InspectorSlider(
                 title: "Width",
@@ -24,7 +27,7 @@ struct EditorResizeInspector: View {
                 format: .points
             )
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Button("100%") { model.resetExportScale() }
                     .disabled(abs(model.exportScale - 1) < 0.001)
                 Button("50%") { model.setExportScale(0.5) }
@@ -34,8 +37,10 @@ struct EditorResizeInspector: View {
                         .disabled(abs(model.exportScale - oneToOneScale) < 0.001)
                 }
             }
-            .controlSize(.small)
+            .buttonStyle(InspectorButtonStyle())
             .help("Scale the exported image. The canvas stays at capture resolution.")
+
+            InspectorNote("Copy and Save write this size. The canvas stays at capture resolution.")
         }
     }
 
@@ -53,6 +58,6 @@ struct EditorResizeInspector: View {
         if abs(model.exportScale - 1) < 0.001 {
             return "\(Int(size.width)) × \(Int(size.height)) px"
         }
-        return "\(Int(size.width)) × \(Int(size.height)) px  (from \(Int(native.width)) × \(Int(native.height)))"
+        return "\(Int(size.width)) × \(Int(size.height)) px of \(Int(native.width)) × \(Int(native.height))"
     }
 }

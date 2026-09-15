@@ -2,69 +2,78 @@ import SettingsKit
 import SwiftUI
 
 extension QuickAccessCardView {
-    /// A light veil so buttons read, without hiding the capture they are for.
+    /// What hover adds to the picture: a soft veil, the capture's size, Hide, and one bar of
+    /// actions — the shape of the macOS screenshot thumbnail, with its daily actions on it.
+    ///
+    /// The veil takes no clicks, so a hovered card is still dragged by its picture. The
+    /// controls sit above the drag surface and take their own.
     var hoverChrome: some View {
         ZStack {
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [.black.opacity(0.45), .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 40)
-                Spacer(minLength: 0)
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.55)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 56)
-            }
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.34), location: 0),
+                    .init(color: .black.opacity(0.08), location: 0.42),
+                    .init(color: .black.opacity(0.14), location: 0.62),
+                    .init(color: .black.opacity(0.46), location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 4) {
+                HStack(alignment: .top, spacing: 5) {
                     corner(.topLeading)
+                    details
                     Spacer(minLength: 0)
                     corner(.topTrailing)
                     if showsTrashButton {
-                        trashButton
-                    }
-                    hideButton
-                }
-                Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        details
-                        HStack(spacing: 4) {
-                            corner(.bottomLeading)
-                            corner(.bottomTrailing)
+                        circleButton("Move to Trash", systemImage: "trash", label: "Delete capture") {
+                            actions.delete()
                         }
                     }
-                    Spacer(minLength: 4)
-                    primaryActionRow
+                    // Hide, not delete. The file stays where the save policy put it (docs/03 §2).
+                    circleButton("Hide — the file stays", systemImage: "xmark", label: "Hide card") {
+                        actions.dismiss()
+                    }
+                }
+                Spacer(minLength: 0)
+                HStack(alignment: .bottom, spacing: 5) {
+                    corner(.bottomLeading)
+                    Spacer(minLength: 0)
+                    actionBar
+                    Spacer(minLength: 0)
+                    corner(.bottomTrailing)
                 }
             }
             .padding(Self.chromeInset)
         }
+        .environment(\.colorScheme, .dark)
     }
 
-    /// One row on the picture. Anything past that is a More menu, not a second row.
+    /// One bar on the picture. Anything past what fits is More, never a second row.
     @ViewBuilder
-    private var primaryActionRow: some View {
-        let column = layout.actions(in: .column, for: item.captureKind)
-        let split = Self.splitActions(column, width: width)
+    private var actionBar: some View {
+        let row = layout.actions(in: .column, for: item.captureKind)
+        let split = Self.splitActions(row, width: width - Self.barPadding * 2)
         if !split.visible.isEmpty || !split.overflow.isEmpty {
             HStack(spacing: Self.actionSpacing) {
                 ForEach(split.visible, id: \.self) { action in
                     button(for: action)
-                        .background(.regularMaterial, in: Circle())
                 }
                 if !split.overflow.isEmpty {
                     moreMenu(split.overflow)
                 }
             }
+            .padding(Self.barPadding)
+            .background(Capsule().fill(CardGlass.fill))
+            .overlay(Capsule().strokeBorder(CardGlass.edge, lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
         }
+    }
+
+    static var barPadding: CGFloat {
+        3
     }
 
     private func moreMenu(_ actions: [CardAction]) -> some View {
@@ -74,13 +83,11 @@ extension QuickAccessCardView {
             }
         } label: {
             Image(systemName: "ellipsis")
-                .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .menuIndicator(.hidden)
-        .buttonStyle(CardActionButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .background(.regularMaterial, in: Circle())
+        .buttonStyle(CardBarButtonStyle())
+        .fixedSize()
         .help("More actions")
         .accessibilityLabel("More actions")
     }
@@ -99,38 +106,47 @@ extension QuickAccessCardView {
         }
     }
 
-    /// Hide, not delete. The file stays where the save policy put it (docs/03 §2).
-    private var hideButton: some View {
-        Button(action: actions.dismiss) {
-            Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .bold))
-                .frame(width: 14, height: 14)
+    private func circleButton(
+        _ help: String,
+        systemImage: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
         }
-        .buttonStyle(CardCloseButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help("Hide — the file stays")
-        .accessibilityLabel("Hide card")
+        .buttonStyle(CardCircleButtonStyle())
+        .help(help)
+        .accessibilityLabel(label)
     }
 
-    /// Move to Trash when the capture is already on disk (CleanShot §6.2).
-    private var trashButton: some View {
-        Button(action: actions.delete) {
-            Image(systemName: "trash")
-                .font(.system(size: 9, weight: .semibold))
-                .frame(width: 14, height: 14)
-        }
-        .buttonStyle(CardCloseButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help("Move to Trash")
-        .accessibilityLabel("Delete capture")
-    }
-
-    /// The buttons the user's layout asks for, in the order they asked for them
-    /// (docs/09 U2.3).
+    /// The layout's corner actions (docs/09 U2.3): one round control each, in its corner.
     private func corner(_ slot: CardSlot) -> some View {
-        ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { action in
-            button(for: action)
-                .background(.regularMaterial, in: Circle())
+        ForEach(layout.actions(in: slot, for: item.captureKind), id: \.self) { cardAction in
+            cornerButton(for: cardAction)
+        }
+    }
+
+    @ViewBuilder
+    private func cornerButton(for cardAction: CardAction) -> some View {
+        let style = CardCircleButtonStyle(diameter: 26, glyphSize: 11)
+        switch cardAction {
+        case .share:
+            ShareLink(item: item.fileURL) {
+                Image(systemName: cardAction.systemImage)
+            }
+            .buttonStyle(style)
+            .help("Share")
+            .accessibilityLabel("Share \(item.filename)")
+        default:
+            Button {
+                perform(cardAction)
+            } label: {
+                Image(systemName: cardAction.systemImage)
+            }
+            .buttonStyle(style)
+            .help(cardAction.title)
+            .accessibilityLabel(cardAction.title)
         }
     }
 
@@ -138,20 +154,22 @@ extension QuickAccessCardView {
     private func button(for cardAction: CardAction) -> some View {
         switch cardAction {
         case .share:
+            // Its own case: `NSSharingServicePicker` needs the button's frame to point at.
             ShareLink(item: item.fileURL) {
                 Image(systemName: cardAction.systemImage)
-                    .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
             }
-            .buttonStyle(CardActionButtonStyle())
-            .kadrHitTarget(minSize: 20)
+            .buttonStyle(CardBarButtonStyle())
             .help("Share")
             .accessibilityLabel("Share \(item.filename)")
         default:
-            action(
-                cardAction.title,
-                systemImage: cardAction.systemImage,
-                action: { perform(cardAction) }
-            )
+            Button {
+                perform(cardAction)
+            } label: {
+                Image(systemName: cardAction.systemImage)
+            }
+            .buttonStyle(CardBarButtonStyle())
+            .help(cardAction.title)
+            .accessibilityLabel(cardAction.title)
         }
     }
 
@@ -163,8 +181,7 @@ extension QuickAccessCardView {
         handler(for: cardAction)()
     }
 
-    /// Share is absent on purpose — it is drawn by its own case above, because
-    /// `NSSharingServicePicker` needs the button's frame to point at.
+    /// Share is absent on purpose — it is drawn by its own case above.
     private var handlers: [CardAction: () -> Void] {
         [
             .copy: actions.copy,
@@ -183,20 +200,5 @@ extension QuickAccessCardView {
 
     private func handler(for cardAction: CardAction) -> () -> Void {
         handlers[cardAction] ?? {}
-    }
-
-    private func action(
-        _ title: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .frame(width: Self.actionButtonSize - 6, height: Self.actionButtonSize - 6)
-        }
-        .buttonStyle(CardActionButtonStyle())
-        .kadrHitTarget(minSize: 20)
-        .help(title)
-        .accessibilityLabel(title)
     }
 }

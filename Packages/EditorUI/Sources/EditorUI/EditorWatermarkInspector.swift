@@ -18,44 +18,58 @@ struct EditorWatermarkInspector: View {
     }
 
     var body: some View {
-        EditorInspectorSection(title: "Watermark", key: "watermark", startsOpen: false) {
-            Toggle("Mark the image", isOn: enabledBinding)
-
-            if isEnabled {
-                TextField("Text", text: $draftText)
-                    .onSubmit { commit { $0.text = draftText } }
-                    .onChange(of: draftText) { _, value in commit { $0.text = value } }
-
-                Toggle("Repeat across the image", isOn: tiledBinding)
-                    .help("A repeated mark survives being cropped; a single one is a signature.")
-
-                if spec.isTiled {
-                    InspectorSlider(
-                        title: "Spacing",
-                        value: spacingBinding,
-                        range: 1 ... 6,
-                        format: .multiplier
-                    )
-                } else {
-                    HStack(alignment: .top) {
-                        Text("Corner")
-                        Spacer()
-                        BeautifyAlignmentPicker(alignment: placementBinding)
-                    }
-                }
-
-                InspectorSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
-                InspectorSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
-                InspectorSlider(
-                    title: "Angle",
-                    value: rotationBinding,
-                    range: -90 ... 90,
-                    format: .degrees(signed: true)
-                )
-                ColorPicker("Colour", selection: colourBinding)
-            }
+        EditorInspectorSection(
+            title: "Watermark",
+            key: "watermark",
+            startsOpen: false,
+            isEnabled: enabledBinding
+        ) {
+            controls
         }
         .onAppear { draftText = spec.text }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        TextField("Text", text: $draftText)
+            .inspectorTextField()
+            // The field is on screen, disabled, while the mark is off; seeding the
+            // draft must not quietly switch the watermark on.
+            .onSubmit {
+                if isEnabled {
+                    commit { $0.text = draftText }
+                }
+            }
+            .onChange(of: draftText) { _, value in
+                guard isEnabled, value != spec.text else { return }
+                commit { $0.text = value }
+            }
+
+        InspectorToggleRow("Repeat across the image", isOn: tiledBinding)
+            .help("A repeated mark survives being cropped; a single one is a signature.")
+
+        if spec.isTiled {
+            InspectorSlider(
+                title: "Spacing",
+                value: spacingBinding,
+                range: 1 ... 6,
+                format: .multiplier
+            )
+        } else {
+            InspectorRow("Corner") {
+                BeautifyAlignmentPicker(alignment: placementBinding)
+            }
+        }
+
+        InspectorSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
+        InspectorSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
+        InspectorSlider(
+            title: "Angle",
+            value: rotationBinding,
+            range: -90 ... 90,
+            format: .degrees(signed: true)
+        )
+        InspectorColorRow("Colour", selection: colourBinding)
     }
 
     /// What the metrics resolve against — the canvas, since a watermark covers all of it.
