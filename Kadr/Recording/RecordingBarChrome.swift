@@ -120,15 +120,14 @@ struct RecordingIslandSurface<Content: View>: View {
 /// Positioned off the hovered control's measured frame, so it tracks a mode swap.
 struct RecordingBarTooltipLayer: View {
     let tooltip: RecordingBarTooltipModel
+    /// Above the floating bar; below the notch island, where above is off the display.
+    var edge: VerticalEdge = .top
 
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
             if let target = tooltip.visible {
                 RecordingBarTooltipPill(text: target.text)
-                    .position(
-                        x: target.frame.midX,
-                        y: -(RecordingBarMetrics.tooltipGap + RecordingBarMetrics.tooltipPillHeight / 2)
-                    )
+                    .position(x: target.frame.midX, y: pillCentre(in: proxy.size))
             }
         }
         .allowsHitTesting(false)
@@ -136,6 +135,11 @@ struct RecordingBarTooltipLayer: View {
         // from control to control rather than cross-fading it in place.
         .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.id)
         .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.text)
+    }
+
+    private func pillCentre(in size: CGSize) -> CGFloat {
+        let offset = RecordingBarMetrics.tooltipGap + RecordingBarMetrics.tooltipPillHeight / 2
+        return edge == .top ? -offset : size.height + offset
     }
 }
 
@@ -297,6 +301,27 @@ struct RecordingAudioMeter: View {
         }
         .accessibilityLabel("Audio level")
         .accessibilityValue("\(Int((level * 100).rounded())) percent")
+    }
+}
+
+/// A worded choice inside the bar — the inline discard confirmation. Destructive is the
+/// filled red capsule; the other stays quiet so the safe answer is not the loud one.
+struct RecordingBarCapsuleButtonStyle: ButtonStyle {
+    var isDestructive = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(isDestructive ? Color.white : RecordingBarMetrics.activeTint)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background {
+                Capsule().fill(isDestructive ? RecordingBarMetrics.recordTint : RecordingBarMetrics.hoverFill)
+            }
+            .contentShape(Capsule())
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

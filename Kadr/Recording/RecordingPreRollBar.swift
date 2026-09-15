@@ -10,21 +10,25 @@ import SwiftUI
 struct RecordingPreRollBar: View {
     let preRoll: RecordingControlBar.PreRoll
     let settings: AppSettings
+    /// Off in the notch island, whose ear already shows the countdown.
+    var showsCountdown = true
 
     var body: some View {
         HStack(spacing: RecordingBarMetrics.controlSpacing) {
-            Text("\(max(preRoll.remaining, 1))")
-                .font(.system(size: 16, weight: .medium, design: .monospaced).monospacedDigit())
-                .foregroundStyle(RecordingBarMetrics.activeTint)
-                .frame(minWidth: 28, alignment: .center)
-                .padding(.leading, 8)
-                .padding(.trailing, 2)
-                .frame(height: RecordingBarMetrics.controlSize)
-                .contentTransition(.numericText(countsDown: true))
-                .kadrAnimation(.snappy, value: preRoll.remaining)
-                .accessibilityLabel("Starting in \(preRoll.remaining) seconds")
+            if showsCountdown {
+                Text("\(max(preRoll.remaining, 1))")
+                    .font(.system(size: 16, weight: .medium, design: .monospaced).monospacedDigit())
+                    .foregroundStyle(RecordingBarMetrics.activeTint)
+                    .frame(minWidth: 28, alignment: .center)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 2)
+                    .frame(height: RecordingBarMetrics.controlSize)
+                    .contentTransition(.numericText(countsDown: true))
+                    .kadrAnimation(.snappy, value: preRoll.remaining)
+                    .accessibilityLabel("Starting in \(preRoll.remaining) seconds")
 
-            RecordingBarDivider()
+                RecordingBarDivider()
+            }
 
             if RecordingOptions.microphoneIsAvailable {
                 RecordingBarCircleButton(

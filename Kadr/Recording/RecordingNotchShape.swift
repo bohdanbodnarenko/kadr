@@ -17,26 +17,19 @@ enum RecordingNotchScreen {
     }
 }
 
-/// Notch-docked shell: flat against the screen top, pill ears only at the bottom.
+/// Dynamic Island silhouette (macos-notch-ui).
 ///
-/// Concave top “island ears” nicked the menu bar on a wide countdown strip — the
-/// hardware notch already supplies the top edge, so the panel must not cut itself
-/// away from it. A 1-pt bleed above the view kills the anti-aliased hairline.
+/// Full width along the top edge, then concave “ears” that curve in to the body — the same
+/// inverse corner the hardware notch has, so the shell reads as the notch growing rather
+/// than a black slab pasted under it — and convex rounded corners at the bottom. Both radii
+/// animate, so compact → expanded → hidden is one continuous shape.
 struct RecordingNotchShape: Shape {
     var topCornerRadius: CGFloat
     var bottomCornerRadius: CGFloat
 
-    init(topCornerRadius: CGFloat = 0, bottomCornerRadius: CGFloat = 16) {
+    init(topCornerRadius: CGFloat = 8, bottomCornerRadius: CGFloat = 12) {
         self.topCornerRadius = topCornerRadius
         self.bottomCornerRadius = bottomCornerRadius
-    }
-
-    static func forShell(height: CGFloat) -> RecordingNotchShape {
-        let clamped = max(height, 24)
-        return RecordingNotchShape(
-            topCornerRadius: 0,
-            bottomCornerRadius: min(clamped * 0.5, 16)
-        )
     }
 
     var animatableData: AnimatablePair<CGFloat, CGFloat> {
@@ -48,16 +41,37 @@ struct RecordingNotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let radius = min(bottomCornerRadius, rect.height / 2, rect.width / 2)
-        var bleed = rect
-        bleed.origin.y -= 1
-        bleed.size.height += 1
-        return UnevenRoundedRectangle(
-            topLeadingRadius: topCornerRadius,
-            bottomLeadingRadius: radius,
-            bottomTrailingRadius: radius,
-            topTrailingRadius: topCornerRadius,
-            style: .continuous
-        ).path(in: bleed)
+        let top = max(0, min(topCornerRadius, rect.width / 4, rect.height / 2))
+        let bottom = max(0, min(bottomCornerRadius, (rect.width - 2 * top) / 2, rect.height - top))
+        let left = rect.minX + top
+        let right = rect.maxX - top
+
+        var path = Path()
+        // A 1-pt bleed above the rect: the shell is flush with the display edge, and an
+        // anti-aliased top edge would leave a hairline of wallpaper over the notch.
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY - 1))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: left, y: rect.minY + top),
+            control: CGPoint(x: left, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: left, y: rect.maxY - bottom))
+        path.addQuadCurve(
+            to: CGPoint(x: left + bottom, y: rect.maxY),
+            control: CGPoint(x: left, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: right - bottom, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: right, y: rect.maxY - bottom),
+            control: CGPoint(x: right, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: right, y: rect.minY + top))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: right, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY - 1))
+        path.closeSubpath()
+        return path
     }
 }

@@ -48,7 +48,6 @@ final class RecordingControlBar {
     private static let edgeMargin: CGFloat = 12
     /// Used to keep the bar on screen before SwiftUI has measured it.
     private static let estimatedBarWidth: CGFloat = 560
-    static let notchContentHeight: CGFloat = RecordingNotchLayout.contentHeight
 
     static var panelSize: CGSize {
         CGSize(width: RecordingBarMetrics.panelWidth, height: RecordingBarMetrics.panelHeight)
@@ -63,7 +62,7 @@ final class RecordingControlBar {
     var screenFrame: NSRect? {
         guard let panel else { return nil }
         let bar = model.barFrameInPanel
-        guard !panelDocksToNotch, bar != .zero else { return panel.frame }
+        guard bar != .zero else { return panel.frame }
         // SwiftUI reports a top-left origin; screen coordinates are bottom-up.
         return NSRect(
             x: panel.frame.minX + bar.minX,
@@ -148,11 +147,19 @@ final class RecordingControlBar {
     func dismiss() {
         hideTask?.cancel()
         if panelDocksToNotch, panel != nil {
-            model.notchVisible = false
+            // Shrink back into the notch in two beats — the row, then the ears — and only
+            // then take the window away, so it never vanishes mid-spring (macos-notch-ui).
+            RecordingBarHoverView.endActiveHover()
+            model.notchExpanded = false
+            model.isConfirmingDiscard = false
+            model.preRoll = nil
             hideTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(350))
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled, let self else { return }
+                model.notchVisible = false
+                try? await Task.sleep(for: .milliseconds(400))
                 guard !Task.isCancelled else { return }
-                self?.teardownPanel()
+                teardownPanel()
             }
             return
         }
@@ -269,11 +276,9 @@ final class RecordingControlBar {
         // The controls track hover themselves so they still highlight while Kadr is in
         // the background — which is the whole time a recording runs.
         panel.acceptsMouseMovedEvents = true
-        if !model.docksToNotch {
-            // Nothing in the bar wants a cursor but the hand its controls push; AppKit's
-            // cursor rects would reset it to an arrow on every move while Kadr is active.
-            panel.disableCursorRects()
-        }
+        // Nothing in the bar wants a cursor but the hand its controls push; AppKit's
+        // cursor rects would reset it to an arrow on every move while Kadr is active.
+        panel.disableCursorRects()
         let movable = !model.docksToNotch
         panel.isMovable = movable
         panel.isMovableByWindowBackground = movable
@@ -303,6 +308,9 @@ final class RecordingControlBar {
         // A docked island sits in the menu-bar strip. Container safe area would
         // inset it and leave a hairline under the hardware notch.
         hosting.safeAreaRegions = model.docksToNotch ? [] : .all
+        // The notch is always black, whatever the system appearance: dynamic colours
+        // (label, separator, tooltip glass) must resolve for a dark surface.
+        hosting.appearance = model.docksToNotch ? NSAppearance(named: .darkAqua) : nil
     }
 
     private func teardownPanel() {
@@ -325,6 +333,7 @@ final class RecordingControlBar {
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
+        model.isConfirmingDiscard = false
     }
 
     private func revealNotchIfNeeded() {
@@ -337,9 +346,11 @@ final class RecordingControlBar {
         }
     }
 
+    /// The notch shell sits just above the menu bar it grows out of. Not the shielding
+    /// level: that also covers system alerts, permission sheets and Kadr's own overlays.
     private var windowLevel: NSWindow.Level {
         model.docksToNotch
-            ? NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
+            ? NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
             : .floating
     }
 
@@ -383,9 +394,8 @@ final class RecordingBarHostingView: NSHostingView<RecordingControlBarView> {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        let model = rootView.model
-        guard !model.docksToNotch else { return super.hitTest(point) }
-        let bar = model.barFrameInPanel
+        // The floating bar or the notch shell — whichever is showing reports its frame.
+        let bar = rootView.model.barFrameInPanel
         // SwiftUI reports a top-left origin and NSHostingView is flipped, so they agree.
         guard bar != .zero, bar.contains(convert(point, from: superview)) else { return nil }
         return super.hitTest(point)
@@ -416,6 +426,9 @@ final class RecordingControlBarModel {
     var notchVisible = false
     var notchExpanded = false
     var notchMetrics = RecordingNotchMetrics.fallback
+    /// The transport has turned into "Discard this recording?". Shared by both chromes so
+    /// the notch stays expanded while it is asking.
+    var isConfirmingDiscard = false
     /// The bar's frame inside the panel, reported by SwiftUI. Not observed: nothing
     /// renders from it, and it changes every frame of a morph.
     @ObservationIgnored var barFrameInPanel: CGRect = .zero
@@ -428,18 +441,20 @@ final class RecordingControlBarModel {
         )
     }
 
-    nonisolated static func mode(hasPicker: Bool, hasSession: Bool, hasPreRoll: Bool) -> Mode {
+    static func mode(hasPicker: Bool, hasSession: Bool, hasPreRoll: Bool) -> Mode {
         if hasPicker, !hasSession {
             return .picker
         }
         return hasPreRoll ? .preRoll : .live
     }
 
+    /// Hovering expands the notch; so does anything that needs the controls without a
+    /// hover — a countdown, the discard confirmation, VoiceOver.
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(
             hardware: notchMetrics,
-            isExpanded: notchExpanded || microphoneIsSilent,
-            hasPreRoll: preRoll != nil,
+            isExpanded: notchExpanded || preRoll != nil || isConfirmingDiscard
+                || AccessibilityChrome.voiceOverEnabled,
             isVisible: notchVisible
         )
     }
@@ -525,14 +540,30 @@ private struct RecordingFloatingBar: View {
 }
 
 /// Elapsed time and the transport for the recording that is running.
-private struct RecordingLiveControls: View {
+struct RecordingLiveControls: View {
     @Bindable var model: RecordingControlBarModel
-    @State private var isConfirmingCancel = false
+    /// Off in the notch island, whose ear already shows the clock.
+    var showsClock = true
 
     var body: some View {
         HStack(spacing: RecordingBarMetrics.controlSpacing) {
-            elapsed
+            if showsClock {
+                elapsed
+            }
 
+            if model.isConfirmingDiscard {
+                discardConfirmation
+                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+            } else {
+                transport
+                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+            }
+        }
+        .kadrAnimation(RecordingBarMetrics.modeChange, value: model.microphoneIsSilent)
+    }
+
+    private var transport: some View {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
             RecordingAudioMeter(level: model.audioLevel)
                 .padding(.horizontal, 6)
 
@@ -571,20 +602,49 @@ private struct RecordingLiveControls: View {
             .accessibilityLabel("Stop and save the recording")
 
             RecordingBarCircleButton(symbol: "trash.fill", help: "Discard recording") {
-                isConfirmingCancel = true
+                setConfirmingDiscard(true)
             }
             .accessibilityLabel("Discard — delete this recording without saving")
-            .confirmationDialog(
-                "Discard this recording?",
-                isPresented: $isConfirmingCancel
-            ) {
-                Button("Discard", role: .destructive) { model.cancel() }
-                Button("Keep Recording", role: .cancel) {}
-            } message: {
-                Text("What you have recorded so far will be deleted.")
-            }
         }
-        .kadrAnimation(RecordingBarMetrics.modeChange, value: model.microphoneIsSilent)
+    }
+
+    /// Asked in place rather than in a dialog.
+    ///
+    /// A confirmation dialog is a sheet on this panel: AppKit dims the whole transparent
+    /// window behind it, a grey slab around the bar or the notch. A standalone alert would
+    /// instead activate Kadr and change what is being recorded. The recording keeps
+    /// running meanwhile, so the clock stays.
+    private var discardConfirmation: some View {
+        HStack(spacing: 8) {
+            Text("Discard this recording?")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(RecordingBarMetrics.activeTint)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, 6)
+
+            Button("Keep Recording") {
+                setConfirmingDiscard(false)
+            }
+            .buttonStyle(RecordingBarCapsuleButtonStyle())
+
+            Button("Discard") {
+                model.isConfirmingDiscard = false
+                model.cancel()
+            }
+            .buttonStyle(RecordingBarCapsuleButtonStyle(isDestructive: true))
+            .accessibilityHint("What you have recorded so far will be deleted.")
+        }
+        .padding(.horizontal, 4)
+        .frame(height: RecordingBarMetrics.controlSize)
+        .help("What you have recorded so far will be deleted.")
+        .accessibilityElement(children: .contain)
+    }
+
+    private func setConfirmingDiscard(_ confirming: Bool) {
+        withAnimation(AccessibilityChrome.animation(RecordingBarMetrics.modeChange)) {
+            model.isConfirmingDiscard = confirming
+        }
     }
 
     /// Red and steady while recording, dimmed while paused.

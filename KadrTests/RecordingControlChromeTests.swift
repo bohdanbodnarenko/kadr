@@ -7,6 +7,8 @@ import Testing
 @MainActor
 @Suite("Recording control chrome")
 struct RecordingControlChromePlacementTests {
+    private let hardware = RecordingNotchMetrics(width: 180, height: 32)
+
     @Test("Notch docking needs the setting, a notched display, and a live take")
     func dockingRules() {
         #expect(
@@ -39,93 +41,70 @@ struct RecordingControlChromePlacementTests {
         )
     }
 
-    @Test("The shell is menu-bar height with wings beside the camera reserve")
-    func shellGeometry() {
-        let hardware = RecordingNotchMetrics(width: 180, height: 32)
-        let compact = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: false,
-            hasPreRoll: false
-        )
-        #expect(compact.stripHeight == 32)
+    @Test("Compact is menu-bar height, with status ears either side of the camera")
+    func compactGeometry() {
+        let compact = RecordingNotchLayout(hardware: hardware, isExpanded: false)
+        #expect(!compact.showsRow)
         #expect(compact.shellHeight == 32)
-        #expect(compact.cameraReserveWidth == 180)
-        #expect(compact.leftWingWidth < 120)
-        #expect(compact.islandWidth == compact.leftWingWidth + 180 + compact.rightWingWidth)
-        #expect(compact.islandWidth < 380)
-
-        let expanded = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: true,
-            hasPreRoll: false
-        )
-        #expect(expanded.windowSize == compact.windowSize)
-        #expect(compact.windowSize.width >= expanded.islandWidth)
-        #expect(expanded.windowSize.height == compact.windowSize.height)
-        #expect(expanded.islandWidth > compact.islandWidth)
-        #expect(expanded.islandWidth - compact.islandWidth == RecordingNotchLayout.hoverExpansion)
-        #expect(RecordingNotchLayout.hoverExpansion <= 14)
-        #expect(RecordingNotchLayout.endInset >= 18)
-        #expect(RecordingNotchLayout.cameraSidePad == 0)
-        assertCameraCentered(compact)
-        assertCameraCentered(expanded)
-        assertCameraCentered(
-            RecordingNotchLayout(hardware: hardware, isExpanded: false, hasPreRoll: true)
-        )
+        #expect(compact.stripWidth == 180 + 2 * RecordingNotchLayout.earWidth)
+        #expect(compact.minimumShellWidth == compact.stripWidth)
+        // Room for "1:02:03" in the ear without reaching the camera housing.
+        #expect(RecordingNotchLayout.earWidth - compact.earPadding >= 50)
     }
 
-    @Test("Countdown wings stay clear of the camera housing")
-    func countdownClearsTheCamera() {
-        let hardware = RecordingNotchMetrics(width: 180, height: 32)
-        let countdown = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: false,
-            hasPreRoll: true
+    @Test("Expanded puts the controls in a row below the camera, never beside it")
+    func expandedGeometry() {
+        let compact = RecordingNotchLayout(hardware: hardware, isExpanded: false)
+        let expanded = RecordingNotchLayout(hardware: hardware, isExpanded: true)
+        #expect(expanded.showsRow)
+        #expect(
+            expanded.shellHeight == 32
+                + RecordingNotchLayout.rowTopGap
+                + RecordingNotchLayout.rowHeight
+                + RecordingNotchLayout.rowBottomPadding
         )
-        #expect(countdown.leftWingWidth > countdown.rightWingWidth)
-        #expect(countdown.islandLeadingInset >= RecordingNotchLayout.windowEarPad)
-        assertCameraCentered(countdown)
-        #expect(countdown.islandLeadingInset > 0)
+        #expect(RecordingNotchLayout.rowHeight >= RecordingBarMetrics.controlSize)
+        #expect(expanded.minimumShellWidth >= compact.minimumShellWidth)
+        #expect(expanded.shape.bottomCornerRadius > compact.shape.bottomCornerRadius)
     }
 
-    @Test("The pill ears sit inside the window, not on its square clip")
-    func pillEarsAreInsetFromTheWindow() {
-        let hardware = RecordingNotchMetrics(width: 180, height: 32)
-        let countdown = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: false,
-            hasPreRoll: true
-        )
-        let expanded = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: true,
-            hasPreRoll: false
-        )
-        #expect(countdown.islandLeadingInset >= RecordingNotchLayout.windowEarPad)
-        #expect(expanded.islandLeadingInset >= RecordingNotchLayout.windowEarPad)
-        let trailing = countdown.windowSize.width - countdown.islandLeadingInset - countdown.islandWidth
-        #expect(trailing >= RecordingNotchLayout.windowEarPad)
+    @Test("Hidden collapses to the hardware notch, so showing grows out of it")
+    func hiddenGeometry() {
+        let hidden = RecordingNotchLayout(hardware: hardware, isExpanded: true, isVisible: false)
+        #expect(!hidden.showsRow)
+        #expect(hidden.minimumShellWidth == 180)
+        #expect(hidden.shellHeight == 32)
     }
 
-    @Test("The shell uses pill ears, not a rectangle")
-    func shellCornerRadii() {
-        let shape = RecordingNotchShape.forShell(height: 32)
-        #expect(shape.bottomCornerRadius >= 14)
-        #expect(shape.topCornerRadius == 0)
-        let path = shape.path(in: CGRect(x: 0, y: 0, width: 240, height: 32))
-        // Flush top: no concave nicks in the menu bar (countdown used to show these).
-        #expect(path.contains(CGPoint(x: 2, y: 2)))
-        #expect(path.contains(CGPoint(x: 238, y: 2)))
-        #expect(path.contains(CGPoint(x: 2, y: 16)))
-        #expect(path.contains(CGPoint(x: 238, y: 16)))
+    @Test("One window holds every state plus the tooltip below it")
+    func windowHoldsEveryState() {
+        let states = [
+            RecordingNotchLayout(hardware: hardware, isExpanded: false),
+            RecordingNotchLayout(hardware: hardware, isExpanded: true),
+            RecordingNotchLayout(hardware: hardware, isExpanded: true, isVisible: false)
+        ]
+        let window = states[0].windowSize
+        for state in states {
+            #expect(state.windowSize == window)
+        }
+        #expect(window.width >= RecordingNotchLayout.maximumExpandedWidth)
+        #expect(window.height >= states[1].expandedHeight + RecordingNotchLayout.tooltipReserve)
     }
 
-    private func assertCameraCentered(_ layout: RecordingNotchLayout) {
-        let cameraMid =
-            layout.islandLeadingInset
-                + layout.leftWingWidth
-                + layout.cameraReserveWidth / 2
-        #expect(abs(cameraMid - layout.windowSize.width / 2) < 0.5)
+    @Test("Top ears are concave, bottom corners convex")
+    func shellShape() {
+        let shape = RecordingNotchShape(topCornerRadius: 10, bottomCornerRadius: 16)
+        let path = shape.path(in: CGRect(x: 0, y: 0, width: 240, height: 80))
+        // Full width along the display edge.
+        #expect(path.contains(CGPoint(x: 120, y: 0.5)))
+        // The ear curves inward below the edge…
+        #expect(!path.contains(CGPoint(x: 2, y: 8)))
+        #expect(!path.contains(CGPoint(x: 238, y: 8)))
+        // …to the body.
+        #expect(path.contains(CGPoint(x: 12, y: 40)))
+        // Rounded bottom corners.
+        #expect(!path.contains(CGPoint(x: 11, y: 79)))
+        #expect(path.contains(CGPoint(x: 120, y: 79)))
     }
 }
 
@@ -142,6 +121,15 @@ struct RecordingIslandChromeTests {
     @Test("The tooltip band sits above the capsule, not inside it")
     func tooltipReservesSpace() {
         #expect(RecordingBarMetrics.tooltipReserve > RecordingBarMetrics.tooltipPillHeight)
+    }
+
+    @Test("A zero fitting size is never used as the panel size")
+    func firstShowRejectsZero() {
+        let size = RecordingBarMetrics.resolvedIslandSize(fitting: .zero)
+        #expect(size.width >= 200)
+        #expect(size.height >= 48)
+        let laidOut = RecordingBarMetrics.resolvedIslandSize(fitting: CGSize(width: 400, height: 72))
+        #expect(laidOut == CGSize(width: 400, height: 72))
     }
 
     @Test("The fixed panel holds the bar, its tooltip and its shadow")
@@ -199,14 +187,5 @@ struct RecordingIslandChromeTests {
         let rightBarEdge = offTop.x + (size.width + barWidth) / 2
         #expect(rightBarEdge <= visible.maxX)
         #expect(offTop.y + RecordingBarMetrics.shadowSlack + RecordingBarMetrics.barHeight <= visible.maxY)
-    }
-
-    @Test("A zero fitting size is never used as the panel size")
-    func firstShowRejectsZero() {
-        let size = RecordingBarMetrics.resolvedIslandSize(fitting: .zero)
-        #expect(size.width >= 200)
-        #expect(size.height >= 48)
-        let laidOut = RecordingBarMetrics.resolvedIslandSize(fitting: CGSize(width: 400, height: 72))
-        #expect(laidOut == CGSize(width: 400, height: 72))
     }
 }

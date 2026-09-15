@@ -26,100 +26,80 @@ struct RecordingNotchMetrics: Equatable, Sendable {
     }
 }
 
-/// Dynamic Island geometry (macos-notch-ui): flush to the screen top, controls in the ears.
+/// Dynamic Island geometry (macos-notch-ui).
 ///
-/// The shell is menu-bar height only. A non-interactive band covers the camera;
-/// every button lives in the left or right wing so nothing is hidden behind it.
+/// * **Hidden** — exactly the hardware notch, so showing grows out of it and hiding shrinks
+///   back into it instead of popping.
+/// * **Compact** — menu-bar height, one status ear either side of the camera.
+/// * **Expanded** — the same ears, plus a row of controls *below* the camera. Its width
+///   follows the row's measured size (with a floor), never a hand-counted estimate.
+///
+/// The window is one fixed size that holds every state and the tooltip beneath, so the
+/// shell animates inside it and the window never moves.
 struct RecordingNotchLayout: Equatable, Sendable {
-    /// Inset from each rounded end so the first and last controls sit inside the ears,
-    /// past the pill’s corner — not flush against the curve.
-    static let endInset: CGFloat = 20
-    /// Gap between a wing and the camera housing. Zero: the hardware reserve is
-    /// already the camera, so extra pad here was a second empty strip.
-    static let cameraSidePad: CGFloat = 0
-    /// Extra left-wing width on hover — a small island breathe, not a full grow.
-    static let hoverExpansion: CGFloat = 12
-    static let controlSize: CGFloat = 22
-    static let controlGap: CGFloat = 6
-    /// Interactive row height — matches the menu-bar strip.
-    static let contentHeight: CGFloat = 32
-    /// Clear margin past each pill ear so the window’s square clip cannot flatten it.
-    static var windowEarPad: CGFloat {
-        RecordingNotchShape.forShell(height: contentHeight).bottomCornerRadius
-    }
+    /// Status ear either side of the camera: the dot on the left, the clock on the right.
+    static let earWidth: CGFloat = 72
+    /// Space between an ear's content and the shell edge, past the concave curve.
+    static let earContentInset: CGFloat = 10
+    static let rowHeight: CGFloat = 40
+    static let rowTopGap: CGFloat = 2
+    static let rowBottomPadding: CGFloat = 10
+    static let rowSidePadding: CGFloat = 12
+    /// So a short row still reads as an island, not a tab hanging off the notch.
+    static let minimumExpandedWidth: CGFloat = 340
+    /// The widest row the window is sized for.
+    static let maximumExpandedWidth: CGFloat = 520
+    /// Below the shell: tooltip pill, its gap and its shadow.
+    static let tooltipReserve: CGFloat = 48
+    /// Either side of and below the expanded shell, for its shadow.
+    static let shadowReserve: CGFloat = 24
 
     var hardware: RecordingNotchMetrics
     var isExpanded: Bool
-    var hasPreRoll: Bool
     var isVisible: Bool = true
 
-    /// Menu-bar inset; also the shell height (no extra row below the notch).
-    var stripHeight: CGFloat {
-        hardware.height
+    var showsRow: Bool {
+        isVisible && isExpanded
+    }
+
+    /// Width of the menu-bar strip: the camera plus both ears, or just the camera when hidden.
+    var stripWidth: CGFloat {
+        isVisible ? hardware.width + 2 * Self.earWidth : hardware.width
+    }
+
+    var expandedHeight: CGFloat {
+        hardware.height + Self.rowTopGap + Self.rowHeight + Self.rowBottomPadding
+    }
+
+    /// The floor under the shell's measured width.
+    var minimumShellWidth: CGFloat {
+        showsRow ? max(stripWidth, Self.minimumExpandedWidth) : stripWidth
     }
 
     var shellHeight: CGFloat {
-        stripHeight
+        showsRow ? expandedHeight : hardware.height
     }
 
-    /// Width of the camera cutout the shell must cover (not hit-testable).
-    var cameraReserveWidth: CGFloat {
-        hardware.width
-    }
-
-    var notchShape: RecordingNotchShape {
-        RecordingNotchShape.forShell(height: shellHeight)
-    }
-
-    private var wingInsets: CGFloat {
-        Self.endInset + Self.cameraSidePad
-    }
-
-    var leftWingWidth: CGFloat {
-        if hasPreRoll {
-            return wingInsets + 20 + (3 * (Self.controlSize + Self.controlGap))
+    var shape: RecordingNotchShape {
+        if showsRow {
+            return RecordingNotchShape(topCornerRadius: 14, bottomCornerRadius: 22)
         }
-        // Dot + elapsed time. Restart/discard stay in the More menu so the ear
-        // does not grow a strip of empty black on hover.
-        var content = 7 + Self.controlGap + 40 + Self.controlGap + Self.controlSize
-        if isExpanded {
-            content += Self.hoverExpansion
+        if isVisible {
+            return RecordingNotchShape(topCornerRadius: 8, bottomCornerRadius: 12)
         }
-        return wingInsets + content
+        return RecordingNotchShape(topCornerRadius: 6, bottomCornerRadius: 10)
     }
 
-    var rightWingWidth: CGFloat {
-        wingInsets + (2 * Self.controlSize) + Self.controlGap
+    /// Ear content inset from the shell edge.
+    var earPadding: CGFloat {
+        shape.topCornerRadius + Self.earContentInset
     }
 
-    var restIslandWidth: CGFloat {
-        leftWingWidth + cameraReserveWidth + rightWingWidth
-    }
-
-    var islandWidth: CGFloat {
-        isVisible ? restIslandWidth : 0
-    }
-
-    /// Leading space so the camera band stays on the hardware notch while a
-    /// wing is wider than the other (countdown is left-heavy). Always at least
-    /// `windowEarPad` so the left pill is not clipped to a square.
-    var islandLeadingInset: CGFloat {
-        max(0, (windowSize.width - cameraReserveWidth) / 2 - leftWingWidth)
-    }
-
-    /// The panel stays this size so hover can animate the island without moving the window.
-    ///
-    /// Wider than the island when the wings are unequal, plus ear pads, so the
-    /// camera can sit on the display centre and the pill is not clipped square.
     var windowSize: CGSize {
-        let widest = RecordingNotchLayout(
-            hardware: hardware,
-            isExpanded: true,
-            hasPreRoll: hasPreRoll,
-            isVisible: true
+        CGSize(
+            width: max(Self.maximumExpandedWidth, hardware.width + 2 * Self.earWidth)
+                + 2 * Self.shadowReserve,
+            height: expandedHeight + Self.tooltipReserve + Self.shadowReserve
         )
-        let wing = max(widest.leftWingWidth, widest.rightWingWidth)
-        let pad = Self.windowEarPad * 2
-        return CGSize(width: wing * 2 + widest.cameraReserveWidth + pad, height: shellHeight)
     }
 }

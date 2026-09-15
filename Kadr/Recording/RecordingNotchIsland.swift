@@ -1,253 +1,220 @@
-import RecordingCore
-import SettingsKit
+import AppKit
 import SwiftUI
 
 /// Recording controls that grow out of the MacBook notch (macos-notch-ui).
 ///
-/// The shell is flush with the top of the display at menu-bar height. A black band over
-/// the camera is not hit-testable; every button sits in the left or right ear.
+/// Two states, one shape. Compact is menu-bar height: a status dot in the left ear and the
+/// clock in the right, nothing under the camera. Hovering (or a countdown, or VoiceOver)
+/// expands the shell downward and the controls appear in a row *below* the camera housing.
+///
+/// There is deliberately no black element but the shell's own fill. The previous layout put
+/// a solid camera band between two fixed-width wings; whenever a wing's contents were wider
+/// than its estimate they slid under that band and disappeared.
 struct RecordingNotchIsland: View {
     @Bindable var model: RecordingControlBarModel
-    @State private var isConfirmingCancel = false
+    @State private var tooltip = RecordingBarTooltipModel()
     @State private var collapseTask: Task<Void, Never>?
+
+    /// Slight overshoot, like the Dynamic Island; dropped entirely under Reduce Motion.
+    private static let spring = Animation.spring(response: 0.36, dampingFraction: 0.8)
+    /// Leaving the shell for a moment — overshooting a control — must not snap it shut.
+    private static let collapseDelay = Duration.milliseconds(350)
 
     var body: some View {
         let layout = model.notchLayout
-        let shape = layout.notchShape
-        HStack(spacing: 0) {
-            Color.clear
-                .frame(width: layout.islandLeadingInset)
-                .allowsHitTesting(false)
-
-            HStack(spacing: 0) {
-                wingContent(layout: layout, side: .leading)
-                    .padding(.leading, RecordingNotchLayout.endInset)
-                    .padding(.trailing, RecordingNotchLayout.cameraSidePad)
-                    .frame(width: layout.leftWingWidth, alignment: .trailing)
-
-                Color.black
-                    .frame(width: layout.cameraReserveWidth)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-
-                wingContent(layout: layout, side: .trailing)
-                    .padding(.leading, RecordingNotchLayout.cameraSidePad)
-                    .padding(.trailing, RecordingNotchLayout.endInset)
-                    .frame(width: layout.rightWingWidth, alignment: .leading)
-            }
-            .foregroundStyle(.white)
-            .frame(width: layout.islandWidth, height: layout.shellHeight)
-            .background(shape.fill(.black))
+        let shape = layout.shape
+        shell(layout: layout)
+            .frame(minWidth: layout.minimumShellWidth, alignment: .top)
+            .overlay(alignment: .top) { ears(layout: layout) }
+            .background(shape.fill(Color.black))
             .clipShape(shape)
-        }
-        .frame(width: layout.windowSize.width, height: layout.windowSize.height, alignment: .topLeading)
-        .contentShape(Rectangle())
-        .compositingGroup()
-        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: layout.islandWidth)
-        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: layout.islandLeadingInset)
-        .kadrAnimation(.spring(response: 0.28, dampingFraction: 0.88), value: model.notchVisible)
-        .onExitCommand {
-            if model.preRoll != nil {
-                model.preRoll?.cancel()
+            // Only once it hangs over content: a compact shell is part of the notch.
+            .shadow(color: .black.opacity(layout.showsRow ? 0.35 : 0), radius: 14, y: 6)
+            .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
+            .overlay { RecordingBarTooltipLayer(tooltip: tooltip, edge: .bottom) }
+            .background { RecordingNotchHoverTracking { setHovering($0) } }
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(RecordingBarCoordinateSpace.panel))
+            } action: { frame in
+                model.barFrameInPanel = frame
             }
-        }
-        .ignoresSafeArea()
-        .onHover { hovering in
-            collapseTask?.cancel()
-            if hovering {
-                model.notchExpanded = true
-            } else {
-                collapseTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(180))
-                    guard !Task.isCancelled else { return }
-                    model.notchExpanded = false
-                }
-            }
-        }
-        .onDisappear {
-            collapseTask?.cancel()
-        }
-        .confirmationDialog(
-            "Discard this recording?",
-            isPresented: $isConfirmingCancel
-        ) {
-            Button("Discard", role: .destructive) { model.cancel() }
-            Button("Keep Recording", role: .cancel) {}
-        } message: {
-            Text("What you have recorded so far will be deleted.")
-        }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Recording controls")
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .coordinateSpace(.named(RecordingBarCoordinateSpace.panel))
+            .environment(tooltip)
+            .environment(\.colorScheme, .dark)
+            .kadrAnimation(Self.spring, value: layout.showsRow)
+            .kadrAnimation(Self.spring, value: layout.isVisible)
+            .ignoresSafeArea()
+            .onDisappear { collapseTask?.cancel() }
     }
 
-    private enum WingSide {
-        case leading
-        case trailing
+    // MARK: - Shell
+
+    /// The strip over the camera, and the control row below it when expanded.
+    private func shell(layout: RecordingNotchLayout) -> some View {
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(width: layout.stripWidth, height: layout.hardware.height)
+
+            if layout.showsRow {
+                row
+                    .fixedSize()
+                    .frame(height: RecordingNotchLayout.rowHeight)
+                    .padding(.top, RecordingNotchLayout.rowTopGap)
+                    .padding(.bottom, RecordingNotchLayout.rowBottomPadding)
+                    .padding(.horizontal, layout.shape.topCornerRadius + RecordingNotchLayout.rowSidePadding)
+                    // In with the shape, out at once: a fading row would hold the height
+                    // open while the shell is trying to close.
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .top)),
+                            removal: .identity
+                        )
+                    )
+            }
+        }
+        .fixedSize()
     }
 
     @ViewBuilder
-    private func wingContent(layout: RecordingNotchLayout, side: WingSide) -> some View {
+    private var row: some View {
         if let preRoll = model.preRoll, let settings = model.settings {
-            preRollWing(preRoll: preRoll, settings: settings, side: side)
+            RecordingPreRollBar(preRoll: preRoll, settings: settings, showsCountdown: false)
         } else {
-            liveWing(layout: layout, side: side)
+            RecordingLiveControls(model: model, showsClock: false)
         }
     }
 
-    private func liveWing(layout: RecordingNotchLayout, side: WingSide) -> some View {
-        HStack(spacing: 6) {
-            switch side {
-            case .leading:
-                statusDot
-                Text(model.elapsedText)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
-                    .lineLimit(1)
-                    .accessibilityLabel("Recording time")
+    // MARK: - Ears
 
-                if layout.isExpanded {
-                    RecordingAudioMeter(level: model.audioLevel, compact: true)
+    /// Status either side of the camera. Overlaid on the finished shell so the ears hug its
+    /// outer edges in both states; never hit-testable, so they cannot shadow a control.
+    private func ears(layout: RecordingNotchLayout) -> some View {
+        HStack(spacing: 0) {
+            statusEar
+            Spacer(minLength: layout.hardware.width)
+            clockEar
+        }
+        .padding(.horizontal, layout.earPadding)
+        .frame(height: layout.hardware.height)
+        .foregroundStyle(.white)
+        .opacity(layout.isVisible ? 1 : 0)
+        .allowsHitTesting(false)
+    }
 
-                    if model.microphoneIsSilent {
-                        Label("Mic", systemImage: "mic.slash.fill")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
-                            .labelStyle(.titleAndIcon)
-                            .accessibilityLabel("Microphone is silent")
-                    }
-                }
+    private var statusEar: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(model.preRoll == nil ? RecordingBarMetrics.recordTint : Color.orange)
+                .frame(width: 8, height: 8)
+                .opacity(model.isPaused ? 0.35 : 1)
 
-                notchMoreButton
+            if model.isPaused {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
 
-            case .trailing:
-                notchCircleButton(
-                    symbol: model.isPaused ? "play.fill" : "pause.fill",
-                    help: model.isPaused ? "Resume" : "Pause"
-                ) {
-                    model.togglePause()
-                }
-                .accessibilityLabel(model.isPaused ? "Resume recording" : "Pause recording")
-
-                notchFilledButton(
-                    symbol: "stop.fill",
-                    help: "Stop and keep the recording (⌃⇧.)"
-                ) {
-                    model.stop()
-                }
-                .accessibilityLabel("Stop and save")
+            if model.microphoneIsSilent, model.preRoll == nil {
+                Image(systemName: "mic.slash.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.orange)
             }
         }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(statusLabel)
     }
 
-    private var statusDot: some View {
-        Circle()
-            .fill(model.isPaused ? Color.orange : Color.red)
-            .frame(width: 7, height: 7)
-            .opacity(model.isPaused ? 0.45 : 1)
-            .accessibilityLabel(model.isPaused ? "Paused" : "Recording")
+    private var clockEar: some View {
+        Text(clockText)
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
+            .contentTransition(.numericText(countsDown: model.preRoll != nil))
+            .accessibilityLabel(clockLabel)
     }
 
-    private func preRollWing(
-        preRoll: RecordingControlBar.PreRoll,
-        settings: AppSettings,
-        side: WingSide
-    ) -> some View {
-        HStack(spacing: 6) {
-            switch side {
-            case .leading:
-                Text("\(max(preRoll.remaining, 1))")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .frame(minWidth: 18, alignment: .center)
-                    .contentTransition(.numericText(countsDown: true))
-                    .accessibilityLabel("Starting in \(preRoll.remaining) seconds")
+    private var clockText: String {
+        guard let preRoll = model.preRoll else { return model.elapsedText }
+        return "\(max(preRoll.remaining, 1))"
+    }
 
-                notchCircleButton(
-                    symbol: settings.recordsMicrophone ? "mic.fill" : "mic.slash.fill",
-                    help: settings.recordsMicrophone ? "Microphone is on" : "Microphone is off",
-                    isOn: settings.recordsMicrophone
-                ) {
-                    settings.recordsMicrophone.toggle()
-                }
-                .disabled(!RecordingOptions.microphoneIsAvailable)
-                .accessibilityLabel("Microphone")
-                .accessibilityValue(settings.recordsMicrophone ? "On" : "Off")
+    private var statusLabel: String {
+        if model.preRoll != nil {
+            return KadrText.string("Countdown")
+        }
+        if model.microphoneIsSilent {
+            return KadrText.string("Recording — microphone is silent")
+        }
+        return model.isPaused ? KadrText.string("Paused") : KadrText.string("Recording")
+    }
 
-                notchCircleButton(
-                    symbol: settings.recordsSystemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                    help: settings.recordsSystemAudio ? "System sound is on" : "System sound is off",
-                    isOn: settings.recordsSystemAudio
-                ) {
-                    settings.recordsSystemAudio.toggle()
-                }
-                .accessibilityLabel("System sound")
-                .accessibilityValue(settings.recordsSystemAudio ? "On" : "Off")
+    private var clockLabel: String {
+        guard let preRoll = model.preRoll else { return "\(model.elapsedText) elapsed" }
+        return "Starting in \(max(preRoll.remaining, 1)) seconds"
+    }
 
-                notchCircleButton(
-                    symbol: settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
-                    help: settings.recordingShowsWebcam ? "Camera is on" : "Camera is off",
-                    isOn: settings.recordingShowsWebcam
-                ) {
-                    settings.recordingShowsWebcam.toggle()
-                }
-                .accessibilityLabel("Camera")
-                .accessibilityValue(settings.recordingShowsWebcam ? "On" : "Off")
+    // MARK: - Hover
 
-            case .trailing:
-                notchFilledButton(symbol: "play.fill", help: "Skip countdown and start now") {
-                    preRoll.startNow()
-                }
-                .accessibilityLabel("Start now")
-
-                notchCircleButton(symbol: "xmark", help: "Cancel") {
-                    preRoll.cancel()
-                }
-                .accessibilityLabel("Cancel countdown")
-            }
+    private func setHovering(_ hovering: Bool) {
+        collapseTask?.cancel()
+        if hovering {
+            model.notchExpanded = true
+            return
+        }
+        collapseTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.collapseDelay)
+            guard !Task.isCancelled else { return }
+            model.notchExpanded = false
         }
     }
+}
 
-    private func notchCircleButton(
-        symbol: String,
-        help: String,
-        isOn: Bool = true,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isOn ? .white : .white.opacity(0.45))
-                .frame(width: 22, height: 22)
-                .contentShape(Circle())
-                .background(Circle().fill(Color.white.opacity(0.14)))
-        }
-        .buttonStyle(.plain)
-        .help(help)
+/// Enter/exit for the whole shell. An AppKit tracking area marked `.activeAlways`, because
+/// `.onHover` is silent in a non-activating panel while another app is active — which is
+/// the whole time something is being recorded. No cursor of its own; the controls own that.
+private struct RecordingNotchHoverTracking: NSViewRepresentable {
+    var onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> RecordingNotchHoverView {
+        let view = RecordingNotchHoverView()
+        view.onChange = onChange
+        return view
     }
 
-    private func notchFilledButton(symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.red))
-        }
-        .buttonStyle(.plain)
-        .help(help)
+    func updateNSView(_ view: RecordingNotchHoverView, context: Context) {
+        view.onChange = onChange
+    }
+}
+
+final class RecordingNotchHoverView: NSView {
+    var onChange: ((Bool) -> Void)?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
     }
 
-    private var notchMoreButton: some View {
-        Menu {
-            Button("Restart recording") { model.restart() }
-            Button("Discard recording", role: .destructive) { isConfirmingCancel = true }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .contentShape(Circle())
-                .background(Circle().fill(Color.white.opacity(0.14)))
-        }
-        .menuStyle(.borderlessButton)
-        .help("More recording actions")
-        .accessibilityLabel("More recording actions")
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self
+            )
+        )
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onChange?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onChange?(false)
     }
 }

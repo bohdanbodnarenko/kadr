@@ -19,6 +19,11 @@ enum AccessibilityChrome {
         NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
     }
 
+    /// Hover-revealed controls stay revealed for VoiceOver, which has no hover to reveal them.
+    static var voiceOverEnabled: Bool {
+        NSWorkspace.shared.isVoiceOverEnabled
+    }
+
     /// Critically damped spring: no decorative bounce (docs/14 §8).
     static var defaultSpring: Animation {
         .spring(duration: 0.32, bounce: 0)
