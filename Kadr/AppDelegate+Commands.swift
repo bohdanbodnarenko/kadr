@@ -137,6 +137,7 @@ extension AppDelegate {
     var isCaptureArmed: Bool {
         areaCaptureStorage?.isArmed == true
             || recordingControlBar.isShowingPicker
+            || recordingStorage?.isSelectingTarget == true
             || allInOne.isShowing
             || recordingStorage?.isCountingDown == true
     }
@@ -279,8 +280,8 @@ extension AppDelegate {
             return
         }
         switch command {
-        case .recordRegion: recording.beginRegionRecording()
-        case .recordDisplay: recording.beginDisplayRecording()
+        case .recordRegion: recordSetup.present(picking: .area)
+        case .recordDisplay: recordSetup.present()
         case .stopRecording: recording.stop()
         // Opens the chooser rather than recording anything: the whole point of record mode
         // is that nothing starts until the user says so.

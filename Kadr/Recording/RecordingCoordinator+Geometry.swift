@@ -149,9 +149,11 @@ extension RecordingCoordinator {
     }
 
     /// Picks a region with the selection overlay, then records it.
-    func beginRegionRecording() {
-        guard !isRecording else { return }
-        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+    func pickRegion(completion: @escaping (SelectionResult?) -> Void) {
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else {
+            completion(nil)
+            return
+        }
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -160,21 +162,34 @@ extension RecordingCoordinator {
                 permissions.noteCaptureSuccess()
                 overlay.present(
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) }
-                ) { [weak self] outcome in
-                    guard case let .region(result) = outcome else {
-                        self?.wantsGIFExport = false
-                        return
+                ) { outcome in
+                    if case let .region(result) = outcome {
+                        completion(result)
+                    } else {
+                        completion(nil)
                     }
-                    self?.startAfterCountdown(
-                        target: .region(result.rect, display: result.display.displayID)
-                    )
                 }
             } catch {
                 wantsGIFExport = false
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze for recording: \(error.localizedDescription, privacy: .public)")
                 presentPermissionRecoveryIfNeeded(error)
+                completion(nil)
             }
+        }
+    }
+
+    /// Picks a region with the selection overlay, then records it.
+    func beginRegionRecording() {
+        guard !isRecording else { return }
+        pickRegion { [weak self] result in
+            guard let self, let result else {
+                self?.wantsGIFExport = false
+                return
+            }
+            startAfterCountdown(
+                target: .region(result.rect, display: result.display.displayID)
+            )
         }
     }
 

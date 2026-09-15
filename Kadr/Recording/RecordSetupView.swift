@@ -5,22 +5,23 @@ import SettingsKit
 import Shared
 import SwiftUI
 
-/// The compact picker strip. One row, same chrome as the live recording bar.
+/// The picker's controls. One row inside the recording bar's glass, which
+/// `RecordingControlBar` owns so Record can morph this into the countdown.
 struct RecordSetupView: View {
     @Bindable var model: RecordSetupModel
 
     private static let timerOptions = [0, 1, 3, 5, 10]
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            fullStrip
-            twoRowStrip
-            compactStrip
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
+            sources
+            RecordingBarDivider()
+            inputs
+            RecordingBarDivider()
+            timerMenu
+            recordButton
+            closeButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RecordingBarBackground())
-        .padding(10)
         .onExitCommand { model.cancel() }
         .onAppear { model.refreshDevices() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -37,41 +38,15 @@ struct RecordSetupView: View {
         .kadrLayoutDirection()
     }
 
-    private var fullStrip: some View {
-        HStack(spacing: 6) {
-            sources
-            RecordingBarDivider()
-            inputs
-            RecordingBarDivider()
-            timerMenu
-            closeButton
+    private var recordButton: some View {
+        RecordingBarFilledCircleButton(
+            symbol: "record.circle.fill",
+            help: "Start recording"
+        ) {
+            model.record()
         }
-    }
-
-    private var twoRowStrip: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                sources
-                Spacer(minLength: 0)
-                closeButton
-            }
-            HStack(spacing: 6) {
-                inputs
-                RecordingBarDivider()
-                timerMenu
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private var compactStrip: some View {
-        HStack(spacing: 6) {
-            sources
-            overflowInputsMenu
-            RecordingBarDivider()
-            timerMenu
-            closeButton
-        }
+        .disabled(model.armedTarget == nil)
+        .accessibilityLabel("Start recording")
     }
 
     private var closeButton: some View {
@@ -81,94 +56,79 @@ struct RecordSetupView: View {
         .accessibilityLabel("Close")
     }
 
-    private var overflowInputsMenu: some View {
-        Menu {
-            Button {
-                model.requestCameraToggle()
-            } label: {
-                Text(model.settings.recordingShowsWebcam ? "Camera on" : "Camera off")
-            }
-            if RecordingOptions.microphoneIsAvailable {
-                Button {
-                    model.requestMicrophoneEnabled(!model.settings.recordsMicrophone)
-                } label: {
-                    Text(model.settings.recordsMicrophone ? "Microphone on" : "Microphone off")
-                }
-            }
-            Button {
-                model.settings.recordsSystemAudio.toggle()
-            } label: {
-                Text(model.settings.recordsSystemAudio ? "System sound on" : "System sound off")
-            }
-            Button {
-                model.settings.recordingShowsClicks.toggle()
-            } label: {
-                Text(model.settings.recordingShowsClicks ? "Click highlights on" : "Click highlights off")
-            }
-            Button {
-                model.settings.recordingShowsKeystrokes.toggle()
-            } label: {
-                Text(model.settings.recordingShowsKeystrokes ? "Keystrokes on" : "Keystrokes off")
-            }
-            Button {
-                model.onTeleprompterComposer()
-            } label: {
-                Text(model.settings.teleprompterEnabled ? "Teleprompter on" : "Teleprompter off")
-            }
-        } label: {
-            RecordingBarIcon(symbol: "slider.horizontal.3")
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help("Recording options")
-        .accessibilityLabel("Recording options")
-    }
-
     @ViewBuilder
     private var sources: some View {
         if model.displays.count > 1 {
             Menu {
                 ForEach(model.displays) { display in
-                    Button(display.name) { model.beginDisplay(display.displayID) }
+                    Button {
+                        model.armScreen(display.displayID)
+                    } label: {
+                        if case let .screen(id) = model.armedTarget, id == display.displayID {
+                            Label(display.name, systemImage: "checkmark")
+                        } else {
+                            Text(display.name)
+                        }
+                    }
                 }
             } label: {
-                RecordingBarIcon(symbol: RecordTargetKind.screen.symbol)
+                RecordingBarIcon(
+                    symbol: RecordTargetKind.screen.symbol,
+                    isOn: model.isArmed(.screen)
+                )
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .help("Pick a screen to record")
-            .accessibilityLabel("Display — choose which screen to record")
+            .recordingBarMenu(tooltip: "Select which screen to record")
+            .accessibilityLabel("Display")
+            .accessibilityValue(model.isArmed(.screen) ? "Selected" : "Off")
         } else {
             RecordingBarCircleButton(
                 symbol: RecordTargetKind.screen.symbol,
-                help: "Record the whole screen"
+                help: "Select the whole screen",
+                isOn: model.isArmed(.screen)
             ) {
-                model.begin(.screen)
+                model.armScreen(model.displays.first?.displayID ?? CGMainDisplayID())
             }
-            .accessibilityLabel("Display — record the whole screen")
+            .accessibilityLabel("Display")
+            .accessibilityValue(model.isArmed(.screen) ? "Selected" : "Off")
         }
 
         RecordingBarCircleButton(
             symbol: RecordTargetKind.window.symbol,
-            help: "Pick an app window"
+            help: windowHelp,
+            isOn: model.isArmed(.window)
         ) {
-            model.begin(.window)
+            model.requestWindowPick()
         }
-        .accessibilityLabel("Window — click the window to record")
+        .accessibilityLabel("Window")
+        .accessibilityValue(windowAccessibilityValue)
 
         RecordingBarCircleButton(
             symbol: RecordTargetKind.area.symbol,
-            help: "Drag to select a region"
+            help: model.isArmed(.area) ? "Area selected — click to choose another" : "Drag to select a region",
+            isOn: model.isArmed(.area)
         ) {
-            model.begin(.area)
+            model.requestAreaPick()
         }
-        .accessibilityLabel("Area — drag to select the region to record")
+        .accessibilityLabel("Area")
+        .accessibilityValue(model.isArmed(.area) ? "Selected" : "Off")
+    }
+
+    private var windowHelp: String {
+        if case let .window(_, title) = model.armedTarget {
+            return "Window — \(title)"
+        }
+        return "Click the window to record"
+    }
+
+    private var windowAccessibilityValue: String {
+        if case let .window(_, title) = model.armedTarget {
+            return title
+        }
+        return "Off"
     }
 
     private var inputs: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
             cameraToggle
             microphoneMenu
             RecordingBarCircleButton(
@@ -291,10 +251,9 @@ struct RecordSetupView: View {
                     isOn: model.settings.recordsMicrophone
                 )
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .help(model.settings.recordsMicrophone ? "Microphone on" : "Microphone off")
+            .recordingBarMenu(
+                tooltip: model.settings.recordsMicrophone ? "Microphone on" : "Microphone off"
+            )
             .accessibilityLabel("Microphone")
             .accessibilityValue(model.settings.recordsMicrophone ? "On" : "Off")
         }
@@ -328,11 +287,8 @@ struct RecordSetupView: View {
                 isOn: model.settings.recordingCountdownSeconds > 0
             )
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help(
-            model.settings.recordingCountdownSeconds == 0
+        .recordingBarMenu(
+            tooltip: model.settings.recordingCountdownSeconds == 0
                 ? "Timer off"
                 : "Timer \(model.settings.recordingCountdownSeconds)s"
         )

@@ -15,13 +15,8 @@ import Shared
 /// hoping it did not move.
 @MainActor
 extension RecordingCoordinator {
-    /// Records one window, picked with the same overlay stills use (docs/03 §1.8).
-    ///
-    /// `RecordingTarget.window` existed and nothing could reach it: the app offered Region
-    /// and Screen, so recording a single window — the commonest thing anybody demonstrates
-    /// — meant drawing a rectangle around it by hand and hoping it did not move.
-    func beginWindowRecording() {
-        guard !isRecording else { return }
+    /// Lets the floating island pick a window without starting the take.
+    func pickWindow(completion: @escaping (WindowSelection?) -> Void) {
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -44,15 +39,31 @@ extension RecordingCoordinator {
                     freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
                     mode: .window,
                     windows: windows
-                ) { [weak self] outcome in
-                    guard case let .window(selection) = outcome else { return }
-                    self?.beginWindowHighlight(from: selection)
-                    self?.startAfterCountdown(target: .window(selection.window.id))
+                ) { outcome in
+                    if case let .window(selection) = outcome {
+                        completion(selection)
+                    } else {
+                        completion(nil)
+                    }
                 }
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze to pick a window: \(error.localizedDescription, privacy: .public)")
+                completion(nil)
             }
+        }
+    }
+
+    /// Records one window, picked with the same overlay stills use (docs/03 §1.8).
+    ///
+    /// Used by automation and GIF-style one-shots that should start as soon as a window
+    /// is chosen. The floating island uses `pickWindow` so Record is a separate press.
+    func beginWindowRecording() {
+        guard !isRecording else { return }
+        pickWindow { [weak self] selection in
+            guard let self, let selection else { return }
+            beginWindowHighlight(from: selection)
+            startAfterCountdown(target: .window(selection.window.id))
         }
     }
 }

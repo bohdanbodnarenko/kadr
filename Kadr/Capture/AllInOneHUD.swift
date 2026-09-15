@@ -53,11 +53,12 @@ final class AllInOneHUD {
 
         let hosting = NSHostingView(rootView: AllInOneView(model: model))
         hosting.sizingOptions = .intrinsicContentSize
-        hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
+        let size = RecordingBarMetrics.resolvedIslandSize(fitting: hosting.fittingSize)
+        hosting.frame = NSRect(origin: .zero, size: size)
 
         let panel = NonActivatingPanel(contentRect: hosting.frame, level: .floating)
         panel.contentView = hosting
-        panel.setFrame(Self.centeredFrame(for: hosting.fittingSize), display: false)
+        panel.setFrame(Self.centeredFrame(for: size), display: false)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovable = true
         panel.isMovableByWindowBackground = true
@@ -204,10 +205,7 @@ struct AllInOneView: View {
             twoRowStrip
             compactStrip
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RecordingBarBackground())
-        .padding(10)
+        .recordingIslandSurface()
         .focusable()
         .onExitCommand { model.cancel() }
         .onKeyPress { press in
@@ -219,7 +217,7 @@ struct AllInOneView: View {
     }
 
     private var fullStrip: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
             modeButtons(for: AllInOneMode.allCases)
             RecordingBarDivider()
             timerMenu
@@ -231,14 +229,14 @@ struct AllInOneView: View {
     }
 
     private var twoRowStrip: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(spacing: RecordingBarMetrics.controlSpacing) {
+            HStack(spacing: RecordingBarMetrics.controlSpacing) {
                 modeButtons(for: Self.primaryModes)
                 overflowMenu
                 Spacer(minLength: 0)
                 closeButton
             }
-            HStack(spacing: 6) {
+            HStack(spacing: RecordingBarMetrics.controlSpacing) {
                 timerMenu
                 aspectMenu
                 saveTargetMenu
@@ -249,7 +247,7 @@ struct AllInOneView: View {
     }
 
     private var compactStrip: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
             modeButtons(for: Self.primaryModes)
             overflowMenu
             RecordingBarDivider()
@@ -272,10 +270,7 @@ struct AllInOneView: View {
         } label: {
             RecordingBarIcon(symbol: "ellipsis.circle")
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help("More capture modes")
+        .recordingBarMenu(tooltip: "More capture modes")
         .accessibilityLabel("More capture modes")
     }
 
@@ -327,10 +322,7 @@ struct AllInOneView: View {
                 isOn: model.settings.timerSeconds > 0
             )
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help(timerHelp)
+        .recordingBarMenu(tooltip: timerHelp)
         .accessibilityLabel("Self-timer")
         .accessibilityValue(
             model.settings.timerSeconds > 0
@@ -354,10 +346,7 @@ struct AllInOneView: View {
                 isOn: model.settings.captureSelectionAspect != .free
             )
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help(aspectHelp)
+        .recordingBarMenu(tooltip: aspectHelp)
         .accessibilityLabel("Aspect lock")
         .accessibilityValue(model.settings.captureSelectionAspect.title)
     }

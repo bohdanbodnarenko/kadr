@@ -2,21 +2,24 @@ import RecordingCore
 import SettingsKit
 import SwiftUI
 
-/// The same capsule as the picker and the live bar, while the countdown runs.
+/// The recording bar's contents while the countdown runs.
 ///
-/// Remaining seconds take the clock's place. Skip and Cancel are the same filled and
-/// quiet circles the live bar uses for Stop and Discard, so this is not a different app
+/// Remaining seconds take the clock's place, in the clock's type. Skip and Cancel are the
+/// same controls the live bar uses for Stop and Discard, so this is not a different app
 /// for three seconds.
 struct RecordingPreRollBar: View {
     let preRoll: RecordingControlBar.PreRoll
     let settings: AppSettings
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
             Text("\(max(preRoll.remaining, 1))")
-                .font(.system(.title3, design: .rounded).monospacedDigit())
-                .foregroundStyle(.primary)
+                .font(.system(size: 16, weight: .medium, design: .monospaced).monospacedDigit())
+                .foregroundStyle(RecordingBarMetrics.activeTint)
                 .frame(minWidth: 28, alignment: .center)
+                .padding(.leading, 8)
+                .padding(.trailing, 2)
+                .frame(height: RecordingBarMetrics.controlSize)
                 .contentTransition(.numericText(countsDown: true))
                 .kadrAnimation(.snappy, value: preRoll.remaining)
                 .accessibilityLabel("Starting in \(preRoll.remaining) seconds")
@@ -68,10 +71,6 @@ struct RecordingPreRollBar: View {
             }
             .accessibilityLabel("Cancel countdown")
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RecordingBarBackground())
-        .padding(10)
         .onExitCommand { preRoll.cancel() }
     }
 }

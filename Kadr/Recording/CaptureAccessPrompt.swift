@@ -37,8 +37,7 @@ enum CaptureAccessKind: String, Identifiable, Equatable, Sendable {
 
 enum CaptureAccessResume: Equatable {
     case toggle
-    case begin(RecordTargetKind)
-    case beginDisplay(CGDirectDisplayID)
+    case record
 }
 
 enum CaptureAccessGate {

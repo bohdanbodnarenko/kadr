@@ -8,26 +8,34 @@ import SwiftUI
 
 /// The floating controls shown before and during a recording (docs/03 §1.8, docs/08 §2).
 ///
-/// One panel, three modes. The picker, the countdown strip and the live Stop/Pause bar
-/// used to be three different windows that appeared and vanished independently, so starting
-/// a recording meant watching a card disappear and a different capsule pop up somewhere
-/// nearby. They now share this panel: picking a display morphs the icons into the clock,
-/// and only Area/Window hide it (the selection overlay has to own the screen).
+/// One panel, one bar, three modes. The picker, the countdown strip and the live Stop/Pause
+/// controls are the same glass bar with different contents, so Record morphs the picker into
+/// the countdown and the countdown into the clock — the bar's rounded rect springs to the new
+/// width while the controls cross-fade. Area/Window only hide it while the selection overlay
+/// owns the screen.
+///
+/// The panel is a fixed size that every mode sits inside, so an update never resizes the
+/// window: resizing on each timer tick is what made the bar jitter and ghost. The transparent
+/// slack around the bar holds tooltips and the glass shadow; the hosting view hit-tests only
+/// the bar so that slack never swallows clicks meant for what is being recorded.
 ///
 /// A non-activating panel, for the same reason the scrolling-capture HUD is one: the user
 /// is recording whatever is behind this, and a bar that stole focus would change the thing
 /// being filmed. It registers with `CaptureExclusionRegistry`, so it never appears in the
 /// recording it controls.
 ///
-/// Live session chrome is either the draggable floating island or a Dynamic Island-style
-/// strip on a MacBook camera notch, chosen in Recording settings. Destroyed when idle —
-/// no window, no view, no timer (PRD §8).
+/// Live session chrome is either this floating island or a Dynamic Island-style strip on a
+/// MacBook camera notch, chosen in Recording settings. Destroyed when idle — no window, no
+/// view, no timer (PRD §8).
 @MainActor
 final class RecordingControlBar {
     private var panel: NonActivatingPanel?
-    private var hosting: NSHostingView<RecordingControlBarView>?
+    private var hosting: RecordingBarHostingView?
     private let model = RecordingControlBarModel()
     private var hideTask: Task<Void, Never>?
+    /// What the current window was built for. Notch and island panels differ in level,
+    /// size and movability, so switching between them needs a new window.
+    private var panelDocksToNotch = false
 
     /// Where the user last dragged the floating island, so it comes back where they put it.
     ///
@@ -35,20 +43,38 @@ final class RecordingControlBar {
     /// been unplugged has to come back somewhere visible rather than off the desk.
     static var savedOrigin: CGPoint?
 
-    private static let margin: CGFloat = 22
+    /// Distance from the bottom of the visible frame to the bar (not the panel).
+    private static let bottomInset: CGFloat = 48
+    private static let edgeMargin: CGFloat = 12
+    /// Used to keep the bar on screen before SwiftUI has measured it.
+    private static let estimatedBarWidth: CGFloat = 560
     static let notchContentHeight: CGFloat = RecordingNotchLayout.contentHeight
+
+    static var panelSize: CGSize {
+        CGSize(width: RecordingBarMetrics.panelWidth, height: RecordingBarMetrics.panelHeight)
+    }
 
     var isShowing: Bool {
         panel != nil
     }
 
-    /// The bar's frame in screen space, so the teleprompter composer can sit next to it.
+    /// The visible bar in screen space, so the teleprompter composer can sit next to it —
+    /// not the padded panel, or satellites would float clear of the bar.
     var screenFrame: NSRect? {
-        panel?.frame
+        guard let panel else { return nil }
+        let bar = model.barFrameInPanel
+        guard !panelDocksToNotch, bar != .zero else { return panel.frame }
+        // SwiftUI reports a top-left origin; screen coordinates are bottom-up.
+        return NSRect(
+            x: panel.frame.minX + bar.minX,
+            y: panel.frame.maxY - bar.maxY,
+            width: bar.width,
+            height: bar.height
+        )
     }
 
     var isShowingPicker: Bool {
-        panel != nil && model.picker != nil && model.session == nil
+        panel != nil && model.mode == .picker
     }
 
     /// Notch layout is only for a live take (or its countdown) on a notched display.
@@ -63,13 +89,14 @@ final class RecordingControlBar {
     func showPicker(model picker: RecordSetupModel) {
         hideTask?.cancel()
         hideTask = nil
-        model.picker = picker
-        model.session = nil
-        model.preRoll = nil
+        if panel != nil, panelDocksToNotch {
+            teardownPanel()
+        }
         model.chrome = picker.settings.recordingControlChrome
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
+        setContents(picker: picker, session: nil, preRoll: nil, settings: nil)
         present(key: true)
     }
 
@@ -81,30 +108,28 @@ final class RecordingControlBar {
     func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         hideTask?.cancel()
         hideTask = nil
-        model.picker = nil
+        if panel != nil, panelDocksToNotch != docksToNotch(settings: settings) {
+            teardownPanel()
+        }
         model.apply(controls)
-        model.settings = settings
-        model.preRoll = preRoll
-        model.session = true
         applyChrome(settings: settings)
+        setContents(picker: nil, session: true, preRoll: preRoll, settings: settings)
         present(key: false)
     }
 
-    /// Updates the timer and the paused state without rebuilding anything.
+    /// Updates the timer and the mode without rebuilding or resizing anything.
+    ///
+    /// When the picker is still up this is the handoff: the same bar morphs into the
+    /// countdown, then into the clock.
     func update(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         guard panel != nil else { return }
-        model.picker = nil
-        model.apply(controls)
-        model.settings = settings
-        model.preRoll = preRoll
-        model.session = true
-        applyChrome(settings: settings)
-        syncWindowChrome()
-        // Notch: the panel stays at expanded size; resizing on the timer (or hover)
-        // leaves a delayed ghost of the island. Floating chrome still morphs width.
-        if !model.docksToNotch {
-            resizeToFittingSize()
+        guard panelDocksToNotch == docksToNotch(settings: settings) else {
+            show(controls: controls, settings: settings, preRoll: preRoll)
+            return
         }
+        model.apply(controls)
+        applyChrome(settings: settings)
+        setContents(picker: nil, session: true, preRoll: preRoll, settings: settings)
     }
 
     /// What the bar offers while the countdown is running.
@@ -122,7 +147,7 @@ final class RecordingControlBar {
 
     func dismiss() {
         hideTask?.cancel()
-        if model.docksToNotch, panel != nil {
+        if panelDocksToNotch, panel != nil {
             model.notchVisible = false
             hideTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(350))
@@ -134,18 +159,81 @@ final class RecordingControlBar {
         teardownPanel()
     }
 
-    private func applyChrome(settings: AppSettings?) {
-        let chrome = settings?.recordingControlChrome ?? .island
-        model.chrome = chrome
-        model.docksToNotch = Self.shouldDockToNotch(
-            chrome: chrome,
+    /// Keeps the bar — not the transparent panel around it — on the visible frame.
+    static func clampedOrigin(
+        _ origin: CGPoint,
+        barWidth: CGFloat,
+        in visible: CGRect
+    ) -> CGPoint {
+        let size = panelSize
+        let halfBar = barWidth / 2 + edgeMargin
+        let midX = min(
+            max(origin.x + size.width / 2, visible.minX + halfBar),
+            visible.maxX - halfBar
+        )
+        let slack = RecordingBarMetrics.shadowSlack
+        let minY = visible.minY + edgeMargin - slack
+        let maxY = visible.maxY - edgeMargin - slack - RecordingBarMetrics.barHeight
+        return CGPoint(x: midX - size.width / 2, y: min(max(origin.y, minY), maxY))
+    }
+
+    /// Bottom-centre of the visible frame, with the bar `bottomInset` above it.
+    static func defaultOrigin(in visible: CGRect) -> CGPoint {
+        CGPoint(
+            x: visible.midX - panelSize.width / 2,
+            y: visible.minY + bottomInset - RecordingBarMetrics.shadowSlack
+        )
+    }
+
+    // MARK: - Contents
+
+    /// Assigns what the bar shows, animating only when that changes its mode.
+    ///
+    /// The clock ticks through here too; springing every tick would animate the digits
+    /// and the meter, so an unchanged mode is assigned plainly.
+    private func setContents(
+        picker: RecordSetupModel?,
+        session: Bool?,
+        preRoll: PreRoll?,
+        settings: AppSettings?
+    ) {
+        let next = RecordingControlBarModel.mode(
+            hasPicker: picker != nil,
+            hasSession: session != nil,
+            hasPreRoll: preRoll != nil && settings != nil
+        )
+        let morphs = panel?.isVisible == true && !model.docksToNotch && next != model.mode
+        let apply = {
+            self.model.picker = picker
+            self.model.session = session
+            self.model.preRoll = preRoll
+            self.model.settings = settings
+        }
+        if morphs {
+            RecordingBarHoverView.endActiveHover()
+            withAnimation(AccessibilityChrome.animation(RecordingBarMetrics.modeChange), apply)
+        } else {
+            apply()
+        }
+    }
+
+    private func docksToNotch(settings: AppSettings?) -> Bool {
+        Self.shouldDockToNotch(
+            chrome: settings?.recordingControlChrome ?? .island,
             screenHasNotch: RecordingNotchScreen.isAvailable,
             isLiveSession: true
         )
+    }
+
+    private func applyChrome(settings: AppSettings?) {
+        model.chrome = settings?.recordingControlChrome ?? .island
+        model.docksToNotch = docksToNotch(settings: settings)
         if model.docksToNotch {
             model.notchMetrics = RecordingNotchScreen.metrics
         }
     }
+
+    // MARK: - Window
 
     private func present(key: Bool) {
         if let panel {
@@ -155,27 +243,40 @@ final class RecordingControlBar {
             } else {
                 panel.orderFrontRegardless()
             }
-            syncWindowChrome()
-            resizeToFittingSize()
+            if panelDocksToNotch {
+                placeNotchPanel()
+            }
             revealNotchIfNeeded()
             return
         }
 
-        let hosting = NSHostingView(rootView: RecordingControlBarView(model: model))
+        let frame = model.docksToNotch
+            ? notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+            : floatingFrame()
+        let hosting = RecordingBarHostingView(rootView: RecordingControlBarView(model: model))
         configureHosting(hosting)
-        hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
-        hosting.frame = NSRect(origin: .zero, size: hostingSize)
+        hosting.frame = NSRect(origin: .zero, size: frame.size)
 
         let panel = NonActivatingPanel(contentRect: hosting.frame, level: windowLevel)
         panel.contentView = hosting
-        panel.setFrame(frame(for: hostingSize), display: false)
+        panel.setFrame(frame, display: false)
         panel.collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
             .stationary,
             .ignoresCycle
         ]
-        applyMovability(to: panel)
+        // The controls track hover themselves so they still highlight while Kadr is in
+        // the background — which is the whole time a recording runs.
+        panel.acceptsMouseMovedEvents = true
+        if !model.docksToNotch {
+            // Nothing in the bar wants a cursor but the hand its controls push; AppKit's
+            // cursor rects would reset it to an arrow on every move while Kadr is active.
+            panel.disableCursorRects()
+        }
+        let movable = !model.docksToNotch
+        panel.isMovable = movable
+        panel.isMovableByWindowBackground = movable
         panel.becomesKeyOnlyIfNeeded = !key
         CaptureExclusionRegistry.shared.register(panel)
         if key {
@@ -186,10 +287,15 @@ final class RecordingControlBar {
         }
         self.panel = panel
         self.hosting = hosting
+        panelDocksToNotch = model.docksToNotch
         revealNotchIfNeeded()
     }
 
-    private func configureHosting(_ hosting: NSHostingView<RecordingControlBarView>) {
+    private func configureHosting(_ hosting: RecordingBarHostingView) {
+        // The panel is sized explicitly and the bar animates its own width inside it. Left
+        // to bridge its ideal size onto the window, the two fight over sizing every frame.
+        hosting.sizingOptions = []
+        hosting.autoresizingMask = [.width, .height]
         hosting.wantsLayer = true
         hosting.layer?.isOpaque = false
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
@@ -202,7 +308,8 @@ final class RecordingControlBar {
     private func teardownPanel() {
         hideTask = nil
         guard let panel else { return }
-        if !model.docksToNotch {
+        RecordingBarHoverView.endActiveHover()
+        if !panelDocksToNotch {
             Self.savedOrigin = panel.frame.origin
         }
         CaptureExclusionRegistry.shared.unregister(panel)
@@ -210,9 +317,11 @@ final class RecordingControlBar {
         panel.contentView = nil
         self.panel = nil
         hosting = nil
+        panelDocksToNotch = false
         model.picker = nil
         model.session = nil
         model.preRoll = nil
+        model.barFrameInPanel = .zero
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
@@ -234,74 +343,24 @@ final class RecordingControlBar {
             : .floating
     }
 
-    private var hostingSize: CGSize {
-        if model.docksToNotch {
-            return model.notchLayout.windowSize
-        }
-        return hosting?.fittingSize ?? .zero
+    private func floatingFrame() -> NSRect {
+        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let origin = Self.savedOrigin ?? Self.defaultOrigin(in: visible)
+        let barWidth = model.barFrameInPanel.width > 0 ? model.barFrameInPanel.width : Self.estimatedBarWidth
+        return NSRect(
+            origin: Self.clampedOrigin(origin, barWidth: barWidth, in: visible),
+            size: Self.panelSize
+        )
     }
 
-    private func applyMovability(to panel: NonActivatingPanel) {
-        let movable = !model.docksToNotch
-        panel.isMovable = movable
-        panel.isMovableByWindowBackground = movable
-        panel.level = windowLevel
-        panel.ignoresMouseEvents = false
-    }
-
-    private func syncWindowChrome() {
+    private func placeNotchPanel() {
         guard let panel, let hosting else { return }
-        configureHosting(hosting)
-        hosting.sizingOptions = model.docksToNotch ? [] : .intrinsicContentSize
-        applyMovability(to: panel)
-    }
-
-    private func resizeToFittingSize() {
-        guard let panel, let hosting else { return }
-        if model.docksToNotch {
-            let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
-            // Re-setting the frame while the island is springing leaves a delayed ghost.
-            guard !panel.frame.equalTo(frame) else { return }
-            panel.setFrame(frame, display: false)
-            hosting.frame = NSRect(origin: .zero, size: frame.size)
-            return
-        }
-        hosting.invalidateIntrinsicContentSize()
-        let size = hosting.fittingSize
-        guard size.width > 0, size.height > 0 else { return }
-        var frame = panel.frame
-        // Keep the centre so a shorter live bar does not jump left when the picker
-        // morphs into the clock.
-        let centre = CGPoint(x: frame.midX, y: frame.midY)
-        frame.size = size
-        frame.origin.x = centre.x - size.width / 2
-        frame.origin.y = centre.y - size.height / 2
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? panel.frame
-        frame.origin.x = min(
-            max(frame.origin.x, visible.minX + Self.margin),
-            visible.maxX - size.width - Self.margin
-        )
-        frame.origin.y = min(
-            max(frame.origin.y, visible.minY + Self.margin),
-            visible.maxY - size.height - Self.margin
-        )
-        panel.setFrame(frame, display: true)
-    }
-
-    /// Bottom-centre of the active screen by default — where a recording HUD is expected,
-    /// and clear of the menu bar and most window chrome.
-    private func frame(for size: CGSize) -> NSRect {
-        if model.docksToNotch {
-            return notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
-        }
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .zero
-        let origin = Self.savedOrigin ?? CGPoint(
-            x: visible.midX - size.width / 2,
-            y: visible.minY + Self.margin
-        )
-        let x = min(max(origin.x, visible.minX + Self.margin), visible.maxX - size.width - Self.margin)
-        let y = min(max(origin.y, visible.minY + Self.margin), visible.maxY - size.height - Self.margin)
-        return NSRect(x: x, y: y, width: size.width, height: size.height)
+        let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+        // Re-setting the frame while the island is springing leaves a delayed ghost.
+        guard !panel.frame.equalTo(frame) else { return }
+        panel.setFrame(frame, display: false)
+        hosting.frame = NSRect(origin: .zero, size: frame.size)
     }
 
     private func notchFrame(on screen: NSScreen?) -> NSRect {
@@ -316,10 +375,33 @@ final class RecordingControlBar {
     }
 }
 
+/// The panel is much larger than the bar. AppKit hit-tests by bounds, not alpha, so without
+/// this the transparent slack would swallow clicks meant for whatever is behind it.
+final class RecordingBarHostingView: NSHostingView<RecordingControlBarView> {
+    override var isOpaque: Bool {
+        false
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let model = rootView.model
+        guard !model.docksToNotch else { return super.hitTest(point) }
+        let bar = model.barFrameInPanel
+        // SwiftUI reports a top-left origin and NSHostingView is flipped, so they agree.
+        guard bar != .zero, bar.contains(convert(point, from: superview)) else { return nil }
+        return super.hitTest(point)
+    }
+}
+
 /// What the bar shows, as one observable value the panel can update in place.
 @MainActor
 @Observable
 final class RecordingControlBarModel {
+    enum Mode: Equatable {
+        case picker
+        case preRoll
+        case live
+    }
+
     var elapsedText = "0:00"
     var isPaused = false
     var audioLevel: Float = 0
@@ -334,6 +416,24 @@ final class RecordingControlBarModel {
     var notchVisible = false
     var notchExpanded = false
     var notchMetrics = RecordingNotchMetrics.fallback
+    /// The bar's frame inside the panel, reported by SwiftUI. Not observed: nothing
+    /// renders from it, and it changes every frame of a morph.
+    @ObservationIgnored var barFrameInPanel: CGRect = .zero
+
+    var mode: Mode {
+        Self.mode(
+            hasPicker: picker != nil,
+            hasSession: session != nil,
+            hasPreRoll: preRoll != nil && settings != nil
+        )
+    }
+
+    nonisolated static func mode(hasPicker: Bool, hasSession: Bool, hasPreRoll: Bool) -> Mode {
+        if hasPicker, !hasSession {
+            return .picker
+        }
+        return hasPreRoll ? .preRoll : .live
+    }
 
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(
@@ -363,52 +463,84 @@ final class RecordingControlBarModel {
 
 struct RecordingControlBarView: View {
     @Bindable var model: RecordingControlBarModel
-    @State private var isConfirmingCancel = false
 
     var body: some View {
         Group {
             if model.docksToNotch {
                 RecordingNotchIsland(model: model)
-            } else if let picker = model.picker, model.session == nil {
-                RecordSetupView(model: picker)
-            } else if let preRoll = model.preRoll, let settings = model.settings {
-                RecordingPreRollBar(preRoll: preRoll, settings: settings)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
-                liveBar
+                RecordingFloatingBar(model: model)
             }
         }
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity,
-            alignment: model.docksToNotch ? .top : .center
-        )
-        .kadrAnimation(.snappy(duration: 0.22), value: model.session != nil)
-        .kadrAnimation(.snappy(duration: 0.22), value: model.preRoll != nil)
-        .kadrAnimation(.snappy(duration: 0.22), value: model.docksToNotch)
         .kadrLayoutDirection()
         .background(Color.clear)
-        .onExitCommand {
-            if model.preRoll != nil {
-                model.preRoll?.cancel()
-            }
-        }
+    }
+}
+
+/// The floating island: one glass bar whose contents change with the mode.
+private struct RecordingFloatingBar: View {
+    @Bindable var model: RecordingControlBarModel
+    @State private var tooltip = RecordingBarTooltipModel()
+
+    var body: some View {
+        bar
+            // The slack above the bar is the tooltip's room, the slack below the shadow's.
+            .padding(.bottom, RecordingBarMetrics.shadowSlack)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .coordinateSpace(.named(RecordingBarCoordinateSpace.panel))
+            .environment(tooltip)
     }
 
-    private var liveBar: some View {
-        HStack(spacing: 8) {
-            statusDot
-            Text(model.elapsedText)
-                .font(.system(.title3, design: .rounded).monospacedDigit())
-                .foregroundStyle(.primary)
-                .frame(minWidth: 56, alignment: .leading)
-                .accessibilityLabel("Recording time")
+    private var bar: some View {
+        Group {
+            switch model.mode {
+            case .picker:
+                if let picker = model.picker {
+                    RecordSetupView(model: picker)
+                }
+            case .preRoll:
+                if let preRoll = model.preRoll, let settings = model.settings {
+                    RecordingPreRollBar(preRoll: preRoll, settings: settings)
+                }
+            case .live:
+                RecordingLiveControls(model: model)
+            }
+        }
+        .fixedSize()
+        // The outgoing controls leave instantly so the bar starts changing width at once;
+        // a fading-out set would hold its width and the bar would bulge to fit both.
+        .transition(.asymmetric(insertion: .opacity, removal: .identity))
+        .padding(.horizontal, RecordingBarMetrics.horizontalPadding)
+        .frame(height: RecordingBarMetrics.barHeight)
+        .recordingBarGlass()
+        .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
+        .overlay { RecordingBarTooltipLayer(tooltip: tooltip) }
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(RecordingBarCoordinateSpace.panel))
+        } action: { frame in
+            model.barFrameInPanel = frame
+        }
+    }
+}
+
+/// Elapsed time and the transport for the recording that is running.
+private struct RecordingLiveControls: View {
+    @Bindable var model: RecordingControlBarModel
+    @State private var isConfirmingCancel = false
+
+    var body: some View {
+        HStack(spacing: RecordingBarMetrics.controlSpacing) {
+            elapsed
 
             RecordingAudioMeter(level: model.audioLevel)
+                .padding(.horizontal, 6)
 
             if model.microphoneIsSilent {
                 Text("Mic silent")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
+                    .padding(.trailing, 6)
                     .help("The microphone is on but nothing is reaching it. Check mute and the input.")
                     .accessibilityLabel("Microphone is silent")
             }
@@ -417,32 +549,31 @@ struct RecordingControlBarView: View {
 
             RecordingBarCircleButton(
                 symbol: model.isPaused ? "play.fill" : "pause.fill",
-                help: model.isPaused ? "Resume" : "Pause"
+                help: model.isPaused ? "Resume recording" : "Pause recording"
             ) {
                 model.togglePause()
             }
-            .accessibilityLabel(model.isPaused ? "Resume recording" : "Pause recording")
 
             RecordingBarCircleButton(
                 symbol: "arrow.counterclockwise",
-                help: "Start over — discard what's recorded and record again"
+                help: "Start over"
             ) {
                 model.restart()
             }
-            .accessibilityLabel("Restart recording")
+            .accessibilityLabel("Restart — discard what's recorded and record again")
 
             RecordingBarFilledCircleButton(
                 symbol: "stop.fill",
-                help: "Stop and keep the recording (⌃⇧.)"
+                help: "Stop and save (⌃⇧.)"
             ) {
                 model.stop()
             }
-            .accessibilityLabel("Stop and save")
+            .accessibilityLabel("Stop and save the recording")
 
-            RecordingBarCircleButton(symbol: "trash", help: "Discard this recording") {
+            RecordingBarCircleButton(symbol: "trash.fill", help: "Discard recording") {
                 isConfirmingCancel = true
             }
-            .accessibilityLabel("Discard recording")
+            .accessibilityLabel("Discard — delete this recording without saving")
             .confirmationDialog(
                 "Discard this recording?",
                 isPresented: $isConfirmingCancel
@@ -453,25 +584,35 @@ struct RecordingControlBarView: View {
                 Text("What you have recorded so far will be deleted.")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RecordingBarBackground())
-        .padding(10)
-        .fixedSize()
-        .kadrAnimation(.snappy(duration: 0.22), value: model.isPaused)
-        .kadrAnimation(.snappy(duration: 0.22), value: model.microphoneIsSilent)
+        .kadrAnimation(RecordingBarMetrics.modeChange, value: model.microphoneIsSilent)
     }
 
-    /// Red and steady while recording, amber while paused.
+    /// Red and steady while recording, dimmed while paused.
     ///
     /// Not animated: this sits on screen for the length of a recording, and a pulsing layer
     /// is a repeating animation in the process whose whole design is that it has none.
-    private var statusDot: some View {
-        Circle()
-            .fill(model.isPaused ? Color.orange : Color.red)
-            .frame(width: 8, height: 8)
-            .opacity(model.isPaused ? 0.45 : 1)
-            .padding(.leading, 6)
-            .accessibilityLabel(model.isPaused ? "Paused" : "Recording")
+    private var elapsed: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(RecordingBarMetrics.recordTint)
+                .frame(width: 8, height: 8)
+                .opacity(model.isPaused ? 0.35 : 1)
+
+            Text(model.elapsedText)
+                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(RecordingBarMetrics.activeTint)
+                // Fixed width so 9:59 → 10:00 does not nudge the whole bar sideways.
+                .frame(minWidth: 56, alignment: .leading)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 2)
+        .frame(height: RecordingBarMetrics.controlSize)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            model.isPaused
+                ? "Recording paused at \(model.elapsedText)"
+                : "Recording, \(model.elapsedText) elapsed"
+        )
     }
 }

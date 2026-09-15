@@ -72,6 +72,48 @@ extension View {
         modifier(AccessibilityChromeModifier(material: material, cornerRadius: cornerRadius))
     }
 
+    /// Floating chrome: Liquid Glass on macOS 26, a richer material before that.
+    ///
+    /// Apple's rule is glass belongs on the navigation layer that sits *over*
+    /// content — HUDs, toolbars, floating controls — never on the content itself.
+    /// Reduce Transparency and Increase Contrast swap to an opaque fill + stroke.
+    @ViewBuilder
+    func kadrLiquidGlass(in shape: some InsettableShape, interactive: Bool = false) -> some View {
+        if AccessibilityChrome.reduceTransparency {
+            background(shape.fill(Color(nsColor: .windowBackgroundColor)))
+                .overlay {
+                    shape.strokeBorder(
+                        Color.primary.opacity(AccessibilityChrome.increaseContrast ? 0.45 : 0.18)
+                    )
+                }
+        } else if #available(macOS 26.0, *) {
+            if interactive {
+                glassEffect(.regular.interactive(), in: shape)
+            } else {
+                glassEffect(.regular, in: shape)
+            }
+        } else {
+            background {
+                shape.fill(.regularMaterial)
+            }
+            .overlay {
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.55),
+                            Color.white.opacity(0.10)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.8
+                )
+            }
+            .shadow(color: .black.opacity(0.32), radius: 22, y: 8)
+            .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
+        }
+    }
+
     /// Absolute minimum hit target (docs/14 §8). Visual size is unchanged.
     func kadrHitTarget(minSize: CGFloat = 20) -> some View {
         frame(minWidth: minSize, minHeight: minSize)

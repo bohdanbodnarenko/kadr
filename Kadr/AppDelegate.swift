@@ -100,16 +100,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var recordSetup = RecordSetupHUD(
         bar: recordingControlBar,
         settings: settings,
-        start: { [weak self] target in
-            guard let self else { return }
-            switch target {
-            case .area: recording.beginRegionRecording()
-            case .window: recording.beginWindowRecording()
-            case .screen: recording.beginDisplayRecording()
+        record: { [weak self] target in
+            self?.recording.startAfterCountdown(target: target)
+        },
+        pickWindow: { [weak self] completion in
+            self?.recording.pickWindow { selection in
+                if let selection {
+                    self?.recording.beginWindowHighlight(from: selection)
+                }
+                completion(selection)
             }
         },
-        startDisplay: { [weak self] displayID in
-            self?.recording.beginDisplayRecording(displayID)
+        pickArea: { [weak self] completion in
+            self?.recording.pickRegion(completion: completion)
         },
         cameraPreview: { [weak self] enabled in
             guard let self else { return }

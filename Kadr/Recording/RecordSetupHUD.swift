@@ -1,21 +1,17 @@
 import AppKit
 import OverlayKit
 import RecordingCore
+import SelectionUI
 import SettingsKit
 import Shared
 import SwiftUI
 
-/// Record mode: a compact picker strip, then start (docs/03 §1.4, §1.8).
+/// Record mode: a floating island, then Record (docs/03 §1.4, §1.8).
 ///
-/// Recording used to begin the instant a hotkey fired. The shortcut chose the target *and*
-/// committed to it in one press, so there was no moment at which somebody could look at what
-/// was about to happen and change their mind.
-///
-/// This is that moment, but it is not a form. Screendrop's picker is a row of icons that
-/// *are* the start button — Display, Window, Area — with the mic, camera and timer sitting
-/// beside them. The first version here was a 320-point card of switches and a "Start
-/// Recording" button, which made every recording two decisions and a confirmation. One
-/// click on a source starts it; the options are already decided in the same strip.
+/// The island stays up so microphone, camera and the target can be chosen before anything
+/// is captured. Screen / Window / Area arm a target; the red Record button is what starts
+/// the countdown. Window and area open the same overlay stills use, then bring the island
+/// back — they do not begin the take on the click.
 @MainActor
 final class RecordSetupHUD {
     private let bar: RecordingControlBar
@@ -25,13 +21,15 @@ final class RecordSetupHUD {
     init(
         bar: RecordingControlBar,
         settings: AppSettings,
-        start: @escaping (RecordTargetKind) -> Void,
-        startDisplay: @escaping (CGDirectDisplayID) -> Void,
+        record: @escaping (RecordingTarget) -> Void,
+        pickWindow: @escaping (@escaping (WindowSelection?) -> Void) -> Void,
+        pickArea: @escaping (@escaping (SelectionResult?) -> Void) -> Void,
         cameraPreview: @escaping (Bool) -> Void = { _ in }
     ) {
         self.bar = bar
-        model = RecordSetupModel(settings: settings, start: start)
-        model.startDisplay = startDisplay
+        model = RecordSetupModel(settings: settings, record: record)
+        model.onPickWindow = pickWindow
+        model.onPickArea = pickArea
         model.onCameraPreview = cameraPreview
     }
 
@@ -51,29 +49,64 @@ final class RecordSetupHUD {
         }
     }
 
-    func present() {
-        model.onStart = { [weak self] hidesBar in
-            self?.composer.hide()
-            if hidesBar {
-                self?.dismiss()
-            }
-        }
-        model.onCancel = { [weak self] in self?.dismiss() }
-        model.onTeleprompterComposer = { [weak self] in
-            guard let self else { return }
-            composer.toggle(settings: model.settings, above: bar.screenFrame)
-        }
-        bar.showPicker(model: model)
-        if model.settings.recordingShowsWebcam {
-            model.onCameraPreview(true)
+    func present(picking: RecordTargetKind? = nil) {
+        wireSession()
+        model.refreshDevices()
+        model.armedTarget = nil
+        model.armDefaultScreenIfNeeded()
+        switch picking {
+        case .window:
+            model.requestWindowPick()
+        case .area:
+            model.requestAreaPick()
+        case .screen, .none:
+            revealIsland()
         }
         onShowingChanged?()
     }
 
     func dismiss() {
         composer.hide()
+        model.onCameraPreview(false)
         bar.dismissPicker()
         onShowingChanged?()
+    }
+
+    private func wireSession() {
+        model.onHideForPick = { [weak self] in
+            self?.composer.hide()
+            self?.bar.dismissPicker()
+            self?.onShowingChanged?()
+        }
+        model.onRevealAfterPick = { [weak self] in
+            self?.revealIsland()
+            self?.onShowingChanged?()
+        }
+        // Record keeps the bar up: the countdown claims it synchronously and morphs the
+        // picker in place. Tearing it down first made a second window pop up elsewhere.
+        model.onCommit = { [weak self] in
+            self?.composer.hide()
+            self?.model.onCameraPreview(false)
+        }
+        // Only closes a picker nothing took over (control bar off, or the start refused).
+        model.onCommitted = { [weak self] in
+            self?.bar.dismissPicker()
+            self?.onShowingChanged?()
+        }
+        model.onCancel = { [weak self] in self?.dismiss() }
+        model.onTeleprompterComposer = { [weak self] in
+            guard let self else { return }
+            composer.toggle(settings: model.settings, above: bar.screenFrame)
+        }
+    }
+
+    private func revealIsland() {
+        bar.showPicker(model: model)
+        if model.settings.recordingShowsWebcam,
+           CaptureMediaAccess.status(for: .camera) == .allowed
+        {
+            model.onCameraPreview(true)
+        }
     }
 }
 
@@ -104,6 +137,13 @@ enum RecordTargetKind: String, CaseIterable, Identifiable {
     }
 }
 
+/// The target the island will record when the user presses Record.
+enum RecordArmedTarget: Equatable {
+    case screen(CGDirectDisplayID)
+    case window(id: CGWindowID, title: String)
+    case area(DisplayRect, display: CGDirectDisplayID)
+}
+
 @MainActor
 @Observable
 final class RecordSetupModel {
@@ -111,24 +151,32 @@ final class RecordSetupModel {
     var displays: [RecordingDeviceCatalog.Display] = []
     var cameras: [RecordingDeviceCatalog.Device] = []
     var microphones: [RecordingDeviceCatalog.Device] = []
+    var armedTarget: RecordArmedTarget?
 
-    @ObservationIgnored let start: (RecordTargetKind) -> Void
-    /// Called just before a source begins. `hidesBar` is true for Area and Window, which
-    /// need the overlay unobstructed; Display keeps the bar so it can morph into the
-    /// countdown controls.
-    @ObservationIgnored var onStart: (Bool) -> Void = { _ in }
+    @ObservationIgnored let recordAction: (RecordingTarget) -> Void
+    /// Hides the island so the selection overlay can own the screen.
+    @ObservationIgnored var onHideForPick: () -> Void = {}
+    /// Brings the island back after a window or area pick (or a cancel).
+    @ObservationIgnored var onRevealAfterPick: () -> Void = {}
+    /// The island is done — Record was pressed, countdown owns the bar.
+    @ObservationIgnored var onCommit: () -> Void = {}
+    /// After the record action ran — the recording has had its chance to claim the bar.
+    @ObservationIgnored var onCommitted: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
     /// Turns the live camera bubble on or off. Kept independent of the bar so Area and
     /// Window selection can hide the picker without tearing the session down.
     @ObservationIgnored var onCameraPreview: (Bool) -> Void = { _ in }
+    @ObservationIgnored var onPickWindow: (@escaping (WindowSelection?) -> Void) -> Void = { $0(nil) }
+    @ObservationIgnored var onPickArea: (@escaping (SelectionResult?) -> Void) -> Void = { $0(nil) }
     /// Opens the script editor that belongs on the bar, not in Settings.
     @ObservationIgnored var onTeleprompterComposer: () -> Void = {}
     var accessPrompt: CaptureAccessKind?
     var accessResume: CaptureAccessResume?
+    var accessRequestInFlight = false
 
-    init(settings: AppSettings, start: @escaping (RecordTargetKind) -> Void) {
+    init(settings: AppSettings, record: @escaping (RecordingTarget) -> Void) {
         self.settings = settings
-        self.start = start
+        recordAction = record
     }
 
     func refreshDevices() {
@@ -137,17 +185,67 @@ final class RecordSetupModel {
         microphones = RecordingDeviceCatalog.microphones()
     }
 
-    func begin(_ kind: RecordTargetKind) {
-        beginAfterAccessCheck(kind)
+    func armDefaultScreenIfNeeded() {
+        guard armedTarget == nil else { return }
+        armScreen(displays.first?.displayID ?? CGMainDisplayID())
     }
 
-    func beginDisplay(_ displayID: CGDirectDisplayID) {
-        beginDisplayAfterAccessCheck(displayID)
+    func armScreen(_ displayID: CGDirectDisplayID) {
+        armedTarget = .screen(displayID)
     }
 
-    /// Set by the HUD's owner so a multi-display pick can name a screen rather than
-    /// always recording the main one.
-    @ObservationIgnored var startDisplay: ((CGDirectDisplayID) -> Void)?
+    func isArmed(_ kind: RecordTargetKind) -> Bool {
+        switch (armedTarget, kind) {
+        case (.screen, .screen), (.window, .window), (.area, .area):
+            true
+        default:
+            false
+        }
+    }
+
+    var recordingTarget: RecordingTarget? {
+        switch armedTarget {
+        case let .screen(id):
+            .display(id)
+        case let .window(id, _):
+            .window(id)
+        case let .area(rect, display):
+            .region(rect, display: display)
+        case .none:
+            nil
+        }
+    }
+
+    func requestWindowPick() {
+        onHideForPick()
+        onPickWindow { [weak self] selection in
+            guard let self else { return }
+            if let selection {
+                let title = selection.window.title?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = (title?.isEmpty == false ? title : nil)
+                    ?? selection.window.applicationName
+                    ?? "Window"
+                armedTarget = .window(id: selection.window.id, title: name)
+            }
+            onRevealAfterPick()
+        }
+    }
+
+    func requestAreaPick() {
+        onHideForPick()
+        onPickArea { [weak self] result in
+            guard let self else { return }
+            if let result {
+                armedTarget = .area(result.rect, display: result.display.displayID)
+            }
+            onRevealAfterPick()
+        }
+    }
+
+    func record() {
+        recordAfterAccessCheck()
+    }
 
     func cancel() {
         onCameraPreview(false)

@@ -21,10 +21,7 @@ extension AllInOneView {
                 isOn: model.settings.askForSaveDestination
             )
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help(saveTargetHelp)
+        .recordingBarMenu(tooltip: saveTargetHelp)
         .accessibilityLabel("Save target")
         .accessibilityValue(
             model.settings.askForSaveDestination ? "Ask where to save" : "Default folder"
@@ -57,10 +54,7 @@ extension AllInOneView {
                 isOn: model.settings.recordsSystemAudio || model.settings.recordsMicrophone
             )
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help("Audio for the next recording")
+        .recordingBarMenu(tooltip: "Audio for the next recording")
         .accessibilityLabel("Recording audio")
         .accessibilityValue(recordingAudioValue)
     }
@@ -114,10 +108,7 @@ extension AllInOneView {
         } label: {
             RecordingBarIcon(symbol: "slider.horizontal.3")
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .help("Timer, save target, and recording audio")
+        .recordingBarMenu(tooltip: "Timer, save target, and recording audio")
         .accessibilityLabel("Capture options")
     }
 

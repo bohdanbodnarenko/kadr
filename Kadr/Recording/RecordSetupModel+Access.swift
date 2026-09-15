@@ -1,3 +1,4 @@
+import RecordingCore
 import SettingsKit
 import SwiftUI
 
@@ -7,7 +8,14 @@ extension RecordSetupModel {
             get: { self.accessPrompt },
             set: { newValue in
                 if newValue == nil {
-                    self.dismissAccessPrompt()
+                    // The system camera sheet steals key status and dismisses this
+                    // popover. Keep the in-flight resume so Allow can still restore
+                    // the island instead of leaving only the camera bubble.
+                    if self.accessRequestInFlight {
+                        self.accessPrompt = nil
+                    } else {
+                        self.dismissAccessPrompt()
+                    }
                 } else {
                     self.accessPrompt = newValue
                 }
@@ -17,6 +25,10 @@ extension RecordSetupModel {
 
     func requestCameraToggle() {
         if settings.recordingShowsWebcam {
+            if needsCameraPrompt {
+                armCamera()
+                return
+            }
             settings.recordingShowsWebcam = false
             onCameraPreview(false)
             return
@@ -42,42 +54,33 @@ extension RecordSetupModel {
         settings.recordsMicrophone = true
     }
 
-    func beginAfterAccessCheck(_ kind: RecordTargetKind) {
+    func recordAfterAccessCheck() {
         if needsCameraPrompt {
-            accessResume = .begin(kind)
+            accessResume = .record
             accessPrompt = .camera
             return
         }
         if needsMicrophonePrompt {
-            accessResume = .begin(kind)
+            accessResume = .record
             accessPrompt = .microphone
             return
         }
-        commitStart(kind)
-    }
-
-    func beginDisplayAfterAccessCheck(_ displayID: CGDirectDisplayID) {
-        if needsCameraPrompt {
-            accessResume = .beginDisplay(displayID)
-            accessPrompt = .camera
-            return
-        }
-        if needsMicrophonePrompt {
-            accessResume = .beginDisplay(displayID)
-            accessPrompt = .microphone
-            return
-        }
-        commitDisplay(displayID)
+        commitRecord()
     }
 
     func allowAccess() {
         guard let kind = accessPrompt else { return }
-        Task {
+        let resume = accessResume
+        accessRequestInFlight = true
+        Task { @MainActor in
             let granted = await CaptureMediaAccess.request(kind)
-            if granted {
-                applyGrant(kind)
-                resumeAfterAccess()
+            accessRequestInFlight = false
+            guard granted else {
+                onRevealAfterPick()
+                return
             }
+            applyGrant(kind)
+            continueResume(resume, skipping: nil)
         }
     }
 
@@ -96,17 +99,23 @@ extension RecordSetupModel {
             settings.recordsMicrophone = false
         }
         accessPrompt = nil
-        continueResume(skipping: kind)
+        continueResume(accessResume, skipping: kind)
     }
 
     func refreshAfterPermissionChange() {
         guard let kind = accessPrompt else { return }
         guard CaptureMediaAccess.status(for: kind) == .allowed else { return }
         applyGrant(kind)
-        resumeAfterAccess()
+        continueResume(accessResume, skipping: nil)
     }
 
-    private var needsCameraPrompt: Bool {
+    /// Completes a grant without the system sheet (tests, and returning from Settings).
+    func completeAccessGrant(_ kind: CaptureAccessKind) {
+        applyGrant(kind)
+        continueResume(accessResume, skipping: nil)
+    }
+
+    var needsCameraPrompt: Bool {
         settings.recordingShowsWebcam
             && CaptureAccessGate.needsPrompt(status: CaptureMediaAccess.status(for: .camera))
     }
@@ -143,30 +152,20 @@ extension RecordSetupModel {
         accessPrompt = nil
     }
 
-    private func resumeAfterAccess() {
-        continueResume(skipping: nil)
-    }
-
-    private func continueResume(skipping skipped: CaptureAccessKind?) {
-        let resume = accessResume
+    private func continueResume(_ resume: CaptureAccessResume?, skipping skipped: CaptureAccessKind?) {
         accessResume = nil
         switch resume {
+        case .record:
+            if skipped == .camera, needsMicrophonePrompt {
+                accessResume = .record
+                accessPrompt = .microphone
+                return
+            }
+            commitRecord()
         case .toggle, .none:
-            return
-        case let .begin(kind):
-            if skipped == .camera, needsMicrophonePrompt {
-                accessResume = .begin(kind)
-                accessPrompt = .microphone
-                return
-            }
-            commitStart(kind)
-        case let .beginDisplay(displayID):
-            if skipped == .camera, needsMicrophonePrompt {
-                accessResume = .beginDisplay(displayID)
-                accessPrompt = .microphone
-                return
-            }
-            commitDisplay(displayID)
+            // The TCC sheet often dismisses the picker panel. Bring the island
+            // back so the user is not left with only the camera bubble.
+            onRevealAfterPick()
         }
     }
 
@@ -175,13 +174,10 @@ extension RecordSetupModel {
         accessResume = nil
     }
 
-    private func commitStart(_ kind: RecordTargetKind) {
-        onStart(kind != .screen)
-        start(kind)
-    }
-
-    private func commitDisplay(_ displayID: CGDirectDisplayID) {
-        onStart(false)
-        startDisplay?(displayID)
+    private func commitRecord() {
+        guard let target = recordingTarget else { return }
+        onCommit()
+        recordAction(target)
+        onCommitted()
     }
 }

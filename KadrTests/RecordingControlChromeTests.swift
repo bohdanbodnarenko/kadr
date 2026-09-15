@@ -123,8 +123,90 @@ struct RecordingControlChromePlacementTests {
     private func assertCameraCentered(_ layout: RecordingNotchLayout) {
         let cameraMid =
             layout.islandLeadingInset
-            + layout.leftWingWidth
-            + layout.cameraReserveWidth / 2
+                + layout.leftWingWidth
+                + layout.cameraReserveWidth / 2
         #expect(abs(cameraMid - layout.windowSize.width / 2) < 0.5)
+    }
+}
+
+@MainActor
+@Suite("Recording island chrome")
+struct RecordingIslandChromeTests {
+    @Test("Island controls stay comfortably hittable")
+    func hitTargets() {
+        #expect(RecordingBarMetrics.controlSize >= 20)
+        #expect(RecordingBarMetrics.iconSize >= 12)
+        #expect(RecordingBarMetrics.barHeight >= 40)
+    }
+
+    @Test("The tooltip band sits above the capsule, not inside it")
+    func tooltipReservesSpace() {
+        #expect(RecordingBarMetrics.tooltipReserve > RecordingBarMetrics.tooltipPillHeight)
+    }
+
+    @Test("The fixed panel holds the bar, its tooltip and its shadow")
+    func panelHoldsTheBar() {
+        let size = RecordingControlBar.panelSize
+        #expect(
+            size.height == RecordingBarMetrics.tooltipReserve
+                + RecordingBarMetrics.barHeight
+                + RecordingBarMetrics.shadowSlack
+        )
+        // The picker is the widest mode: 12 controls, two dividers.
+        let picker = 12 * RecordingBarMetrics.controlSize + 2 * 11 + 13 * RecordingBarMetrics.controlSpacing
+            + 2 * RecordingBarMetrics.horizontalPadding
+        #expect(size.width >= picker + 2 * 60)
+    }
+
+    @Test("Mode follows the picker, then the countdown, then the clock", arguments: [
+        (true, false, false, RecordingControlBarModel.Mode.picker),
+        (true, true, true, .preRoll),
+        (false, true, true, .preRoll),
+        (false, true, false, .live),
+        (true, true, false, .live)
+    ])
+    func modeRules(hasPicker: Bool, hasSession: Bool, hasPreRoll: Bool, expected: RecordingControlBarModel.Mode) {
+        #expect(
+            RecordingControlBarModel.mode(
+                hasPicker: hasPicker,
+                hasSession: hasSession,
+                hasPreRoll: hasPreRoll
+            ) == expected
+        )
+    }
+
+    @Test("The default bar sits 48 pt above the visible frame, centred")
+    func defaultPlacement() {
+        let visible = CGRect(x: 0, y: 80, width: 1440, height: 820)
+        let origin = RecordingControlBar.defaultOrigin(in: visible)
+        #expect(origin.x + RecordingControlBar.panelSize.width / 2 == visible.midX)
+        #expect(origin.y + RecordingBarMetrics.shadowSlack == visible.minY + 48)
+        #expect(RecordingControlBar.clampedOrigin(origin, barWidth: 540, in: visible) == origin)
+    }
+
+    @Test("A remembered position is clamped so the bar, not the panel, stays visible")
+    func clampKeepsTheBarOnScreen() {
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let size = RecordingControlBar.panelSize
+        let barWidth: CGFloat = 400
+
+        let offLeft = RecordingControlBar.clampedOrigin(CGPoint(x: -2000, y: -500), barWidth: barWidth, in: visible)
+        let leftBarEdge = offLeft.x + (size.width - barWidth) / 2
+        #expect(leftBarEdge >= visible.minX)
+        #expect(offLeft.y + RecordingBarMetrics.shadowSlack >= visible.minY)
+
+        let offTop = RecordingControlBar.clampedOrigin(CGPoint(x: 5000, y: 5000), barWidth: barWidth, in: visible)
+        let rightBarEdge = offTop.x + (size.width + barWidth) / 2
+        #expect(rightBarEdge <= visible.maxX)
+        #expect(offTop.y + RecordingBarMetrics.shadowSlack + RecordingBarMetrics.barHeight <= visible.maxY)
+    }
+
+    @Test("A zero fitting size is never used as the panel size")
+    func firstShowRejectsZero() {
+        let size = RecordingBarMetrics.resolvedIslandSize(fitting: .zero)
+        #expect(size.width >= 200)
+        #expect(size.height >= 48)
+        let laidOut = RecordingBarMetrics.resolvedIslandSize(fitting: CGSize(width: 400, height: 72))
+        #expect(laidOut == CGSize(width: 400, height: 72))
     }
 }

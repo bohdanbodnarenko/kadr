@@ -127,7 +127,7 @@ struct ScrollCaptureHUDView: View {
         }
         .padding(12)
         .frame(width: 240)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .kadrLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous), interactive: true)
     }
 
     private var header: some View {

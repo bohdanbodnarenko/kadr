@@ -104,6 +104,11 @@ final class RecordingCoordinator {
         state.isActive && state != .finishing
     }
 
+    /// The window/area overlay is up to choose a recording target.
+    var isSelectingTarget: Bool {
+        overlay.isPresented
+    }
+
     /// Elapsed time as the menu bar shows it.
     var elapsedText: String {
         let total = Int(elapsed)

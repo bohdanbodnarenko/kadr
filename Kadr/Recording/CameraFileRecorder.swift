@@ -146,10 +146,9 @@ final class CameraFileRecorder {
     // MARK: - Preview
 
     private func warmPreview(deviceID: String?, generation: Int) async {
-        if !Self.isAuthorized {
-            let granted = await Self.requestAccess()
-            guard granted else { return }
-        }
+        // Do not request TCC here. The record island owns that prompt; a sheet
+        // from this path dismisses the picker and leaves only the camera bubble.
+        guard Self.isAuthorized else { return }
         guard generation == previewGeneration else { return }
         startPreview(deviceID: deviceID)
     }
