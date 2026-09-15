@@ -145,6 +145,14 @@ extension AnnotationCanvasView {
 
     /// Puts the offscreen render on screen and hides everything it already contains.
     private func showOffscreenLayer() {
+        let idle = model.tool != .crop && !textEditor.isEditing
+        guard idle else {
+            cameraLayer.isHidden = true
+            contentHost.isHidden = false
+            setDrawingLayersHidden(false)
+            applyCanvasOrientation()
+            return
+        }
         contentHost.isHidden = true
         setDrawingLayersHidden(true)
         shadowLayer.isHidden = true
@@ -162,6 +170,8 @@ extension AnnotationCanvasView {
         draftLayer.isHidden = hidden
         selectionLayer.isHidden = hidden
         cropLayer.isHidden = hidden || model.tool != .crop
+        compositeSpotlightLayer.isHidden = hidden
+        watermarkLayer.isHidden = hidden || model.document.watermark == nil
     }
 
     func layoutCanvasChrome() {
@@ -296,6 +306,10 @@ extension AnnotationCanvasView {
         selectionLayer.frame = drawing
         reviewLayer.frame = drawing
         cropLayer.frame = drawing
+        compositeSpotlightLayer.frame = bounds
+        watermarkLayer.frame = bounds
+        updateCompositeSpotlight()
+        updateWatermarkLayer()
     }
 
     /// Draws the card's shadow without laying anything opaque behind the capture.
@@ -347,6 +361,8 @@ extension AnnotationCanvasView {
         gradientLayer.isHidden = true
         backdropLayer.contents = nil
         switch backdrop {
+        case .none:
+            backdropLayer.backgroundColor = nil
         case let .solid(colour):
             backdropLayer.backgroundColor = NSColor(
                 srgbRed: colour.red,
@@ -398,6 +414,7 @@ struct CanvasLayoutKey: Equatable {
     var beautify: BeautifySpec?
     var isCropping: Bool
     var orientation: CanvasOrientation
+    var watermark: WatermarkSpec?
 }
 
 extension AnnotationCanvasView {
@@ -410,7 +427,8 @@ extension AnnotationCanvasView {
                 imageSpace: CGRect(origin: .zero, size: bounds.size),
                 beautify: nil,
                 isCropping: true,
-                orientation: model.document.orientation
+                orientation: model.document.orientation,
+                watermark: model.document.watermark
             )
         }
         return CanvasLayoutKey(
@@ -419,7 +437,8 @@ extension AnnotationCanvasView {
             imageSpace: model.document.imageSpaceFrame,
             beautify: model.document.beautify,
             isCropping: false,
-            orientation: model.document.orientation
+            orientation: model.document.orientation,
+            watermark: model.document.watermark
         )
     }
 }

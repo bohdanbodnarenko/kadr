@@ -64,7 +64,16 @@ public struct BeautifyLayout: Equatable, Sendable {
     /// 5. A border ring grows the *card*, not the canvas around it. The capture keeps its
     ///    own size and the ring is added outside it, so turning a border on does not
     ///    shrink the screenshot.
-    public static func compute(contentSize: CGSize, spec: BeautifySpec) -> BeautifyLayout {
+    public static func compute(
+        contentSize: CGSize,
+        spec: BeautifySpec,
+        camera: AnnotationCameraSpec? = nil
+    ) -> BeautifyLayout {
+        var spec = spec
+        // A stuck edge would clip a camera that leans off the card (docs/16 ED-16).
+        if let camera, !camera.isIdentity {
+            spec.sticksToEdges = false
+        }
         let capture = CGSize(width: max(contentSize.width, 1), height: max(contentSize.height, 1))
         let shortestEdge = min(capture.width, capture.height)
         let border = spec.border.thickness.resolved(shortestEdge: shortestEdge)
@@ -122,5 +131,24 @@ public struct BeautifyLayout: Equatable, Sendable {
             imageCorners: corners.inset(by: border).clamped(to: imageRect),
             stuckEdges: stuck
         )
+    }
+
+    /// Grows the canvas so a projected camera is not clipped (docs/16 ED-16).
+    ///
+    /// Used for camera-without-beautify documents. A beautified canvas already has
+    /// padding; expanding it again would change the designed frame.
+    func expanded(toFit camera: AnnotationCameraSpec) -> BeautifyLayout {
+        let quad = AnnotationCameraGeometry.project(spec: camera, contentRect: cardRect)
+        let canvas = CGRect(origin: .zero, size: canvasSize)
+        let union = canvas.union(quad.boundingBox)
+        let dx = -min(union.minX, 0)
+        let dy = -min(union.minY, 0)
+        var next = self
+        if dx != 0 || dy != 0 {
+            next.cardRect = cardRect.offsetBy(dx: dx, dy: dy)
+            next.imageRect = imageRect.offsetBy(dx: dx, dy: dy)
+        }
+        next.canvasSize = CGSize(width: union.width, height: union.height)
+        return next
     }
 }

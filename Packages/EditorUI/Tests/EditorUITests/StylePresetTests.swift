@@ -238,11 +238,21 @@ struct StylePresetTests {
     @Test("An unknown field is ignored, not fatal")
     func unknownFieldsAreIgnored() throws {
         let json = """
-        {"name": "Future", "version": 9, "sparkle": {"amount": 11}}
+        {"name": "Future", "version": 1, "sparkle": {"amount": 11}}
         """
         let preset = try JSONDecoder().decode(StylePreset.self, from: Data(json.utf8))
         #expect(preset.name == "Future")
         #expect(preset.isEmpty)
+    }
+
+    @Test("An unsupported version is refused")
+    func unsupportedVersionIsRefused() {
+        let json = """
+        {"name": "Future", "version": 9}
+        """
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(StylePreset.self, from: Data(json.utf8))
+        }
     }
 
     @Test("A preset with nothing in it at all still decodes")

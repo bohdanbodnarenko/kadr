@@ -39,11 +39,12 @@ struct ActivationJugglerTests {
     }
 
     @Test("Closing the last window returns the agent to .accessory")
-    func restoresIdlePolicy() {
+    func restoresIdlePolicy() async {
         let app = FakeApplication()
         let juggler = ActivationJuggler(application: app)
         juggler.beginRegularWindow()
         juggler.endRegularWindow()
+        await Task.yield()
 
         #expect(app.policy == .accessory)
         #expect(app.policyHistory == [.regular, .accessory])
@@ -51,7 +52,7 @@ struct ActivationJugglerTests {
     }
 
     @Test("A second window does not re-activate, and closing it does not drop the policy")
-    func refCounts() {
+    func refCounts() async {
         let app = FakeApplication()
         let juggler = ActivationJuggler(application: app)
         juggler.beginRegularWindow()
@@ -63,6 +64,7 @@ struct ActivationJugglerTests {
         #expect(juggler.regularWindowCount == 1)
 
         juggler.endRegularWindow()
+        await Task.yield()
         #expect(app.policy == .accessory)
     }
 
@@ -77,12 +79,13 @@ struct ActivationJugglerTests {
     }
 
     @Test("The idle policy is configurable for hosts that are not accessory apps")
-    func customIdlePolicy() {
+    func customIdlePolicy() async {
         let app = FakeApplication()
         app.policy = .regular
         let juggler = ActivationJuggler(application: app, idlePolicy: .regular)
         juggler.beginRegularWindow()
         juggler.endRegularWindow()
+        await Task.yield()
 
         #expect(app.policy == .regular)
         #expect(app.activateCount == 1)

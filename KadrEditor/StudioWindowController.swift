@@ -82,6 +82,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         window.delegate = self
         window.center()
         window.isReleasedWhenClosed = false
+        model.session.markOpened()
         self.window = window
 
         // Into the responder chain (docs/08 §3: "command-stack undo vs …").

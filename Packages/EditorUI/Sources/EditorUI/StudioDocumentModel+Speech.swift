@@ -73,11 +73,6 @@ public extension StudioDocumentModel {
     /// Transcribes the recording and proposes cuts. Does not apply them (docs/13 T0.4).
     func tidySpeech() async {
         guard !isTranscribing else { return }
-        // Guard first, before minutes of transcription (docs/13 T-M1).
-        guard !edit.clips.isEdited(ofRecordingLasting: manifest.duration) else {
-            failure = .tidyRefused()
-            return
-        }
         guard await transcriber.requestAuthorization() else {
             failure = .speechPermissionNeeded()
             return
@@ -170,7 +165,7 @@ public extension StudioDocumentModel {
 
         pendingCuts = cuts
         selectedCutIDs = Set(cuts.map(\.id))
-        requiresCutConfirmation = planner.exceedsRemovalCap(cuts, duration: manifest.duration)
+        requiresCutConfirmation = planner.exceedsRemovalCap(cuts, duration: edit.clips.editedDuration)
         notice = requiresCutConfirmation
             ? "This would remove more than 40% of the recording. Review the list and confirm before applying."
             : "Review the proposed cuts, then apply. Nothing has been changed yet."
@@ -183,12 +178,8 @@ public extension StudioDocumentModel {
             notice = "No cuts were selected."
             return
         }
-        guard !edit.clips.isEdited(ofRecordingLasting: manifest.duration) else {
-            failure = .tidyRefused()
-            return
-        }
         let planner = TranscriptCutPlanner()
-        if planner.exceedsRemovalCap(cuts, duration: manifest.duration), !confirmingLargeRemoval {
+        if planner.exceedsRemovalCap(cuts, duration: edit.clips.editedDuration), !confirmingLargeRemoval {
             requiresCutConfirmation = true
             failure = StudioFailurePresentation(
                 title: "Remove more than 40% of this recording?",
@@ -199,7 +190,7 @@ public extension StudioDocumentModel {
             )
             return
         }
-        let timeline = planner.applying(cuts, to: manifest.duration)
+        let timeline = planner.applying(cuts, to: edit.clips)
         guard !timeline.clips.isEmpty, timeline.editedDuration > 0 else {
             notice = "Tidying would leave nothing to play. The recording was left as it is."
             return
@@ -226,7 +217,7 @@ public extension StudioDocumentModel {
         }
         let planner = TranscriptCutPlanner()
         let selected = pendingCuts.filter { selectedCutIDs.contains($0.id) }
-        requiresCutConfirmation = planner.exceedsRemovalCap(selected, duration: manifest.duration)
+        requiresCutConfirmation = planner.exceedsRemovalCap(selected, duration: edit.clips.editedDuration)
     }
 
     func seekToCut(_ cut: ProposedCut) {

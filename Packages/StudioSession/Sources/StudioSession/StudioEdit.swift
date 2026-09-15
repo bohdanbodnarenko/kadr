@@ -9,12 +9,13 @@ import Shared
 /// question with an exact answer rather than a guess.
 public struct StudioEdit: Sendable, Hashable, Codable {
     /// Bumped when a field's meaning changes, as against a field being added.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var version: Int
     /// Which pieces of the recording survive, and how fast they play.
     public var clips: ClipTimeline
-    /// The zooms, in edited time.
+    /// The zooms, in *source* time (docs/16 STU-A3). v1 files stored edited time and
+    /// are migrated in `init(from:)`.
     public var zooms: [ZoomCue]
     /// The shape the video comes out.
     public var reframe: Reframe
@@ -116,6 +117,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
     public var canvas: StudioCanvas
     /// Whether any zoom runs. Off leaves the cues on the lane so they can be turned back on.
     public var showsZooms: Bool
+    /// User-edited transcript words, keyed by word id (docs/16 STU-C4).
+    public var transcriptCorrections: [String: String]
 
     public init(
         version: Int = StudioEdit.currentVersion,
@@ -147,7 +150,8 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         zoomStyle: ZoomAnimationStyle = .smooth,
         motionBlur: Double = 0.5,
         canvas: StudioCanvas = .identity,
-        showsZooms: Bool = true
+        showsZooms: Bool = true,
+        transcriptCorrections: [String: String] = [:]
     ) {
         self.version = version
         self.clips = clips
@@ -179,6 +183,7 @@ public struct StudioEdit: Sendable, Hashable, Codable {
         self.motionBlur = Self.clampedMotionBlur(motionBlur)
         self.canvas = canvas
         self.showsZooms = showsZooms
+        self.transcriptCorrections = transcriptCorrections
     }
 
     public static let minimumCursorScale: Double = 0.5
@@ -221,6 +226,10 @@ public struct StudioEdit: Sendable, Hashable, Codable {
             && abs(crop.width - size.width) < 0.5
             && abs(crop.height - size.height) < 0.5
         guard !identity else { return active }
+
+        if reframe.follows {
+            return active
+        }
 
         let inherentZoom = size.width / crop.width
         return active.map { cue in
@@ -274,17 +283,24 @@ public struct StudioEdit: Sendable, Hashable, Codable {
              keystrokeScale, captionScale,
              soundtrackFileName, soundtrackDisplayName, mutesAudio, mixesToMono,
              cursorScale, clickScale, clickColor, clickStyle,
-             showsClickPress, cursorSmoothing, zoomStyle, motionBlur, canvas, showsZooms
+             showsClickPress, cursorSmoothing, zoomStyle, motionBlur, canvas, showsZooms,
+             transcriptCorrections
     }
 
     /// Every field defaults, so an edit written by a later Kadr still opens — it simply
     /// arrives without whatever was added (docs/08 §2.6).
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let storedVersion = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        let clips = try container.decodeIfPresent(ClipTimeline.self, forKey: .clips) ?? ClipTimeline()
+        var zooms = try container.decodeIfPresent([ZoomCue].self, forKey: .zooms) ?? []
+        if storedVersion < 2 {
+            zooms = clips.migratingZoomsFromEditedTime(zooms)
+        }
         try self.init(
-            version: container.decodeIfPresent(Int.self, forKey: .version) ?? 1,
-            clips: container.decodeIfPresent(ClipTimeline.self, forKey: .clips) ?? ClipTimeline(),
-            zooms: container.decodeIfPresent([ZoomCue].self, forKey: .zooms) ?? [],
+            version: max(storedVersion, 2),
+            clips: clips,
+            zooms: zooms,
             reframe: container.decodeIfPresent(Reframe.self, forKey: .reframe) ?? .original,
             cropRect: container.decodeIfPresent(CGRect.self, forKey: .cropRect),
             camera: container.decodeIfPresent(CameraBubble.self, forKey: .camera) ?? .standard,
@@ -321,7 +337,11 @@ public struct StudioEdit: Sendable, Hashable, Codable {
             zoomStyle: container.decodeIfPresent(ZoomAnimationStyle.self, forKey: .zoomStyle) ?? .smooth,
             motionBlur: container.decodeIfPresent(Double.self, forKey: .motionBlur) ?? 0.5,
             canvas: container.decodeIfPresent(StudioCanvas.self, forKey: .canvas) ?? .identity,
-            showsZooms: container.decodeIfPresent(Bool.self, forKey: .showsZooms) ?? true
+            showsZooms: container.decodeIfPresent(Bool.self, forKey: .showsZooms) ?? true,
+            transcriptCorrections: container.decodeIfPresent(
+                [String: String].self,
+                forKey: .transcriptCorrections
+            ) ?? [:]
         )
     }
 }

@@ -9,10 +9,12 @@ struct HistoryView: View {
     @Bindable var controller: HistoryController
     let open: (HistoryRecord) -> Void
     let openAsCard: (HistoryRecord) -> Void
+    var preview: (HistoryRecord) -> Void = { _ in }
 
     @State var selection = HistorySelection()
     @State var kindFilter: HistoryItemKind?
     @State var dateFilter: HistoryDateFilter = .all
+    @State var sort: HistorySort = .newest
     /// The search field's text (docs/03 §5 P3). Debounced before it reaches SQLite so a
     /// fast typist does not queue a query per keystroke.
     @State private var searchText = ""
@@ -23,10 +25,48 @@ struct HistoryView: View {
     @State private var renameText = ""
     @State private var pendingBatchDelete = false
     @FocusState private var gridFocused: Bool
+    @State private var gridWidth: CGFloat = 560
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
+    private var batchDeleteMessage: String {
+        KadrPlural.files(selection.selected.count) + ". You can recover them from the Trash."
+    }
+
     var body: some View {
+        historyChrome
+    }
+
+    private var historyChrome: some View {
+        historyStack
+            .alert("Rename", isPresented: renameAlertPresented) {
+                TextField("Name", text: $renameText)
+                Button("Rename") { applyRename() }
+                Button("Cancel", role: .cancel) { renaming = nil }
+            }
+            .confirmationDialog(
+                "Move to Trash?",
+                isPresented: $pendingBatchDelete,
+                titleVisibility: .visible
+            ) {
+                Button(batchDeleteButtonTitle, role: .destructive) {
+                    Task { await performDelete(Array(selection.selected)) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(batchDeleteMessage)
+            }
+    }
+
+    private var historyStack: some View {
+        historyLifecycleModifiers(
+            historyFrame
+                .searchable(text: $searchText, prompt: "Search captures")
+                .toolbar { toolbarContent }
+        )
+    }
+
+    private var historyFrame: some View {
         VStack(spacing: 0) {
             grid
             Divider()
@@ -35,42 +75,10 @@ struct HistoryView: View {
         .frame(minWidth: HistoryWindowGeometry.minimumWidth, minHeight: HistoryWindowGeometry.minimumHeight)
         .background(.background)
         .kadrLayoutDirection()
-        .searchable(text: $searchText, prompt: "Search captures")
-        .toolbar { toolbarContent }
-        .onDeleteCommand { Task { await deleteSelected() } }
-        .focusable()
-        .focused($gridFocused)
-        .onKeyPress { handleKey($0) }
-        .task { await controller.reload(filter: currentFilter) }
-        .onChange(of: kindFilter) { _, _ in Task { await applyFilters() } }
-        .onChange(of: dateFilter) { _, _ in Task { await applyFilters() } }
-        .onChange(of: searchText) { _, text in scheduleSearch(text) }
-        .onChange(of: controller.records) { _, _ in refreshRecordingTitles() }
-        .onAppear {
-            refreshRecordingTitles()
-            gridFocused = true
-        }
-        .onDisappear { searchTask?.cancel() }
-        .alert("Rename Recording", isPresented: renameAlertPresented) {
-            TextField("Name", text: $renameText)
-            Button("Rename") { applyRename() }
-            Button("Cancel", role: .cancel) { renaming = nil }
-        }
-        .confirmationDialog(
-            "Move to Trash?",
-            isPresented: $pendingBatchDelete,
-            titleVisibility: .visible
-        ) {
-            Button("Move \(selection.selected.count) Items to Trash", role: .destructive) {
-                Task { await performDelete(Array(selection.selected)) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(
-                KadrPlural.files(selection.selected.count)
-                    + ". You can recover them from the Trash."
-            )
-        }
+    }
+
+    private var batchDeleteButtonTitle: String {
+        "Move \(selection.selected.count) Items to Trash"
     }
 
     private func title(for record: HistoryRecord) -> String {
@@ -81,10 +89,7 @@ struct HistoryView: View {
     }
 
     private func canRename(_ record: HistoryRecord) -> Bool {
-        guard record.kind == .video, let url = controller.fileURL(for: record) else {
-            return false
-        }
-        return StudioSessionRecorder.session(forRecordingAt: url) != nil
+        controller.fileURL(for: record) != nil
     }
 
     private func refreshRecordingTitles() {
@@ -157,7 +162,8 @@ struct HistoryView: View {
                                 HistoryCell(
                                     record: record,
                                     title: title(for: record),
-                                    image: controller.thumbnail(for: record, maxPixelSize: 280),
+                                    cachedImage: controller.cachedThumbnail(for: record, maxPixelSize: 280),
+                                    loadImage: { await controller.loadThumbnail(for: record, maxPixelSize: 280) },
                                     isSelected: selection.contains(record.id),
                                     isFocused: selection.isFocused(record.id)
                                 )
@@ -175,7 +181,8 @@ struct HistoryView: View {
                                                 resolve: {
                                                     controller.markAccessed(record)
                                                     return controller.fileURL(for: record)
-                                                }
+                                                },
+                                                stableFileURL: controller.fileURL(for: record)
                                             )
                                         },
                                         dragImage: {
@@ -218,22 +225,23 @@ struct HistoryView: View {
             return .handled
         }
 
+        let extending = press.modifiers.contains(.shift)
         switch press.key {
         case .upArrow:
-            selection.moveFocus(.up, in: controller.records, extending: press.modifiers.contains(.shift))
+            selection.moveFocus(.up, in: controller.records, extending: extending, windowWidth: gridWidth)
             return .handled
         case .downArrow:
-            selection.moveFocus(.down, in: controller.records, extending: press.modifiers.contains(.shift))
+            selection.moveFocus(.down, in: controller.records, extending: extending, windowWidth: gridWidth)
             return .handled
         case .leftArrow:
-            selection.moveFocus(.left, in: controller.records, extending: press.modifiers.contains(.shift))
+            selection.moveFocus(.left, in: controller.records, extending: extending, windowWidth: gridWidth)
             return .handled
         case .rightArrow:
-            selection.moveFocus(.right, in: controller.records, extending: press.modifiers.contains(.shift))
+            selection.moveFocus(.right, in: controller.records, extending: extending, windowWidth: gridWidth)
             return .handled
         case .space:
             if let id = selection.focused ?? selection.anchor, let record = controller.record(id: id) {
-                openAsCard(record)
+                preview(record)
             }
             return .handled
         case .return:
@@ -258,6 +266,15 @@ struct HistoryView: View {
             }
         }
         Button("Open in Overlay") { openAsCard(record) }
+            .keyboardShortcut(.return, modifiers: [.option])
+        if record.kind != .video {
+            Button("Annotate") { controller.onAnnotate?(record) }
+            Button("Pin") { controller.onPin?(record) }
+        }
+        Button("Copy") {
+            controller.copy(ids: [record.id])
+        }
+        Button("Copy Text") { controller.onCopyText?(record) }
         Button("Reveal in Finder") {
             selection.selected = [record.id]
             selection.anchor = record.id
@@ -336,32 +353,6 @@ struct HistoryView: View {
         .padding(.vertical, 8)
     }
 
-    private var storageMeter: some View {
-        let used = controller.usage.byteCount
-        let cap = controller.policy.sizeCapBytes
-        let usedText = ByteCountFormatter.string(fromByteCount: used, countStyle: .file)
-        return HStack(spacing: 8) {
-            if let cap, cap > 0 {
-                ProgressView(value: Double(used), total: Double(cap))
-                    .progressViewStyle(.linear)
-                    .frame(width: 120)
-                Text("\(usedText) of \(ByteCountFormatter.string(fromByteCount: cap, countStyle: .file))")
-            } else {
-                Text(usedText)
-            }
-        }
-        .help("Space used by the History library")
-    }
-
-    func revealSelected() {
-        guard let id = selection.selected.first ?? selection.focused,
-              let record = controller.record(id: id),
-              let url = controller.fileURL(for: record)
-        else { return }
-        controller.markAccessed(record)
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
     func deleteSelected() async {
         let ids = Array(selection.selected)
         guard !ids.isEmpty else { return }
@@ -382,72 +373,29 @@ struct HistoryView: View {
         selection.clear()
         await controller.reload(filter: currentFilter)
     }
-}
 
-private struct HistoryCell: View {
-    let record: HistoryRecord
-    let title: String
-    let image: CGImage?
-    let isSelected: Bool
-    let isFocused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ZStack {
-                if let image {
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Rectangle().fill(.quaternary)
-                }
-                if record.kind == .video {
-                    Image(systemName: "play.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.white, .black.opacity(0.45))
-                }
-                // A project looks like the capture it is built on, so it needs a badge to
-                // say that opening it reopens an editing session (docs/06 M24).
-                if record.kind == .project {
-                    Image(systemName: "square.stack.3d.up.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white, .black.opacity(0.45))
-                }
+    @ViewBuilder
+    private func historyLifecycleModifiers<Content: View>(_ content: Content) -> some View {
+        content
+            .onDeleteCommand { Task { await deleteSelected() } }
+            .onCopyCommand {
+                copySelected()
+                return []
             }
-            .frame(height: 96)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.08),
-                        lineWidth: isSelected ? 3 : 1
-                    )
-            )
-            .overlay {
-                if isFocused {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.primary.opacity(0.55), lineWidth: 1, antialiased: true)
-                        .padding(2)
-                }
+            .focusable()
+            .focused($gridFocused)
+            .onKeyPress { handleKey($0) }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+            .task { await controller.reload(filter: currentFilter) }
+            .onChange(of: kindFilter) { _, _ in Task { await applyFilters() } }
+            .onChange(of: dateFilter) { _, _ in Task { await applyFilters() } }
+            .onChange(of: sort) { _, _ in Task { await applyFilters() } }
+            .onChange(of: searchText) { _, text in scheduleSearch(text) }
+            .onChange(of: controller.records) { _, _ in refreshRecordingTitles() }
+            .onAppear {
+                refreshRecordingTitles()
+                gridFocused = true
             }
-
-            Text(title)
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Text("\(record.width) × \(record.height)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private var accessibilityLabel: String {
-        let kind = record.kind.title
-        let dimensions = "\(record.width) × \(record.height)"
-        let timestamp = record.capturedAt.formatted(date: .abbreviated, time: .shortened)
-        return "\(kind), \(title), \(dimensions), \(timestamp)"
+            .onDisappear { searchTask?.cancel() }
     }
 }

@@ -25,10 +25,10 @@ struct AfterCaptureMatrixTests {
     func rowsAreIndependent() {
         var matrix = AfterCaptureMatrix()
         matrix[.screenshot] = [.copy]
-        matrix[.recording] = [.save]
+        matrix[.recording] = [.openEditor]
 
         #expect(matrix[.screenshot] == [.copy])
-        #expect(matrix[.recording] == [.save])
+        #expect(matrix[.recording] == [.openEditor])
     }
 
     /// Nobody wants a two-minute recording on their clipboard, which is why the default
@@ -37,9 +37,10 @@ struct AfterCaptureMatrixTests {
     func defaults() {
         let matrix = AfterCaptureMatrix.standard
         #expect(matrix[.screenshot].contains(.copy))
-        #expect(!matrix[.recording].contains(.copy))
-        #expect(matrix[.recording].contains(.save))
         #expect(matrix[.screenshot].contains(.overlay))
+        #expect(!matrix[.recording].contains(.copy))
+        #expect(!matrix[.recording].contains(.save))
+        #expect(matrix[.recording].contains(.overlay))
     }
 
     // MARK: - Applicability
@@ -51,6 +52,7 @@ struct AfterCaptureMatrixTests {
         #expect(!AfterCaptureActions.annotate.applies(to: .recording))
         #expect(!AfterCaptureActions.pin.applies(to: .recording))
         #expect(AfterCaptureActions.openEditor.applies(to: .recording))
+        #expect(!AfterCaptureActions.save.applies(to: .recording))
     }
 
     @Test("The trim editor means nothing for a screenshot")
@@ -69,7 +71,8 @@ struct AfterCaptureMatrixTests {
 
         #expect(!matrix[.recording].contains(.annotate))
         #expect(!matrix[.recording].contains(.pin))
-        #expect(matrix[.recording].contains(.save))
+        #expect(!matrix[.recording].contains(.save))
+        #expect(matrix[.recording].contains(.overlay))
     }
 
     @Test("Every action is applicable to at least one kind")
@@ -146,6 +149,7 @@ struct AfterCaptureMatrixTests {
 
         matrix.write(to: store, forKey: "test.afterCapture")
         #expect(AfterCaptureMatrix.read(from: store, forKey: "test.afterCapture") == matrix)
+        #expect(!matrix[.recording].contains(.save))
     }
 
     /// `defaults read` should stay legible: a raw bitmask is already about as opaque as a

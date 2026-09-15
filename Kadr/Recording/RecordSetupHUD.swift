@@ -103,8 +103,7 @@ final class RecordSetupHUD {
     private func revealIsland() {
         bar.showPicker(model: model)
         if model.settings.recordingShowsWebcam,
-           CaptureMediaAccess.status(for: .camera) == .allowed
-        {
+           CaptureMediaAccess.status(for: .camera) == .allowed {
             model.onCameraPreview(true)
         }
     }

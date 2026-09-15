@@ -18,6 +18,8 @@ public enum SecretKind: String, Codable, Sendable, Hashable, CaseIterable {
     case credential
     /// A user-typed find-field match, not a built-in detector.
     case custom
+    case url
+    case ipAddress
 
     public var title: String {
         switch self {
@@ -29,6 +31,8 @@ public enum SecretKind: String, Codable, Sendable, Hashable, CaseIterable {
         case .apiKey: "API key"
         case .credential: "Password or token"
         case .custom: "Match"
+        case .url: "URL"
+        case .ipAddress: "IP address"
         }
     }
 }

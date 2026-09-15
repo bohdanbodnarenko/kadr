@@ -118,8 +118,18 @@ public enum CropRectEditor {
         handle: CropHandle,
         translation: CGSize,
         aspect: CGFloat? = nil,
-        bounds: CGRect? = nil
+        bounds: CGRect? = nil,
+        fromCenter: Bool = false
     ) -> CGRect {
+        if fromCenter, handle != .body {
+            return resizedFromCenter(
+                rect,
+                handle: handle,
+                translation: translation,
+                aspect: aspect,
+                bounds: bounds
+            )
+        }
         guard handle != .body else {
             return moved(rect, by: translation, within: bounds)
         }
@@ -143,6 +153,43 @@ public enum CropRectEditor {
             edges.maxY += translation.height
         }
 
+        var resized = CGRect(
+            x: min(edges.minX, edges.maxX),
+            y: min(edges.minY, edges.maxY),
+            width: abs(edges.maxX - edges.minX),
+            height: abs(edges.maxY - edges.minY)
+        )
+        resized = enforcingMinimum(resized, handle: handle)
+        if let aspect, aspect > 0 {
+            resized = holding(aspect, on: resized, handle: handle)
+        }
+        if let bounds {
+            resized = clamped(resized, to: bounds, handle: handle, aspect: aspect)
+        }
+        return resized
+    }
+
+    private static func resizedFromCenter(
+        _ rect: CGRect,
+        handle: CropHandle,
+        translation: CGSize,
+        aspect: CGFloat?,
+        bounds: CGRect?
+    ) -> CGRect {
+        var edges = (
+            minX: rect.minX,
+            minY: rect.minY,
+            maxX: rect.maxX,
+            maxY: rect.maxY
+        )
+        if handle.moves(.leading) || handle.moves(.trailing) {
+            edges.minX -= translation.width
+            edges.maxX += translation.width
+        }
+        if handle.moves(.top) || handle.moves(.bottom) {
+            edges.minY -= translation.height
+            edges.maxY += translation.height
+        }
         var resized = CGRect(
             x: min(edges.minX, edges.maxX),
             y: min(edges.minY, edges.maxY),

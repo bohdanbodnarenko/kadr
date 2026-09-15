@@ -1,4 +1,5 @@
 import SettingsKit
+import Shared
 import StudioSession
 import SwiftUI
 
@@ -47,6 +48,14 @@ struct TeleprompterSection: View {
             Toggle("Follow my voice", isOn: $settings.teleprompterFollowsSpeech)
                 .disabled(!settings.teleprompterEnabled)
 
+            Toggle("Dock under the camera", isOn: $settings.teleprompterDocksUnderCamera)
+                .disabled(!settings.teleprompterEnabled)
+
+            Button("Install speech model…") {
+                Task { await installSpeechModel() }
+            }
+            .disabled(!settings.teleprompterEnabled)
+
             Toggle("Mirror the text", isOn: $settings.teleprompterMirrored)
                 .disabled(!settings.teleprompterEnabled)
         } header: {
@@ -72,5 +81,16 @@ struct TeleprompterSection: View {
         let seconds = Int(pacing.duration(of: script).rounded())
         let words = script.words.count
         return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) · \(words) words"
+    }
+
+    /// User-initiated: never auto-download (CLAUDE.md rule 1).
+    private func installSpeechModel() async {
+        do {
+            _ = try await VisionClient().installSpeechModel(
+                SpeechInstallRequest(localeIdentifier: Locale.current.identifier)
+            )
+        } catch {
+            FailurePresenter.present(message: error.localizedDescription)
+        }
     }
 }

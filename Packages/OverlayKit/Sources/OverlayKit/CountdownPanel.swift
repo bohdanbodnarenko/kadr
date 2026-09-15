@@ -120,6 +120,7 @@ public final class CountdownPanel {
 
     private func present(frame: CGRect, size: CGSize, scale: CGFloat) {
         let panel = NonActivatingPanel(contentRect: frame, level: .floating)
+        panel.alwaysHiddenFromCaptures = true
         panel.ignoresMouseEvents = true
 
         let view = NSView(frame: CGRect(origin: .zero, size: size))

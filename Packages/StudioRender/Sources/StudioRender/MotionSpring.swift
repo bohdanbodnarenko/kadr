@@ -86,7 +86,7 @@ public struct SpringIntegrator: Sendable {
     ///   - targets: where the thing being smoothed wants to be, over time. Must be sorted.
     ///   - duration: how long to integrate for.
     /// - Returns: positions at fixed intervals from zero.
-    public func integrate(
+    func integrate(
         targets: [(time: TimeInterval, value: CGPoint)],
         duration: TimeInterval
     ) -> [CGPoint] {

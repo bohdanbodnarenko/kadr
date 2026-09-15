@@ -190,7 +190,11 @@ final class AreaCaptureCoordinator {
         beginOverlayCapture(mode: .area, purpose: .recognizeText)
     }
 
-    func beginOverlayCapture(mode: SelectionMode, purpose: SelectionPurpose = .capture) {
+    func beginOverlayCapture(
+        mode: SelectionMode,
+        purpose: SelectionPurpose = .capture,
+        frontmost: AppIdentity? = nil
+    ) {
         // Freeze inspect is already the area overlay; a second Capture Area must not
         // re-photograph the screen and lose the hover menu (docs/03 §7).
         if overlay.isPresented, self.purpose == .inspect, mode == .area, purpose == .capture {
@@ -199,7 +203,7 @@ final class AreaCaptureCoordinator {
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
-        frontmostAtHotkey = Self.currentFrontmostApp()
+        frontmostAtHotkey = frontmost ?? Self.currentFrontmostApp()
         self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
         inFlight?.cancel()
@@ -455,35 +459,6 @@ final class AreaCaptureCoordinator {
             let state = signposter.beginInterval("selectionToClipboard")
             await deliver(capture)
             signposter.endInterval("selectionToClipboard", state)
-        }
-    }
-
-    /// Sends a crop to the Vision helper and puts the result on the clipboard.
-    private func recognizeText(in image: CGImage, on displayID: CGDirectDisplayID) {
-        inFlight = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let recognition = try await vision.recognize(
-                    image,
-                    preservingLineBreaks: automation.overrides.preservesLineBreaks
-                        ?? settings.ocrPreservesLineBreaks
-                )
-                vision.copyToClipboard(recognition)
-                let characters = recognition.text.count
-                logger.info("Recognised \(characters, privacy: .public) characters")
-
-                let screen = NSScreen.screens.first { ScreenDescriptor($0)?.displayID == displayID }
-                presentTextResult(
-                    recognition.text,
-                    codes: recognition.codes,
-                    table: recognition.table,
-                    on: screen
-                )
-                automation.report(.text(recognition.text))
-            } catch {
-                logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
-                automation.report(.failed(error.localizedDescription))
-            }
         }
     }
 }

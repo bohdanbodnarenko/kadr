@@ -50,7 +50,8 @@ public extension EditorDocumentModel {
             handle: handle,
             translation: translation,
             aspect: aspect,
-            bounds: expand ? nil : document.baseImage.bounds
+            bounds: expand ? nil : document.baseImage.bounds,
+            fromCenter: modifiers.contains(.fromCenter)
         )
         var spec = document.crop ?? CropSpec(rect: next)
         spec.rect = next

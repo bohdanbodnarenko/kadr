@@ -43,7 +43,7 @@ extension RecordingEngine {
 
             // Everything for this recording lives in one directory, so a crash leaves an
             // obvious place to recover segments from.
-            let directory = FileManager.default.temporaryDirectory
+            let directory = segmentRoot
                 .appendingPathComponent(
                     "\(InterruptedRecordingStore.directoryPrefix)\(UUID().uuidString)",
                     isDirectory: true
@@ -52,10 +52,12 @@ extension RecordingEngine {
             sessionDirectory = directory
             segments = []
             accumulatedDuration = 0
+            interruptionReason = nil
 
             try await beginSegment()
             try await startStream(filter: capture.filter, sourceRect: capture.sourceRect)
             try checkAlive(token)
+            beginActivity()
             state = .recording
             let size = "\(pixelSize.width)×\(pixelSize.height)"
             logger.info("Recording started at \(size, privacy: .public)")
@@ -91,14 +93,20 @@ extension RecordingEngine {
     }
 
     /// Stops and returns the finished file.
-    public func stop(savingTo destination: URL) async throws -> RecordingResult {
+    public func stop(savingTo destination: URL, interruption: String? = nil) async throws -> RecordingResult {
         guard state == .recording || state == .paused else { throw RecordingError.notRecording }
         state = .finishing
+        if let interruption {
+            interruptionReason = interruption
+        }
 
         // Whatever happens below, the engine comes back to `.idle`. Leaving it in
         // `.finishing` is what made a single failed stitch brick recording until relaunch:
         // the menu bar reads "not recording" while every later start throws (docs/07 C3).
-        defer { state = .idle }
+        defer {
+            endActivity()
+            state = .idle
+        }
 
         await closeSegment()
         await stopStream()
@@ -114,7 +122,8 @@ extension RecordingEngine {
                 fileURL: url,
                 duration: accumulatedDuration,
                 pixelSize: pixelSize,
-                options: options
+                options: options,
+                interruption: interruptionReason
             )
             cleanUp()
             return result
@@ -139,6 +148,7 @@ extension RecordingEngine {
         generation &+= 1
         await awaitPendingClose()
         await teardown()
+        endActivity()
         state = .idle
         logger.info("Recording cancelled")
     }
@@ -163,6 +173,11 @@ extension RecordingEngine {
         segmentStartTime = nil
         let url = sessionDirectory.appendingPathComponent("segment-\(segments.count).mp4")
         writer = try makeWriter(url, pixelSize.width, pixelSize.height, options)
+        segmentHasVideo = false
+        if let lastVideoBox {
+            _ = await writer?.append(lastVideoBox)
+            segmentHasVideo = true
+        }
     }
 
     func closeSegment() async {
@@ -184,6 +199,9 @@ extension RecordingEngine {
 
     func drain(_ writer: any SegmentWriting) async {
         accumulatedDuration += await writer.duration
+        if interruptionReason == nil, let reason = await writer.failureReason {
+            interruptionReason = reason
+        }
         if let url = await writer.finish() {
             segments.append(url)
         }
@@ -203,6 +221,10 @@ extension RecordingEngine {
         output = nil
         audioMeter = AudioMeter()
         segments = []
+        interruptionReason = nil
+        lastVideoBox = nil
+        segmentHasVideo = false
+        endActivity()
         if deletingFiles, let sessionDirectory {
             try? FileManager.default.removeItem(at: sessionDirectory)
         }

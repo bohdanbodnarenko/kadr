@@ -42,6 +42,8 @@ public struct ReconstructedCursor: Sendable, Hashable {
 /// press, and eased back out afterwards. The result moves smoothly and clicks exactly.
 public struct CursorReconstruction: Sendable {
     /// How long a click's ripple lasts.
+    public static let anticipation: TimeInterval = 0.5
+    public static let interceptWindow: TimeInterval = 0.175
     public static let clickDuration: TimeInterval = 0.45
     /// How long the cursor takes to return to its smoothed path after a press.
     ///
@@ -62,7 +64,40 @@ public struct CursorReconstruction: Sendable {
     public func path(for telemetry: InputTelemetry, duration: TimeInterval) -> [CGPoint] {
         let targets = telemetry.pointer.map { (time: $0.time, value: $0.position) }
         guard !targets.isEmpty else { return [] }
-        return SpringIntegrator(spring: spring).integrate(targets: targets, duration: duration)
+        let presses = telemetry.clicks.filter(\.isDown).sorted { $0.time < $1.time }
+        var x = DampedSpring(position: Double(targets[0].value.x), omega: DampedSpring.omega(settlingIn: 0.22))
+        var y = DampedSpring(position: Double(targets[0].value.y), omega: x.omega)
+        var result: [CGPoint] = []
+        var time: TimeInterval = 0
+        var index = 0
+        while time <= duration {
+            while index + 1 < targets.count, targets[index + 1].time <= time {
+                index += 1
+            }
+            var aim = targets[index].value
+            var omega = DampedSpring.omega(settlingIn: 0.22)
+            if isDragging(at: time, clicks: telemetry.clicks) {
+                aim = targets[index].value
+                omega = DampedSpring.omega(settlingIn: 0.08)
+            } else if let press = presses.first(where: { $0.time >= time && $0.time - time <= Self.anticipation }) {
+                aim = press.position
+                if press.time - time <= Self.interceptWindow {
+                    omega = DampedSpring.omega(settlingIn: 0.08)
+                }
+            }
+            x.omega = omega
+            y.omega = omega
+            x.advance(towards: Double(aim.x), by: MotionSpring.step)
+            y.advance(towards: Double(aim.y), by: MotionSpring.step)
+            result.append(CGPoint(x: x.position, y: y.position))
+            time += MotionSpring.step
+        }
+        return result
+    }
+
+    private func isDragging(at time: TimeInterval, clicks: [ClickEvent]) -> Bool {
+        guard let last = clicks.last(where: { $0.time <= time }) else { return false }
+        return last.isDown
     }
 
     /// What to draw at `time`.

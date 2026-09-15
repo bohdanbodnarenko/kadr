@@ -105,4 +105,15 @@ struct StudioExportSettingsTests {
         #expect(settings.gifOptions.maximumWidth == 480)
         #expect(settings.gifOptions.frameRate == 8)
     }
+
+    @Test("Export fps is min of the choice and the recording")
+    func frameRateIsCappedByTheManifest() {
+        var settings = StudioExportSettings()
+        settings.frameRate = .sixty
+        #expect(settings.rendererOptions(manifestFrameRate: 30).frameRate == 30)
+        settings.frameRate = .thirty
+        #expect(settings.rendererOptions(manifestFrameRate: 60).frameRate == 30)
+        settings.frameRate = .source
+        #expect(settings.rendererOptions(manifestFrameRate: 24).frameRate == 24)
+    }
 }

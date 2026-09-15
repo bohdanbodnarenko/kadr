@@ -41,4 +41,27 @@ struct InterruptedRecordingStoreTests {
         let names = InterruptedRecordingStore.segmentFiles(in: root).map(\.lastPathComponent)
         #expect(names == ["segment-2.mp4", "segment-10.mp4"])
     }
+
+    @Test("In-progress recordings live under Application Support")
+    func inProgressRootIsDurable() {
+        let root = InterruptedRecordingStore.inProgressRoot()
+        #expect(root.path.contains("Application Support/Kadr/InProgress"))
+    }
+
+    @Test("Discovery scans every supplied root")
+    func scansMultipleRoots() throws {
+        let first = scratch()
+        let second = scratch()
+        defer {
+            try? FileManager.default.removeItem(at: first)
+            try? FileManager.default.removeItem(at: second)
+        }
+        let recording = second.appendingPathComponent(
+            "\(InterruptedRecordingStore.directoryPrefix)XYZ",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: recording, withIntermediateDirectories: true)
+        let found = InterruptedRecordingStore.directories(in: [first, second])
+        #expect(found.map(\.lastPathComponent) == [recording.lastPathComponent])
+    }
 }

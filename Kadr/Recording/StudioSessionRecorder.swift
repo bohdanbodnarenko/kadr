@@ -82,6 +82,28 @@ final class StudioSessionRecorder {
         logger.info("Studio session started: \(session.directory.lastPathComponent, privacy: .public)")
     }
 
+    /// Pairs the in-progress segment folder with this session (docs/16 REC-8).
+    func linkSegments(_ directory: URL?, options: RecordingOptions) {
+        guard let session, let directory else { return }
+        let link = directory.appendingPathComponent("session.link")
+        try? session.directory.path.write(to: link, atomically: true, encoding: .utf8)
+        let reverse = session.directory.appendingPathComponent("segments.link")
+        try? directory.path.write(to: reverse, atomically: true, encoding: .utf8)
+        writeProvisionalManifest(options: options)
+    }
+
+    func writeProvisionalManifest(options: RecordingOptions) {
+        guard let session else { return }
+        try? SessionDocument(session: session).write(CaptureManifest(
+            pixelSize: .zero,
+            scale: pointPixelScale,
+            frameRate: options.frameRate.rawValue,
+            duration: 0,
+            hasBakedCursor: options.showsCursor,
+            hasCamera: FileManager.default.fileExists(atPath: session.cameraURL.path)
+        ))
+    }
+
     /// Advances the telemetry clock past paused time.
     ///
     /// A pause is time the user chose not to record, so it must not appear in the sidecar
@@ -109,6 +131,14 @@ final class StudioSessionRecorder {
 
     func resumeCamera() {
         camera.resume()
+    }
+
+    func pauseTelemetry() {
+        telemetry.pause()
+    }
+
+    func resumeTelemetry() {
+        telemetry.resume()
     }
 
     // MARK: - Where the window is

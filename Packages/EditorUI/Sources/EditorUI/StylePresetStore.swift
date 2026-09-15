@@ -51,6 +51,27 @@ public struct StylePresetStore {
     }
 
     @discardableResult
+    public func addImported(_ preset: StylePreset) -> [StylePreset] {
+        var presets = load()
+        var name = preset.name
+        var suffix = 2
+        let taken: (String) -> Bool = { candidate in
+            presets.contains { $0.name.caseInsensitiveCompare(candidate) == .orderedSame }
+                || StylePreset.builtIn.contains { $0.name.caseInsensitiveCompare(candidate) == .orderedSame }
+        }
+        while taken(name) {
+            name = "\(preset.name) \(suffix)"
+            suffix += 1
+        }
+        var copy = preset
+        copy.id = UUID()
+        copy.name = name
+        presets.append(copy)
+        save(presets)
+        return presets
+    }
+
+    @discardableResult
     public func add(_ preset: StylePreset) -> [StylePreset] {
         var presets = load()
         // Saving over a name replaces it, which is what someone who types the same name

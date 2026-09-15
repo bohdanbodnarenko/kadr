@@ -17,8 +17,8 @@ extension StudioFrameComposer {
             return CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1)).cropped(to: bounds)
         case let .solid(color):
             return CIImage(color: color.ciColor).cropped(to: bounds)
-        case let .gradient(start, end):
-            return gradient(from: start, to: end)
+        case let .gradient(ramp):
+            return gradient(ramp)
         case .wallpaper:
             if let wallpaper {
                 return Self.filled(wallpaper, to: plan.outputSize)
@@ -29,8 +29,20 @@ extension StudioFrameComposer {
 
     /// Keeps the recording inside the rounded card so padding shows the backdrop.
     func clipToCard(_ image: CIImage) -> CIImage {
+        guard let mask = cachedCardMask else { return image }
+        return image.applyingFilter("CIBlendWithAlphaMask", parameters: [
+            kCIInputMaskImageKey: mask,
+            kCIInputBackgroundImageKey: CIImage.empty()
+        ])
+    }
+
+    var cardShadow: CIImage? {
+        cachedCardShadow
+    }
+
+    static func makeCardMask(plan: StudioRenderPlan, edit: StudioEdit) -> CIImage? {
         let card = plan.cardRect
-        guard card.width > 1, card.height > 1 else { return image }
+        guard card.width > 1, card.height > 1 else { return nil }
         let canvas = plan.outputSize
         let radius = plan.cardCornerRadius
         let flipped = CGRect(
@@ -47,15 +59,12 @@ extension StudioFrameComposer {
                 fillCard(flipped, radius: radius, in: context)
             }
         ) else {
-            return image
+            return nil
         }
-        return image.applyingFilter("CIBlendWithAlphaMask", parameters: [
-            kCIInputMaskImageKey: CIImage(cgImage: maskImage),
-            kCIInputBackgroundImageKey: CIImage.empty()
-        ])
+        return CIImage(cgImage: maskImage)
     }
 
-    var cardShadow: CIImage? {
+    static func makeCardShadow(plan: StudioRenderPlan, edit: StudioEdit) -> CIImage? {
         let strength = edit.canvas.shadow
         guard strength > 0.01 else { return nil }
         let card = plan.cardRect
@@ -85,7 +94,7 @@ extension StudioFrameComposer {
             .cropped(to: CGRect(origin: .zero, size: canvas))
     }
 
-    private func fillCard(_ rect: CGRect, radius: CGFloat, in context: CGContext) {
+    private static func fillCard(_ rect: CGRect, radius: CGFloat, in context: CGContext) {
         if radius > 0.5 {
             context.addPath(CGPath(
                 roundedRect: rect,
@@ -99,15 +108,47 @@ extension StudioFrameComposer {
         }
     }
 
-    private func gradient(from start: StudioColor, to end: StudioColor) -> CIImage {
+    private func gradient(_ ramp: StudioGradient) -> CIImage {
         let size = plan.outputSize
-        let filter = CIFilter(name: "CILinearGradient")
-        filter?.setValue(CIVector(x: 0, y: size.height), forKey: "inputPoint0")
-        filter?.setValue(CIVector(x: 0, y: 0), forKey: "inputPoint1")
-        filter?.setValue(start.ciColor, forKey: "inputColor0")
-        filter?.setValue(end.ciColor, forKey: "inputColor1")
-        let generated = filter?.outputImage ?? CIImage(color: start.ciColor)
-        return generated.cropped(to: CGRect(origin: .zero, size: size))
+        let bounds = CGRect(origin: .zero, size: size)
+        guard let image = BitmapCanvas.image(
+            width: Int(size.width.rounded()),
+            height: Int(size.height.rounded()),
+            action: { context in
+                Self.fillGradient(ramp, in: bounds, context: context)
+            }
+        ) else {
+            return CIImage(color: ramp.start.ciColor).cropped(to: bounds)
+        }
+        return CIImage(cgImage: image)
+    }
+
+    private static func fillGradient(_ ramp: StudioGradient, in rect: CGRect, context: CGContext) {
+        let colourSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let locations = (0 ..< ramp.stops.count).map { CGFloat($0) / CGFloat(max(ramp.stops.count - 1, 1)) }
+        guard let gradient = CGGradient(
+            colorsSpace: colourSpace,
+            colors: ramp.stops.map(\.cgColor) as CFArray,
+            locations: locations
+        ) else {
+            context.setFillColor(ramp.start.cgColor)
+            context.fill(rect)
+            return
+        }
+        let angle = ramp.angleDegrees * .pi / 180
+        let length = hypot(rect.width, rect.height) / 2
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let startPoint = CGPoint(x: center.x - cos(angle) * length, y: center.y - sin(angle) * length)
+        let endPoint = CGPoint(x: center.x + cos(angle) * length, y: center.y + sin(angle) * length)
+        context.saveGState()
+        context.clip(to: rect)
+        context.drawLinearGradient(
+            gradient,
+            start: startPoint,
+            end: endPoint,
+            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+        )
+        context.restoreGState()
     }
 
     /// Aspect-fills `image` to `size`, cropping the surplus.
@@ -131,6 +172,10 @@ extension StudioFrameComposer {
 extension StudioColor {
     var ciColor: CIColor {
         CIColor(red: red, green: green, blue: blue, alpha: 1)
+    }
+
+    var cgColor: CGColor {
+        CGColor(red: red, green: green, blue: blue, alpha: 1)
     }
 }
 

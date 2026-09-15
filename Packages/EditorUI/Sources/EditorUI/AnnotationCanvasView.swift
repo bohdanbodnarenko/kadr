@@ -61,6 +61,9 @@ public final class AnnotationCanvasView: NSView {
     let contentHost = CALayer()
     let baseLayer = CALayer()
     let annotationLayer = CALayer()
+    let compositeSpotlightLayer = CALayer()
+    let watermarkLayer = WatermarkLayer()
+    let bindingHintLayer = CAShapeLayer()
     let reviewLayer = CALayer()
     let draftLayer = CALayer()
     let selectionLayer = CALayer()
@@ -93,6 +96,8 @@ public final class AnnotationCanvasView: NSView {
     /// Last chrome layout, so a style-only inspector tick does not re-lay the whole card.
     var lastLayoutKey: CanvasLayoutKey?
     var spacePanClipOrigin: CGPoint?
+    /// Pointer location in image space, for Select-mode hover cursors (docs/16 ED-12).
+    var lastHoverImagePoint: CGPoint?
 
     /// Called whenever the document changes, so the window can update its title bar.
     public var onDocumentChanged: (() -> Void)?
@@ -121,14 +126,24 @@ public final class AnnotationCanvasView: NSView {
         baseLayer.magnificationFilter = .trilinear
         contentHost.addSublayer(baseLayer)
         drawingHost.addSublayer(contentHost)
+        drawingHost.addSublayer(compositeSpotlightLayer)
         // Drawn on the canvas, not inside the card: arrows and shapes belong on the
         // beautify padding as well as on the screenshot (docs/03 §3).
         for layer in [annotationLayer, reviewLayer, draftLayer, selectionLayer, cropLayer] {
             layer.masksToBounds = false
             drawingHost.addSublayer(layer)
         }
+        watermarkLayer.masksToBounds = true
+        drawingHost.addSublayer(watermarkLayer)
         cameraLayer.isHidden = true
         drawingHost.addSublayer(cameraLayer)
+
+        bindingHintLayer.fillColor = nil
+        bindingHintLayer.strokeColor = NSColor.controlAccentColor.cgColor
+        bindingHintLayer.lineWidth = 2
+        bindingHintLayer.lineDashPattern = [4, 3]
+        bindingHintLayer.isHidden = true
+        selectionLayer.addSublayer(bindingHintLayer)
 
         marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
         marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
@@ -176,6 +191,8 @@ public final class AnnotationCanvasView: NSView {
         layers.removeAll()
 
         let scale = window?.backingScaleFactor ?? 2
+        updateCompositeSpotlight()
+        updateWatermarkLayer()
         // Resolved, so a bound arrow is drawn against its target's current geometry
         // rather than against the endpoint it was stored with (docs/09 U1.7).
         for command in model.document.resolvedCommands {
@@ -228,6 +245,7 @@ public final class AnnotationCanvasView: NSView {
         guard let draft = model.draft else {
             draftShapeLayer?.removeFromSuperlayer()
             draftShapeLayer = nil
+            updateBindingHint()
             return
         }
 
@@ -253,6 +271,7 @@ public final class AnnotationCanvasView: NSView {
                 draftLayer.addSublayer(layer)
             }
         }
+        updateBindingHint()
     }
 
     // MARK: - Mouse
@@ -340,7 +359,7 @@ public final class AnnotationCanvasView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        for command in model.document.resolvedCommands where model.selection.contains(command.id) {
+        for command in model.document.resolvedCommands where model.layersNeedingUpdateDuringMove.contains(command.id) {
             guard let layer = layers[command.id] else { continue }
             AnnotationLayerFactory.update(
                 layer,
@@ -350,6 +369,8 @@ public final class AnnotationCanvasView: NSView {
                 canvasRect: model.document.canvasRect
             )
         }
+        updateCompositeSpotlight()
+        updateBindingHint()
     }
 
     /// Existing layers, in the order they sit on `annotationLayer`.
@@ -445,23 +466,9 @@ public final class AnnotationCanvasView: NSView {
         updateSelectionHandles()
         updateCropOverlay()
         rebuildReviewLayers()
+        updateCompositeSpotlight()
+        updateWatermarkLayer()
         updateExpensiveChrome()
         onDocumentChanged?()
-    }
-
-    var canvasCursor: NSCursor {
-        if spaceIsDown {
-            return spacePanAnchor == nil ? NSCursor.openHand : NSCursor.closedHand
-        }
-        switch model.tool {
-        case .select:
-            return NSCursor.arrow
-        case .text:
-            return NSCursor.iBeam
-        case .crop:
-            return NSCursor.crosshair
-        default:
-            return NSCursor.crosshair
-        }
     }
 }

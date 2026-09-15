@@ -48,6 +48,7 @@ struct CaptureOverrides: Sendable, Equatable {
 enum CaptureOutcome: Sendable, Equatable {
     case file(URL)
     case text(String)
+    case noText
     case cancelled
     case failed(String)
 
@@ -55,6 +56,7 @@ enum CaptureOutcome: Sendable, Equatable {
         switch self {
         case let .file(url): .file(url.path)
         case let .text(text): AutomationResponse(status: .ok, text: text)
+        case .noText: AutomationResponse(status: .noText, message: "No text found")
         case .cancelled: .cancelled
         case let .failed(message): .failed(message)
         }

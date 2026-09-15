@@ -37,6 +37,7 @@ struct RecordingCrashRecoveryTests {
         var presented: [URL] = []
         let count = await RecordingCrashRecovery.recover(
             temporaryDirectory: temporary,
+            inProgressDirectory: root.appendingPathComponent("in-progress", isDirectory: true),
             saveFolder: saves,
             sessions: RecordingSessionStore(root: sessions),
             present: { presented.append($0) }
@@ -68,6 +69,7 @@ struct RecordingCrashRecoveryTests {
 
         let count = await RecordingCrashRecovery.recover(
             temporaryDirectory: temporary,
+            inProgressDirectory: root.appendingPathComponent("in-progress", isDirectory: true),
             saveFolder: root.appendingPathComponent("saves", isDirectory: true),
             sessions: RecordingSessionStore(root: sessions),
             present: { _ in }

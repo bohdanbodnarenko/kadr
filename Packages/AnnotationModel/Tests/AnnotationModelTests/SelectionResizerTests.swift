@@ -18,12 +18,18 @@ struct SelectionResizerTests {
 
     // MARK: - Anchors
 
-    @Test("A shape offers eight anchors, corners first")
+    @Test("A shape offers eight box anchors and four rotate handles")
     func boxHasEightHandles() {
         let handles = SelectionResizer.anchors(for: [shape()]).map(\.0)
-        #expect(handles.count == 8)
-        #expect(handles[0].isCorner && handles[1].isCorner && handles[2].isCorner && handles[3].isCorner)
-        #expect(!handles[4].isCorner && !handles[5].isCorner && !handles[6].isCorner && !handles[7].isCorner)
+        #expect(handles.filter(\.isCorner).count == 4)
+        #expect(handles.filter {
+            if case .rotate = $0 {
+                true
+            } else {
+                false
+            }
+        }.count == 4)
+        #expect(handles.count == 12)
     }
 
     @Test("A lone arrow offers start, middle and end, not a box")
@@ -65,6 +71,17 @@ struct SelectionResizerTests {
         let box = SelectionResizer.unionBounds(of: [command])
         let hit = SelectionResizer.handle(at: CGPoint(x: box.maxX, y: box.maxY), in: [command], tolerance: 10)
         #expect(hit == .box(.bottomTrailing))
+    }
+
+    @Test("A rotate handle sits 14 pt outside a corner")
+    func rotateHandleHit() {
+        let command = shape()
+        let box = SelectionResizer.unionBounds(of: [command])
+        #expect(SelectionResizer.handle(
+            at: CGPoint(x: box.minX - SelectionResizer.rotateOffset, y: box.minY - SelectionResizer.rotateOffset),
+            in: [command],
+            tolerance: 10
+        ) == .rotate)
     }
 
     @Test("Counters have no resize handles; size comes from the inspector")
@@ -226,7 +243,11 @@ struct SelectionResizerTests {
             Issue.record("expected an arrow")
             return
         }
-        #expect(curved.controlPoint == CGPoint(x: 50, y: 30))
+        #expect(curved.controlPoint == QuadraticCurve.control(
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 100, y: 0),
+            apex: CGPoint(x: 50, y: 30)
+        ))
 
         let straight = SelectionResizer.draggingPath(
             bent,

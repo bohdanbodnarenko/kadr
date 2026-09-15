@@ -38,6 +38,14 @@ public enum BeautifyMetric: Codable, Hashable, Sendable {
 
     public static let zero = BeautifyMetric.points(0)
 
+    /// Caps a hostile preset so padding cannot inflate a multi-gigapixel canvas.
+    public func clamped() -> BeautifyMetric {
+        switch self {
+        case let .relative(fraction): .relative(min(max(fraction, 0), 0.5))
+        case let .points(length): .points(min(max(length, 0), 400))
+        }
+    }
+
     public var isZero: Bool {
         switch self {
         case let .relative(fraction): fraction <= 0

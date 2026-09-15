@@ -144,6 +144,15 @@ public struct ProgressiveBlurSpec: Codable, Hashable, Sendable {
         falloffRadius: 0.6,
         isInverted: true
     )
+    /// A symmetric band of sharpness — tilt-shift (docs/16 ED-16).
+    public static let tiltShift = ProgressiveBlurSpec(
+        shape: .directional,
+        extent: .scene,
+        radius: .relative(0.08),
+        focusRadius: 0.12,
+        falloffRadius: 0.38,
+        angleDegrees: 90
+    )
 }
 
 /// The gradient a progressive blur uses as its mask (docs/09 U1.3).

@@ -51,11 +51,11 @@ public extension StudioDocumentModel {
         let from = playhead
         playbackTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await previewAudio.start(from: from, session: session, edit: edit)
-            guard !Task.isCancelled else { return }
-            // Clock starts after the soundtrack is armed, so prepare time is a pause
-            // rather than a jump in the playhead.
             let origin = ContinuousClock.now
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await previewAudio.start(from: from, session: session, edit: edit)
+            }
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.playbackTick)
                 guard !Task.isCancelled else { return }

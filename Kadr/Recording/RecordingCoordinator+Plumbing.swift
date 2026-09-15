@@ -1,4 +1,5 @@
 import AppKit
+import CaptureCore
 import Foundation
 import MediaExport
 import os
@@ -30,6 +31,93 @@ extension RecordingCoordinator {
             return url
         }
         return folder.appendingPathComponent(template.expand(context)).appendingPathExtension("mp4")
+    }
+
+    func runEngineStart(
+        target: RecordingTarget,
+        options: RecordingOptions,
+        cameraDeviceID: String?
+    ) async {
+        do {
+            startOverlays(for: target)
+            startStudioSession(for: target, cameraDeviceID: cameraDeviceID)
+            await CaptureExclusionPush.into(engine)
+            try await engine.start(target: target, options: options)
+            await studio.linkSegments(engine.inProgressDirectory, options: options)
+            await teleprompter.start(
+                microphone: options.recordsMicrophone ? engine.microphoneTap : nil
+            )
+            // Still ours to claim (docs/11 S0.3).
+            //
+            // Everything above suspends, and Stop and Cancel both run to completion
+            // during those suspensions: they set `.idle`, tear the overlays down and
+            // call `studio.cancel()`, which deletes the session directory. Announcing
+            // `.recording` afterwards resurrected a recording the user had already
+            // stopped — the menu-bar timer counted up against a session that no longer
+            // existed on disk. If the state moved out from under us, the engine has
+            // already been told to stand down and there is nothing here to claim.
+            guard state == .starting else {
+                await engine.cancel()
+                isTransitioning = false
+                logger.info("Recording was stopped while it was still starting")
+                return
+            }
+            state = .recording
+            startedAt = Date()
+            overlaySource.resetClock()
+            pausedDuration = 0
+            pausedAt = nil
+            startTicking()
+            if settings.recordingEnablesFocus {
+                focus.enable()
+            }
+            hygiene?.beginRecording()
+            isTransitioning = false
+            logger.info("Recording started")
+        } catch {
+            stopOverlays()
+            studio.cancel()
+            stopGeometryObserver()
+            teleprompter.stop()
+            hygiene?.endRecording()
+            isTransitioning = false
+            state = .idle
+            // A cancellation is not a capture failure. Feeding it to the permission
+            // tracker would count the user's own Escape as evidence that screen
+            // recording is broken, and eventually prompt them to fix a working grant.
+            guard error as? RecordingError != .cancelledDuringStart else {
+                logger.info("Recording was cancelled while it was still starting")
+                return
+            }
+            logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
+            permissions.noteCaptureFailure(error)
+            presentPermissionRecoveryIfNeeded(error)
+            RecordingFailureNotice.presentStartFailure(error)
+        }
+    }
+
+    func startTicking() {
+        stopTicking()
+        microphonePeakMax = 0
+        audioMeter = AudioMeter()
+        tickTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard let self, let startedAt else { return }
+                let fresh = await engine.audioMeter
+                microphonePeakMax = max(microphonePeakMax, fresh.microphone)
+                audioMeter = AudioMeter(
+                    microphone: max(fresh.microphone, audioMeter.microphone * 0.72),
+                    system: max(fresh.system, audioMeter.system * 0.72)
+                )
+                elapsed = Date().timeIntervalSince(startedAt) - pausedDuration
+            }
+        }
+    }
+
+    func stopTicking() {
+        tickTask?.cancel()
+        tickTask = nil
     }
 }
 

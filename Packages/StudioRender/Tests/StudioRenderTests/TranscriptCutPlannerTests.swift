@@ -33,8 +33,8 @@ struct TranscriptCutPlannerTests {
         let cuts = planner.cuts(for: script, duration: 2)
         let filler = try #require(cuts.first { $0.reason == .fillerWord })
 
-        #expect(abs(filler.start - 0.5) < 0.001)
-        #expect(abs(filler.end - 0.8) < 0.001)
+        #expect(abs(filler.start - 0.45) < 0.001)
+        #expect(abs(filler.end - 0.85) < 0.001)
         #expect(filler.label == "um")
     }
 

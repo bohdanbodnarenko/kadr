@@ -84,8 +84,9 @@ struct StudioZoomLane: View {
     }
 
     private func block(for cue: ZoomCue) -> some View {
+        let span = model.editedDisplayRange(of: cue)
         let selected = model.selectedZoom == cue.id
-        let width = max((cue.end - cue.start) * scale, 24)
+        let width = max((span.upperBound - span.lowerBound) * scale, 24)
         let running = cue.isEnabled && model.edit.showsZooms
         return HStack(spacing: 0) {
             handle(for: cue, leading: true)
@@ -105,7 +106,7 @@ struct StudioZoomLane: View {
             RoundedRectangle(cornerRadius: 3)
                 .strokeBorder(Color.primary.opacity(dragging?.id == cue.id ? 0.7 : 0), lineWidth: 1)
         }
-        .offset(x: cue.start * scale)
+        .offset(x: span.lowerBound * scale)
         .help("\(String(format: "%.1f", cue.magnification))× zoom — drag to move, handles to resize")
         .gesture(moveGesture(for: cue))
         .contextMenu {
@@ -134,7 +135,8 @@ struct StudioZoomLane: View {
                 .onChanged { value in
                     model.selectedZoom = cue.id
                     model.pausePlayback()
-                    let origin = resizing ?? ResizeOrigin(id: cue.id, start: cue.start, end: cue.end)
+                    let span = model.editedDisplayRange(of: cue)
+                    let origin = resizing ?? ResizeOrigin(id: cue.id, start: span.lowerBound, end: span.upperBound)
                     if resizing == nil {
                         resizing = origin
                     }
@@ -160,9 +162,10 @@ struct StudioZoomLane: View {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 model.selectedZoom = cue.id
-                let origin = dragging.map(\.start) ?? cue.start
+                let span = model.editedDisplayRange(of: cue)
+                let origin = dragging.map(\.start) ?? span.lowerBound
                 if dragging == nil {
-                    dragging = (cue.id, cue.start)
+                    dragging = (cue.id, span.lowerBound)
                 }
                 model.moveZoom(cue.id, to: origin + value.translation.width / scale)
             }

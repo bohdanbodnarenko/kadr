@@ -20,17 +20,21 @@ struct FilePromisePayload: Sendable {
     /// The drag ended. `true` when a receiver actually took the file, `false` when the
     /// user let go over nothing or pressed Escape.
     var completed: @MainActor @Sendable (Bool) -> Void
+    /// Already-final path, for the `.fileURL` pasteboard flavour (docs/16 OUT-6).
+    var stableFileURL: URL?
 
     init(
         suggestedName: String,
         contentType: UTType,
         resolve: @escaping @MainActor @Sendable () -> URL?,
-        completed: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }
+        completed: @escaping @MainActor @Sendable (Bool) -> Void = { _ in },
+        stableFileURL: URL? = nil
     ) {
         self.suggestedName = suggestedName
         self.contentType = contentType
         self.resolve = resolve
         self.completed = completed
+        self.stableFileURL = stableFileURL
     }
 
     /// The payload for a file that is already where it belongs and needs no finalising.
@@ -42,7 +46,8 @@ struct FilePromisePayload: Sendable {
             suggestedName: url.lastPathComponent,
             contentType: UTType(filenameExtension: url.pathExtension) ?? .data,
             resolve: { url },
-            completed: completed
+            completed: completed,
+            stableFileURL: url
         )
     }
 }
@@ -81,7 +86,8 @@ final class FilePromiseDragController: NSObject, NSFilePromiseProviderDelegate, 
     func beginDrag(from view: NSView, event: NSEvent, payload: FilePromisePayload, image: NSImage?) {
         inFlight = payload
 
-        let provider = NSFilePromiseProvider(fileType: payload.contentType.identifier, delegate: self)
+        let provider = KadrFilePromiseProvider(fileType: payload.contentType.identifier, delegate: self)
+        provider.resolvedFileURL = payload.stableFileURL
         let item = NSDraggingItem(pasteboardWriter: provider)
         let size = image?.size ?? CGSize(width: 64, height: 64)
         item.setDraggingFrame(view.bounds.centred(size), contents: image)
@@ -277,5 +283,29 @@ extension CGRect {
             width: size.width,
             height: size.height
         )
+    }
+}
+
+/// Promise plus a `.fileURL` flavour so Terminal and Electron drop zones receive a path
+/// (docs/16 OUT-6).
+///
+/// `nonisolated` so the `NSFilePromiseProvider` overrides stay off the module's default
+/// main actor; pasteboard asks for types on AppKit's own thread.
+final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
+    var resolvedFileURL: URL?
+
+    override func writableTypes(for pasteboard: NSPasteboard) -> [NSPasteboard.PasteboardType] {
+        var types = super.writableTypes(for: pasteboard)
+        if resolvedFileURL != nil, !types.contains(.fileURL) {
+            types.append(.fileURL)
+        }
+        return types
+    }
+
+    override func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -> Any? {
+        if type == .fileURL, let resolvedFileURL {
+            return resolvedFileURL.absoluteString
+        }
+        return super.pasteboardPropertyList(forType: type)
     }
 }

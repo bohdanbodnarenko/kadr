@@ -18,8 +18,12 @@ struct BeautifyBackdropPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Button("None") { onChoose(.none) }
+                .buttonStyle(InspectorButtonStyle(fillsWidth: true))
+                .accessibilityLabel("No backdrop")
             swatches("Colours", items: BeautifyPalette.solids.map(BeautifyBackdrop.solid))
             swatches("Gradients", items: BeautifyPalette.gradients.map(BeautifyBackdrop.gradient))
+            images
             custom
         }
     }
@@ -48,6 +52,8 @@ struct BeautifyBackdropPicker: View {
     @ViewBuilder
     private var custom: some View {
         switch backdrop {
+        case .none:
+            EmptyView()
         case let .solid(colour):
             InspectorColorRow("Custom colour", selection: Binding(
                 get: { Color(colour) },
@@ -100,9 +106,45 @@ struct BeautifyBackdropPicker: View {
 
     private static func label(for backdrop: BeautifyBackdrop) -> String {
         switch backdrop {
+        case .none: "No fill"
         case .solid: "Solid colour"
         case .gradient: "Gradient"
         case .image: "Image"
+        }
+    }
+
+    private var images: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Images")
+                .font(.inspectorNote)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: Self.columns, spacing: 6) {
+                Button(action: pickImage) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .frame(height: Self.swatchHeight)
+                .help("Choose an image")
+                .accessibilityLabel("Choose an image")
+
+                ForEach(BackdropRecents.load(), id: \.self) { path in
+                    Button {
+                        onChoose(.image(path: path))
+                    } label: {
+                        BeautifySwatch(backdrop: .image(path: path), isSelected: backdrop == .image(path: path))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: Self.swatchHeight)
+                    .accessibilityLabel(URL(fileURLWithPath: path).lastPathComponent)
+                }
+            }
         }
     }
 
@@ -115,7 +157,9 @@ struct BeautifyBackdropPicker: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        onChoose(.image(path: BeautifyBackdropPicker.copiedBackdrop(from: url) ?? url.path))
+        let path = BeautifyBackdropPicker.copiedBackdrop(from: url) ?? url.path
+        onChoose(.image(path: path))
+        BackdropRecents.remember(path)
     }
 
     /// Copies the chosen image into Application Support so the `.kadr` file does not
@@ -156,6 +200,8 @@ struct BeautifySwatch: View {
 
     private var fill: AnyShapeStyle {
         switch backdrop {
+        case .none:
+            AnyShapeStyle(Color.clear)
         case let .solid(colour):
             AnyShapeStyle(Color(colour))
         case let .gradient(ramp):

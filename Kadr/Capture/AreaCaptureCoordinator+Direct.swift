@@ -1,6 +1,8 @@
 import AppKit
 import CaptureCore
+import MediaExport
 import os
+import OverlayKit
 import SelectionUI
 import SettingsKit
 import Shared
@@ -11,6 +13,27 @@ import Shared
 extension AreaCaptureCoordinator {
     /// Captures every display with no overlay at all (docs/03 §1.3).
     func captureAllDisplays() {
+        captureFullscreen()
+    }
+
+    /// Honours Settings → Capture → Fullscreen captures (docs/16 CAP-3).
+    func captureFullscreen() {
+        switch settings.fullscreenTarget {
+        case .activeDisplay:
+            if let displayID = ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID {
+                captureDisplay(displayID)
+            } else {
+                captureEveryDisplay(preferringActive: false)
+            }
+        case .allDisplays:
+            captureEveryDisplay(preferringActive: true)
+        case .allDisplaysStitched:
+            captureStitchedDisplays()
+        }
+    }
+
+    /// Captures every display with no overlay at all (docs/03 §1.3).
+    func captureEveryDisplay(preferringActive: Bool) {
         rememberBeautifySkip()
         if captureHeldFreeze() {
             return
@@ -36,7 +59,7 @@ extension AreaCaptureCoordinator {
                         includesCursor: includesCursor
                     )
                     permissions.noteCaptureSuccess()
-                    await deliverAll(captures)
+                    await deliverAll(Self.ordered(captures, preferringActive: preferringActive))
                     hygiene?.endCapture()
                 } catch {
                     hygiene?.endCapture()
@@ -163,6 +186,84 @@ extension AreaCaptureCoordinator {
                 pointRect: frozen.geometry.frame,
                 pixelSize: PixelSize(width: frozen.image.width, height: frozen.image.height),
                 colorSpaceName: frozen.image.colorSpace?.name as String?,
+                frontmostApp: frontmost
+            )
+        )
+    }
+
+    func captureStitchedDisplays() {
+        rememberBeautifySkip()
+        if captureHeldFreeze() {
+            return
+        }
+        guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
+            self?.captureWithSystemPicker()
+        }) else { return }
+        inFlight?.cancel()
+        let seconds = timerSeconds
+        timer.run(seconds: seconds, screen: nil, displayID: nil) { [weak self] in
+            guard let self else { return }
+            inFlight = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    await engine.setDynamicRange(settings.captureDynamicRange)
+                    await hygiene?.beginCaptureAndSettle()
+                    await CaptureExclusionPush.into(engine)
+                    let captures = try await engine.captureAllDisplays(
+                        includesCursor: includesCursor
+                    )
+                    permissions.noteCaptureSuccess()
+                    if let stitched = Self.stitched(captures, frontmost: frontmostAtHotkey) {
+                        await deliver(stitched)
+                    } else if captures.count == 1, let only = captures.first {
+                        await deliver(only)
+                    } else {
+                        await deliverAll(captures)
+                    }
+                    hygiene?.endCapture()
+                } catch {
+                    hygiene?.endCapture()
+                    handle(error)
+                }
+            }
+        }
+    }
+
+    static func ordered(_ captures: [Capture], preferringActive: Bool) -> [Capture] {
+        guard preferringActive,
+              let activeID = ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID
+        else {
+            return captures
+        }
+        return captures.sorted { lhs, rhs in
+            let left = lhs.metadata.displayID == activeID ? 0 : 1
+            let right = rhs.metadata.displayID == activeID ? 0 : 1
+            return left < right
+        }
+    }
+
+    static func stitched(_ captures: [Capture], frontmost: AppIdentity?) -> Capture? {
+        guard captures.count >= 2 else { return captures.first }
+        let tiles = captures.map {
+            DisplayStitcher.Tile(rect: $0.metadata.pointRect.cgRect, scale: $0.metadata.scale.factor)
+        }
+        guard let image = DisplayStitcher.compose(captures.map(\.image), tiles: tiles) else {
+            return nil
+        }
+        let canvas = DisplayStitcher.canvas(for: tiles)
+        return Capture(
+            image: image,
+            metadata: CaptureMetadata(
+                source: .display(captures[0].metadata.displayID ?? 0),
+                displayID: ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID
+                    ?? captures[0].metadata.displayID,
+                scale: DisplayScale(canvas.scale),
+                pointRect: DisplayRect(cgRect: CGRect(origin: canvas.origin, size: CGSize(
+                    width: canvas.size.width / canvas.scale,
+                    height: canvas.size.height / canvas.scale
+                ))),
+                pixelSize: PixelSize(width: image.width, height: image.height),
+                colorSpaceName: image.colorSpace?.name as String?,
                 frontmostApp: frontmost
             )
         )

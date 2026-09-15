@@ -14,9 +14,13 @@ extension RecordingCoordinator {
     // MARK: - Controlling
 
     func pause() {
-        guard state == .recording else { return }
+        guard state == .recording, !isTransitioning else { return }
+        isTransitioning = true
+        studio.pauseCamera()
+        studio.pauseTelemetry()
         Task { [weak self] in
             guard let self else { return }
+            defer { isTransitioning = false }
             do {
                 try await engine.pause()
             } catch {
@@ -34,9 +38,13 @@ extension RecordingCoordinator {
     }
 
     func resume() {
-        guard state == .paused else { return }
+        guard state == .paused, !isTransitioning else { return }
+        isTransitioning = true
+        studio.resumeTelemetry()
+        studio.resumeCamera()
         Task { [weak self] in
             guard let self else { return }
+            defer { isTransitioning = false }
             do {
                 try await engine.resume()
             } catch {
@@ -76,6 +84,7 @@ extension RecordingCoordinator {
         }
         automationCompletion = completion
         state = .finishing
+        isTransitioning = true
         stopTicking()
         focus.disable()
         stopOverlays()
@@ -84,10 +93,16 @@ extension RecordingCoordinator {
         hygiene?.endRecording()
 
         let destination = destinationURL()
+        let interruption = pendingInterruption
+        pendingInterruption = nil
         Task { [weak self] in
             guard let self else { return }
+            defer {
+                isTransitioning = false
+                liveNotice = nil
+            }
             do {
-                let result = try await engine.stop(savingTo: destination)
+                let result = try await engine.stop(savingTo: destination, interruption: interruption)
                 let exportGIF = wantsGIFExport
                 state = .idle
                 elapsed = 0
@@ -105,6 +120,11 @@ extension RecordingCoordinator {
                 if let session = await studio.finish(with: result) {
                     onStudioSessionReady?(session, result)
                 }
+                if result.interruption != nil {
+                    RecordingFailureNotice.presentInterruption(
+                        result.interruption ?? "The recording ended unexpectedly."
+                    )
+                }
                 finishTerminationIfNeeded()
             } catch {
                 state = .idle
@@ -115,6 +135,7 @@ extension RecordingCoordinator {
                 studio.cancel()
                 logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
                 report(.failed(error.localizedDescription))
+                RecordingFailureNotice.presentStopFailure(error)
                 finishTerminationIfNeeded()
             }
         }
@@ -129,6 +150,8 @@ extension RecordingCoordinator {
         }
         guard isRecording else { return }
         state = .idle
+        isTransitioning = false
+        liveNotice = nil
         stopTicking()
         focus.disable()
         stopOverlays()

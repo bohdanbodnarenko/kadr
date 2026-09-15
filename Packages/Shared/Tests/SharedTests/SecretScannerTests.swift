@@ -192,3 +192,36 @@ struct SecretScannerTests {
             || foldedHay.localizedCaseInsensitiveContains(foldedNeedle)
     }
 }
+
+@Suite("URL and IPv4 detectors")
+struct SecretScannerNetworkTests {
+    @Test("A scheme URL is proposed")
+    func schemeURL() {
+        let found = SecretScanner.matches(in: "See https://example.com/reset?token=1")
+        #expect(found.contains { $0.kind == .url && $0.text.contains("https://example.com") })
+    }
+
+    @Test("A www host is proposed")
+    func wwwURL() {
+        let found = SecretScanner.matches(in: "Visit www.example.org/login")
+        #expect(found.contains { $0.kind == .url && $0.text.contains("www.example.org") })
+    }
+
+    @Test("A bare domain is not a URL")
+    func bareDomainIsIgnored() {
+        let found = SecretScanner.matches(in: "Talk to example.com about this")
+        #expect(!found.contains { $0.kind == .url })
+    }
+
+    @Test("A valid IPv4 is proposed")
+    func ipv4() {
+        let found = SecretScanner.matches(in: "Host 192.168.1.20 is down")
+        #expect(found.contains { $0.kind == .ipAddress && $0.text == "192.168.1.20" })
+    }
+
+    @Test("An octet past 255 is not an address")
+    func invalidOctet() {
+        let found = SecretScanner.matches(in: "999.1.1.1")
+        #expect(!found.contains { $0.kind == .ipAddress })
+    }
+}

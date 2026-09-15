@@ -19,6 +19,14 @@ struct GeneralPane: View {
         Form {
             Section {
                 Toggle("Launch Kadr at login", isOn: loginAtLoginBinding)
+                Toggle("Show menu bar icon", isOn: menuBarIconBinding)
+                Text(
+                    "Turn this off to hide Kadr from the menu bar. Reopen the app from Finder "
+                        + "or the Dock to get back to Settings."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
                 if let explanation = loginItem.state.explanation {
                     Text(explanation)
                         .font(.callout)
@@ -37,11 +45,13 @@ struct GeneralPane: View {
                 LabeledContent("Save to") {
                     HStack {
                         Text(settings.saveFolder.path)
-                            .truncationMode(.head)
+                            .truncationMode(.middle)
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
+                            .help(settings.saveFolder.path)
                         Spacer()
                         Button("Choose…", action: chooseSaveFolder)
+                        Button("Use Default", action: restoreDefaultSaveFolder)
                     }
                 }
                 Toggle("Ask where to save from the overlay", isOn: $settings.askForSaveDestination)
@@ -71,6 +81,13 @@ struct GeneralPane: View {
 
                 Toggle("Save Retina captures at 1×", isOn: $settings.downscaleRetinaCaptures)
                 Toggle("Convert to sRGB when saving", isOn: $settings.convertExportsToSRGB)
+                Toggle("Play a sound when capturing", isOn: $settings.playsCaptureSound)
+                if settings.imageFormat != .png {
+                    Slider(value: $settings.lossyQuality, in: 0.1 ... 1)
+                    Text("Quality")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 Text("Off keeps a wide-gamut capture in Display P3. On converts so "
                     + "browsers and Windows apps show the same colours as this Mac.")
                     .font(.callout)
@@ -150,5 +167,19 @@ struct GeneralPane: View {
         panel.prompt = "Choose"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.saveFolderPath = url.path
+    }
+
+    private func restoreDefaultSaveFolder() {
+        settings.saveFolderPath = SettingKeys.saveFolderPath.defaultValue
+    }
+
+    private var menuBarIconBinding: Binding<Bool> {
+        Binding(
+            get: { settings.showsMenuBarIcon },
+            set: { visible in
+                settings.showsMenuBarIcon = visible
+                StatusItemController.postMenuBarVisibility(visible)
+            }
+        )
     }
 }

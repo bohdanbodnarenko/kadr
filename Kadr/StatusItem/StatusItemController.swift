@@ -23,13 +23,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let captureWithPicker: () -> Void
     private let showOnboarding: () -> Void
     private let checkForUpdates: () -> Void
-    private let canCheckForUpdates: () -> Bool
+    let canCheckForUpdates: () -> Bool
     /// Nil when nothing is recording; otherwise the live recording's controls.
     private let recordingControls: () -> RecordingControls?
     /// Extra menu items contributed by debug builds; empty in release.
-    private let additionalItems: () -> [NSMenuItem]
+    let additionalItems: () -> [NSMenuItem]
     /// Whether the status item is currently showing the recording icon (click = stop).
     var showsRecordingIcon = false
+    /// KVO for the user dragging the icon out of the menu bar (docs/16 APP-2).
+    var visibilityObservation: NSKeyValueObservation?
     private let history: HistoryController?
     private let reopenFromHistory: (HistoryRecord) -> Void
     /// Overlay-menu items live in `StatusItemController+Overlay.swift`, so these
@@ -46,6 +48,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     let pinsAreHidden: () -> Bool
     /// Images dropped on the menu-bar icon open in the editor (docs/03 §8.1).
     var openDroppedFile: ((URL) -> Void)?
+    /// Writes the menu-bar visibility setting when the user removes the icon (docs/16 APP-2).
+    var onMenuBarVisibilityChange: ((Bool) -> Void)?
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
@@ -95,7 +99,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         super.init()
 
         statusItem.button?.toolTip = "Kadr"
-        statusItem.behavior = .terminationOnRemoval
+        statusItem.behavior = .removalAllowed
+        statusItem.isVisible = true
         showIdleIcon()
         attachDropTarget()
 
@@ -103,6 +108,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
         menu.delegate = self
         attachIdleMenu()
+        observeMenuBarVisibility()
     }
 
     /// Drop a still or `.kadr` on the icon to annotate it (docs/03 §8.1).
@@ -286,12 +292,41 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             let item = NSMenuItem()
             item.view = strip
             menu.addItem(item)
+
+            let recentMenu = NSMenu()
+            for record in recent {
+                let row = NSMenuItem(
+                    title: record.originalFilename,
+                    action: #selector(didSelectRecent(_:)),
+                    keyEquivalent: ""
+                )
+                row.target = self
+                row.representedObject = record.id
+                if let cgImage = history?.thumbnail(for: record, maxPixelSize: 32, scope: .strip) {
+                    let icon = NSImage(cgImage: cgImage, size: NSSize(width: 16, height: 16))
+                    row.image = icon
+                }
+                recentMenu.addItem(row)
+            }
+            let recentItem = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
+            recentItem.submenu = recentMenu
+            menu.addItem(recentItem)
         }
 
-        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "")
+        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "l")
+        historyItem.keyEquivalentModifierMask = [.command, .shift]
         historyItem.target = self
         historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(historyItem)
+
+        let folderItem = NSMenuItem(
+            title: "Open Capture Folder",
+            action: #selector(didSelectOpenSaveFolder),
+            keyEquivalent: ""
+        )
+        folderItem.target = self
+        folderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+        menu.addItem(folderItem)
 
         if canRestore() {
             let restoreItem = NSMenuItem(
@@ -305,54 +340,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
 
         addRecoveryItem(to: menu)
-    }
-
-    /// Groups 6–8 — setup, updates, quit.
-    private func addApplicationItems(to menu: NSMenu) {
-        let extras = additionalItems()
-        if !extras.isEmpty {
-            menu.addItem(.separator())
-            for item in extras {
-                menu.addItem(item)
-            }
-        }
-
-        menu.addItem(.separator())
-
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(didSelectSettings), keyEquivalent: ",")
-        settingsItem.keyEquivalentModifierMask = [.command]
-        settingsItem.target = self
-        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
-        menu.addItem(settingsItem)
-
-        let onboardingItem = NSMenuItem(
-            title: "Setup & Permissions…",
-            action: #selector(didSelectOnboarding),
-            keyEquivalent: ""
-        )
-        onboardingItem.target = self
-        menu.addItem(onboardingItem)
-
-        // Absent rather than greyed. It is false in debug builds, where Sparkle does
-        // nothing at all, and for the few seconds one check is already in flight — and
-        // "Check for Updates…" greyed out with no reason given reads as a broken app.
-        if canCheckForUpdates() {
-            menu.addItem(.separator())
-            let updatesItem = NSMenuItem(
-                title: "Check for Updates…",
-                action: #selector(didSelectCheckForUpdates),
-                keyEquivalent: ""
-            )
-            updatesItem.target = self
-            menu.addItem(updatesItem)
-        }
-
-        menu.addItem(.separator())
-
-        let quitItem = NSMenuItem(title: "Quit Kadr", action: #selector(didSelectQuit), keyEquivalent: "q")
-        quitItem.keyEquivalentModifierMask = [.command]
-        quitItem.target = self
-        menu.addItem(quitItem)
     }
 
     // MARK: - Actions
@@ -373,6 +360,21 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc
     func didSelectHistory() {
         openHistory()
+    }
+
+    @objc
+    func didSelectOpenSaveFolder() {
+        perform(.openSaveFolder)
+    }
+
+    @objc
+    func didSelectRecent(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? UUID,
+              let record = history?.record(id: id)
+        else {
+            return
+        }
+        reopenFromHistory(record)
     }
 
     @objc
@@ -406,22 +408,22 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc
-    private func didSelectOnboarding() {
+    func didSelectOnboarding() {
         showOnboarding()
     }
 
     @objc
-    private func didSelectCheckForUpdates() {
+    func didSelectCheckForUpdates() {
         checkForUpdates()
     }
 
     @objc
-    private func didSelectSettings() {
+    func didSelectSettings() {
         openSettings()
     }
 
     @objc
-    private func didSelectQuit() {
+    func didSelectQuit() {
         logger.info("Quit from the status menu")
         NSApp.terminate(nil)
     }
@@ -439,4 +441,7 @@ struct RecordingControls {
     var audioLevel: Float = 0
     /// True when the microphone is on but has not picked up anything this take.
     var microphoneIsSilent: Bool = false
+    /// Transient status while a take is interrupted or the transport is settling.
+    var notice: String?
+    var isTransitioning: Bool = false
 }

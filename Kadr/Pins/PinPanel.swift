@@ -43,6 +43,7 @@ final class PinPanel: NonActivatingPanel {
     /// Fired for the menu commands the pin does not implement itself.
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
+    var onReveal: (() -> Void)?
     var onAnnotate: (() -> Void)?
     /// Recognises the pin's text and copies it (docs/03 §1.7). The pin holds a file URL,
     /// so the work is the manager's — the panel only offers the command (docs/07 M8).
@@ -53,6 +54,7 @@ final class PinPanel: NonActivatingPanel {
     /// so the promise has nothing to resolve beyond handing the path over.
     private let dragController = FilePromiseDragController()
     var onClose: (() -> Void)?
+    private var hoverBar: PinHoverBar?
 
     init?(fileURL: URL, scale: CGFloat) {
         guard let pixelSize = ThumbnailLoader().pixelSize(for: fileURL) else { return nil }
@@ -70,12 +72,20 @@ final class PinPanel: NonActivatingPanel {
             defer: false
         )
         configureAsOverlay(level: .floating)
+        hasShadow = true
+        contentAspectRatio = NSSize(width: width, height: height)
+        let shortest: CGFloat = 80
+        if width >= height {
+            minSize = NSSize(width: shortest, height: shortest * height / max(width, 1))
+        } else {
+            minSize = NSSize(width: shortest * width / max(height, 1), height: shortest)
+        }
         // Pins are reference layers the user arranges by hand.
         isMovableByWindowBackground = true
         // On every Space, because a reference you have to chase between Spaces is useless.
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
-        imageView.imageScaling = .scaleAxesIndependently
+        imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.frame = CGRect(x: 0, y: 0, width: width, height: height)
         imageView.autoresizingMask = [.width, .height]
 
@@ -86,6 +96,14 @@ final class PinPanel: NonActivatingPanel {
 
         reloadBackingImage()
         configureAccessibility()
+        hoverBar = PinHoverBar(panel: self)
+        if let hoverBar {
+            contentView?.addSubview(hoverBar)
+        }
+    }
+
+    func setHoverBarVisible(_ visible: Bool) {
+        hoverBar?.setVisible(visible)
     }
 
     /// A pin never takes focus when it appears (docs/03 §4 accept list).
@@ -101,6 +119,8 @@ final class PinPanel: NonActivatingPanel {
     func dismiss() {
         reloadTask?.cancel()
         reloadTask = nil
+        hoverBar?.removeFromSuperview()
+        hoverBar = nil
         contentView = nil
         imageView.image = nil
         orderOut(nil)
@@ -197,7 +217,9 @@ final class PinPanel: NonActivatingPanel {
             from: view,
             event: event,
             payload: .file(at: fileURL),
-            image: NSImage(contentsOf: fileURL)
+            image: ThumbnailLoader().thumbnail(for: fileURL, maxPixelSize: 256).map {
+                NSImage(cgImage: $0, size: .zero)
+            }
         )
     }
 
@@ -270,6 +292,7 @@ final class PinPanel: NonActivatingPanel {
             ? String(localized: "Click-through on. Press Command Option L to interact.")
             : String(localized: "Click-through off.")
         FeedbackAnnouncement.post(announcement)
+        hoverBar?.setVisible(false)
         onGeometryChanged?()
     }
 
@@ -367,7 +390,7 @@ final class PinPanel: NonActivatingPanel {
 
 /// The pin's content view, which turns AppKit events into panel commands.
 @MainActor
-private final class PinContentView: NSView {
+final class PinContentView: NSView {
     weak var panel: PinPanel?
 
     override var acceptsFirstResponder: Bool {
@@ -379,6 +402,27 @@ private final class PinContentView: NSView {
         super.viewDidEndLiveResize()
         panel?.reloadBackingImageIfNeeded()
         panel?.onGeometryChanged?()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach { removeTrackingArea($0) }
+        addTrackingArea(NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        panel?.setHoverBarVisible(true)
+        super.mouseEntered(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        panel?.setHoverBarVisible(false)
+        super.mouseExited(with: event)
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -415,70 +459,5 @@ private final class PinContentView: NSView {
         case 53: panel?.onClose?()
         default: super.keyDown(with: event)
         }
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        guard let panel else { return nil }
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-
-        let copy = NSMenuItem(title: "Copy", action: #selector(copyPin), keyEquivalent: "")
-        copy.target = self
-        menu.addItem(copy)
-
-        let save = NSMenuItem(title: "Save…", action: #selector(savePin), keyEquivalent: "")
-        save.target = self
-        menu.addItem(save)
-
-        let annotate = NSMenuItem(title: "Annotate", action: #selector(annotatePin), keyEquivalent: "")
-        annotate.target = self
-        menu.addItem(annotate)
-
-        let ocr = NSMenuItem(title: "Copy Text", action: #selector(copyPinText), keyEquivalent: "")
-        ocr.target = self
-        menu.addItem(ocr)
-
-        menu.addItem(.separator())
-
-        let clickThrough = NSMenuItem(
-            title: panel.clickThroughEnabled ? "Stop Click-Through" : "Click-Through",
-            action: #selector(toggleClickThrough),
-            keyEquivalent: "l"
-        )
-        clickThrough.keyEquivalentModifierMask = [.command, .option]
-        clickThrough.target = self
-        menu.addItem(clickThrough)
-
-        menu.addItem(.separator())
-
-        let close = NSMenuItem(title: "Close Pin", action: #selector(closePin), keyEquivalent: "w")
-        close.target = self
-        menu.addItem(close)
-
-        return menu
-    }
-
-    @objc private func annotatePin() {
-        panel?.onAnnotate?()
-    }
-
-    @objc private func copyPinText() {
-        panel?.onCopyText?()
-    }
-
-    @objc private func copyPin() {
-        panel?.onCopy?()
-    }
-
-    @objc private func savePin() {
-        panel?.onSave?()
-    }
-
-    @objc private func closePin() {
-        panel?.onClose?()
-    }
-
-    @objc private func toggleClickThrough() {
-        panel?.toggleClickThrough()
     }
 }

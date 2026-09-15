@@ -50,8 +50,8 @@ public enum ZoomAnchor: Sendable, Hashable, Codable {
 /// approximating the other.
 public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
     public var id: UUID
-    /// When the zoom begins, in *edited* time — after cuts and speed changes, because that
-    /// is the timeline the viewer experiences.
+    /// When the zoom begins, in *source* time — the recording's own clock, so cuts and
+    /// speed changes keep the cue on the same footage (docs/16 STU-A3).
     public var start: TimeInterval
     /// How long it stays zoomed, excluding the moves in and out.
     public var duration: TimeInterval
@@ -166,7 +166,7 @@ public struct ZoomCuePlanner: Sendable {
     public init(
         maximumGap: TimeInterval = 2.5,
         maximumSpreadFraction: Double = 0.25,
-        minimumClicks: Int = 2,
+        minimumClicks: Int = 1,
         tail: TimeInterval = 1.2
     ) {
         self.maximumGap = max(maximumGap, 0.1)

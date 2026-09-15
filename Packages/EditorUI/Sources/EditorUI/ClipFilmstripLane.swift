@@ -32,7 +32,24 @@ struct ClipFilmstripLane: View {
                 duration: clip.sourceDuration,
                 count: count
             )
-            images = await StudioFilmstrip.images(from: url, times: times)
+            let level = max(Int(log2(Double(max(count, 1))).rounded(.down)), 0)
+            var frames: [CGImage] = []
+            frames.reserveCapacity(times.count)
+            for (index, time) in times.enumerated() {
+                if Task.isCancelled {
+                    return
+                }
+                if let image = await StudioThumbnailStore.shared.tile(
+                    url: url,
+                    time: time,
+                    level: level,
+                    index: index,
+                    size: CGSize(width: 80, height: 80)
+                ) {
+                    frames.append(image)
+                }
+            }
+            images = frames
         }
     }
 
@@ -41,6 +58,6 @@ struct ClipFilmstripLane: View {
     }
 
     private var loadKey: String {
-        "\(clip.id.uuidString)-\(clip.sourceStart)-\(clip.sourceDuration)-\(Int(width))"
+        "\(clip.id.uuidString)-\(clip.sourceStart)-\(clip.sourceDuration)-\(StudioFilmstrip.tileCount(forWidth: width))"
     }
 }

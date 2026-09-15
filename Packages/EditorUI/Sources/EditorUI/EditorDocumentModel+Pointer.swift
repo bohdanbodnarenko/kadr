@@ -72,7 +72,7 @@ public extension EditorDocumentModel {
             return
         }
         if isMovingSelection {
-            dragSelection(to: point, from: origin)
+            dragSelection(to: point, from: origin, modifiers: modifiers)
             return
         }
 
@@ -104,6 +104,7 @@ public extension EditorDocumentModel {
             document.endGesture()
             dragOrigin = nil
             dragStartCommands = [:]
+            dragDependents = []
             isMovingSelection = false
             resizeHandle = nil
             resizeStartBounds = nil
@@ -156,6 +157,7 @@ public extension EditorDocumentModel {
         document.selection = [hit.id]
         guard !isCanvasLocked else { return true }
         dragStartCommands = [hit.id: hit]
+        captureArrowDependents()
         isMovingSelection = true
         document.beginGesture()
         return true
@@ -163,7 +165,9 @@ public extension EditorDocumentModel {
 
     private func beginSelectionDrag(at point: CGPoint, modifiers: EditorModifiers) {
         guard let hit = AnnotationHitTesting.topmost(in: document.commands, at: point) else {
-            // An empty click clears the selection and starts a marquee.
+            if beginMoveFromSelectionInterior(at: point, modifiers: modifiers) {
+                return
+            }
             if !modifiers.contains(.extendSelection) {
                 document.selection = []
             }
@@ -186,6 +190,7 @@ public extension EditorDocumentModel {
                 .filter { document.selection.contains($0.id) }
                 .map { ($0.id, $0) }
         )
+        captureArrowDependents()
         // One undo step for the whole drag, however many frames it takes (docs/09 U0.2).
         document.beginGesture()
     }
@@ -195,8 +200,15 @@ public extension EditorDocumentModel {
     /// Absolute, not incremental: every event re-derives each annotation from where it
     /// was when the drag started, so a 100-point drag moves exactly 100 points no matter
     /// how many mouse-moved events arrived on the way.
-    private func dragSelection(to point: CGPoint, from origin: CGPoint) {
-        let delta = CGSize(width: point.x - origin.x, height: point.y - origin.y)
+    private func dragSelection(to point: CGPoint, from origin: CGPoint, modifiers: EditorModifiers = []) {
+        var delta = CGSize(width: point.x - origin.x, height: point.y - origin.y)
+        if modifiers.contains(.constrain) {
+            if abs(delta.width) >= abs(delta.height) {
+                delta.height = 0
+            } else {
+                delta.width = 0
+            }
+        }
         let starts = dragStartCommands
         guard !starts.isEmpty else { return }
 
@@ -206,5 +218,25 @@ public extension EditorDocumentModel {
                 commands[index] = Self.translated(start, by: delta)
             }
         }
+    }
+
+    /// A drag from empty space inside the selection's union moves it (docs/16 ED-12).
+    private func beginMoveFromSelectionInterior(at point: CGPoint, modifiers: EditorModifiers) -> Bool {
+        guard !modifiers.contains(.extendSelection), !document.selection.isEmpty, !isCanvasLocked else {
+            return false
+        }
+        let selected = document.commands.filter { document.selection.contains($0.id) }
+        if selected.count == 1 {
+            switch selected[0] {
+            case .arrow, .line, .measure: return false
+            default: break
+            }
+        }
+        guard SelectionResizer.unionBounds(of: selected).contains(point) else { return false }
+        isMovingSelection = true
+        dragStartCommands = Dictionary(uniqueKeysWithValues: selected.map { ($0.id, $0) })
+        captureArrowDependents()
+        document.beginGesture()
+        return true
     }
 }

@@ -79,12 +79,23 @@ struct CapturePane: View {
             }
 
             Section {
-                Toggle("Crop the notch from fullscreen screenshots", isOn: $settings.cropNotchFromFullscreen)
+                Picker("Fullscreen captures", selection: $settings.fullscreenTarget) {
+                    ForEach(FullscreenTarget.allCases, id: \.self) { target in
+                        Text(target.title).tag(target)
+                    }
+                }
+                Toggle(
+                    "Trim the empty notch strip from fullscreen screenshots",
+                    isOn: $settings.cropNotchFromFullscreen
+                )
             } footer: {
-                Text("Cuts the black camera strip from fullscreen shots on a notched MacBook.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(
+                    "Removes the black camera strip only when that strip is empty. "
+                        + "A fullscreen shot of an app that covers the menu bar is left intact."
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {

@@ -49,14 +49,27 @@ struct EditorToolOptions: View {
         )
     }
 
+    @ViewBuilder
     private var arrowOptions: some View {
-        InspectorRow("Head") {
-            Picker("Head", selection: Binding(
+        InspectorRow("End") {
+            Picker("End", selection: Binding(
                 get: { model.styleMemory.lastArrowHead },
                 set: { model.applyArrowHead($0) }
             )) {
                 ForEach(ArrowHead.allCases, id: \.self) { head in
                     Text(head.title).tag(head)
+                }
+            }
+            .inspectorMenuPicker()
+        }
+        InspectorRow("Start") {
+            Picker("Start", selection: Binding(
+                get: { model.styleMemory.lastStartArrowHead },
+                set: { model.applyStartArrowHead($0) }
+            )) {
+                Text("None").tag(ArrowHead?.none)
+                ForEach(ArrowHead.allCases, id: \.self) { head in
+                    Text(head.title).tag(Optional(head))
                 }
             }
             .inspectorMenuPicker()

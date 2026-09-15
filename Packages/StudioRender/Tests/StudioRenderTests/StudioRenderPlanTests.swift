@@ -113,7 +113,7 @@ struct StudioRenderPlanTests {
             anchor: .fixed(CGPoint(x: size.width / 2, y: size.height / 2))
         )
         let plan = StudioRenderPlan(
-            edit: edit(zooms: [cue], reframe: Reframe(aspect: .nineSixteen, fill: .fill)),
+            edit: edit(zooms: [cue], reframe: Reframe(aspect: .nineSixteen, fill: .fill, follows: false)),
             sourceSize: size
         )
         // Late enough for the spring to have settled.
@@ -130,7 +130,7 @@ struct StudioRenderPlanTests {
         let cue = ZoomCue(start: 0, duration: 8, magnification: 2, anchor: .centre)
         let plain = StudioRenderPlan(edit: edit(zooms: [cue]), sourceSize: size)
         let reframed = StudioRenderPlan(
-            edit: edit(zooms: [cue], reframe: Reframe(aspect: .nineSixteen, fill: .fill)),
+            edit: edit(zooms: [cue], reframe: Reframe(aspect: .nineSixteen, fill: .fill, follows: false)),
             sourceSize: size
         )
         let plainZoom = plain.sourceSize.width / plain.sourceRect(at: 6).width
@@ -236,14 +236,13 @@ struct StudioRenderPlanTests {
         #expect(plan.outputSize == size)
     }
 
-    @Test("A padded canvas is larger than the recording and keeps the card centred")
+    @Test("A padded canvas keeps the reframe aspect and centres the card")
     func paddedCanvasGrows() {
         var padded = edit()
         padded.canvas = StudioCanvas(paddingFraction: 0.1)
         let plan = StudioRenderPlan(edit: padded, sourceSize: size)
-        #expect(plan.outputSize.width > size.width)
-        #expect(plan.outputSize.height > size.height)
-        #expect(abs(plan.cardRect.width - size.width) < 1)
+        #expect(plan.outputSize == size)
+        #expect(plan.cardRect.width < size.width)
         #expect(abs(plan.cardRect.midX - plan.outputSize.width / 2) < 1)
         #expect(Int(plan.outputSize.width) % 2 == 0)
         #expect(Int(plan.outputSize.height) % 2 == 0)

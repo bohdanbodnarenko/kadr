@@ -12,15 +12,20 @@ public extension EditorDocumentModel {
     /// keeps whatever is selected, which is how you resume editing it.
     func selectTool(_ tool: EditorTool) {
         pendingTextEditID = nil
-        // Clearing runs even when the tool is unchanged (docs/03 §3: "picking a drawing
-        // tool from the toolbar clears the current selection"). The early return that used
-        // to guard this made re-pressing the armed tool a no-op, so the shape drawn a
-        // moment ago stayed selected while the user was lining up the next one — and any
-        // style change meant for the *next* shape rewrote the previous one instead.
+        if tool == .crop, self.tool != .crop {
+            cropBaseline = document.crop
+        }
         self.tool = tool
         if tool != .select {
             selection = []
         }
+    }
+
+    /// Esc during Crop restores the crop as it was when the mode was entered (docs/16 ED-17).
+    func cancelCropToBaseline() {
+        document.setCrop(cropBaseline)
+        cropBaseline = nil
+        selectTool(.select)
     }
 
     /// The canvas takes this after mouse-up so the in-place editor can open.
@@ -78,6 +83,7 @@ public extension EditorDocumentModel {
     private func beginDragOfPlaced(_ command: AnnotationCommand) {
         guard !isCanvasLocked else { return }
         dragStartCommands = [command.id: command]
+        captureArrowDependents()
         isMovingSelection = true
     }
 

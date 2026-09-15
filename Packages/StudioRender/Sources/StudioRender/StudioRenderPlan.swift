@@ -24,6 +24,8 @@ public struct StudioRenderPlan: Sendable {
     public let cardCornerRadius: CGFloat
     /// The camera's position for every instant, over `crop.size`.
     public let viewports: ViewportTimeline
+    /// Moving 9:16 / 1:1 crop, or nil when the reframe is locked (docs/16 STU-C1).
+    public let followCamera: ReframeCamera?
     /// The edited length, which is what the timeline and the cursor are indexed by.
     public let duration: TimeInterval
     /// Whether the output frame is filled or fitted (docs/09 U3.5).
@@ -54,7 +56,8 @@ public struct StudioRenderPlan: Sendable {
         let crop = edit.sourceRect(for: sourceSize)
         self.crop = crop
         let contentSize = Self.evenSize(edit.outputSize(for: sourceSize))
-        let laid = edit.canvas.layout(cardSize: contentSize)
+        let aspect = contentSize.width / max(contentSize.height, 1)
+        let laid = edit.canvas.layout(canvasSize: contentSize, contentAspect: aspect)
         let canvas = Self.scaled(Self.evenSize(laid.canvasSize), maxLongestEdge: maxLongestEdge)
         let scaleX = canvas.width / max(laid.canvasSize.width, 1)
         let scaleY = canvas.height / max(laid.canvasSize.height, 1)
@@ -69,30 +72,46 @@ public struct StudioRenderPlan: Sendable {
         duration = edit.duration
         fill = edit.reframe.fill
 
+        let follows = edit.reframe.follows && !edit.reframe.isIdentity
+            && (abs(crop.width - sourceSize.width) > 0.5 || abs(crop.height - sourceSize.height) > 0.5)
+        followCamera = follows
+            ? ReframeCamera(
+                sourceSize: sourceSize,
+                windowSize: crop.size,
+                duration: edit.duration,
+                pointer: pointer,
+                zooms: edit.renderableZooms(in: sourceSize)
+            )
+            : nil
+
         // Cues are replanned for the crop and *then* moved into its coordinates. Both
         // steps are needed and neither implies the other: replanning pulls an anchor
         // inside the crop and takes the crop's own zoom back out of the magnification,
         // and the translation is what makes the anchor mean the same point once the
         // timeline is built over the crop rather than the whole frame.
-        let replanned = edit.renderableZooms(in: sourceSize)
-            .map { $0.translated(by: CGPoint(x: -crop.minX, y: -crop.minY), in: sourceSize) }
-        let localPointer = pointer.map { sample in
+        let zooms = edit.renderableZooms(in: sourceSize)
+        let replanned = follows
+            ? zooms
+            : zooms.map { $0.translated(by: CGPoint(x: -crop.minX, y: -crop.minY), in: sourceSize) }
+        let localPointer = follows ? pointer : pointer.map { sample in
             PointerSample(
                 time: sample.time,
                 position: CGPoint(
                     x: sample.position.x - crop.minX,
                     y: sample.position.y - crop.minY
                 ),
-                cursorIndex: sample.cursorIndex
+                cursorIndex: sample.cursorIndex,
+                isDragging: sample.isDragging
             )
         }
 
         viewports = ViewportTimeline(
             cues: replanned,
-            size: crop.size,
+            size: follows ? sourceSize : crop.size,
             duration: edit.duration,
             spring: spring ?? MotionSpring(edit.zoomStyle),
-            pointer: localPointer
+            pointer: localPointer,
+            clips: edit.clips
         )
     }
 
@@ -101,6 +120,12 @@ public struct StudioRenderPlan: Sendable {
     /// The rect of the source frame that fills the output at `time`, in source pixels.
     public func sourceRect(at time: TimeInterval) -> CGRect {
         let local = viewports.sourceRect(at: time)
+        if let followCamera {
+            let window = followCamera.crop(at: time)
+            let isIdentityZoom = abs(local.width - sourceSize.width) < 1
+                && abs(local.height - sourceSize.height) < 1
+            return isIdentityZoom ? window : local
+        }
         return local.offsetBy(dx: crop.minX, dy: crop.minY)
     }
 

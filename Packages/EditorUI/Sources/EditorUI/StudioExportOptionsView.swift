@@ -52,6 +52,17 @@ struct StudioExportOptionsView: View {
                 .labelsHidden()
             }
 
+            labeled("Frame rate") {
+                Picker("Frame rate", selection: $model.exportSettings.frameRate) {
+                    ForEach(StudioExportSettings.FrameRate.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            .disabled(model.exportSettings.container == .gif)
+
             Text(formatHint)
                 .font(.caption)
                 .foregroundStyle(.secondary)

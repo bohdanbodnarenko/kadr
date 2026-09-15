@@ -8,9 +8,8 @@ import Foundation
 ///
 /// Detectors, in priority order (overlapping hits keep the earlier / longer one):
 ///
-/// 1. **JWT** — three base64url segments; the header is `{"…` so it starts with `eyJ`.
-/// 2. **Credit card** — 13–19 digits with optional spaces/dashes, then
-/// [Luhn](https://en.wikipedia.org/wiki/Luhn_algorithm).
+/// 1. **JWT** — three base64url segments; the header starts with `eyJ`.
+/// 2. **Credit card** — 13–19 digits with optional spaces/dashes, then Luhn.
 /// 3. **IBAN** — ISO 13616 shape, then the mod-97 checksum.
 /// 4. **Email** — addr-spec with a real TLD, not `user@localhost`.
 /// 5. **Phone** — separators or a leading `+`, so a 16-digit card is not a phone.
@@ -36,6 +35,8 @@ public struct SecretScanner: Sendable {
         found.append(contentsOf: find(pattern: phone, kind: .phone, in: text))
         found.append(contentsOf: findAPIKeys(in: text))
         found.append(contentsOf: findLabelledCredentials(in: text))
+        found.append(contentsOf: findURLs(in: text))
+        found.append(contentsOf: findIPv4(in: text))
         return collapsingOverlaps(found)
     }
 
@@ -68,9 +69,6 @@ public struct SecretScanner: Sendable {
 
     // MARK: - Patterns
 
-    // Compiled once. Each pattern is a programmer constant; a compile failure here is a
-    // bug in this file, not in user input.
-
     /// `local@domain.tld` — letters/digits/._%+- locally, a dotted domain, TLD ≥ 2 letters.
     ///
     /// Deliberately not RFC 5322: a screenshot OCR of an email is ASCII, and matching
@@ -102,6 +100,15 @@ public struct SecretScanner: Sendable {
         #"eyJ[^\s.]{8,}\.[^\s.]{8,}\.[^\s.]{8,}"#,
         options: []
     )
+
+    /// `https://…` / `http://…` / `www.…` — never a bare domain (docs/16 ED-14).
+    private static let url = regex(
+        #"((?:https?|ftp)://[^\s<>"']+|www\.[^\s<>"']+)"#,
+        options: [.caseInsensitive]
+    )
+
+    /// Four dotted decimal groups. Octets are checked in the finder.
+    private static let ipv4 = regex(#"\b(?:\d{1,3}\.){3}\d{1,3}\b"#, options: [])
 
     /// Known high-confidence prefixes (gitleaks / trufflehog style), then a conservative
     /// entropy fallback. Prefixes:
@@ -163,7 +170,7 @@ public struct SecretScanner: Sendable {
         in text: String,
         transform: ((String) -> String)? = nil
     ) -> [SecretMatch] {
-        matches(pattern, in: text).compactMap { result in
+        matchResults(pattern, in: text).compactMap { result in
             guard result.range.location != NSNotFound else { return nil }
             let raw = (text as NSString).substring(with: result.range)
             let value = transform?(raw) ?? raw
@@ -172,7 +179,7 @@ public struct SecretScanner: Sendable {
     }
 
     private static func findCards(in text: String) -> [SecretMatch] {
-        matches(card, in: text).compactMap { result in
+        matchResults(card, in: text).compactMap { result in
             let raw = (text as NSString).substring(with: result.range)
             let digits = raw.filter(\.isNumber)
             guard digits.count >= 13, digits.count <= 19, luhnIsValid(digits) else { return nil }
@@ -186,7 +193,7 @@ public struct SecretScanner: Sendable {
     }
 
     private static func findIBANs(in text: String) -> [SecretMatch] {
-        matches(iban, in: text).compactMap { result in
+        matchResults(iban, in: text).compactMap { result in
             let raw = (text as NSString).substring(with: result.range)
             let compact = raw.replacingOccurrences(of: " ", with: "").uppercased()
             guard ibanChecksumIsValid(compact) else { return nil }
@@ -201,7 +208,7 @@ public struct SecretScanner: Sendable {
 
     private static func findAPIKeys(in text: String) -> [SecretMatch] {
         var found = find(pattern: apiKeyPrefix, kind: .apiKey, in: text)
-        for result in matches(apiKeyEntropy, in: text) {
+        for result in matchResults(apiKeyEntropy, in: text) {
             let raw = (text as NSString).substring(with: result.range)
             guard looksLikeHighEntropyKey(raw) else { continue }
             found.append(SecretMatch(
@@ -225,7 +232,7 @@ public struct SecretScanner: Sendable {
         // Bearer first: `Authorization: Bearer abc…` also matches the bare pattern, whose
         // "value" would be the word `Bearer` itself.
         for pattern in [bearerCredential, quotedCredential, bareCredential] {
-            for result in matches(pattern, in: text) {
+            for result in matchResults(pattern, in: text) {
                 let range = result.range(at: 1)
                 guard range.location != NSNotFound, range.length > 0 else { continue }
                 let value = (text as NSString).substring(with: range)
@@ -239,6 +246,32 @@ public struct SecretScanner: Sendable {
             }
         }
         return found
+    }
+
+    /// `scheme://…` or `www.…` only — never a bare domain (docs/16 ED-14).
+    private static func findURLs(in text: String) -> [SecretMatch] {
+        find(pattern: url, kind: .url, in: text)
+    }
+
+    /// Dotted IPv4 with each octet 0…255.
+    private static func findIPv4(in text: String) -> [SecretMatch] {
+        matchResults(ipv4, in: text).compactMap { result in
+            let raw = (text as NSString).substring(with: result.range)
+            let parts = raw.split(separator: ".")
+            guard parts.count == 4,
+                  parts.allSatisfy({ octet in
+                      octet == String(Int(octet) ?? -1) && (0 ... 255).contains(Int(octet) ?? -1)
+                  })
+            else {
+                return nil
+            }
+            return SecretMatch(
+                kind: .ipAddress,
+                text: raw,
+                location: result.range.location,
+                length: result.range.length
+            )
+        }
     }
 
     /// Whether a "value" is really the name of an authentication scheme, which means the
@@ -427,7 +460,9 @@ public struct SecretScanner: Sendable {
         case .email: 4
         case .phone: 5
         case .apiKey: 6
-        case .custom: 7
+        case .url: 7
+        case .ipAddress: 8
+        case .custom: 9
         }
     }
 
@@ -449,7 +484,7 @@ public struct SecretScanner: Sendable {
         )
     }
 
-    private static func matches(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
+    private static func matchResults(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
         pattern.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
     }
 

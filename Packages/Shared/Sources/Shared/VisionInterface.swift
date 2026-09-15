@@ -116,8 +116,11 @@ public struct VisionAnalysis: Codable, Sendable, Hashable {
 
     /// The recognised text, assembled per the caller's line-break preference.
     public func text(preservingLineBreaks: Bool) -> String {
-        let separator = preservingLineBreaks ? "\n" : " "
-        return lines.map(\.text).joined(separator: separator)
+        if !tables.isEmpty {
+            let separator = preservingLineBreaks ? "\n" : " "
+            return lines.map(\.text).joined(separator: separator)
+        }
+        return ReadingOrder.joinedText(lines, preservingLineBreaks: preservingLineBreaks)
     }
 
     public var averageConfidence: Double {

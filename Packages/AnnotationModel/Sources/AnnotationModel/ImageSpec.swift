@@ -22,6 +22,7 @@ public struct ImageSpec: Codable, Hashable, Sendable {
     /// Drawn behind a drop shadow, which is what makes a stacked composition read as
     /// stacked rather than as one flat picture.
     public var hasShadow: Bool
+    public var rotation: CGFloat
 
     public init(
         id: AnnotationID = AnnotationID(),
@@ -30,7 +31,8 @@ public struct ImageSpec: Codable, Hashable, Sendable {
         naturalSize: CGSize? = nil,
         opacity: Double = 1,
         cornerRadius: CGFloat = 0,
-        hasShadow: Bool = true
+        hasShadow: Bool = true,
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.pngData = pngData
@@ -39,6 +41,25 @@ public struct ImageSpec: Codable, Hashable, Sendable {
         self.opacity = min(max(opacity, 0), 1)
         self.cornerRadius = max(0, cornerRadius)
         self.hasShadow = hasShadow
+        self.rotation = rotation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, pngData, rect, naturalSize, opacity, cornerRadius, hasShadow, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            pngData: container.decode(Data.self, forKey: .pngData),
+            rect: container.decode(CGRect.self, forKey: .rect),
+            naturalSize: container.decodeIfPresent(CGSize.self, forKey: .naturalSize),
+            opacity: container.decodeIfPresent(Double.self, forKey: .opacity) ?? 1,
+            cornerRadius: container.decodeIfPresent(CGFloat.self, forKey: .cornerRadius) ?? 0,
+            hasShadow: container.decodeIfPresent(Bool.self, forKey: .hasShadow) ?? true,
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 
     /// The rect an inserted image should land in.

@@ -2,6 +2,7 @@ import AVFoundation
 import CoreImage
 import Foundation
 import os
+import StudioSession
 
 /// The render loop itself (docs/09 U3.3).
 ///
@@ -58,37 +59,13 @@ extension StudioRenderer {
         }
         writer.writer.startSession(atSourceTime: CMTime.zero)
 
-        var frameCount = 0
-        var lastCamera: CIImage?
-        var pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
-        let total = max(state.duration, 0.0001)
-
-        while let screen = reader.screen.copyNextSampleBuffer() {
-            try Task.checkCancellation()
-            let time = CMSampleBufferGetPresentationTimeStamp(screen)
-            let seconds = CMTimeGetSeconds(time)
-            guard let sourceImage = image(from: screen) else { continue }
-
-            // The camera is pulled forward to the screen frame rather than read in
-            // lockstep: the webcam runs at its own rate — usually 30 against the screen's
-            // 60 — so holding the most recent frame is what keeps the bubble showing a
-            // face instead of flickering to black on every other frame.
-            while let pending = pendingCamera, pending.time <= seconds {
-                lastCamera = pending.image
-                pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
-            }
-
-            let composed = composer.frame(at: seconds, source: sourceImage, camera: lastCamera)
-            try await append(composed, at: time, to: writer, size: plan.outputSize)
-            frameCount += 1
-
-            // Audio is interleaved here rather than written in a pass of its own. A file
-            // whose sound is all at the front plays locally and seeks badly everywhere
-            // else, and "it works on my machine" is exactly the failure a screen recorder
-            // must not ship.
-            try await drainAudio(upTo: time, reader: reader, writer: writer)
-            progress?(min(seconds / total, 1))
-        }
+        let frameCount = try await renderLoop(
+            state,
+            composer: composer,
+            io: (reader, writer),
+            options: options,
+            progress: progress
+        )
 
         // Ask the reader *why* it stopped (docs/11 S0.4).
         //
@@ -127,6 +104,52 @@ extension StudioRenderer {
             duration: state.duration,
             frameCount: frameCount
         )
+    }
+
+    private func renderLoop(
+        _ state: RenderState,
+        composer: StudioFrameComposer,
+        io: (reader: ReaderBundle, writer: WriterBundle),
+        options: Options,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws -> Int {
+        let reader = io.reader
+        let writer = io.writer
+        var lastCamera: CIImage?
+        var pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
+        var lastScreen: CIImage?
+        var pendingScreen = copyImage(from: reader.screen)
+        var lastClipID: Clip.ID?
+        let fps = max(options.frameRate, 1)
+        let frameCountTarget = VariableFrameClock.frameCount(duration: state.duration, frameRate: fps)
+        var frameCount = 0
+        let size = composer.plan.outputSize
+
+        for frame in 0 ..< frameCountTarget {
+            try Task.checkCancellation()
+            let time = VariableFrameClock.presentationTime(frame: frame, frameRate: fps)
+            let seconds = CMTimeGetSeconds(time)
+            let clipID = composer.edit.clips.clip(atEdited: seconds)?.id
+            if clipID != lastClipID {
+                lastScreen = nil
+                lastClipID = clipID
+            }
+            while let pending = pendingScreen, pending.time <= seconds {
+                lastScreen = pending.image
+                pendingScreen = copyImage(from: reader.screen)
+            }
+            while let pending = pendingCamera, pending.time <= seconds {
+                lastCamera = pending.image
+                pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
+            }
+            guard let sourceImage = lastScreen else { continue }
+            let composed = composer.frame(at: seconds, source: sourceImage, camera: lastCamera)
+            try await append(composed, at: time, to: writer, size: size)
+            frameCount += 1
+            try await drainAudio(upTo: time, reader: reader, writer: writer)
+            progress?(min(Double(frame + 1) / Double(frameCountTarget), 1))
+        }
+        return frameCount
     }
 
     /// Fails the render if the reader stopped for any reason but reaching the end.
@@ -174,7 +197,7 @@ extension StudioRenderer {
         let reader: AVAssetReader
         let screen: AVAssetReaderTrackOutput
         let camera: AVAssetReaderTrackOutput?
-        let audio: AVAssetReaderTrackOutput?
+        let audio: AVAssetReaderAudioMixOutput?
     }
 
     private func makeReader(_ state: RenderState, options: Options) throws -> ReaderBundle {
@@ -204,9 +227,9 @@ extension StudioRenderer {
             }
         }
 
-        var audio: AVAssetReaderTrackOutput?
-        if options.includeAudio, let track = state.audioTrack {
-            let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+        var audio: AVAssetReaderAudioMixOutput?
+        if options.includeAudio, !state.audioTracks.isEmpty {
+            let output = AVAssetReaderAudioMixOutput(audioTracks: state.audioTracks, audioSettings: [
                 AVFormatIDKey: kAudioFormatLinearPCM,
                 AVNumberOfChannelsKey: options.audioChannelCount,
                 AVSampleRateKey: 48000,
@@ -261,13 +284,14 @@ extension StudioRenderer {
             AVVideoCompressionPropertiesKey: compression
         ])
         video.expectsMediaDataInRealTime = false
+        writer.shouldOptimizeForNetworkUse = options.fileType == .mp4
         guard writer.canAdd(video) else {
             throw RenderError.couldNotCreateWriter("the writer refused a \(Int(size.width))×\(Int(size.height)) input")
         }
         writer.add(video)
 
         var audio: AVAssetWriterInput?
-        if options.includeAudio, state.audioTrack != nil {
+        if options.includeAudio, !state.audioTracks.isEmpty {
             let input = AVAssetWriterInput(mediaType: .audio, outputSettings: options.aacSettings)
             input.expectsMediaDataInRealTime = false
             if writer.canAdd(input) {

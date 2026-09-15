@@ -87,31 +87,79 @@ extension StudioInspector {
                     }
                 )
             )
-        case let .gradient(start, end):
-            canvasGradientSwatches(start: start, end: end)
+        case let .gradient(ramp):
+            canvasGradientSwatches(ramp: ramp)
             ColorPicker(
                 "From",
                 selection: Binding(
-                    get: { Color(start) },
+                    get: { Color(ramp.start) },
                     set: { color in
-                        model.change(coalescingAs: "canvas.fill") {
-                            $0.canvas.setGradient(from: StudioColor(color), to: end)
-                        }
+                        var next = ramp
+                        var stops = next.stops
+                        stops[0] = StudioColor(color)
+                        next.stops = stops
+                        model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
                     }
                 )
             )
             ColorPicker(
                 "To",
                 selection: Binding(
-                    get: { Color(end) },
+                    get: { Color(ramp.end) },
                     set: { color in
-                        model.change(coalescingAs: "canvas.fill") {
-                            $0.canvas.setGradient(from: start, to: StudioColor(color))
-                        }
+                        var next = ramp
+                        var stops = next.stops
+                        stops[stops.count - 1] = StudioColor(color)
+                        next.stops = stops
+                        model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
                     }
                 )
             )
+            if ramp.stops.count > 2 {
+                ColorPicker(
+                    "Middle",
+                    selection: Binding(
+                        get: { Color(ramp.stops[1]) },
+                        set: { color in
+                            var next = ramp
+                            var stops = next.stops
+                            stops[1] = StudioColor(color)
+                            next.stops = stops
+                            model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
+                        }
+                    )
+                )
+            }
+            Button(ramp.stops.count > 2 ? "Remove midpoint" : "Add midpoint") {
+                var next = ramp
+                if next.stops.count > 2 {
+                    next.stops = [next.start, next.end]
+                } else {
+                    let mid = StudioColor(
+                        red: (next.start.red + next.end.red) / 2,
+                        green: (next.start.green + next.end.green) / 2,
+                        blue: (next.start.blue + next.end.blue) / 2
+                    )
+                    next.stops = [next.start, mid, next.end]
+                }
+                model.change { $0.canvas.setGradient(next) }
+            }
+            .controlSize(.small)
+            InspectorSlider(
+                title: "Angle",
+                value: Binding(
+                    get: { ramp.angleDegrees },
+                    set: { value in
+                        var next = ramp
+                        next.angleDegrees = value
+                        model.change(coalescingAs: "canvas.angle") { $0.canvas.setGradient(next) }
+                    }
+                ),
+                range: 0 ... 360,
+                format: .degrees
+            )
         case .wallpaper:
+            studioWallpaperRecents
             Button("Choose Image…") { model.chooseWallpaper() }
                 .controlSize(.small)
             if model.edit.canvas.wallpaperFileName != nil {
@@ -144,16 +192,16 @@ extension StudioInspector {
         }
     }
 
-    private func canvasGradientSwatches(start: StudioColor, end: StudioColor) -> some View {
+    private func canvasGradientSwatches(ramp: StudioGradient) -> some View {
         LazyVGrid(columns: Self.swatchColumns, spacing: 6) {
-            ForEach(Array(Self.gradientPresets.enumerated()), id: \.offset) { _, ramp in
-                let selected = ramp.0 == start && ramp.1 == end
+            ForEach(Array(Self.gradientPresets.enumerated()), id: \.offset) { _, preset in
+                let selected = preset.0 == ramp.start && preset.1 == ramp.end && ramp.stops.count == 2
                 Button {
-                    model.change { $0.canvas.setGradient(from: ramp.0, to: ramp.1) }
+                    model.change { $0.canvas.setGradient(from: preset.0, to: preset.1) }
                 } label: {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(LinearGradient(
-                            colors: [Color(ramp.0), Color(ramp.1)],
+                            colors: [Color(preset.0), Color(preset.1)],
                             startPoint: .top,
                             endPoint: .bottom
                         ))
@@ -168,6 +216,32 @@ extension StudioInspector {
                 .buttonStyle(.plain)
                 .frame(height: 22)
                 .accessibilityLabel("Canvas gradient")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var studioWallpaperRecents: some View {
+        let recents = BackdropRecents.load()
+        if !recents.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(recents.prefix(6), id: \.self) { path in
+                    Button {
+                        model.importWallpaper(from: URL(fileURLWithPath: path))
+                    } label: {
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.secondary.opacity(0.2))
+                            .overlay {
+                                Text(URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 4)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(height: 22)
+                    .accessibilityLabel(URL(fileURLWithPath: path).lastPathComponent)
+                }
             }
         }
     }

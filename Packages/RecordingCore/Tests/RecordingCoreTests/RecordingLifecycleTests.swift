@@ -196,4 +196,86 @@ struct RecordingLifecycleTests {
         // refactor cannot quietly restore the unbounded default (docs/07 H6).
         #expect(RecordingEngine.sampleBufferDepth == 3)
     }
+
+    @Test("A dead stream publishes a streamStopped event")
+    func streamStopPublishesEvent() async {
+        let engine = RecordingEngine(stitcher: StubStitcher(behaviour: .succeed))
+        let waiter: Task<RecordingEngineEvent?, Never> = Task {
+            for await event in engine.events {
+                return event
+            }
+            return nil
+        }
+        await engine.deliverStreamStopForTesting("The display was unplugged.")
+        let event = await waiter.value
+        #expect(event == RecordingEngineEvent.streamStopped("The display was unplugged."))
+    }
+
+    @Test("A failed writer still keeps a started file")
+    func failedWriterKeepsTheFile() async throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let segment = directory.appendingPathComponent("segment-0.mp4")
+        try Data("partial-take".utf8).write(to: segment)
+        let writer = FailedSegmentWriter(url: segment, reason: "The disk is full.")
+        let engine = RecordingEngine(
+            stitcher: StubStitcher(behaviour: .succeed),
+            makeWriter: { _, _, _, _ in writer }
+        )
+        await engine.primeForTesting(
+            state: .recording,
+            segments: [],
+            sessionDirectory: directory,
+            writer: writer
+        )
+
+        let destination = scratch().appendingPathComponent("out.mp4")
+        let result = try await engine.stop(savingTo: destination)
+        #expect(result.interruption == "The disk is full.")
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    @Test("An activity assertion begins on start and ends on stop")
+    func activityAssertionTracksTheTake() async throws {
+        let activity = CountingRecordingActivity()
+        let engine = RecordingEngine(
+            stitcher: StubStitcher(behaviour: .succeed),
+            activity: activity
+        )
+        let token = await engine.beginStartForTesting()
+        try await engine.finishStartForTesting(token: token)
+        #expect(activity.begins == 1)
+        #expect(activity.ends == 0)
+
+        let (directory, segments) = try session()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        await engine.primeForTesting(state: .recording, segments: segments, sessionDirectory: directory)
+        _ = try await engine.stop(savingTo: scratch().appendingPathComponent("out.mp4"))
+        #expect(activity.ends >= 1)
+    }
+}
+
+/// A writer that has already failed but still has a file on disk (docs/16 REC-2).
+private actor FailedSegmentWriter: SegmentWriting {
+    let url: URL
+    let failureReason: String?
+
+    init(url: URL, reason: String) {
+        self.url = url
+        failureReason = reason
+    }
+
+    var duration: TimeInterval {
+        2
+    }
+
+    func append(_: SampleBufferBox) -> Bool {
+        false
+    }
+
+    func finish() async -> URL? {
+        url
+    }
+
+    func cancel() {}
 }

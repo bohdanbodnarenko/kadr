@@ -85,6 +85,12 @@ public extension AnnotationCommand {
         return .arrow(spec)
     }
 
+    func applying(startArrowHead: ArrowHead?) -> AnnotationCommand {
+        guard case var .arrow(spec) = self else { return self }
+        spec.startHead = startArrowHead
+        return .arrow(spec)
+    }
+
     func applying(redactionStyle: RedactionStyle) -> AnnotationCommand {
         guard case var .redaction(spec) = self else { return self }
         spec.style = redactionStyle

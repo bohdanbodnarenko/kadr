@@ -168,8 +168,10 @@ struct StudioTimelineView: View {
                     scale: scale,
                     duration: model.edit.duration
                 )
+                model.hoverPreviewTime = hoverTime
             case .ended:
                 hoverTime = nil
+                model.hoverPreviewTime = nil
             }
         }
         .overlay(alignment: .topLeading) {

@@ -313,6 +313,7 @@ public actor CaptureEngine {
 
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = options.includesCursor
+        configuration.ignoreShadowsDisplay = false
         apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
         // The freeze is what an area capture is cropped out of, so it has to be captured
         // in the same range as the file the user will get — otherwise "what you selected
@@ -341,6 +342,7 @@ public actor CaptureEngine {
         let scale = DisplayScale(CGFloat(filter.pointPixelScale))
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = includesCursor
+        configuration.ignoreShadowsDisplay = false
         apply(size: filter.contentRect.size, scale: filter.pointPixelScale, to: configuration)
         applyDynamicRange(dynamicRange, to: configuration)
 
@@ -381,6 +383,9 @@ public actor CaptureEngine {
     private nonisolated func apply(size: CGSize, scale: Float, to configuration: SCStreamConfiguration) {
         configuration.width = Int((size.width * CGFloat(scale)).rounded())
         configuration.height = Int((size.height * CGFloat(scale)).rounded())
+        // Explicit on macOS 14.0–15.1 so overlapping windows keep their drop shadows
+        // (docs/16 CAP-11).
+        configuration.ignoreShadowsDisplay = false
     }
 
     /// Asks ScreenCaptureKit for the display's full range, when the user wants it and the

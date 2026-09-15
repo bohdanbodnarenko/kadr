@@ -67,4 +67,26 @@ public final class CaptureExclusionRegistry {
     private func sweep() {
         entries.removeAll { $0.window == nil }
     }
+
+    public func refresh() {
+        sweep()
+        for entry in entries {
+            guard let window = entry.window else { continue }
+            if let panel = window as? NonActivatingPanel {
+                window.sharingType = CaptureVisibility.sharingType(alwaysExcluded: panel.alwaysHiddenFromCaptures)
+            }
+        }
+    }
+}
+
+@MainActor
+public enum CaptureVisibility {
+    public static var includesOverlays = false
+
+    public static func sharingType(alwaysExcluded: Bool) -> NSWindow.SharingType {
+        if alwaysExcluded {
+            return .none
+        }
+        return includesOverlays ? .readOnly : .none
+    }
 }

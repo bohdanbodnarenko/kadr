@@ -108,8 +108,10 @@ final class UpdaterManager: NSObject {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
     }
 
+    private(set) var lastCheckDate: Date?
+
     var lastUpdateCheckDate: Date? {
-        controller?.updater.lastUpdateCheckDate
+        lastCheckDate ?? controller?.updater.lastUpdateCheckDate
     }
 
     /// Starts the updater. Called once, after hotkeys are armed.
@@ -129,6 +131,7 @@ final class UpdaterManager: NSObject {
             ) { [weak self] updater, _ in
                 MainActor.assumeIsolated {
                     self?.setCanCheckForUpdates(updater.canCheckForUpdates)
+                    self?.lastCheckDate = updater.lastUpdateCheckDate
                 }
             }
             do {

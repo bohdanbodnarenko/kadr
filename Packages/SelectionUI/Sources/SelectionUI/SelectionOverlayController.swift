@@ -113,6 +113,7 @@ final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
             defer: false
         )
         configureAsOverlay()
+        alwaysHiddenFromCaptures = true
         contentView = overlayView
     }
 

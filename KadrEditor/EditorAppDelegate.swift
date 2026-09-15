@@ -159,6 +159,11 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     /// like a finished export. `.terminateLater` is the only reply that buys the time to
     /// delete it — `false` would refuse the quit outright, and `true` would not wait.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Flush editor autosaves so work from the last 1.5 s is not lost (docs/16 ED-7).
+        for controller in windows where controller.model.hasUnsavedChanges {
+            controller.flushAutosaveSynchronously()
+        }
+
         let exporting = studioWindows.filter(\.isExporting)
         guard !exporting.isEmpty else { return .terminateNow }
 

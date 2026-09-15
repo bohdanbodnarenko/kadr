@@ -2,6 +2,7 @@ import AnnotationModel
 import CoreGraphics
 import CoreText
 import Foundation
+import QuartzCore
 
 /// Draws a watermark over the finished canvas (docs/09 U1.4).
 ///
@@ -62,5 +63,61 @@ enum WatermarkCompositor {
             context.restoreGState()
         }
         context.restoreGState()
+    }
+
+    /// Stamps a watermark onto an already-rendered canvas, after scene blur (docs/16 ED-3).
+    static func stamp(
+        _ spec: WatermarkSpec,
+        onto image: CGImage,
+        canvas: CGRect,
+        scale: CGFloat
+    ) -> CGImage? {
+        guard let context = AnnotationExportRenderer.makeContext(
+            width: image.width,
+            height: image.height,
+            matching: image
+        ) else {
+            return nil
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: 0, y: canvas.height)
+        context.scaleBy(x: 1, y: -1)
+        draw(spec, in: CGRect(origin: .zero, size: canvas.size), context: context)
+        return context.makeImage()
+    }
+}
+
+/// Editing-time watermark, rasterised with the same compositor the export uses (docs/16 ED-3).
+public final class WatermarkLayer: CALayer {
+    private var spec: WatermarkSpec?
+
+    override public init() {
+        super.init()
+        needsDisplayOnBoundsChange = true
+        contentsGravity = .resize
+    }
+
+    override public init(layer: Any) {
+        spec = (layer as? WatermarkLayer)?.spec
+        super.init(layer: layer)
+        needsDisplayOnBoundsChange = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    public func apply(_ spec: WatermarkSpec?) {
+        self.spec = spec
+        isHidden = spec == nil || spec?.isIdentity == true
+        setNeedsDisplay()
+        displayIfNeeded()
+    }
+
+    override public func draw(in ctx: CGContext) {
+        guard let spec, !spec.isIdentity, bounds.width > 0, bounds.height > 0 else { return }
+        WatermarkCompositor.draw(spec, in: bounds, context: ctx)
     }
 }

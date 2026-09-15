@@ -1,4 +1,5 @@
 import AppKit
+import OverlayKit
 import SettingsKit
 import SwiftUI
 
@@ -46,6 +47,14 @@ struct AdvancedPane: View {
 
             StudioStorageSection()
 
+            Section {
+                Toggle("Include Kadr overlays in captures", isOn: includeOverlays)
+                Text("Off keeps cards, the recording bar and the HUD out of screenshots and recordings.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("Reset") {
                 Button("Reset All Settings…", role: .destructive) {
                     showsResetConfirmation = true
@@ -63,7 +72,10 @@ struct AdvancedPane: View {
             isPresented: $showsResetConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Reset", role: .destructive) { settings.resetToDefaults() }
+            Button("Reset", role: .destructive) {
+                settings.resetToDefaults()
+                HotkeyCenter.restoreAll()
+            }
             Button("Cancel", role: .cancel) {}
         }
     }
@@ -74,6 +86,17 @@ struct AdvancedPane: View {
 
     private func refresh() {
         isInstalled = installer.isInstalled
+    }
+
+    private var includeOverlays: Binding<Bool> {
+        Binding(
+            get: { settings.includesOverlaysInCaptures },
+            set: { value in
+                settings.includesOverlaysInCaptures = value
+                CaptureVisibility.includesOverlays = value
+                CaptureExclusionRegistry.shared.refresh()
+            }
+        )
     }
 
     private func apply(_ outcome: CLIInstaller.Outcome) {

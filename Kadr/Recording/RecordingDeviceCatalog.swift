@@ -42,6 +42,15 @@ nonisolated enum RecordingDeviceCatalog {
         ).devices.map { Device(uniqueID: $0.uniqueID, localizedName: $0.localizedName) }
     }
 
+    static func microphone(withID uniqueID: String) -> AVCaptureDevice? {
+        guard !uniqueID.isEmpty else { return nil }
+        return AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone],
+            mediaType: .audio,
+            position: .unspecified
+        ).devices.first { $0.uniqueID == uniqueID }
+    }
+
     static func camera(withID uniqueID: String) -> AVCaptureDevice? {
         guard !uniqueID.isEmpty else { return nil }
         return AVCaptureDevice.DiscoverySession(

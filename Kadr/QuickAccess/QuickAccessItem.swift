@@ -6,6 +6,12 @@ import SettingsKit
 import Shared
 import UniformTypeIdentifiers
 
+enum CardActivity: Equatable, Sendable {
+    case compressing
+    case recognizingText
+    case exportingGIF
+}
+
 /// One capture, as the overlay knows it (docs/03 §2).
 ///
 /// Note what is *not* here: the full-resolution image. The card holds a file URL and a
@@ -41,6 +47,8 @@ struct QuickAccessItem: Identifiable, Sendable {
     /// Whether compression has been tried, so the badge can say "no smaller" rather than
     /// showing nothing and looking broken.
     var wasCompressed = false
+    /// In-flight work that should pause auto-dismiss (docs/16 OUT-5, OUT-16).
+    var activity: CardActivity?
 
     /// How HistoryKit should classify this capture (docs/03 §5).
     var historyKind: HistoryItemKind = .image

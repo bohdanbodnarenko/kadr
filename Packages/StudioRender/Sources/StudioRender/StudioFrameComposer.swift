@@ -36,6 +36,9 @@ public struct StudioFrameComposer: Sendable {
     private let frameDuration: TimeInterval
     /// Decoded wallpaper, or nil when the canvas is a colour fill or there is no file.
     let wallpaper: CIImage?
+    let captionCues: [CaptionCue]
+    let cachedCardMask: CIImage?
+    let cachedCardShadow: CIImage?
 
     /// Opaque black the size of the output, to put letterbox bars on.
     private var backdrop: CIImage {
@@ -81,6 +84,9 @@ public struct StudioFrameComposer: Sendable {
         // a dozen of them, but decoding one per frame is a decode per frame.
         cursorImages = self.telemetry.cursors.map { CursorArtwork.decode($0.pngData) }
         self.wallpaper = wallpaper.map { CIImage(cgImage: $0) }
+        captionCues = CaptionExport.cues(from: transcript, timeline: edit.clips)
+        cachedCardMask = Self.makeCardMask(plan: plan, edit: edit)
+        cachedCardShadow = Self.makeCardShadow(plan: plan, edit: edit)
     }
 
     /// The output frame at `time`.

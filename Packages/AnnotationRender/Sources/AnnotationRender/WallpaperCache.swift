@@ -26,6 +26,7 @@ public final class WallpaperCache: @unchecked Sendable {
 
     private let cache = NSCache<NSString, CacheEntry>()
     private let logger = KadrLog.logger(.overlay)
+    private let lock = NSLock()
     private var pressureSource: (any DispatchSourceMemoryPressure)?
 
     /// Doubling buckets from 256 px up, capped at 4096. A 8192 bucket is one 4096-class
@@ -57,6 +58,8 @@ public final class WallpaperCache: @unchecked Sendable {
 
     /// A wallpaper decoded at least as large as `longestEdge`, or nil if it cannot be read.
     public func image(at path: String, longestEdge: CGFloat) -> CGImage? {
+        lock.lock()
+        defer { lock.unlock() }
         let bucket = Self.bucket(for: longestEdge)
         let key = "\(path)@\(bucket)" as NSString
         if let cached = cache.object(forKey: key) {
@@ -83,6 +86,8 @@ public final class WallpaperCache: @unchecked Sendable {
     }
 
     public func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
         cache.removeAllObjects()
     }
 

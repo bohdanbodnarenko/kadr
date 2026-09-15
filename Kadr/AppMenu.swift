@@ -16,7 +16,9 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         if menuItem.action == #selector(toggleSettingsSidebar(_:)) {
             let open = AppDelegate.shared.settingsWindowController.isOpen
             let hidden = AppDelegate.shared.settingsWindowController.isSidebarHidden
-            menuItem.title = hidden ? "Show Sidebar" : "Hide Sidebar"
+            menuItem.title = hidden
+                ? String(localized: "Show Sidebar")
+                : String(localized: "Hide Sidebar")
             return open
         }
         return true
@@ -41,10 +43,29 @@ final class AppMenu: NSObject, NSMenuItemValidation {
     private func makeMenu() -> NSMenu {
         let main = NSMenu()
         main.addItem(makeAppMenuItem())
+        main.addItem(makeFileMenuItem())
         main.addItem(makeEditMenuItem())
         main.addItem(makeViewMenuItem())
         let windowItem = NSMenuItem()
-        windowItem.submenu = NSApp.windowsMenu ?? NSMenu(title: "Window")
+        let windowMenu = NSMenu(title: String(localized: "Window"))
+        windowMenu.addItem(
+            withTitle: String(localized: "Minimize"),
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        )
+        windowMenu.addItem(
+            withTitle: String(localized: "Zoom"),
+            action: #selector(NSWindow.performZoom(_:)),
+            keyEquivalent: ""
+        )
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(
+            withTitle: String(localized: "Bring All to Front"),
+            action: #selector(NSApplication.arrangeInFront(_:)),
+            keyEquivalent: ""
+        )
+        windowItem.submenu = windowMenu
+        NSApp.windowsMenu = windowMenu
         main.addItem(windowItem)
         main.addItem(makeHelpMenuItem())
         return main
@@ -54,51 +75,83 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About Kadr",
+            withTitle: String(localized: "About Kadr"),
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
+        appMenu.addItem(
+            withTitle: String(localized: "Settings…"),
+            action: #selector(openSettings(_:)),
+            keyEquivalent: ","
+        )
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Kadr", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(
+            withTitle: String(localized: "Hide Kadr"),
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        )
         let hideOthers = appMenu.addItem(
-            withTitle: "Hide Others",
+            withTitle: String(localized: "Hide Others"),
             action: #selector(NSApplication.hideOtherApplications(_:)),
             keyEquivalent: "h"
         )
         hideOthers.keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(
-            withTitle: "Show All",
+            withTitle: String(localized: "Show All"),
             action: #selector(NSApplication.unhideAllApplications(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Kadr", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(
+            withTitle: String(localized: "Quit Kadr"),
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
         appItem.submenu = appMenu
         return appItem
     }
 
+    private func makeFileMenuItem() -> NSMenuItem {
+        let fileItem = NSMenuItem()
+        let fileMenu = NSMenu(title: String(localized: "File"))
+        fileMenu.addItem(
+            withTitle: String(localized: "Close"),
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        )
+        fileItem.submenu = fileMenu
+        return fileItem
+    }
+
     private func makeEditMenuItem() -> NSMenuItem {
         let editItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        let editMenu = NSMenu(title: String(localized: "Edit"))
+        editMenu.addItem(withTitle: String(localized: "Undo"), action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(
+            withTitle: String(localized: "Redo"),
+            action: Selector(("redo:")),
+            keyEquivalent: "z"
+        )
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: String(localized: "Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: String(localized: "Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: String(localized: "Paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(
+            withTitle: String(localized: "Select All"),
+            action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: "a"
+        )
         editItem.submenu = editMenu
         return editItem
     }
 
     private func makeViewMenuItem() -> NSMenuItem {
         let viewItem = NSMenuItem()
-        let viewMenu = NSMenu(title: "View")
+        let viewMenu = NSMenu(title: String(localized: "View"))
         let sidebar = viewMenu.addItem(
-            withTitle: "Hide Sidebar",
+            withTitle: String(localized: "Hide Sidebar"),
             action: #selector(toggleSettingsSidebar(_:)),
             keyEquivalent: "s"
         )
@@ -109,10 +162,14 @@ final class AppMenu: NSObject, NSMenuItemValidation {
 
     private func makeHelpMenuItem() -> NSMenuItem {
         let helpItem = NSMenuItem()
-        let helpMenu = NSMenu(title: "Help")
-        helpMenu.addItem(withTitle: "Kadr Help", action: #selector(openHelp(_:)), keyEquivalent: "?")
+        let helpMenu = NSMenu(title: String(localized: "Help"))
         helpMenu.addItem(
-            withTitle: "Keyboard Shortcuts",
+            withTitle: String(localized: "Kadr Help"),
+            action: #selector(openHelp(_:)),
+            keyEquivalent: "?"
+        )
+        helpMenu.addItem(
+            withTitle: String(localized: "Keyboard Shortcuts"),
             action: #selector(openKeyboardShortcuts(_:)),
             keyEquivalent: ""
         )

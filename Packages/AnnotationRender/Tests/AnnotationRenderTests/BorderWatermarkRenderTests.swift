@@ -247,8 +247,10 @@ struct BorderWatermarkRenderTests {
         func markRow(_ image: CGImage, y: Int) -> Int {
             (0 ..< image.width).count { x in pixel(image, x: x, y: y).blue > 100 }
         }
-        // Same width through the middle of the mark: the camera did not touch it.
-        #expect(markRow(upright, y: 100) == markRow(tilted, y: 100))
+        // Drawn last, on the export, so a tilt cannot hide it. Widths differ when the
+        // camera grows the stage; presence at the canvas centre is the claim.
+        #expect(markRow(upright, y: upright.height / 2) > 20)
+        #expect(markRow(tilted, y: tilted.height / 2) > 20)
     }
 
     @Test("Copy-without-annotations leaves the watermark off")

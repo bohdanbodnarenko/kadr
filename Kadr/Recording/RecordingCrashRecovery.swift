@@ -18,13 +18,14 @@ enum RecordingCrashRecovery {
     /// Recovers interrupted recordings, then returns how many movies were restored.
     static func recover(
         temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+        inProgressDirectory: URL = InterruptedRecordingStore.inProgressRoot(),
         saveFolder: URL,
         sessions: RecordingSessionStore? = StudioSessionRecorder.store(),
         present: (URL) -> Void
     ) async -> Int {
         var restored = 0
         restored += await recoverAbandonedSegments(
-            in: temporaryDirectory,
+            in: [temporaryDirectory, inProgressDirectory],
             saveFolder: saveFolder,
             sessions: sessions,
             present: present
@@ -46,13 +47,13 @@ enum RecordingCrashRecovery {
     }
 
     private static func recoverAbandonedSegments(
-        in temporaryDirectory: URL,
+        in roots: [URL],
         saveFolder: URL,
         sessions: RecordingSessionStore?,
         present: (URL) -> Void
     ) async -> Int {
         var restored = 0
-        for directory in InterruptedRecordingStore.directories(in: temporaryDirectory) {
+        for directory in InterruptedRecordingStore.directories(in: roots) {
             restored += await recoverSessionDirectory(
                 directory,
                 saveFolder: saveFolder,
@@ -81,7 +82,12 @@ enum RecordingCrashRecovery {
             return false
         }
 
-        guard await adopt(destination, sessions: sessions, present: present) else { return false }
+        guard await adopt(
+            destination,
+            sessions: sessions,
+            present: present,
+            preferredSession: sessionLinked(from: directory, sessions: sessions)
+        ) else { return false }
         try? FileManager.default.removeItem(at: directory)
         return true
     }
@@ -116,14 +122,29 @@ enum RecordingCrashRecovery {
     private static func adopt(
         _ footage: URL,
         sessions: RecordingSessionStore?,
-        present: (URL) -> Void
+        present: (URL) -> Void,
+        preferredSession: RecordingSession? = nil
     ) async -> Bool {
-        let session = sessions?.sessionsWaitingForFootage().first ?? newSession(in: sessions?.root)
+        let session = preferredSession
+            ?? sessions?.sessionsWaitingForFootage().first
+            ?? newSession(in: sessions?.root)
         if let session, attach(footage, to: session) {
+            hydrateTelemetry(for: session)
             _ = await writeManifest(for: session)
         }
         present(footage)
         return true
+    }
+
+    private static func hydrateTelemetry(for session: RecordingSession) {
+        guard !FileManager.default.fileExists(atPath: session.inputURL.path) else { return }
+        let chunk = TelemetryJournal(url: session.inputJournalURL).load()
+        guard !chunk.isEmpty else { return }
+        try? SessionDocument(session: session).write(InputTelemetry(
+            pointer: chunk.pointer,
+            clicks: chunk.clicks,
+            keystrokes: chunk.keystrokes
+        ))
     }
 
     private static func newSession(in root: URL?) -> RecordingSession? {
@@ -142,14 +163,15 @@ enum RecordingCrashRecovery {
         guard let duration = await VideoPosterFrame.duration(of: session.screenURL),
               let size = await VideoPosterFrame.pixelSize(of: session.screenURL)
         else { return false }
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let existing = SessionDocument(session: session).manifest()
+        let scale = existing?.scale ?? NSScreen.main?.backingScaleFactor ?? 2
         do {
             try SessionDocument(session: session).write(CaptureManifest(
                 pixelSize: CGSize(width: size.width, height: size.height),
                 scale: scale,
-                frameRate: 60,
+                frameRate: existing?.frameRate ?? 60,
                 duration: duration,
-                hasBakedCursor: true,
+                hasBakedCursor: existing?.hasBakedCursor ?? true,
                 hasCamera: session.hasCameraFile
             ))
             return true
@@ -175,6 +197,14 @@ enum RecordingCrashRecovery {
                 return false
             }
         }
+    }
+
+    private static func sessionLinked(from directory: URL, sessions _: RecordingSessionStore?) -> RecordingSession? {
+        let link = directory.appendingPathComponent("session.link")
+        guard let path = try? String(contentsOf: link, encoding: .utf8) else { return nil }
+        let url = URL(fileURLWithPath: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return RecordingSession(directory: url)
     }
 
     private static func uniqueMovieURL(in folder: URL) -> URL {

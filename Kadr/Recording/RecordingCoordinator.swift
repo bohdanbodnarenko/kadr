@@ -17,7 +17,9 @@ import StudioSession
 @MainActor
 @Observable
 final class RecordingCoordinator {
-    @ObservationIgnored let engine = RecordingEngine()
+    @ObservationIgnored let engine = RecordingEngine(
+        segmentRoot: InterruptedRecordingStore.inProgressRoot()
+    )
     @ObservationIgnored let captureEngine: CaptureEngine
     @ObservationIgnored let permissions: PermissionCoordinator
     @ObservationIgnored let settings: AppSettings
@@ -70,6 +72,18 @@ final class RecordingCoordinator {
     /// Fired whenever the state or the clock moves, so the menu bar can follow.
     var onStateChanged: (() -> Void)?
     @ObservationIgnored var terminationCompletion: (() -> Void)?
+    /// Why the engine asked us to stop, if it did (docs/16 REC-1).
+    @ObservationIgnored var pendingInterruption: String?
+    @ObservationIgnored var engineEventsTask: Task<Void, Never>?
+    /// Disables transport while start/pause/resume/stop is in flight (docs/16 REC-17).
+    var isTransitioning = false {
+        didSet { onStateChanged?() }
+    }
+
+    /// Transient bar copy while a take is being saved after an interruption (docs/16 REC-3).
+    var liveNotice: String? {
+        didSet { onStateChanged?() }
+    }
 
     /// Ticks the elapsed time while recording.
     ///
@@ -94,6 +108,29 @@ final class RecordingCoordinator {
         self.overlay = overlay
         self.hygiene = hygiene
         studio = StudioSessionRecorder(camera: camera)
+        listenForEngineEvents()
+    }
+
+    /// Stream death and writer failure must stop the take and keep the footage
+    /// (docs/16 REC-1/2).
+    private func listenForEngineEvents() {
+        engineEventsTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in engine.events {
+                handleEngineEvent(event)
+            }
+        }
+    }
+
+    func handleEngineEvent(_ event: RecordingEngineEvent) {
+        guard state == .recording || state == .paused else { return }
+        let message: String = switch event {
+        case let .streamStopped(reason), let .writerFailed(reason):
+            reason
+        }
+        pendingInterruption = message
+        liveNotice = "Saving what was captured…"
+        stop()
     }
 
     /// Whether a recording exists — including one still starting up.
@@ -166,6 +203,7 @@ final class RecordingCoordinator {
             guard !isRecording else { return }
             state = .starting
         }
+        isTransitioning = true
         lastTarget = target
 
         if case .window = target {
@@ -173,58 +211,20 @@ final class RecordingCoordinator {
         } else {
             isWindowRecording = false
         }
-        let options = currentOptions
+        let resolved = RecordingInputResolver.resolve(
+            options: currentOptions,
+            cameraDeviceID: settings.recordingCameraDeviceID
+        )
+        let options = resolved.options
+        if let notice = resolved.notice {
+            logger.info("\(notice, privacy: .public)")
+        }
         Task { [weak self] in
-            guard let self else { return }
-            do {
-                startOverlays(for: target)
-                startStudioSession(for: target)
-                teleprompter.start()
-                await CaptureExclusionPush.into(engine)
-                try await engine.start(target: target, options: options)
-                // Still ours to claim (docs/11 S0.3).
-                //
-                // Everything above suspends, and Stop and Cancel both run to completion
-                // during those suspensions: they set `.idle`, tear the overlays down and
-                // call `studio.cancel()`, which deletes the session directory. Announcing
-                // `.recording` afterwards resurrected a recording the user had already
-                // stopped — the menu-bar timer counted up against a session that no longer
-                // existed on disk. If the state moved out from under us, the engine has
-                // already been told to stand down and there is nothing here to claim.
-                guard state == .starting else {
-                    await engine.cancel()
-                    logger.info("Recording was stopped while it was still starting")
-                    return
-                }
-                state = .recording
-                startedAt = Date()
-                overlaySource.resetClock()
-                pausedDuration = 0
-                pausedAt = nil
-                startTicking()
-                if settings.recordingEnablesFocus {
-                    focus.enable()
-                }
-                hygiene?.beginRecording()
-                logger.info("Recording started")
-            } catch {
-                stopOverlays()
-                studio.cancel()
-                stopGeometryObserver()
-                teleprompter.stop()
-                hygiene?.endRecording()
-                state = .idle
-                // A cancellation is not a capture failure. Feeding it to the permission
-                // tracker would count the user's own Escape as evidence that screen
-                // recording is broken, and eventually prompt them to fix a working grant.
-                guard error as? RecordingError != .cancelledDuringStart else {
-                    logger.info("Recording was cancelled while it was still starting")
-                    return
-                }
-                logger.error("Recording failed to start: \(error.localizedDescription, privacy: .public)")
-                permissions.noteCaptureFailure(error)
-                presentPermissionRecoveryIfNeeded(error)
-            }
+            await self?.runEngineStart(
+                target: target,
+                options: options,
+                cameraDeviceID: resolved.cameraDeviceID
+            )
         }
     }
 
@@ -242,7 +242,7 @@ final class RecordingCoordinator {
 
     /// Turns on only the overlays the user asked for, and tells the engine where to get
     /// them (docs/03 §1.8).
-    private func startOverlays(for target: RecordingTarget) {
+    func startOverlays(for target: RecordingTarget) {
         // The webcam belongs to one of the two paths, never both: a studio session records
         // the camera to its own file so the bubble stays editable, and macOS will not hand
         // the same device to two capture sessions. Baking a bubble that can no longer be
@@ -333,7 +333,7 @@ final class RecordingCoordinator {
     /// for all. A window moves, so the same click means different things at different
     /// moments — and the converter has to ask the engine where the window is now rather
     /// than having been told once at the start.
-    private func startStudioSession(for target: RecordingTarget) {
+    func startStudioSession(for target: RecordingTarget, cameraDeviceID: String? = nil) {
         guard capturesStudioSession else { return }
 
         var converter = Self.pointConverter(for: target)
@@ -343,9 +343,10 @@ final class RecordingCoordinator {
             converter = moving.converter()
         }
 
+        let camera = cameraDeviceID ?? settings.recordingCameraDeviceID
         studio.start(
-            recordsCamera: settings.recordingShowsWebcam,
-            cameraDeviceID: settings.recordingCameraDeviceID,
+            recordsCamera: settings.recordingShowsWebcam && !camera.isEmpty,
+            cameraDeviceID: camera,
             pointConverter: converter,
             pointPixelScale: Self.pointPixelScale(for: target),
             topInset: Self.topInset(for: target)
@@ -467,36 +468,5 @@ final class RecordingCoordinator {
             return settings.recordingShowsCursor
         }
         return false
-    }
-
-    // MARK: - The clock the menu bar reads
-
-    /// Ticks the elapsed time while recording.
-    ///
-    /// Kept beside the state rather than in the plumbing extension because it writes
-    /// `elapsed`, whose setter is private to this file — and an extension that cannot
-    /// reach the thing it exists to update is worse than no extension.
-    func startTicking() {
-        stopTicking()
-        microphonePeakMax = 0
-        audioMeter = AudioMeter()
-        tickTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                guard let self, let startedAt else { return }
-                let fresh = await engine.audioMeter
-                microphonePeakMax = max(microphonePeakMax, fresh.microphone)
-                audioMeter = AudioMeter(
-                    microphone: max(fresh.microphone, audioMeter.microphone * 0.72),
-                    system: max(fresh.system, audioMeter.system * 0.72)
-                )
-                elapsed = Date().timeIntervalSince(startedAt) - pausedDuration
-            }
-        }
-    }
-
-    func stopTicking() {
-        tickTask?.cancel()
-        tickTask = nil
     }
 }

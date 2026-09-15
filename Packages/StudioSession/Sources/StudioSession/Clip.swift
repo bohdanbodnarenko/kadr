@@ -71,6 +71,7 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
         var pieces: [Clip] = []
         if start > range.lowerBound {
             pieces.append(Clip(
+                id: id,
                 sourceStart: sourceStart,
                 sourceDuration: start - sourceStart,
                 speed: speed
@@ -158,12 +159,35 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
     public func editedTime(forSource time: TimeInterval) -> TimeInterval? {
         var elapsed: TimeInterval = 0
         for clip in clips {
-            if clip.sourceRange.contains(time) {
+            if time >= clip.sourceStart, time < clip.sourceEnd {
                 return elapsed + (time - clip.sourceStart) / clip.speed
             }
             elapsed += clip.editedDuration
         }
         return nil
+    }
+
+    /// Edited-time spans that overlap a source range, for drawing cues stored in source time.
+    public func editedRanges(overlappingSource range: ClosedRange<TimeInterval>) -> [ClosedRange<TimeInterval>] {
+        var elapsed: TimeInterval = 0
+        var result: [ClosedRange<TimeInterval>] = []
+        for clip in clips {
+            let overlapStart = max(range.lowerBound, clip.sourceStart)
+            let overlapEnd = min(range.upperBound, clip.sourceEnd)
+            if overlapEnd > overlapStart {
+                let editedStart = elapsed + (overlapStart - clip.sourceStart) / clip.speed
+                let editedEnd = elapsed + (overlapEnd - clip.sourceStart) / clip.speed
+                result.append(editedStart ... editedEnd)
+            }
+            elapsed += clip.editedDuration
+        }
+        return result
+    }
+
+    public func editedRange(forSource range: ClosedRange<TimeInterval>) -> ClosedRange<TimeInterval>? {
+        let ranges = editedRanges(overlappingSource: range)
+        guard let first = ranges.first, let last = ranges.last else { return nil }
+        return first.lowerBound ... last.upperBound
     }
 
     /// Whether this moment of the recording still appears in the edit.
@@ -176,6 +200,32 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
         guard end > start else { return self }
         let kept = clips.flatMap { $0.keepingOutside(start: start, end: end) }
         return ClipTimeline(clips: kept.filter { $0.sourceDuration > 0.02 })
+    }
+
+    /// Cuts several source ranges, merging overlaps and keeping the leading clip's id.
+    public func removingSourceRanges(_ ranges: [ClosedRange<TimeInterval>]) -> ClipTimeline {
+        let merged = Self.merged(ranges)
+        var result = self
+        for range in merged {
+            result = result.removingSourceRange(from: range.lowerBound, to: range.upperBound)
+        }
+        return result
+    }
+
+    private static func merged(_ ranges: [ClosedRange<TimeInterval>]) -> [ClosedRange<TimeInterval>] {
+        let sorted = ranges.filter { $0.upperBound > $0.lowerBound }.sorted { $0.lowerBound < $1.lowerBound }
+        guard var current = sorted.first else { return [] }
+        var merged: [ClosedRange<TimeInterval>] = []
+        for range in sorted.dropFirst() {
+            if range.lowerBound <= current.upperBound {
+                current = current.lowerBound ... max(current.upperBound, range.upperBound)
+            } else {
+                merged.append(current)
+                current = range
+            }
+        }
+        merged.append(current)
+        return merged
     }
 
     /// The clip playing at a moment of the finished video.
@@ -328,15 +378,21 @@ public struct ClipTimeline: Sendable, Hashable, Codable {
     /// generated from clicks starts life in source time. A cue whose anchor moment no
     /// longer exists is dropped rather than slid to a neighbouring moment, which would
     /// zoom into something the user never chose.
+    /// Keeps cues whose source start still exists. Cues are stored in source time
+    /// (docs/16 STU-A3); a cut drops the ones that pointed at removed footage.
     public func rebasing(_ cues: [ZoomCue]) -> [ZoomCue] {
+        cues.filter { editedTime(forSource: $0.start) != nil }
+    }
+
+    /// Converts v1 cues (edited time) into source time.
+    public func migratingZoomsFromEditedTime(_ cues: [ZoomCue]) -> [ZoomCue] {
         cues.compactMap { cue in
-            guard let start = editedTime(forSource: cue.start) else { return nil }
-            var rebased = cue
-            rebased.start = start
-            // The hold shortens with the speed of whatever it lands in.
-            let speed = clip(atEdited: start)?.speed ?? 1
-            rebased.duration = cue.duration / speed
-            return rebased
+            guard let start = sourceTime(forEdited: cue.start) else { return nil }
+            var migrated = cue
+            migrated.start = start
+            let speed = clip(atEdited: cue.start)?.speed ?? 1
+            migrated.duration = cue.duration * speed
+            return migrated
         }
     }
 

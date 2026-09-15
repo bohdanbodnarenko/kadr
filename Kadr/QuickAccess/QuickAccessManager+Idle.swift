@@ -47,7 +47,9 @@ extension QuickAccessManager {
     /// engagement is permanent by design, and a first capture should still tidy itself away
     /// once the user has read the tip and moved on.
     func isIdleForAutoDismiss(_ item: QuickAccessItem) -> Bool {
-        hoveredItemID != item.id && draggingItemID != item.id && !isShowingCoachTip(for: item)
+        let live = items.first { $0.id == item.id } ?? item
+        return hoveredItemID != live.id && draggingItemID != live.id && !isShowingCoachTip(for: live)
+            && live.activity == nil
     }
 
     /// The user opened this capture (editor / studio / trim), so it stops being disposable.

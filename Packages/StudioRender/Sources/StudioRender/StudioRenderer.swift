@@ -278,7 +278,7 @@ public struct StudioRenderer: Sendable {
                 // The builder appends the camera as the second video track, so the second
                 // one is the camera or there is not one.
                 cameraTrack: tracks.count > 1 ? tracks[1] : nil,
-                audioTrack: try? composition.loadTracks(withMediaType: .audio).first,
+                audioTracks: (try? composition.loadTracks(withMediaType: .audio)) ?? [],
                 sourceSize: size,
                 duration: CMTimeGetSeconds(composition.load(.duration))
             )
@@ -322,7 +322,7 @@ public struct StudioRenderer: Sendable {
         let composition: AVMutableComposition
         let screenTrack: AVAssetTrack
         let cameraTrack: AVAssetTrack?
-        let audioTrack: AVAssetTrack?
+        let audioTracks: [AVAssetTrack]
         let sourceSize: CGSize
         let duration: TimeInterval
     }

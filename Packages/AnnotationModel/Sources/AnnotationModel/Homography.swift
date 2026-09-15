@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import QuartzCore
 
 /// A 3×3 projective transform (docs/09 U1.2).
 ///
@@ -181,6 +182,40 @@ public struct Homography: Equatable, Sendable {
             m33: 1
         )
         return unitSquare(to: quad).concatenating(normalize)
+    }
+
+    /// The same map as a layer transform (docs/16 ED-4).
+    ///
+    /// Core Animation multiplies a column vector, so the projective row of the 3×3 lands
+    /// in `m14`/`m24`/`m44`. Applying this to a corner must match `map(_:)`.
+    public var caTransform3D: CATransform3D {
+        CATransform3D(
+            m11: m11,
+            m12: m21,
+            m13: 0,
+            m14: m31,
+            m21: m12,
+            m22: m22,
+            m23: 0,
+            m24: m32,
+            m31: 0,
+            m32: 0,
+            m33: 1,
+            m34: 0,
+            m41: m13,
+            m42: m23,
+            m43: 0,
+            m44: m33
+        )
+    }
+
+    /// Applies a Core Animation matrix the same way `map` applies the 3×3.
+    public static func map(_ transform: CATransform3D, _ point: CGPoint) -> CGPoint? {
+        let x = transform.m11 * point.x + transform.m21 * point.y + transform.m41
+        let y = transform.m12 * point.x + transform.m22 * point.y + transform.m42
+        let weight = transform.m14 * point.x + transform.m24 * point.y + transform.m44
+        guard abs(weight) > 1e-9 else { return nil }
+        return CGPoint(x: x / weight, y: y / weight)
     }
 }
 

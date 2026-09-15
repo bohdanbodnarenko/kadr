@@ -92,10 +92,18 @@ public struct StylePreset: Codable, Hashable, Sendable, Identifiable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        guard version <= Self.currentVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported style preset version \(version)"
+            )
+        }
         try self.init(
             id: container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID(),
             name: container.decodeIfPresent(String.self, forKey: .name) ?? "Untitled",
-            version: container.decodeIfPresent(Int.self, forKey: .version) ?? 1,
+            version: version,
             beautify: container.decodeIfPresent(BeautifySpec.self, forKey: .beautify),
             camera: container.decodeIfPresent(AnnotationCameraSpec.self, forKey: .camera),
             progressiveBlur: container.decodeIfPresent(
@@ -104,6 +112,16 @@ public struct StylePreset: Codable, Hashable, Sendable, Identifiable {
             ),
             watermark: container.decodeIfPresent(WatermarkSpec.self, forKey: .watermark)
         )
+    }
+
+    /// Clamps metrics so a hostile file cannot allocate a huge bitmap (docs/16 ED-16).
+    public func sanitized() -> StylePreset {
+        var copy = self
+        if var beautify = copy.beautify {
+            beautify.padding = beautify.padding.clamped()
+            copy.beautify = beautify
+        }
+        return copy
     }
 
     // MARK: - Built-ins

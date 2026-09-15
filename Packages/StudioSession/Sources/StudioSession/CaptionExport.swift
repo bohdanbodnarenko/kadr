@@ -38,7 +38,9 @@ public struct CaptionCue: Sendable, Hashable, Identifiable {
 /// cuts would show words the user already removed.
 public enum CaptionExport {
     /// About one spoken sentence, or three seconds, whichever comes first.
-    public static let maximumCueDuration: TimeInterval = 3.2
+    public static let maximumCueDuration: TimeInterval = 4
+    public static let maximumCueCharacters = 42
+    public static let silenceBreak: TimeInterval = 0.9
 
     public static func cues(
         from transcript: Transcript,
@@ -71,12 +73,17 @@ public enum CaptionExport {
             if let start = cueStart {
                 let spanned = editedStart - start
                 let endsSentence = Self.endsSentence(word.text)
-                if spanned >= maximumCueDuration || endsSentence && spanned > 0.6 {
-                    if endsSentence {
+                let characters = buffer.map(\.text).joined(separator: " ").count + word.text.count + 1
+                let gap = buffer.last.map { word.start - $0.end } ?? 0
+                if spanned >= maximumCueDuration
+                    || characters >= maximumCueCharacters
+                    || gap > silenceBreak
+                    || endsSentence && spanned > 0.6 {
+                    if endsSentence, gap <= silenceBreak, characters < maximumCueCharacters {
                         buffer.append(word)
                     }
                     flush()
-                    if endsSentence {
+                    if endsSentence, gap <= silenceBreak, characters < maximumCueCharacters {
                         continue
                     }
                 }
@@ -95,7 +102,45 @@ public enum CaptionExport {
         timeline: ClipTimeline,
         at time: TimeInterval
     ) -> CaptionCue? {
-        cues(from: transcript, timeline: timeline, at: time).first { time >= $0.start && time < $0.end }
+        cue(in: cues(from: transcript, timeline: timeline, at: time), at: time)
+    }
+
+    public static func cue(in cues: [CaptionCue], at time: TimeInterval) -> CaptionCue? {
+        guard !cues.isEmpty else { return nil }
+        var low = 0
+        var high = cues.count - 1
+        var match: CaptionCue?
+        while low <= high {
+            let mid = (low + high) / 2
+            let cue = cues[mid]
+            if time < cue.start {
+                high = mid - 1
+            } else if time >= cue.end {
+                low = mid + 1
+            } else {
+                match = cue
+                break
+            }
+        }
+        return match
+    }
+
+    public static func highlighting(
+        _ cue: CaptionCue,
+        from transcript: Transcript,
+        timeline: ClipTimeline,
+        at time: TimeInterval
+    ) -> CaptionCue {
+        let words = transcript.words.filter { word in
+            guard let start = timeline.editedTime(forSource: word.start) else { return false }
+            return start >= cue.start - 0.05 && start <= cue.end + 0.05
+        }
+        let karaoke = Self.karaoke(in: words, at: time, timeline: timeline)
+        var highlighted = cue
+        highlighted.highlight = karaoke.word
+        highlighted.activeIndex = karaoke.activeIndex
+        highlighted.spokenCount = karaoke.spokenCount
+        return highlighted
     }
 
     public static func srt(from transcript: Transcript, timeline: ClipTimeline) -> String {

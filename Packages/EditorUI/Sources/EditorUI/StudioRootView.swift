@@ -327,11 +327,43 @@ public struct StudioRootView: View {
 
     /// A percent on the Dock icon so an export still reports after the window is covered.
     static func updateDockProgress(_ progress: Double?) {
+        let tile = NSApp.dockTile
         if let progress {
-            NSApp.dockTile.badgeLabel = "\(Int((progress * 100).rounded()))"
+            let bar = DockProgressView(progress: progress)
+            bar.frame = NSRect(x: 0, y: 0, width: 128, height: 128)
+            tile.contentView = bar
+            tile.badgeLabel = "\(Int((progress * 100).rounded()))"
         } else {
-            NSApp.dockTile.badgeLabel = nil
+            tile.contentView = nil
+            tile.badgeLabel = nil
         }
-        NSApp.dockTile.display()
+        tile.display()
+    }
+}
+
+/// Local Dock progress drawing (docs/16 STU-C6). No DockProgress package.
+private final class DockProgressView: NSView {
+    var progress: Double
+
+    init(progress: Double) {
+        self.progress = progress
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.black.withAlphaComponent(0.35).setFill()
+        dirtyRect.fill()
+        let inset = dirtyRect.insetBy(dx: 16, dy: 56)
+        NSColor.white.withAlphaComponent(0.25).setFill()
+        inset.fill()
+        var filled = inset
+        filled.size.width = inset.width * min(max(progress, 0), 1)
+        NSColor.controlAccentColor.setFill()
+        filled.fill()
     }
 }

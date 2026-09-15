@@ -61,17 +61,22 @@ public struct Reframe: Sendable, Hashable, Codable {
     /// is rarely dead centre — a sidebar-heavy app puts it well left.
     public var horizontalBias: Double
     public var verticalBias: Double
+    /// When true, a non-original aspect follows the pointer instead of a locked centre
+    /// crop, so zooms survive vertical and square exports (docs/16 STU-C1).
+    public var follows: Bool
 
     public init(
         aspect: ReframeAspect = .original,
         fill: ReframeFill = .fill,
         horizontalBias: Double = 0.5,
-        verticalBias: Double = 0.5
+        verticalBias: Double = 0.5,
+        follows: Bool = true
     ) {
         self.aspect = aspect
         self.fill = fill
         self.horizontalBias = min(max(horizontalBias, 0), 1)
         self.verticalBias = min(max(verticalBias, 0), 1)
+        self.follows = follows
     }
 
     public static let original = Reframe()
@@ -117,7 +122,7 @@ public struct Reframe: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case aspect, fill, horizontalBias, verticalBias
+        case aspect, fill, horizontalBias, verticalBias, follows
     }
 
     public init(from decoder: any Decoder) throws {
@@ -126,7 +131,8 @@ public struct Reframe: Sendable, Hashable, Codable {
             aspect: container.decodeIfPresent(ReframeAspect.self, forKey: .aspect) ?? .original,
             fill: container.decodeIfPresent(ReframeFill.self, forKey: .fill) ?? .fill,
             horizontalBias: container.decodeIfPresent(Double.self, forKey: .horizontalBias) ?? 0.5,
-            verticalBias: container.decodeIfPresent(Double.self, forKey: .verticalBias) ?? 0.5
+            verticalBias: container.decodeIfPresent(Double.self, forKey: .verticalBias) ?? 0.5,
+            follows: container.decodeIfPresent(Bool.self, forKey: .follows) ?? false
         )
     }
 }

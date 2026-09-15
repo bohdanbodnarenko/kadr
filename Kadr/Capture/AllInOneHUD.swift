@@ -1,4 +1,5 @@
 import AppKit
+import CaptureCore
 import OverlayKit
 import RecordingCore
 import SettingsKit
@@ -21,9 +22,10 @@ final class AllInOneHUD {
 
     init(
         settings: AppSettings,
-        perform: @escaping (AllInOneMode) -> Void
+        perform: @escaping (AllInOneMode) -> Void,
+        pickDisplay: @escaping (CGDirectDisplayID) -> Void = { _ in }
     ) {
-        model = AllInOneModel(settings: settings, perform: perform)
+        model = AllInOneModel(settings: settings, perform: perform, pickDisplay: pickDisplay)
     }
 
     var isShowing: Bool {
@@ -41,9 +43,15 @@ final class AllInOneHUD {
         }
     }
 
+    var frontmostBeforePresent: AppIdentity?
+
     func present() {
         model.onCancel = { [weak self] in self?.dismiss() }
         model.onPicked = { [weak self] in self?.dismiss() }
+
+        if frontmostBeforePresent == nil {
+            frontmostBeforePresent = AreaCaptureCoordinator.currentFrontmostApp()
+        }
 
         if let panel {
             panel.makeKeyAndOrderFront(nil)
@@ -80,9 +88,11 @@ final class AllInOneHUD {
         onShowingChanged?()
     }
 
-    /// Bottom-centre of the active screen, clear of the menu bar and most window chrome.
+    /// Bottom-centre of the pointer's screen, clear of the menu bar and most window chrome.
     private static func centeredFrame(for size: CGSize) -> NSRect {
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .zero
+        let visible = (ActiveScreen.resolve()?.visibleFrame)
+            ?? (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            ?? .zero
         let margin: CGFloat = 22
         let x = visible.midX - size.width / 2
         let y = visible.minY + margin
@@ -167,10 +177,16 @@ final class AllInOneModel {
     @ObservationIgnored private let perform: (AllInOneMode) -> Void
     @ObservationIgnored var onPicked: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
+    @ObservationIgnored var onPickDisplay: (CGDirectDisplayID) -> Void = { _ in }
 
-    init(settings: AppSettings, perform: @escaping (AllInOneMode) -> Void) {
+    init(
+        settings: AppSettings,
+        perform: @escaping (AllInOneMode) -> Void,
+        pickDisplay: @escaping (CGDirectDisplayID) -> Void = { _ in }
+    ) {
         self.settings = settings
         self.perform = perform
+        onPickDisplay = pickDisplay
     }
 
     var lastMode: AllInOneMode {
@@ -258,8 +274,37 @@ struct AllInOneView: View {
 
     private func modeButtons(for modes: [AllInOneMode]) -> some View {
         ForEach(modes, id: \.self) { mode in
-            modeButton(mode)
+            if mode == .screen, NSScreen.screens.count > 1 {
+                screenMenu
+            } else {
+                modeButton(mode)
+            }
         }
+    }
+
+    private var screenMenu: some View {
+        Menu {
+            Button("Active display") { model.pick(.screen) }
+            ForEach(RecordingDeviceCatalog.displays(), id: \.displayID) { display in
+                Button(display.name) {
+                    model.onPicked()
+                    model.onPickDisplay(display.displayID)
+                }
+            }
+            Divider()
+            Button("All displays") {
+                model.settings.fullscreenTarget = .allDisplays
+                model.pick(.screen)
+            }
+            Button("All displays, stitched") {
+                model.settings.fullscreenTarget = .allDisplaysStitched
+                model.pick(.screen)
+            }
+        } label: {
+            RecordingBarIcon(symbol: AllInOneMode.screen.symbol)
+        }
+        .recordingBarMenu(tooltip: AllInOneMode.screen.help)
+        .accessibilityLabel(AllInOneMode.screen.title)
     }
 
     private var overflowMenu: some View {

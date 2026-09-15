@@ -9,6 +9,9 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
     /// Dragging the midpoint bends the arrow; `nil` is a straight one.
     public var controlPoint: CGPoint?
     public var head: ArrowHead
+    /// Optional start head. `nil` is no head, which is what files from before this field
+    /// decode as.
+    public var startHead: ArrowHead?
     public var stroke: StrokeStyle
     /// Endpoints attached to other annotations, which they then follow (docs/09 U1.7).
     ///
@@ -23,6 +26,7 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
         end: CGPoint,
         controlPoint: CGPoint? = nil,
         head: ArrowHead = .filled,
+        startHead: ArrowHead? = nil,
         stroke: StrokeStyle = StrokeStyle(),
         startBinding: ArrowBinding? = nil,
         endBinding: ArrowBinding? = nil
@@ -32,13 +36,14 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
         self.end = end
         self.controlPoint = controlPoint
         self.head = head
+        self.startHead = startHead
         self.stroke = stroke
         self.startBinding = startBinding
         self.endBinding = endBinding
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, start, end, controlPoint, head, stroke, startBinding, endBinding
+        case id, start, end, controlPoint, head, startHead, stroke, startBinding, endBinding
     }
 
     /// Bindings default to absent, so an arrow written before they existed still opens
@@ -51,6 +56,7 @@ public struct ArrowSpec: Codable, Hashable, Sendable {
             end: container.decode(CGPoint.self, forKey: .end),
             controlPoint: container.decodeIfPresent(CGPoint.self, forKey: .controlPoint),
             head: container.decodeIfPresent(ArrowHead.self, forKey: .head) ?? .filled,
+            startHead: container.decodeIfPresent(ArrowHead.self, forKey: .startHead),
             stroke: container.decodeIfPresent(StrokeStyle.self, forKey: .stroke) ?? StrokeStyle(),
             startBinding: container.decodeIfPresent(ArrowBinding.self, forKey: .startBinding),
             endBinding: container.decodeIfPresent(ArrowBinding.self, forKey: .endBinding)
@@ -65,19 +71,39 @@ public struct ShapeSpec: Codable, Hashable, Sendable {
     public var rect: CGRect
     public var stroke: StrokeStyle
     public var fill: FillStyle
+    /// Radians. Missing in older files (docs/16 ED-10).
+    public var rotation: CGFloat
 
     public init(
         id: AnnotationID = AnnotationID(),
         kind: ShapeKind = .rectangle,
         rect: CGRect,
         stroke: StrokeStyle = StrokeStyle(),
-        fill: FillStyle = .none
+        fill: FillStyle = .none,
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.kind = kind
         self.rect = rect
         self.stroke = stroke
         self.fill = fill
+        self.rotation = rotation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, rect, stroke, fill, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            kind: container.decodeIfPresent(ShapeKind.self, forKey: .kind) ?? .rectangle,
+            rect: container.decode(CGRect.self, forKey: .rect),
+            stroke: container.decodeIfPresent(StrokeStyle.self, forKey: .stroke) ?? StrokeStyle(),
+            fill: container.decodeIfPresent(FillStyle.self, forKey: .fill) ?? .none,
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 }
 
@@ -110,17 +136,35 @@ public struct FreehandSpec: Codable, Hashable, Sendable {
     public var points: [CGPoint]
     public var isSmoothed: Bool
     public var stroke: StrokeStyle
+    public var rotation: CGFloat
 
     public init(
         id: AnnotationID = AnnotationID(),
         points: [CGPoint],
         isSmoothed: Bool = true,
-        stroke: StrokeStyle = StrokeStyle()
+        stroke: StrokeStyle = StrokeStyle(),
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.points = points
         self.isSmoothed = isSmoothed
         self.stroke = stroke
+        self.rotation = rotation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, points, isSmoothed, stroke, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            points: container.decode([CGPoint].self, forKey: .points),
+            isSmoothed: container.decodeIfPresent(Bool.self, forKey: .isSmoothed) ?? true,
+            stroke: container.decodeIfPresent(StrokeStyle.self, forKey: .stroke) ?? StrokeStyle(),
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 }
 
@@ -148,17 +192,43 @@ public struct TextSpec: Codable, Hashable, Sendable {
     /// The laid-out frame. Width drives wrapping; height grows with the text.
     public var rect: CGRect
     public var style: TextStyle
+    /// When true the box grows with the string; a side-handle drag turns this off.
+    ///
+    /// New annotations default on. Files written before this field decode as `false`, so
+    /// a saved wrap width is not silently undone (docs/16 ED-1).
+    public var autoWidth: Bool
+    public var rotation: CGFloat
 
     public init(
         id: AnnotationID = AnnotationID(),
         string: String = "",
         rect: CGRect,
-        style: TextStyle = TextStyle()
+        style: TextStyle = TextStyle(),
+        autoWidth: Bool = true,
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.string = string
         self.rect = rect
         self.style = style
+        self.autoWidth = autoWidth
+        self.rotation = rotation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, string, rect, style, autoWidth, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            string: container.decodeIfPresent(String.self, forKey: .string) ?? "",
+            rect: container.decode(CGRect.self, forKey: .rect),
+            style: container.decodeIfPresent(TextStyle.self, forKey: .style) ?? TextStyle(),
+            autoWidth: container.decodeIfPresent(Bool.self, forKey: .autoWidth) ?? false,
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 }
 
@@ -167,15 +237,32 @@ public struct RedactionSpec: Codable, Hashable, Sendable {
     public var id: AnnotationID
     public var rect: CGRect
     public var style: RedactionStyle
+    public var rotation: CGFloat
 
     public init(
         id: AnnotationID = AnnotationID(),
         rect: CGRect,
-        style: RedactionStyle = .defaultBlur
+        style: RedactionStyle = .defaultBlur,
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.rect = rect
         self.style = style
+        self.rotation = rotation
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, rect, style, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            rect: container.decode(CGRect.self, forKey: .rect),
+            style: container.decodeIfPresent(RedactionStyle.self, forKey: .style) ?? .defaultBlur,
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 }
 
@@ -386,54 +473,5 @@ public enum AnnotationCommand: Codable, Hashable, Sendable, Identifiable {
     /// edited through their own chrome rather than by clicking the drawing.
     public var isSelectable: Bool {
         !tool.isCanvasChrome
-    }
-}
-
-/// The editor's tools (docs/03 §3).
-public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
-    case arrow
-    case shape
-    case line
-    case freehand
-    case highlighter
-    case text
-    case redaction
-    case spotlight
-    case counter
-    case crop
-    case beautify
-    case camera
-    case progressiveBlur
-    case watermark
-    case measure
-    case subjectLift
-    case image
-
-    public var title: String {
-        switch self {
-        case .arrow: "Arrow"
-        case .shape: "Shape"
-        case .line: "Line"
-        case .freehand: "Pencil"
-        case .highlighter: "Highlighter"
-        case .text: "Text"
-        case .redaction: "Blur"
-        case .spotlight: "Spotlight"
-        case .counter: "Counter"
-        case .crop: "Crop"
-        case .beautify: "Beautify"
-        case .camera: "Perspective"
-        case .progressiveBlur: "Progressive Blur"
-        case .watermark: "Watermark"
-        case .measure: "Measure"
-        case .subjectLift: "Remove Background"
-        case .image: "Image"
-        }
-    }
-
-    /// Canvas chrome is edited through its own UI, not by dragging a shape on the image.
-    public var isCanvasChrome: Bool {
-        self == .crop || self == .beautify || self == .subjectLift || self == .camera
-            || self == .progressiveBlur || self == .watermark
     }
 }

@@ -36,7 +36,7 @@ extension RecordingEngine {
 
         // Recording time, not wall-clock: a pause takes time out of the footage, and a
         // geometry sample stamped with the clock would point at a moment the file skips.
-        observer(rect, pointPixelScale, time)
+        observer(box.screenRect ?? rect, box.scaleFactor ?? pointPixelScale, time)
     }
 
     /// Whether a content rect has actually changed, as against jittering.

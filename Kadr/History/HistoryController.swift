@@ -44,6 +44,9 @@ final class HistoryController {
     /// (docs/03 §5 P3).
     private(set) var searchText = ""
     let indexing: HistoryIndexCoordinator
+    var onPin: ((HistoryRecord) -> Void)?
+    var onAnnotate: ((HistoryRecord) -> Void)?
+    var onCopyText: ((HistoryRecord) -> Void)?
 
     static let menuStripCount = 8
     static let pageSize = 48
@@ -102,6 +105,34 @@ final class HistoryController {
         guard let store else { return nil }
         let url = store.thumbnailFileURL(for: record)
         return cache.thumbnail(for: url, maxPixelSize: maxPixelSize, scope: scope)
+    }
+
+    func cachedThumbnail(
+        for record: HistoryRecord,
+        maxPixelSize: Int,
+        scope: ThumbnailCache.Scope = .grid
+    ) -> CGImage? {
+        guard let store else { return nil }
+        return cache.cached(for: store.thumbnailFileURL(for: record), maxPixelSize: maxPixelSize, scope: scope)
+    }
+
+    func loadThumbnail(
+        for record: HistoryRecord,
+        maxPixelSize: Int,
+        scope: ThumbnailCache.Scope = .grid
+    ) async -> CGImage? {
+        guard let store else { return nil }
+        let url = store.thumbnailFileURL(for: record)
+        if let cached = cache.cached(for: url, maxPixelSize: maxPixelSize, scope: scope) {
+            return cached
+        }
+        let image = await Task.detached { [store] in
+            store.thumbnail(for: record, maxPixelSize: maxPixelSize)
+        }.value
+        if let image {
+            cache.store(image, for: url, maxPixelSize: maxPixelSize, scope: scope)
+        }
+        return image
     }
 
     func purgeStripThumbnails() {
@@ -210,17 +241,19 @@ final class HistoryController {
     /// immediately afterwards, and a hash taken later would be a hash of nothing — which
     /// is how a "deleted" capture stayed in the library (docs/07 H5).
     func deleteFromLibrary(matching fileURL: URL) {
-        guard let store, let hash = try? HistoryStore.contentHash(of: fileURL) else { return }
+        guard store != nil, let hash = try? HistoryStore.contentHash(of: fileURL) else { return }
+        deleteFromLibrary(contentHash: hash)
+    }
+
+    func deleteFromLibrary(contentHash hash: String) {
         Task { [weak self] in
-            guard let report = try? await store.delete(contentHash: hash),
+            guard let self else { return }
+            guard let report = try? await store?.delete(contentHash: hash),
                   report.deletedCount > 0
             else {
                 return
             }
-            // Re-query rather than filtering the cached page by hand: the deletion may
-            // have taken several records, and the window is showing whatever filter the
-            // user set.
-            await self?.reload(filter: self?.currentFilter ?? .all)
+            await reload(filter: currentFilter)
         }
     }
 

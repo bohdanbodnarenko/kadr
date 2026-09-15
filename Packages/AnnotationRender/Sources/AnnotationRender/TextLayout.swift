@@ -23,19 +23,35 @@ public enum TextLayout {
 
     /// The font a style resolves to.
     public static func font(for style: TextStyle) -> CTFont {
-        let name = style.isBold ? boldName(for: style.fontName) : style.fontName
-        return CTFontCreateWithName(name as CFString, style.fontSize, nil)
+        let base = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
+        var traits: CTFontSymbolicTraits = []
+        if style.isBold {
+            traits.insert(.boldTrait)
+        }
+        if style.isItalic {
+            traits.insert(.italicTrait)
+        }
+        guard !traits.isEmpty,
+              let styled = CTFontCreateCopyWithSymbolicTraits(base, style.fontSize, nil, traits, traits)
+        else {
+            return base
+        }
+        return styled
     }
 
     /// The attributed string a text annotation renders as.
     ///
     /// CoreText attribute names rather than AppKit's, for the same reason as above.
     public static func attributedString(_ spec: TextSpec) -> NSAttributedString {
-        NSAttributedString(string: spec.string, attributes: [
+        var attributes: [NSAttributedString.Key: Any] = [
             .init(kCTFontAttributeName as String): font(for: spec.style),
             .init(kCTForegroundColorAttributeName as String): spec.style.color.cgColor,
             .init(kCTParagraphStyleAttributeName as String): paragraphStyle(for: spec.style)
-        ])
+        ]
+        if spec.style.isUnderline {
+            attributes[.init(kCTUnderlineStyleAttributeName as String)] = CTUnderlineStyle.single.rawValue
+        }
+        return NSAttributedString(string: spec.string, attributes: attributes)
     }
 
     /// The paragraph style a text annotation's alignment resolves to.

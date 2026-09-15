@@ -15,19 +15,20 @@ public enum AnnotationHitTesting {
 
     /// Whether a point hits one annotation.
     public static func hitTest(_ command: AnnotationCommand, at point: CGPoint) -> Bool {
+        let local = localPoint(point, for: command)
         switch command {
         case let .arrow(spec):
-            hitsPolyline(arrowPolyline(spec), at: point, tolerance: tolerance(for: spec.stroke))
+            return hitsPolyline(arrowPolyline(spec), at: local, tolerance: tolerance(for: spec.stroke))
         case let .line(spec):
-            hitsSegment(from: spec.start, to: spec.end, at: point, tolerance: tolerance(for: spec.stroke))
+            return hitsSegment(from: spec.start, to: spec.end, at: local, tolerance: tolerance(for: spec.stroke))
         case let .shape(spec):
-            hitsShape(spec, at: point)
+            return hitsShape(spec, at: local)
         case let .freehand(spec):
-            hitsPolyline(spec.points, at: point, tolerance: tolerance(for: spec.stroke))
+            return hitsPolyline(spec.points, at: local, tolerance: tolerance(for: spec.stroke))
         case let .highlighter(spec):
-            hitsPolyline(spec.points, at: point, tolerance: tolerance(for: spec.stroke))
+            return hitsPolyline(spec.points, at: local, tolerance: tolerance(for: spec.stroke))
         default:
-            hitsArea(command, at: point)
+            return hitsArea(command, at: local)
         }
     }
 
@@ -50,7 +51,19 @@ public enum AnnotationHitTesting {
 
     /// The bounding box of an annotation, including its stroke.
     public static func boundingBox(of command: AnnotationCommand) -> CGRect {
-        strokedBounds(of: command) ?? rectBounds(of: command)
+        let unrotated = strokedBounds(of: command) ?? rectBounds(of: command)
+        return AnnotationRotation.aabb(unrotated, radians: command.rotation)
+    }
+
+    private static func localPoint(_ point: CGPoint, for command: AnnotationCommand) -> CGPoint {
+        let radians = command.rotation
+        guard radians != 0 else { return point }
+        let box = strokedBounds(of: command) ?? rectBounds(of: command)
+        return AnnotationRotation.inverse(
+            point,
+            around: CGPoint(x: box.midX, y: box.midY),
+            radians: radians
+        )
     }
 
     /// The annotations whose extent comes from a path plus its stroke width.

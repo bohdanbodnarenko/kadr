@@ -2,6 +2,7 @@ import AppKit
 import AutomationKit
 import os
 import RecordingCore
+import SelectionUI
 import SettingsKit
 import Shared
 
@@ -36,6 +37,10 @@ extension AppDelegate {
              .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
              .hidePins, .pinClipboard:
             break
+        case .openHistory:
+            openHistory()
+        case .openSaveFolder:
+            openSaveFolder()
         }
     }
 
@@ -55,7 +60,7 @@ extension AppDelegate {
         case .captureWindow:
             areaCapture.beginWindowCapture()
         case .captureFullscreen:
-            areaCapture.captureAllDisplays()
+            areaCapture.captureFullscreen()
         case .captureText:
             areaCapture.beginTextCapture()
         case .pickColor:
@@ -117,14 +122,16 @@ extension AppDelegate {
 
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
+        let frontmost = allInOne.frontmostBeforePresent
+        allInOne.frontmostBeforePresent = nil
         switch mode {
-        case .area: areaCapture.beginAreaCapture()
-        case .window: areaCapture.beginWindowCapture()
+        case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
+        case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
         case .screen: areaCapture.captureAllDisplays()
         case .record: recordSetup.toggle()
         case .gif: recording.beginGIFRecording()
         case .scrolling: scrollCapture.begin()
-        case .ocr: areaCapture.beginTextCapture()
+        case .ocr: areaCapture.beginOverlayCapture(mode: .area, purpose: .recognizeText, frontmost: frontmost)
         case .color: areaCapture.beginColorPick()
         }
     }
@@ -216,7 +223,9 @@ extension AppDelegate {
             audioLevel: recording.audioMeter.peak,
             microphoneIsSilent: recording.settings.recordsMicrophone
                 && recording.elapsed > 2
-                && recording.microphonePeakMax < AudioMeter.silence
+                && recording.microphonePeakMax < AudioMeter.silence,
+            notice: recording.liveNotice,
+            isTransitioning: recording.isTransitioning
         )
     }
 
@@ -254,6 +263,17 @@ extension AppDelegate {
             reopen: { [weak self] record in self?.areaCapture.reopenFromHistory(record) },
             openStudio: { [weak self] record in self?.areaCapture.openFromHistory(record) }
         )
+    }
+
+    /// Creates the save folder if needed and reveals it (docs/16 X-7).
+    func openSaveFolder() {
+        let folder = settings.saveFolder
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(folder)
+        } catch {
+            FailurePresenter.present(message: "Couldn’t open the capture folder. \(error.localizedDescription)")
+        }
     }
 
     /// Debug builds get a submenu that drives CaptureCore directly (docs/06 M1).

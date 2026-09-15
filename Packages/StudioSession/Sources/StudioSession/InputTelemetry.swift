@@ -13,11 +13,25 @@ public struct PointerSample: Codable, Sendable, Hashable {
     public var position: CGPoint
     /// Which cursor image was showing, as an index into the session's cursor artwork.
     public var cursorIndex: Int?
+    public var isDragging: Bool
 
-    public init(time: TimeInterval, position: CGPoint, cursorIndex: Int? = nil) {
+    public init(time: TimeInterval, position: CGPoint, cursorIndex: Int? = nil, isDragging: Bool = false) {
         self.time = time
         self.position = position
         self.cursorIndex = cursorIndex
+        self.isDragging = isDragging
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case time, position, cursorIndex, isDragging
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        time = try container.decode(TimeInterval.self, forKey: .time)
+        position = try container.decode(CGPoint.self, forKey: .position)
+        cursorIndex = try container.decodeIfPresent(Int.self, forKey: .cursorIndex)
+        isDragging = try container.decodeIfPresent(Bool.self, forKey: .isDragging) ?? false
     }
 }
 

@@ -60,6 +60,10 @@ public final class StudioDocumentModel {
     public var workingCrop = CGRect(x: 0, y: 0, width: 1, height: 1)
     public var cropAspect: CropAspectPreset = .free
 
+    /// Timeline hover, for a skim thumbnail. Does not move the playhead or the main preview
+    /// (docs/16 STU-C5, user preference: no seek-on-hover).
+    public var hoverPreviewTime: TimeInterval?
+
     /// Whether an export is running, and how far along.
     public internal(set) var exportProgress: Double?
 
@@ -132,7 +136,7 @@ public final class StudioDocumentModel {
     @ObservationIgnored var progressObservation: NSKeyValueObservation?
     @ObservationIgnored var transcriber: any Transcribing
 
-    @ObservationIgnored private var undoStack: [StudioEdit] = []
+    @ObservationIgnored private var undoStack: [(edit: StudioEdit, name: String)] = []
     @ObservationIgnored private var redoStack: [StudioEdit] = []
 
     /// How many steps back the studio remembers.
@@ -189,14 +193,18 @@ public final class StudioDocumentModel {
     ///
     ///   Any change with a different gesture — or none — starts a new step, which is what
     ///   makes releasing one slider and dragging another two undo steps rather than one.
-    public func change(coalescingAs gesture: String? = nil, _ mutate: (inout StudioEdit) -> Void) {
+    public func change(
+        named name: String = "Edit",
+        coalescingAs gesture: String? = nil,
+        _ mutate: (inout StudioEdit) -> Void
+    ) {
         var updated = edit
         mutate(&updated)
         guard updated != edit else { return }
 
         let continues = gesture != nil && gesture == activeGesture && !undoStack.isEmpty
         if !continues {
-            undoStack.append(edit)
+            undoStack.append((edit: edit, name: name))
             if undoStack.count > Self.undoDepth {
                 undoStack.removeFirst()
             }
@@ -216,6 +224,11 @@ public final class StudioDocumentModel {
     /// The interaction currently being coalesced, if one is.
     @ObservationIgnored private var activeGesture: String?
 
+    public var undoMenuTitle: String {
+        guard let last = undoStack.last else { return "Undo" }
+        return "Undo \(last.name)"
+    }
+
     public var canUndo: Bool {
         !undoStack.isEmpty
     }
@@ -230,7 +243,7 @@ public final class StudioDocumentModel {
         activeGesture = nil
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(edit)
-        edit = previous
+        edit = previous.edit
         clampAfterEdit()
         saveDraft()
     }
@@ -238,7 +251,7 @@ public final class StudioDocumentModel {
     public func redo() {
         activeGesture = nil
         guard let next = redoStack.popLast() else { return }
-        undoStack.append(edit)
+        undoStack.append((edit: edit, name: "Redo"))
         edit = next
         clampAfterEdit()
         saveDraft()

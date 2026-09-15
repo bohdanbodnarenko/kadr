@@ -43,6 +43,10 @@ public enum SettingKeys {
     public static let convertExportsToSRGB = SettingKey("general.convertExportsToSRGB", default: false)
     /// Crop the MacBook notch strip from fullscreen stills (CleanShot 4.6).
     public static let cropNotchFromFullscreen = SettingKey("capture.cropNotchFromFullscreen", default: true)
+    public static let fullscreenTarget = SettingKey(
+        "capture.fullscreenTarget",
+        default: FullscreenTarget.allDisplays
+    )
     /// Start the annotate editor with objects locked (CleanShot §8.1 / §21).
     public static let lockCanvasByDefault = SettingKey("annotate.lockCanvasByDefault", default: false)
     /// Draw drop shadows behind inserted images (CleanShot §8.2 / §21).
@@ -177,6 +181,8 @@ public enum SettingKeys {
     /// Off by default: it listens to the microphone for the length of a recording, which is
     /// not something to switch on for somebody.
     public static let teleprompterFollowsSpeech = SettingKey("teleprompter.followsSpeech", default: false)
+    /// Pin the script just below the hardware camera housing (docs/16 REC-19e).
+    public static let teleprompterDocksUnderCamera = SettingKey("teleprompter.docksUnderCamera", default: false)
     /// Where the panel was left, so it comes back where the reader put it.
     public static let teleprompterFrame = SettingKey("teleprompter.frame", default: "")
     /// Keep the display's HDR range in recordings (macOS 15+, docs/06 M25).
@@ -229,4 +235,8 @@ public enum SettingKeys {
     /// cannot search is most of the reason people never open one. The work runs in the
     /// helper process, on mains power only, so leaving it on costs nothing at idle.
     public static let historyIndexesText = SettingKey("history.indexesText", default: true)
+    public static let playsCaptureSound = SettingKey("general.playsCaptureSound", default: true)
+    public static let includesOverlaysInCaptures = SettingKey("advanced.includesOverlaysInCaptures", default: false)
+    public static let lossyQuality = SettingKey("general.lossyQuality", default: 0.9)
+    public static let showsMenuBarIcon = SettingKey("general.showsMenuBarIcon", default: true)
 }

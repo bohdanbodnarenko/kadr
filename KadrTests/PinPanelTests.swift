@@ -104,4 +104,16 @@ struct PinPanelTests {
 
         #expect(PinPanel(fileURL: url, scale: 2) == nil)
     }
+
+    @Test("Resizing a pin keeps the capture's aspect ratio")
+    func keepsAspectRatio() throws {
+        let url = try makeCapture(width: 400, height: 200)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let panel = try #require(PinPanel(fileURL: url, scale: 1))
+        defer { panel.dismiss() }
+
+        panel.setFrame(CGRect(x: 0, y: 0, width: 300, height: 50), display: true)
+        let ratio = panel.frame.width / max(panel.frame.height, 1)
+        #expect(abs(ratio - 2) < 0.05)
+    }
 }

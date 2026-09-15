@@ -40,14 +40,30 @@ public final class ThumbnailCache {
 
     /// Returns a cached thumbnail, loading it if this is the first ask.
     public func thumbnail(for url: URL, maxPixelSize: Int, scope: Scope = .grid) -> CGImage? {
-        let key = "\(url.path)@\(maxPixelSize)" as NSString
+        let key = key(url, maxPixelSize: maxPixelSize)
         let cache = cache(for: scope)
         if let cached = cache.object(forKey: key) {
             return cached.image
         }
         guard let image = loader.thumbnail(for: url, maxPixelSize: maxPixelSize) else { return nil }
-        cache.setObject(CGImageBox(image), forKey: key, cost: image.height * image.bytesPerRow)
+        store(image, for: url, maxPixelSize: maxPixelSize, scope: scope)
         return image
+    }
+
+    public func cached(for url: URL, maxPixelSize: Int, scope: Scope = .grid) -> CGImage? {
+        cache(for: scope).object(forKey: key(url, maxPixelSize: maxPixelSize))?.image
+    }
+
+    public func store(_ image: CGImage, for url: URL, maxPixelSize: Int, scope: Scope = .grid) {
+        cache(for: scope).setObject(
+            CGImageBox(image),
+            forKey: key(url, maxPixelSize: maxPixelSize),
+            cost: image.height * image.bytesPerRow
+        )
+    }
+
+    private func key(_ url: URL, maxPixelSize: Int) -> NSString {
+        "\(url.path)@\(maxPixelSize)" as NSString
     }
 
     public func purgeStrip() {

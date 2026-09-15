@@ -11,6 +11,7 @@ struct AutomationResponseTests {
         #expect(AutomationResponse.cancelled.exitCode == 2)
         #expect(AutomationResponse.failed("nope").exitCode == 1)
         #expect(AutomationResponse(status: .unsupported).exitCode == 3)
+        #expect(AutomationResponse(status: .noText).exitCode == 4)
     }
 
     @Test("--json prints one object with the file path in it")

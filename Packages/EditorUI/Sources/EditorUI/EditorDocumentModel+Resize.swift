@@ -29,6 +29,7 @@ extension EditorDocumentModel {
         resizeHandle = handle
         resizeStartBounds = SelectionResizer.unionBounds(of: selected)
         dragStartCommands = Dictionary(uniqueKeysWithValues: selected.map { ($0.id, $0) })
+        captureArrowDependents()
         document.beginGesture()
         return true
     }
@@ -39,7 +40,29 @@ extension EditorDocumentModel {
             dragPathHandle(handle, to: point, modifiers: modifiers)
             return
         }
+        if handle.isRotate {
+            dragRotateHandle(to: point, from: origin, modifiers: modifiers)
+            return
+        }
         dragBoxHandle(handle, to: point, from: origin, modifiers: modifiers)
+    }
+
+    private func dragRotateHandle(to point: CGPoint, from origin: CGPoint, modifiers: EditorModifiers) {
+        guard let startBounds = resizeStartBounds else { return }
+        let center = CGPoint(x: startBounds.midX, y: startBounds.midY)
+        let startAngle = atan2(origin.y - center.y, origin.x - center.x)
+        let currentAngle = atan2(point.y - center.y, point.x - center.x)
+        var delta = currentAngle - startAngle
+        if modifiers.contains(.constrain) {
+            delta = AnnotationRotation.snap(delta)
+        }
+        let starts = dragStartCommands
+        document.updateGesture { commands in
+            for index in commands.indices {
+                guard let start = starts[commands[index].id] else { continue }
+                commands[index] = start.applying(rotation: start.rotation + delta)
+            }
+        }
     }
 
     var selectedCommands: [AnnotationCommand] {

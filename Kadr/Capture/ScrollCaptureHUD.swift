@@ -41,6 +41,7 @@ final class ScrollCaptureHUD {
             // with the window underneath, not with this.
             level: .floating
         )
+        panel.alwaysHiddenFromCaptures = true
         panel.contentView = hosting
         panel.setFrame(frame(for: hosting.fittingSize), display: false)
         panel.orderFrontRegardless()

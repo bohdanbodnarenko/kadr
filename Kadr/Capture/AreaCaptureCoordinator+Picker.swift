@@ -9,6 +9,10 @@ extension AreaCaptureCoordinator {
     /// The frontmost app right now, as a value.
     static func currentFrontmostApp() -> AppIdentity? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        let identifier = app.bundleIdentifier ?? ""
+        if identifier.hasPrefix("app.kadr.") {
+            return nil
+        }
         return AppIdentity(name: app.localizedName, bundleIdentifier: app.bundleIdentifier)
     }
 

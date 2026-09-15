@@ -66,6 +66,8 @@ struct EditorStylePresetInspector: View {
                 .disabled(!hasAnyChrome)
                 Button("Export Look…") { exportCurrent() }
                     .disabled(!hasAnyChrome)
+                Button("Use for New Captures") { saveAsDefault() }
+                    .disabled(!hasAnyChrome)
                 Divider()
                 Button("Import Look…") { importPreset() }
             } label: {
@@ -145,15 +147,46 @@ struct EditorStylePresetInspector: View {
     private func importPreset() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [UTType(exportedAs: StylePresetTransfer.typeIdentifier)]
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        guard let data = try? Data(contentsOf: url),
-              let preset = try? StylePresetTransfer.decoding(data)
-        else { return }
-        presets = StylePreset.builtIn + store.add(preset)
-        model.applyStylePreset(preset)
-        appliedID = preset.id
+        guard panel.runModal() == .OK else { return }
+        var imported: StylePreset?
+        var failures = 0
+        for url in panel.urls {
+            do {
+                let data = try Data(contentsOf: url)
+                let preset = try StylePresetTransfer.decoding(data)
+                presets = StylePreset.builtIn + store.addImported(preset)
+                imported = preset
+            } catch {
+                failures += 1
+            }
+        }
+        if let imported {
+            model.applyStylePreset(imported)
+            appliedID = imported.id
+        }
+        if failures > 0 {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = failures == 1
+                ? "One look could not be imported."
+                : "\(failures) looks could not be imported."
+            alert.runModal()
+        }
+    }
+
+    private func saveAsDefault() {
+        let preset = StylePreset(name: "New captures", capturing: model.document)
+        do {
+            try DefaultCaptureLook.save(preset)
+        } catch {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Could not save the default look."
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
     }
 }
 

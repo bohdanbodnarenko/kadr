@@ -10,6 +10,7 @@ public enum BeautifyAspect: String, Codable, CaseIterable, Sendable {
     case sixteenNine
     case nineSixteen
     case fourThree
+    case threeTwo
 
     /// Width over height, or `nil` when the capture keeps its own ratio.
     public var ratio: CGFloat? {
@@ -20,6 +21,7 @@ public enum BeautifyAspect: String, Codable, CaseIterable, Sendable {
         case .sixteenNine: 16 / 9
         case .nineSixteen: 9 / 16
         case .fourThree: 4 / 3
+        case .threeTwo: 3 / 2
         }
     }
 
@@ -31,12 +33,15 @@ public enum BeautifyAspect: String, Codable, CaseIterable, Sendable {
         case .sixteenNine: "16:9"
         case .nineSixteen: "9:16"
         case .fourThree: "4:3"
+        case .threeTwo: "3:2"
         }
     }
 }
 
 /// The fill behind a beautified capture (docs/03 §3 P2).
 public enum BeautifyBackdrop: Codable, Hashable, Sendable {
+    /// Padding and border only — no fill (docs/16 ED-16).
+    case none
     case solid(AnnotationColor)
     /// A curated or custom ramp, with an optional designed midpoint (docs/09 U1.1).
     case gradient(BeautifyGradient)
@@ -58,14 +63,16 @@ public enum BeautifyBackdrop: Codable, Hashable, Sendable {
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case solid, gradient, image
+        case none, solid, gradient, image
         /// The pre-U1.1 shape: a `gradient` object holding these three keys directly.
         case start, end, angleDegrees
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let colour = try container.decodeIfPresent(AnnotationColor.self, forKey: .solid) {
+        if container.contains(.none) {
+            self = .none
+        } else if let colour = try container.decodeIfPresent(AnnotationColor.self, forKey: .solid) {
             self = .solid(colour)
         } else if let path = try container.decodeIfPresent(String.self, forKey: .image) {
             self = .image(path: path)
@@ -86,6 +93,7 @@ public enum BeautifyBackdrop: Codable, Hashable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
+        case .none: try container.encode(true, forKey: .none)
         case let .solid(colour): try container.encode(colour, forKey: .solid)
         case let .gradient(ramp): try container.encode(ramp, forKey: .gradient)
         case let .image(path): try container.encode(path, forKey: .image)
@@ -114,6 +122,18 @@ public struct BeautifyShadow: Codable, Hashable, Sendable {
 
     public static let none = BeautifyShadow(opacity: 0, blur: .zero, offsetY: .zero)
     public static let soft = BeautifyShadow(opacity: 0.28, blur: .relative(0.05), offsetY: .relative(0.022))
+    public static let long = BeautifyShadow(opacity: 0.32, blur: .relative(0.08), offsetY: .relative(0.08))
+    public static let glow = BeautifyShadow(opacity: 0.4, blur: .relative(0.12), offsetY: .zero)
+    public static let crisp = BeautifyShadow(opacity: 0.45, blur: .relative(0.012), offsetY: .relative(0.01))
+
+    public func scaled(strength: CGFloat) -> BeautifyShadow {
+        let strength = min(max(strength, 0), 1)
+        return BeautifyShadow(
+            opacity: opacity * strength,
+            blur: blur,
+            offsetY: offsetY
+        )
+    }
 
     public var isEnabled: Bool {
         opacity > 0 && !blur.isZero
@@ -138,6 +158,53 @@ public struct BeautifyShadow: Codable, Hashable, Sendable {
         opacity = try container.decodeIfPresent(CGFloat.self, forKey: .opacity) ?? 0
         blur = try container.decodeIfPresent(BeautifyMetric.self, forKey: .blur) ?? .zero
         offsetY = try container.decodeIfPresent(BeautifyMetric.self, forKey: .offsetY) ?? .zero
+    }
+
+    public var style: BeautifyShadowStyle {
+        let glowGap = abs(offsetY.fraction(shortestEdge: 100))
+        if glowGap < 0.004 {
+            return .glow
+        }
+        let blurAmount = blur.fraction(shortestEdge: 100)
+        if blurAmount < 0.02 {
+            return .crisp
+        }
+        if offsetY.fraction(shortestEdge: 100) > 0.05 {
+            return .long
+        }
+        return .soft
+    }
+
+    public var strength: CGFloat {
+        let base = style.shadow.opacity
+        guard base > 0 else { return 1 }
+        return min(max(opacity / base, 0), 1)
+    }
+}
+
+/// Named card-shadow looks (docs/16 ED-16).
+public enum BeautifyShadowStyle: String, CaseIterable, Hashable, Sendable {
+    case soft
+    case long
+    case glow
+    case crisp
+
+    public var title: String {
+        switch self {
+        case .soft: "Soft"
+        case .long: "Long"
+        case .glow: "Glow"
+        case .crisp: "Crisp"
+        }
+    }
+
+    public var shadow: BeautifyShadow {
+        switch self {
+        case .soft: .soft
+        case .long: .long
+        case .glow: .glow
+        case .crisp: .crisp
+        }
     }
 }
 

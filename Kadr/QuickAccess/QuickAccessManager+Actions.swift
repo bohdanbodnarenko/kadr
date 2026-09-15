@@ -189,9 +189,10 @@ extension QuickAccessManager {
         guard pins.pin(
             url,
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
-            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
+            save: { [weak self] fileURL in self?.saveCopy(of: fileURL) },
             annotate: { [weak self] fileURL in self?.openInEditor(fileURL) },
-            copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) }
+            copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) },
+            reveal: { [weak self] fileURL in self?.revealInFinder(fileURL) }
         ) else {
             presentFeedback(.unavailable(.missingFile))
             return
@@ -238,9 +239,10 @@ extension QuickAccessManager {
         pins.pin(
             finalized(url),
             copy: { [weak self] fileURL in self?.copyFile(at: fileURL) },
-            save: { [weak self] fileURL in self?.revealInFinder(fileURL) },
+            save: { [weak self] fileURL in self?.saveCopy(of: fileURL) },
             annotate: { [weak self] fileURL in self?.openInEditor(fileURL) },
-            copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) }
+            copyText: { [weak self] fileURL in self?.recognizeText(at: fileURL) },
+            reveal: { [weak self] fileURL in self?.revealInFinder(fileURL) }
         )
     }
 
@@ -373,62 +375,6 @@ extension QuickAccessManager {
     /// Copies rather than replaces. Compression is lossy, and the case it exists for is
     /// "this needs to fit in a chat window" — a one-off need that must not cost the user
     /// the full-quality file they still have.
-    func compress(_ item: QuickAccessItem) {
-        guard !item.isVideo else { return }
-        finalizeIfStaged(item)
-        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        let format = settings.compressionFormat
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-compressed-\(UUID().uuidString)")
-            .appendingPathExtension(format.fileExtension)
-
-        Task { [weak self] in
-            guard let self else { return }
-            defer { vision.disconnect() }
-            do {
-                let response = try await vision.compressImage(CompressRequest(
-                    sourcePath: url.path,
-                    destinationPath: destination.path,
-                    targetBytes: settings.compressionTargetBytes,
-                    format: format.rawValue
-                ))
-                guard response.isWorthwhile else {
-                    // A screenshot of flat colour re-encodes larger than its PNG. Saying
-                    // so beats putting a bigger file on the clipboard and calling it
-                    // compressed.
-                    try? FileManager.default.removeItem(at: destination)
-                    showCompressionResult(nil, for: item)
-                    return
-                }
-                copyFile(at: URL(fileURLWithPath: response.path))
-                showCompressionResult(response, for: item)
-            } catch {
-                logger.error("Compression failed: \(error.localizedDescription, privacy: .public)")
-                try? FileManager.default.removeItem(at: destination)
-                showCompressionResult(nil, for: item)
-                presentFeedback(.failure(
-                    String(localized: "Compression failed"),
-                    retryTitle: String(localized: "Retry"),
-                    retry: { [weak self] in self?.compress(item) }
-                ))
-            }
-        }
-    }
-
-    /// Puts the savings on the card, or says there were none.
-    private func showCompressionResult(_ response: CompressResponse?, for item: QuickAccessItem) {
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        items[index].compressionSavings = response.map(\.savingsFraction)
-        items[index].wasCompressed = true
-        // No redraw to ask for: the stack observes `items`, so the badge appears with the
-        // mutation. Rebuilding a card's root view by hand is what the old one-panel-per-card
-        // overlay needed, because a hosting view holds a value rather than a reference.
-    }
-
-    /// Recognises the text in a card's capture and copies it (docs/03 §1.7, §2).
-    ///
-    /// Acting on a staged capture finalises it first, exactly like Copy or Pin: the user
-    /// has done something with this screenshot, so it stops being disposable.
     func recognizeText(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL

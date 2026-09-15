@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import os
 import OverlayKit
+import RecordingCore
 import SettingsKit
 import Shared
 import StudioSession
@@ -38,6 +39,8 @@ final class TeleprompterController {
     private var startedAt: Date?
     private var startedFrom: Double = 0
     private var isPaused = false
+    /// Last time a speech hypothesis moved the script, so pace-scroll waits after silence.
+    private var lastFollowedAt: Date?
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -53,7 +56,7 @@ final class TeleprompterController {
     ///
     /// Silent when the script is empty rather than showing an empty panel: somebody who
     /// left the setting on and the script blank wants nothing on screen, not a reminder.
-    func start() {
+    func start(microphone: AsyncStream<SampleBufferBox>? = nil) {
         guard settings.teleprompterEnabled else { return }
         let script = TeleprompterScript(text: settings.teleprompterScript)
         guard !script.isEmpty else {
@@ -65,7 +68,10 @@ final class TeleprompterController {
         let panel = TeleprompterPanel(frame: NSRect(x: 0, y: 0, width: 760, height: 220))
         panel.script = script
         panel.style = style
-        panel.positionOnScreen(savedFrame)
+        panel.positionOnScreen(
+            settings.teleprompterDocksUnderCamera ? nil : savedFrame,
+            dockUnderCamera: settings.teleprompterDocksUnderCamera
+        )
         panel.orderFrontRegardless()
         self.panel = panel
 
@@ -77,14 +83,18 @@ final class TeleprompterController {
         syncFromSettings()
         observeSettings()
         link = DisplayLinkDriver { [weak self] in self?.tick() }
-        link?.start()
-        startFollowingIfWanted(script: script)
+        if let content = panel.contentView {
+            link?.start(on: content)
+        }
+        startFollowingIfWanted(script: script, microphone: microphone)
         logger.info("Teleprompter started")
     }
 
     func stop() {
         guard panel != nil else { return }
-        saveFrame()
+        if !settings.teleprompterDocksUnderCamera {
+            saveFrame()
+        }
         settingsObservation?.cancel()
         settingsObservation = nil
         link?.stop()
@@ -104,12 +114,14 @@ final class TeleprompterController {
         isPaused = true
         startedFrom = position
         startedAt = nil
+        follower?.pause()
     }
 
     func resume() {
         guard isPaused else { return }
         isPaused = false
         startedAt = Date()
+        follower?.resume()
     }
 
     // MARK: - Scrolling
@@ -118,10 +130,11 @@ final class TeleprompterController {
         guard let panel, !isPaused, let startedAt else { return }
 
         if let follower, let followed = follower.position {
-            // Eased rather than jumped. The follower is right about *where* the reader is
-            // and wrong about when it noticed, so moving straight there snaps the text
-            // under their eyes at the moment they are trying to read it.
-            position += (Double(followed) - position) * Self.followEasing
+            let eased = position + (Double(followed) - position) * Self.followEasing
+            position = max(position, eased)
+            lastFollowedAt = Date()
+        } else if let lastFollowedAt, Date().timeIntervalSince(lastFollowedAt) < Self.followHold {
+            // Stay put until the helper has been quiet long enough to fall back to pace.
         } else {
             position = startedFrom + pacing.position(after: Date().timeIntervalSince(startedAt))
         }
@@ -133,15 +146,17 @@ final class TeleprompterController {
     /// Low enough that a correction reads as a scroll rather than a jump, high enough that
     /// the script is not visibly lagging behind the voice.
     private static let followEasing: Double = 0.08
+    /// How long to wait after the last hypothesis before falling back to pace scrolling.
+    private static let followHold: TimeInterval = 2.5
 
     // MARK: - Following
 
-    private func startFollowingIfWanted(script: TeleprompterScript) {
+    private func startFollowingIfWanted(script: TeleprompterScript, microphone: AsyncStream<SampleBufferBox>?) {
         guard settings.teleprompterFollowsSpeech else { return }
         let follower = LiveSpeechFollower(script: script)
         self.follower = follower
         Task { [weak self] in
-            guard await follower.start() else {
+            guard await follower.start(microphone: microphone) else {
                 // No permission, no model, no microphone: the prompter falls back to
                 // scrolling at the set rate, which is what it would have done anyway.
                 await MainActor.run {
@@ -259,10 +274,8 @@ final class DisplayLinkDriver {
         self.onTick = onTick
     }
 
-    func start() {
-        guard link == nil, let view = NSApp.keyWindow?.contentView ?? NSApp.windows.first?.contentView else {
-            return
-        }
+    func start(on view: NSView) {
+        guard link == nil else { return }
         let link = view.displayLink(target: self, selector: #selector(fire))
         link.add(to: .main, forMode: .common)
         self.link = link

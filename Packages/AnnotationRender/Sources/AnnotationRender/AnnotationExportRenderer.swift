@@ -101,23 +101,14 @@ public struct AnnotationExportRenderer: Sendable {
             )
         }
 
-        // A watermark is drawn over everything the picture contains, but under the scene
-        // blur's remit — so it goes on before the canvas is handed off, and the blur
-        // covers it too if the user asked for that (docs/09 U1.3, U1.4).
-        if let watermark = document.watermark, includeAnnotations {
-            context.saveGState()
-            context.translateBy(x: canvas.minX, y: canvas.minY)
-            WatermarkCompositor.draw(
-                watermark,
-                in: CGRect(origin: .zero, size: canvas.size),
-                context: context
-            )
-            context.restoreGState()
-        }
-
         guard let image = context.makeImage() else { throw RenderError.couldNotCreateImage }
         let finished = finish(
-            image, document: document, canvas: canvas, scale: scale, applyOrientation: applyOrientation
+            image,
+            document: document,
+            canvas: canvas,
+            scale: scale,
+            applyOrientation: applyOrientation,
+            includeWatermark: includeAnnotations
         )
         return Self.downscaled(finished, by: applyOrientation ? exportScale : 1) ?? finished
     }
@@ -171,7 +162,12 @@ public struct AnnotationExportRenderer: Sendable {
         case let .arrow(spec): drawArrow(spec, in: context)
         case let .shape(spec): drawShape(spec, in: context)
         case let .line(spec): drawLine(spec, in: context)
-        case let .freehand(spec): drawStroke(spec.points, stroke: spec.stroke, in: context)
+        case let .freehand(spec):
+            drawStroke(
+                spec.isSmoothed ? StrokeSmoothing.smoothed(spec.points) : spec.points,
+                stroke: spec.stroke,
+                in: context
+            )
         case let .highlighter(spec): drawHighlighter(spec, in: context)
         default: drawContent(command, in: context, imageScale: imageScale)
         }
@@ -185,7 +181,9 @@ public struct AnnotationExportRenderer: Sendable {
         case let .counter(spec): drawCounter(spec, in: context)
         case let .measure(spec): drawMeasure(spec, in: context, imageScale: imageScale)
         case let .image(spec): drawImage(spec, in: context)
-        case let .spotlight(spec): drawSpotlight(spec, in: context)
+        case .spotlight:
+            // Drawn once as a composite after redactions (docs/16 ED-9).
+            break
         // A redaction is already burned into the image; drawing it again would be the
         // removable overlay this design exists to avoid. The crop and the beautify
         // backdrop are the canvas itself, applied by the transform above.
@@ -193,22 +191,14 @@ public struct AnnotationExportRenderer: Sendable {
         }
     }
 
-    /// Dims the canvas except for a rounded hole, so one region stays bright.
-    private func drawSpotlight(_ spec: SpotlightSpec, in context: CGContext) {
+    /// Dims the canvas except for every spotlight hole, so two holes stay equally bright.
+    func drawSpotlights(of document: AnnotationDocument, in context: CGContext) {
+        guard let composite = SpotlightComposite.from(commands: document.resolvedCommands) else { return }
         let canvas = context.boundingBoxOfClipPath
         guard !canvas.isNull, !canvas.isInfinite, canvas.width > 0, canvas.height > 0 else { return }
         context.saveGState()
-        context.setFillColor(gray: 0, alpha: spec.dimOpacity)
-        context.beginPath()
-        context.addRect(canvas)
-        let hole = spec.rect.standardized
-        let radius = spec.fittedCornerRadius
-        context.addPath(CGPath(
-            roundedRect: hole,
-            cornerWidth: radius,
-            cornerHeight: radius,
-            transform: nil
-        ))
+        context.setFillColor(gray: 0, alpha: composite.dimOpacity)
+        context.addPath(composite.path(in: canvas))
         context.drawPath(using: .eoFill)
         context.restoreGState()
     }
@@ -226,63 +216,23 @@ public struct AnnotationExportRenderer: Sendable {
     }
 
     private func drawArrow(_ spec: ArrowSpec, in context: CGContext) {
+        let geometry = ArrowGeometry.make(spec)
         apply(spec.stroke, to: context)
-        context.beginPath()
-        context.move(to: spec.start)
-        if let control = spec.controlPoint {
-            context.addQuadCurve(to: spec.end, control: control)
-        } else {
-            context.addLine(to: spec.end)
-        }
+        context.addPath(geometry.shaft)
         context.strokePath()
-        drawArrowHead(spec, in: context)
+        drawHead(geometry.startHead, stroke: spec.stroke, in: context)
+        drawHead(geometry.endHead, stroke: spec.stroke, in: context)
     }
 
-    /// The head sits at the end, pointing along the last bit of the shaft — which for a
-    /// curved arrow is the tangent, not the line back to the start.
-    private func drawArrowHead(_ spec: ArrowSpec, in context: CGContext) {
-        let approach = spec.controlPoint ?? spec.start
-        let angle = atan2(spec.end.y - approach.y, spec.end.x - approach.x)
-        let length = max(spec.stroke.width * 3.5, 12)
-        let spread = CGFloat.pi / 7
-
-        let left = CGPoint(
-            x: spec.end.x - length * cos(angle - spread),
-            y: spec.end.y - length * sin(angle - spread)
-        )
-        let right = CGPoint(
-            x: spec.end.x - length * cos(angle + spread),
-            y: spec.end.y - length * sin(angle + spread)
-        )
-
-        switch spec.head {
-        case .filled:
-            context.setFillColor(spec.stroke.color.cgColor)
-            context.beginPath()
-            context.move(to: spec.end)
-            context.addLine(to: left)
-            context.addLine(to: right)
-            context.closePath()
-            context.fillPath()
-        case .open:
-            context.beginPath()
-            context.move(to: left)
-            context.addLine(to: spec.end)
-            context.addLine(to: right)
+    private func drawHead(_ head: ArrowGeometry.Head?, stroke: StrokeStyle, in context: CGContext) {
+        guard let head else { return }
+        apply(stroke, to: context)
+        context.addPath(head.path)
+        if head.isFilled {
+            context.setFillColor(stroke.color.cgColor)
+            context.drawPath(using: .fillStroke)
+        } else {
             context.strokePath()
-        case .concave:
-            let notch = CGPoint(
-                x: spec.end.x - length * 0.65 * cos(angle),
-                y: spec.end.y - length * 0.65 * sin(angle)
-            )
-            context.setFillColor(spec.stroke.color.cgColor)
-            context.beginPath()
-            context.move(to: spec.end)
-            context.addLine(to: left)
-            context.addLine(to: notch)
-            context.addLine(to: right)
-            context.closePath()
-            context.fillPath()
         }
     }
 
@@ -340,33 +290,7 @@ public struct AnnotationExportRenderer: Sendable {
     }
 
     private func drawText(_ spec: TextSpec, in context: CGContext) {
-        guard !spec.string.isEmpty else { return }
-
-        // Through `TextLayout`, so the on-canvas field and the exported file lay the same
-        // string out the same way (docs/09 U1.8).
-        if let background = spec.style.backgroundColor, let pill = TextLayout.pillRect(spec) {
-            let radius = TextLayout.pillRadius(for: spec.style)
-            context.setFillColor(background.cgColor)
-            context.addPath(CGPath(
-                roundedRect: pill,
-                cornerWidth: radius,
-                cornerHeight: radius,
-                transform: nil
-            ))
-            context.fillPath()
-        }
-
-        let framesetter = CTFramesetterCreateWithAttributedString(TextLayout.attributedString(spec))
-        let path = CGPath(rect: spec.rect, transform: nil)
-        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
-
-        // Text draws in CoreGraphics' own orientation, so the flip applied to the whole
-        // canvas has to be undone around it.
-        context.saveGState()
-        context.translateBy(x: 0, y: spec.rect.midY * 2)
-        context.scaleBy(x: 1, y: -1)
-        CTFrameDraw(frame, context)
-        context.restoreGState()
+        TextRendering.draw(spec, in: context)
     }
 
     /// The dimension geometry and its readout (docs/06 M21).

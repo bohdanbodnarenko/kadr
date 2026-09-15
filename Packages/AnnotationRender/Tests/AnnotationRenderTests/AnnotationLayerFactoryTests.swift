@@ -78,15 +78,11 @@ struct AnnotationLayerFactoryTests {
         let open = AnnotationCommand.arrow(ArrowSpec(start: .zero, end: CGPoint(x: 50, y: 0), head: .open))
         let filled = AnnotationCommand.arrow(ArrowSpec(start: .zero, end: CGPoint(x: 50, y: 0), head: .filled))
 
-        let openLayer = try #require(
-            AnnotationLayerFactory.makeLayer(for: open, contentsScale: 2) as? CAShapeLayer
-        )
-        let filledLayer = try #require(
-            AnnotationLayerFactory.makeLayer(for: filled, contentsScale: 2) as? CAShapeLayer
-        )
+        let openLayer = try #require(AnnotationLayerFactory.makeLayer(for: open, contentsScale: 2) as? ArrowLayer)
+        let filledLayer = try #require(AnnotationLayerFactory.makeLayer(for: filled, contentsScale: 2) as? ArrowLayer)
 
-        #expect(openLayer.fillColor == nil)
-        #expect(filledLayer.fillColor != nil)
+        #expect(openLayer.endHead.fillColor == nil)
+        #expect(filledLayer.endHead.fillColor != nil)
     }
 
     @Test("A curved arrow's path is not the straight one")

@@ -251,4 +251,36 @@ struct BeautifyLayoutTests {
         let layout = BeautifyLayout.compute(contentSize: content, spec: plain(padding: .relative(-2)))
         #expect(layout.canvasSize == content)
     }
+
+    @Test("A camera that leans off the card grows the canvas")
+    func cameraGrowsTheStage() {
+        let camera = AnnotationCameraSpec(tiltDegrees: 40, fieldOfViewDegrees: 80, zoom: 1.4)
+        let without = BeautifyLayout.compute(contentSize: content, spec: plain(padding: .points(10)))
+        let layout = without.expanded(toFit: camera)
+        #expect(layout.canvasSize.width >= without.canvasSize.width - 0.5)
+        #expect(layout.canvasSize.height >= without.canvasSize.height - 0.5)
+        let quad = AnnotationCameraGeometry.project(spec: camera, contentRect: layout.cardRect)
+        #expect(quad.boundingBox.minX >= -0.5)
+        #expect(quad.boundingBox.minY >= -0.5)
+        #expect(quad.boundingBox.maxX <= layout.canvasSize.width + 0.5)
+        #expect(quad.boundingBox.maxY <= layout.canvasSize.height + 0.5)
+    }
+
+    @Test("A camera ignores stuck edges so the lean is not clipped")
+    func cameraClearsStuckEdges() {
+        let spec = BeautifySpec(
+            padding: .points(20),
+            cornerRadius: .points(8),
+            alignment: .bottom,
+            sticksToEdges: true
+        )
+        let stuck = BeautifyLayout.compute(contentSize: content, spec: spec)
+        let camera = BeautifyLayout.compute(
+            contentSize: content,
+            spec: spec,
+            camera: AnnotationCameraSpec(tiltDegrees: 20)
+        )
+        #expect(stuck.stuckEdges.contains(.bottom))
+        #expect(camera.stuckEdges == .none)
+    }
 }

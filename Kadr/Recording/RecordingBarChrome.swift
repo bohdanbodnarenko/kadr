@@ -92,31 +92,6 @@ extension View {
     }
 }
 
-/// One glass capsule sized to its content, for panels that follow their fitting size
-/// (All-in-One). The recording bar builds the same glass inside a fixed panel instead.
-struct RecordingIslandSurface<Content: View>: View {
-    @State private var tooltip = RecordingBarTooltipModel()
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .padding(.horizontal, RecordingBarMetrics.horizontalPadding)
-            .padding(.vertical, (RecordingBarMetrics.barHeight - RecordingBarMetrics.controlSize) / 2)
-            .frame(minHeight: RecordingBarMetrics.barHeight)
-            .recordingBarGlass()
-            .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
-            .overlay { RecordingBarTooltipLayer(tooltip: tooltip) }
-            .padding(.top, RecordingBarMetrics.tooltipReserve)
-            .padding(RecordingBarMetrics.shadowSlack)
-            .fixedSize()
-            .environment(tooltip)
-    }
-}
-
 /// Positioned off the hovered control's measured frame, so it tracks a mode swap.
 struct RecordingBarTooltipLayer: View {
     let tooltip: RecordingBarTooltipModel
@@ -419,7 +394,7 @@ final class RecordingBarHoverView: NSView {
 
     /// The one control, at most, whose hover owns the pointing hand. Class-level so the
     /// claim hands over atomically when the pointer slides to the next control.
-    private static weak var handOwner: RecordingBarHoverView?
+    private weak static var handOwner: RecordingBarHoverView?
 
     /// `orderOut` sends no exit events; the bar's owner ends a live hover by hand.
     static func endActiveHover() {
@@ -500,10 +475,6 @@ final class RecordingBarHoverView: NSView {
 }
 
 extension View {
-    func recordingIslandSurface() -> some View {
-        RecordingIslandSurface { self }
-    }
-
     func recordingBarHoverTooltip(_ text: String) -> some View {
         modifier(RecordingBarHoverTooltipModifier(text: text))
     }

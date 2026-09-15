@@ -31,8 +31,21 @@ extension EditorWindowController {
     }
 
     @objc func paste(_ sender: Any?) {
-        guard let data = NSPasteboard.general.data(forType: .kadrAnnotations) else { return }
-        _ = model.pasteEncoded(data)
+        if let data = NSPasteboard.general.data(forType: .kadrAnnotations),
+           model.pasteEncoded(data) {
+            return
+        }
+        pasteImageFromClipboardIfPresent()
+    }
+
+    func pasteImageFromClipboardIfPresent() {
+        guard let image = NSImage(pasteboard: .general),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let imported = EditorImageImporter.png(from: cgImage)
+        else {
+            return
+        }
+        placeImportedImage(imported.data, pixelSize: imported.pixelSize)
     }
 
     @objc override func selectAll(_ sender: Any?) {

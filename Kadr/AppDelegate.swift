@@ -2,6 +2,7 @@ import AppKit
 import AutomationKit
 import CaptureCore
 import os
+import OverlayKit
 import RecordingCore
 import SelectionUI
 import SettingsKit
@@ -127,7 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var allInOne: AllInOneHUD = {
         let hud = AllInOneHUD(
             settings: settings,
-            perform: { [weak self] mode in self?.performAllInOne(mode) }
+            perform: { [weak self] mode in self?.performAllInOne(mode) },
+            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) }
         )
         hud.onShowingChanged = { [weak self] in
             self?.refreshStatusItemIcon()
@@ -175,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         addToHistory: { [weak self] url in self?.addToHistory(url) ?? false },
         openAllInOne: { [weak self] in self?.allInOne.present() }
     )
-    private var automationListener: AutomationListener?
+    var automationListener: AutomationListener?
 
     private lazy var loginItem = LoginItemController()
     lazy var settingsWindowController = SettingsWindowController(
@@ -250,10 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchInterval = signposter.beginInterval("launchToHotkeyArmed")
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
-        AppMenu.shared.install()
-
+    private func installStatusItem() {
         statusItemInterval = signposter.beginInterval("launchToStatusItem")
         statusItemController = StatusItemController(
             perform: { [weak self] command in self?.perform(command) },
@@ -281,7 +280,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pinsAreHidden: { [weak self] in self?.areaCaptureStorage?.pinsAreHidden ?? false }
         )
         attachStatusItemDrop()
+        statusItemController?.applyMenuBarVisibility(settings.showsMenuBarIcon)
+        statusItemController?.onMenuBarVisibilityChange = { [weak self] visible in
+            self?.settings.showsMenuBarIcon = visible
+        }
+        statusItemController?.observeMenuBarVisibility()
         endStatusItemInterval()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        AppMenu.shared.install()
+        applyOverlayCaptureVisibility()
+        installStatusItem()
 
         hotkeyCenter = HotkeyCenter(perform: { [weak self] command in self?.perform(command) })
         hotkeyCenter?.start()
@@ -312,6 +323,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
         history.start()
+        history.onPin = { [weak self] record in
+            guard let self, let url = history.fileURL(for: record) else { return }
+            _ = areaCapture.quickAccess.pinFile(at: url)
+        }
+        history.onAnnotate = { [weak self] record in
+            guard let self, let url = history.fileURL(for: record) else { return }
+            areaCapture.quickAccess.annotateFile(at: url)
+        }
+        history.onCopyText = { [weak self] record in
+            guard let self, let url = history.fileURL(for: record) else { return }
+            areaCapture.quickAccess.recognizeText(at: url)
+        }
 
         // Pins from the last session, after History so a capture that was only in the
         // library is still on disk (docs/03 §4 P2). Skip constructing the capture layer
@@ -340,6 +363,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // inside it would need an explicit `self.` that SwiftFormat then strips again.
         let loginItemState = String(describing: loginItem.state)
         logger.info("Login item state: \(loginItemState, privacy: .public)")
+    }
+
+    private func applyOverlayCaptureVisibility() {
+        CaptureVisibility.includesOverlays = settings.includesOverlaysInCaptures
     }
 
     /// Ends the launch→statusItemReady interval budgeted at < 150 ms (docs/10 R2.7).
@@ -374,91 +401,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// Warns before quitting with a recording in flight or captures nobody has saved
-    /// (docs/09 U2.1).
-    ///
-    /// A live recording has to be finished, not killed: ⌘Q and a Sparkle relaunch used
-    /// to tear the writer down and throw the take away. Captures still on a card are
-    /// kept only temporarily, so those get the same "save or discard" question.
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let recording = recordingStorage, recording.state.isActive {
-            if recording.isCountingDown {
-                _ = recording.cancelCountdown()
-            } else if recording.state == .finishing {
-                recording.finishForTermination {
-                    sender.reply(toApplicationShouldTerminate: true)
-                }
-                return .terminateLater
-            } else {
-                NSApp.activate()
-                let alert = NSAlert()
-                alert.messageText = "A screen recording is still in progress."
-                alert.informativeText = "Kadr will finish and save the recording before quitting. "
-                    + "This can take a moment for a long recording."
-                alert.alertStyle = .warning
-                // Cancel is leftmost so Return does not discard the take.
-                alert.addButton(withTitle: "Cancel")
-                alert.addButton(withTitle: "Finish Recording and Quit")
-                guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
-                recording.finishForTermination {
-                    sender.reply(toApplicationShouldTerminate: true)
-                }
-                return .terminateLater
-            }
+    /// Dock / Finder "Open" while Kadr is already running (docs/16 APP-1, APP-2).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if recordingStorage?.isRecording == true {
+            refreshRecordingControlBar()
+        } else if statusItemController?.statusItem.isVisible == true {
+            statusItemController?.popIdleMenu()
+        } else {
+            openSettings()
         }
-
-        // Only if the capture layer exists: an agent that never captured anything has
-        // nothing to lose, and asking would build the layer to find that out.
-        guard let quickAccess = areaCaptureStorage?.quickAccess else { return .terminateNow }
-        let unsaved = quickAccess.unsavedItems
-        guard !unsaved.isEmpty else { return .terminateNow }
-
-        let alert = NSAlert()
-        alert.messageText = unsaved.count == 1
-            ? "One capture has not been saved."
-            : "\(unsaved.count) captures have not been saved."
-        alert.informativeText = "Captures still on screen are kept temporarily and cleared "
-            + "within a day. Saving them puts them in your capture folder."
-        alert.addButton(withTitle: unsaved.count == 1 ? "Save and Quit" : "Save All and Quit")
-        alert.addButton(withTitle: "Discard and Quit")
-        alert.addButton(withTitle: "Cancel")
-        alert.alertStyle = .warning
-        NSApp.activate()
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            let saved = quickAccess.finalizeAllStaged()
-            logger.info("Saved \(saved, privacy: .public) capture(s) before quitting")
-            return .terminateNow
-        case .alertSecondButtonReturn:
-            return .terminateNow
-        default:
-            return .terminateCancel
-        }
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        automationListener?.stop()
-        desktopHygiene.prepareForTermination()
-    }
-
-    // MARK: - URL scheme (docs/03 §8.4)
-
-    /// Handles `kadr://…`. The answer is dropped: a URL has nowhere to send one, which is
-    /// exactly why the CLI exists.
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls {
-            do {
-                let command = try AutomationParser.command(from: url)
-                automation.perform(command) { [weak self] response in
-                    guard response.status != .ok else { return }
-                    let message = response.message ?? response.status.rawValue
-                    self?.logger.error("URL command failed: \(message, privacy: .public)")
-                }
-            } catch {
-                let message = (error as? AutomationError)?.localizedDescription ?? error.localizedDescription
-                logger.error("Could not run \(url.absoluteString, privacy: .public): \(message, privacy: .public)")
-            }
-        }
+        return false
     }
 }

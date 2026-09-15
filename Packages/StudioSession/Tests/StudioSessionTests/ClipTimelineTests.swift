@@ -81,6 +81,15 @@ struct ClipTimelineTests {
         #expect(timeline.editedTime(forSource: 5) != nil)
     }
 
+    @Test("Removing several source ranges keeps the leading clip id")
+    func removingSourceRangesKeepsLeadingID() {
+        let original = ClipTimeline.whole(duration: 10)
+        let id = original.clips[0].id
+        let cut = original.removingSourceRanges([1 ... 2, 1.5 ... 3, 8 ... 9])
+        #expect(cut.clips.first?.id == id)
+        #expect(abs(cut.sourceDuration - 7) < 0.05)
+    }
+
     // MARK: - Speed
 
     @Test("Doubling the speed halves the time it takes")
@@ -130,9 +139,8 @@ struct ClipTimelineTests {
 
     // MARK: - Rebasing cues
 
-    /// Cues live in edited time because that is what the viewer experiences, but a cue
-    /// generated from clicks starts life in source time.
-    @Test("Cues are rewritten into edited time")
+    /// Cues whose source start still exists are kept in source time
+    @Test("Cues whose footage survives stay in source time")
     func rebasingCues() throws {
         var timeline = whole()
         timeline.split(atEdited: 4)
@@ -140,7 +148,7 @@ struct ClipTimelineTests {
 
         let cue = ZoomCue(start: 6, duration: 2)
         let rebased = try #require(timeline.rebasing([cue]).first)
-        #expect(abs(rebased.start - 2) < 0.001, "six seconds in, minus the four that were cut")
+        #expect(abs(rebased.start - 6) < 0.001, "source time is unchanged")
     }
 
     /// Sliding a cue to a neighbouring moment would zoom into something the user never
@@ -154,14 +162,14 @@ struct ClipTimelineTests {
         #expect(timeline.rebasing([ZoomCue(start: 2, duration: 1)]).isEmpty)
     }
 
-    @Test("A cue in sped-up footage holds for proportionally less time")
-    func cuesShortenWithSpeed() throws {
+    @Test("A cue in sped-up footage keeps its source duration")
+    func cuesKeepSourceDuration() throws {
         var timeline = whole()
         timeline.setSpeed(2, for: timeline.clips[0].id)
 
         let rebased = try #require(timeline.rebasing([ZoomCue(start: 4, duration: 2)]).first)
-        #expect(abs(rebased.start - 2) < 0.001)
-        #expect(abs(rebased.duration - 1) < 0.001)
+        #expect(abs(rebased.start - 4) < 0.001)
+        #expect(abs(rebased.duration - 2) < 0.001)
     }
 
     // MARK: - Degenerate input

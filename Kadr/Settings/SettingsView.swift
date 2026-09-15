@@ -253,15 +253,15 @@ private struct SettingsDetailView: View {
 extension SettingsTab {
     var title: String {
         switch self {
-        case .general: "General"
-        case .permissions: "Permissions"
-        case .overlay: "Overlay"
-        case .capture: "Capture"
-        case .recording: "Recording"
-        case .history: "History"
-        case .shortcuts: "Shortcuts"
-        case .updates: "Updates"
-        case .advanced: "Advanced"
+        case .general: String(localized: "General")
+        case .permissions: String(localized: "Permissions")
+        case .overlay: String(localized: "Overlay")
+        case .capture: String(localized: "Capture")
+        case .recording: String(localized: "Recording")
+        case .history: String(localized: "History")
+        case .shortcuts: String(localized: "Shortcuts")
+        case .updates: String(localized: "Updates")
+        case .advanced: String(localized: "Advanced")
         }
     }
 

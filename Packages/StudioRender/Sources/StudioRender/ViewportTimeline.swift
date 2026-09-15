@@ -68,7 +68,8 @@ public struct ViewportTimeline: Sendable {
         size: CGSize,
         duration: TimeInterval,
         spring: MotionSpring = MotionSpring(),
-        pointer: [PointerSample] = []
+        pointer: [PointerSample] = [],
+        clips: ClipTimeline = ClipTimeline()
     ) {
         self.size = size
         self.duration = max(duration, 0)
@@ -83,28 +84,48 @@ public struct ViewportTimeline: Sendable {
         magnifications.reserveCapacity(steps)
         centres.reserveCapacity(steps)
 
-        var magnification = 1.0
-        var position = centre
+        var magSpring = DampedSpring(
+            position: 1,
+            omega: DampedSpring.omega(settlingIn: max(ordered.first?.transitionDuration ?? 0.6, 0.1))
+        )
+        var xSpring = DampedSpring(position: centre.x, omega: magSpring.omega)
+        var ySpring = DampedSpring(position: centre.y, omega: magSpring.omega)
 
         for step in 0 ..< steps {
             let time = Double(step) * MotionSpring.step
+            let source = Self.sourceTime(forEdited: time, clips: clips) ?? time
             let target = Self.target(
-                at: time,
+                times: (source: source, edited: time),
                 cues: ordered,
                 size: size,
                 centre: centre,
                 pointer: pointer
             )
-            // Springs rather than a curve per cue: overlapping cues then blend instead of
-            // fighting, and a cue deleted mid-transition eases away rather than snapping.
-            magnification = spring.advance(magnification, towards: target.magnification, by: MotionSpring.step)
-            position = spring.advance(position, towards: target.centre, by: MotionSpring.step)
-            magnifications.append(magnification)
-            centres.append(position)
+            let omega = DampedSpring.omega(settlingIn: Self.transition(at: source, cues: ordered))
+                * (spring.stiffness / 12)
+            magSpring.omega = omega
+            xSpring.omega = omega
+            ySpring.omega = omega
+            magSpring.advance(towards: target.magnification, by: MotionSpring.step)
+            xSpring.advance(towards: target.centre.x, by: MotionSpring.step)
+            ySpring.advance(towards: target.centre.y, by: MotionSpring.step)
+            magnifications.append(magSpring.position)
+            centres.append(CGPoint(x: xSpring.position, y: ySpring.position))
         }
 
         self.magnifications = magnifications
         self.centres = centres
+    }
+
+    private static func sourceTime(forEdited time: TimeInterval, clips: ClipTimeline) -> TimeInterval? {
+        if clips.clips.isEmpty {
+            return time
+        }
+        return clips.sourceTime(forEdited: time)
+    }
+
+    private static func transition(at source: TimeInterval, cues: [ZoomCue]) -> TimeInterval {
+        cues.last { $0.range.contains(source) }?.transitionDuration ?? 0.6
     }
 
     /// What the camera is aiming at, before smoothing.
@@ -113,15 +134,17 @@ public struct ViewportTimeline: Sendable {
     /// spring is what turns the step into a move. Doing it the other way — easing the
     /// target and then smoothing it — eases twice and arrives late.
     static func target(
-        at time: TimeInterval,
+        times: (source: TimeInterval, edited: TimeInterval),
         cues: [ZoomCue],
         size: CGSize,
         centre: CGPoint,
         pointer: [PointerSample]
     ) -> Viewport {
+        let source = times.source
+        let time = times.edited
         // The last cue that contains this moment wins, so a cue placed over another
         // replaces it rather than averaging with it.
-        guard let cue = cues.last(where: { $0.range.contains(time) }) else {
+        guard let cue = cues.last(where: { $0.range.contains(source) }) else {
             return Viewport(magnification: 1, centre: centre)
         }
         let aim: CGPoint = if cue.anchor.followsPointer {
@@ -135,6 +158,17 @@ public struct ViewportTimeline: Sendable {
             cue.anchor.point(in: size)
         }
         return Viewport(magnification: cue.magnification, centre: aim)
+    }
+
+    /// Back-compat for tests that still pass edited time against identity clips.
+    static func target(
+        at time: TimeInterval,
+        cues: [ZoomCue],
+        size: CGSize,
+        centre: CGPoint,
+        pointer: [PointerSample]
+    ) -> Viewport {
+        target(times: (source: time, edited: time), cues: cues, size: size, centre: centre, pointer: pointer)
     }
 
     /// Where pointer-follow aims, after "Edge in Frame" (docs/09 U3.3).

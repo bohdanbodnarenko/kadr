@@ -11,10 +11,19 @@ public enum SelectionHandle: Equatable, Sendable, Hashable {
     case pathStart
     case pathEnd
     case pathMiddle
+    /// 14 pt outside a box corner (docs/16 ED-10).
+    case rotate
 
     public var isCorner: Bool {
         if case let .box(handle) = self {
             return handle.isCorner
+        }
+        return false
+    }
+
+    public var isRotate: Bool {
+        if case .rotate = self {
+            return true
         }
         return false
     }
@@ -29,7 +38,7 @@ public enum SelectionHandle: Equatable, Sendable, Hashable {
     public var isPath: Bool {
         switch self {
         case .pathStart, .pathEnd, .pathMiddle: true
-        case .box: false
+        case .box, .rotate: false
         }
     }
 }
@@ -52,6 +61,8 @@ public enum SelectionResizer {
     /// Padding around the union bounds for the dashed outline. Handles sit on the
     /// bounds themselves — the corners the user actually aims at — the way Screendrop's do.
     public static let framePadding: CGFloat = 4
+    /// How far a rotate handle sits outside a corner, in image points at 1×.
+    public static let rotateOffset: CGFloat = 14
 
     /// The dashed frame the handles sit on.
     public static func frame(for commands: [AnnotationCommand]) -> CGRect {
@@ -99,7 +110,20 @@ public enum SelectionResizer {
         guard box.width > 0, box.height > 0 else { return [] }
         let corners: [CropHandle] = [.topLeading, .topTrailing, .bottomTrailing, .bottomLeading]
         let edges: [CropHandle] = [.top, .trailing, .bottom, .leading]
-        return (corners + edges).map { (.box($0), $0.point(in: box)) }
+        let boxHandles = (corners + edges).map { (SelectionHandle.box($0), $0.point(in: box)) }
+        guard commands.contains(where: \.canRotate) else { return boxHandles }
+        return boxHandles + rotateAnchors(for: box)
+    }
+
+    static func rotateAnchors(for box: CGRect) -> [(SelectionHandle, CGPoint)] {
+        let offset = rotateOffset
+        let points = [
+            CGPoint(x: box.minX - offset, y: box.minY - offset),
+            CGPoint(x: box.maxX + offset, y: box.minY - offset),
+            CGPoint(x: box.maxX + offset, y: box.maxY + offset),
+            CGPoint(x: box.minX - offset, y: box.maxY + offset)
+        ]
+        return points.map { (.rotate, $0) }
     }
 
     /// The handle under `point`, if the pointer is close enough.
@@ -175,7 +199,9 @@ public enum SelectionResizer {
         case let .arrow(spec):
             [
                 (.pathStart, spec.start),
-                (.pathMiddle, spec.controlPoint ?? midpoint(spec.start, spec.end)),
+                (.pathMiddle, spec.controlPoint.map {
+                    QuadraticCurve.apex(start: spec.start, end: spec.end, control: $0)
+                } ?? midpoint(spec.start, spec.end)),
                 (.pathEnd, spec.end)
             ]
         case let .line(spec):
@@ -209,9 +235,9 @@ public enum SelectionResizer {
             if hypot(point.x - chord.x, point.y - chord.y) < 4 {
                 control = nil
             } else {
-                control = point
+                control = QuadraticCurve.control(start: start, end: end, apex: point)
             }
-        case .box:
+        case .box, .rotate:
             break
         }
     }
@@ -314,6 +340,7 @@ public enum SelectionResizer {
         var spec = spec
         if widthOnly {
             // A side handle sets the wrap width, not the type size — the same as Screendrop.
+            spec.autoWidth = false
             spec.rect.origin.x = new.minX + (spec.rect.minX - old.minX)
                 * (old.width > 0 ? new.width / old.width : 1)
             spec.rect.size.width = max(24, spec.rect.width * (old.width > 0 ? new.width / old.width : 1))

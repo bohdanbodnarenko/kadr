@@ -51,7 +51,11 @@ struct EditorCropInspector: View {
     }
 
     private func size(of crop: CropSpec) -> String {
-        "\(Int(crop.rect.width.rounded())) × \(Int(crop.rect.height.rounded())) pt"
+        let points = "\(Int(crop.rect.width.rounded())) × \(Int(crop.rect.height.rounded())) pt"
+        let scale = model.document.baseImage.scale
+        guard scale > 1 else { return points }
+        let pixels = "\(Int((crop.rect.width * scale).rounded())) × \(Int((crop.rect.height * scale).rounded())) px"
+        return "\(points)  ·  \(pixels)"
     }
 
     private var aspectBinding: Binding<CropAspectPreset> {

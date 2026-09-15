@@ -19,17 +19,26 @@ public actor RecordingEngine {
     /// an unbounded queue turns a moment of compositing lag into hundreds of megabytes of
     /// retained frames (docs/07 H6).
     static let sampleBufferDepth = 3
+    static let audioBufferDepth = 256
 
     let logger = KadrLog.logger(.recording)
     private let signposter = KadrLog.signposter(.recording)
     let stitcher: any SegmentStitching
     let compositor = FrameCompositor()
+    let segmentRoot: URL
+    let activityAsserter: any RecordingActivityAsserting
+    private var activitySession: (any RecordingActivitySession)?
 
     private var stream: SCStream?
     var output: StreamOutput?
     var writer: (any SegmentWriting)?
     let makeWriter: SegmentWriterFactory
     var consumeTask: Task<Void, Never>?
+    let eventsContinuation: AsyncStream<RecordingEngineEvent>.Continuation
+    /// Stream death and writer failure, consumed by the coordinator (docs/16 REC-1).
+    public nonisolated let events: AsyncStream<RecordingEngineEvent>
+    /// Why this take is ending early, if it is.
+    var interruptionReason: String?
 
     /// Which recording the engine is currently setting up or running.
     ///
@@ -65,8 +74,22 @@ public actor RecordingEngine {
     var pixelSize = PixelSize(width: 0, height: 0)
     var segments: [URL] = []
     var sessionDirectory: URL?
+    /// The in-progress segment folder, for crash-recovery pairing (docs/16 REC-8).
+    public var inProgressDirectory: URL? {
+        sessionDirectory
+    }
+
+    /// Live microphone samples for the teleprompter (docs/16 REC-19d).
+    public var microphoneTap: AsyncStream<SampleBufferBox> {
+        output?.microphone ?? AsyncStream { $0.finish() }
+    }
+
     var accumulatedDuration: TimeInterval = 0
     var segmentStartTime: CMTime?
+    /// Last complete video frame, so a resume on a static screen still starts the writer
+    /// and a static tail survives Stop (docs/16 REC-5).
+    var lastVideoBox: SampleBufferBox?
+    var segmentHasVideo = false
 
     /// Supplies click halos, keystrokes and the webcam picture, frame by frame.
     ///
@@ -82,8 +105,14 @@ public actor RecordingEngine {
     /// Window numbers to leave out of display and region recordings (docs/10 R3.2).
     public private(set) var excludedWindowIDs: Set<CGWindowID> = []
 
-    public init(stitcher: any SegmentStitching = SegmentStitcher()) {
+    public init(
+        stitcher: any SegmentStitching = SegmentStitcher(),
+        segmentRoot: URL = FileManager.default.temporaryDirectory,
+        activity: any RecordingActivityAsserting = ProcessInfoRecordingActivity()
+    ) {
         self.stitcher = stitcher
+        self.segmentRoot = segmentRoot
+        activityAsserter = activity
         makeWriter = { fileURL, pixelWidth, pixelHeight, options in
             try SegmentWriter(
                 fileURL: fileURL,
@@ -92,6 +121,9 @@ public actor RecordingEngine {
                 options: options
             )
         }
+        let (stream, continuation) = AsyncStream<RecordingEngineEvent>.makeStream()
+        events = stream
+        eventsContinuation = continuation
     }
 
     #if DEBUG
@@ -99,9 +131,19 @@ public actor RecordingEngine {
         ///
         /// The label is required, so this cannot be reached by accident from the public
         /// initialiser (docs/11 S1).
-        init(stitcher: any SegmentStitching = SegmentStitcher(), makeWriter: @escaping SegmentWriterFactory) {
+        init(
+            stitcher: any SegmentStitching = SegmentStitcher(),
+            makeWriter: @escaping SegmentWriterFactory,
+            segmentRoot: URL = FileManager.default.temporaryDirectory,
+            activity: any RecordingActivityAsserting = ProcessInfoRecordingActivity()
+        ) {
             self.stitcher = stitcher
+            self.segmentRoot = segmentRoot
+            activityAsserter = activity
             self.makeWriter = makeWriter
+            let (stream, continuation) = AsyncStream<RecordingEngineEvent>.makeStream()
+            events = stream
+            eventsContinuation = continuation
         }
     #endif
 
@@ -144,6 +186,17 @@ public actor RecordingEngine {
         func finishStartForTesting(token: Int) throws {
             try checkAlive(token)
             state = .recording
+            beginActivity()
+        }
+
+        /// Yields a stream-stopped event the way `SCStreamDelegate` would (docs/16 REC-1).
+        func deliverStreamStopForTesting(_ message: String) {
+            noteInterruption(.streamStopped(message))
+            output?.finish()
+        }
+
+        func deliverWriterFailureForTesting(_ message: String) {
+            noteInterruption(.writerFailed(message))
         }
 
         var accumulatedDurationForTesting: TimeInterval {
@@ -239,8 +292,18 @@ public actor RecordingEngine {
         self.output = output
 
         consumeTask = Task { [weak self] in
-            for await box in output.buffers {
-                await self?.consume(box)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    for await box in output.video {
+                        await self?.consume(box)
+                    }
+                }
+                group.addTask { [weak self] in
+                    for await box in output.audio {
+                        await self?.consume(box)
+                    }
+                }
+                await group.waitForAll()
             }
         }
 
@@ -255,17 +318,15 @@ public actor RecordingEngine {
         filter: SCContentFilter,
         configuration: SCStreamConfiguration
     ) throws -> (SCStream, StreamOutput) {
-        let output = StreamOutput()
+        let output = StreamOutput(events: eventsContinuation)
         let stream = SCStream(filter: filter, configuration: configuration, delegate: output)
         do {
             try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: output.queue)
             if options.capturesSystemAudio {
-                try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: output.queue)
+                try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: output.audioQueue)
             }
-            // Without this output the writer's microphone track exists and is never fed,
-            // which is how the toggle produced silent narration files (docs/07 H2).
             if options.capturesMicrophone, #available(macOS 15.0, *) {
-                try stream.addStreamOutput(output, type: .microphone, sampleHandlerQueue: output.queue)
+                try stream.addStreamOutput(output, type: .microphone, sampleHandlerQueue: output.audioQueue)
             }
         } catch {
             throw RecordingError.writingFailed(error.localizedDescription)
@@ -289,6 +350,19 @@ public actor RecordingEngine {
     private func consume(_ box: SampleBufferBox) async {
         guard state == .recording, let writer else { return }
 
+        if box.kind == .clock {
+            let time = recordingTime(of: box.buffer)
+            reportGeometry(of: box, at: time)
+            clockObserver?(time)
+            if !segmentHasVideo, let lastVideoBox {
+                let accepted = await writer.append(lastVideoBox)
+                segmentHasVideo = accepted
+                if !accepted, let reason = await writer.failureReason {
+                    noteInterruption(.writerFailed(reason))
+                }
+            }
+            return
+        }
         if box.kind == .microphone {
             audioMeter.microphone = AudioLevel.peak(of: box.buffer)
         } else if box.kind == .systemAudio {
@@ -296,6 +370,8 @@ public actor RecordingEngine {
         }
 
         if box.kind == .video {
+            lastVideoBox = box
+            segmentHasVideo = true
             let time = recordingTime(of: box.buffer)
             reportGeometry(of: box, at: time)
             // Published before the overlay is drawn, and whether or not one is drawn. The
@@ -307,7 +383,30 @@ public actor RecordingEngine {
                 composite(overlayProvider, into: box.buffer, at: time)
             }
         }
-        await writer.append(box)
+        let accepted = await writer.append(box)
+        if !accepted, let reason = await writer.failureReason {
+            noteInterruption(.writerFailed(reason))
+        }
+    }
+
+    func noteInterruption(_ event: RecordingEngineEvent) {
+        if interruptionReason == nil {
+            switch event {
+            case let .streamStopped(message), let .writerFailed(message):
+                interruptionReason = message
+            }
+        }
+        eventsContinuation.yield(event)
+    }
+
+    func beginActivity() {
+        endActivity()
+        activitySession = activityAsserter.begin()
+    }
+
+    func endActivity() {
+        activitySession?.end()
+        activitySession = nil
     }
 
     /// Where this frame sits in the recording, pauses already taken out.
@@ -333,135 +432,5 @@ public actor RecordingEngine {
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else { return }
         compositor.draw(provider.overlay(atRecordingTime: time), into: pixelBuffer)
-    }
-}
-
-/// The `nonisolated` fast path off ScreenCaptureKit's delegate queue (docs/04 §4.3).
-///
-/// It does one thing: forward the buffer. Anything more here — encoding, allocation, a
-/// hop to an actor — would block SCK's queue and drop frames.
-final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    let queue = DispatchQueue(label: "app.kadr.recording.samples", qos: .userInitiated)
-    /// Last rect the geometry probe logged, so it reports moves rather than frames.
-    private var lastProbedRect: CGRect?
-    private let continuation: AsyncStream<SampleBufferBox>.Continuation
-    let buffers: AsyncStream<SampleBufferBox>
-    let logger = KadrLog.logger(.recording)
-
-    override init() {
-        // `makeStream` hands back the stream and its continuation together, which avoids
-        // the implicitly-unwrapped dance the closure form of `AsyncStream` requires.
-        //
-        // Bounded, and deliberately shallow: each buffer holds an IOSurface charged partly
-        // to WindowServer, so an unbounded queue turns a moment of compositing lag into
-        // hundreds of megabytes of retained frames. Dropping the oldest is right for a
-        // recording — the writer stamps its own timestamps, so a dropped frame is a
-        // dropped frame, not a desynchronised one (docs/07 H6).
-        let (stream, continuation) = AsyncStream<SampleBufferBox>.makeStream(
-            bufferingPolicy: .bufferingNewest(RecordingEngine.sampleBufferDepth)
-        )
-        buffers = stream
-        self.continuation = continuation
-        super.init()
-    }
-
-    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        switch type {
-        case .screen:
-            // SCK only sends a frame when something changed, and marks the rest. Anything
-            // that is not a complete frame is not a picture.
-            guard isComplete(sampleBuffer) else { return }
-            continuation.yield(SampleBufferBox(
-                buffer: sampleBuffer,
-                kind: .video,
-                contentRect: contentRect(sampleBuffer)
-            ))
-        case .audio:
-            continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .systemAudio))
-        default:
-            // `.microphone` is macOS 15+, so it cannot be matched in a `case` that has to
-            // compile against the 14 SDK floor (docs/04 §4.3).
-            if #available(macOS 15.0, *), type == .microphone {
-                continuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .microphone))
-            }
-        }
-    }
-
-    func stream(_ stream: SCStream, didStopWithError error: any Error) {
-        logger.error("Recording stream stopped: \(error.localizedDescription, privacy: .public)")
-        continuation.finish()
-    }
-
-    func finish() {
-        continuation.finish()
-    }
-
-    /// Where the captured content was on screen for this frame.
-    ///
-    /// A window recording's content moves when the window does, and this attachment is the
-    /// only account of where it went. Read here, on the frame it belongs to, because that
-    /// is the only place the two are known to correspond.
-    func contentRect(_ buffer: CMSampleBuffer) -> CGRect? {
-        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
-            as? [[SCStreamFrameInfo: Any]],
-            let first = attachments.first,
-            let raw = first[.contentRect] as? [String: Any]
-        else {
-            return nil
-        }
-        guard let rect = CGRect(dictionaryRepresentation: raw as CFDictionary) else { return nil }
-        logGeometryAttachments(first, contentRect: rect)
-        return rect
-    }
-
-    /// Logs `.contentRect` beside `.screenRect`, to settle what the first one means
-    /// (docs/11 S2).
-    ///
-    /// Apple documents `contentRect` as the content's rect *within the frame* — surface
-    /// space — while `RecordingEngine+Geometry` and `MovingWindowConverter` both treat it
-    /// as a rect on screen, and `MovingWindowConverter` does `contentRect.contains(point)`
-    /// with a screen point. If Apple's semantics hold, a window recording's clicks are
-    /// dropped by that `contains` and any survivors map to the wrong pixel.
-    ///
-    /// This cannot be settled by reading: `WindowSpaceTests` asserts the semantics the code
-    /// intends rather than the ones ScreenCaptureKit has, so it agrees with the code
-    /// whichever is right. It needs one recording of a window being dragged across the
-    /// screen, on a real Mac, which no reviewer in this thread can run.
-    ///
-    /// **To settle it:** run a window recording, drag the window from one side of the
-    /// display to the other, and read the log —
-    /// `log stream --predicate 'subsystem == "app.kadr"' --info | grep geometry-probe`.
-    /// If `content` stays near the origin while `screen` moves, `contentRect` is surface
-    /// space: switch the two consumers to `.screenRect` (with a 14.0 fallback to
-    /// `contentRect`) and rebuild the `WindowSpaceTests` fixtures around the real answer.
-    /// If both move together, the current reading is right and this probe can go.
-    ///
-    /// Debug-only, and rate-limited to a move, so it cannot cost a shipping recording
-    /// anything.
-    private func logGeometryAttachments(_ attachments: [SCStreamFrameInfo: Any], contentRect: CGRect) {
-        #if DEBUG
-            guard RecordingEngine.hasMoved(from: lastProbedRect, to: contentRect) else { return }
-            lastProbedRect = contentRect
-            let screen = (attachments[.screenRect] as? [String: Any])
-                .flatMap { CGRect(dictionaryRepresentation: $0 as CFDictionary) }
-            let scale = (attachments[.scaleFactor] as? CGFloat) ?? 0
-            logger.info(
-                """
-                geometry-probe content=\(String(describing: contentRect), privacy: .public) \
-                screen=\(String(describing: screen), privacy: .public) \
-                scale=\(scale, privacy: .public)
-                """
-            )
-        #endif
-    }
-
-    /// Reads SCK's per-frame status out of the buffer's attachments.
-    func isComplete(_ buffer: CMSampleBuffer) -> Bool {
-        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
-            as? [[SCStreamFrameInfo: Any]],
-            let raw = attachments.first?[.status] as? Int,
-            let status = SCFrameStatus(rawValue: raw)
-        else { return false }
-        return status == .complete
     }
 }

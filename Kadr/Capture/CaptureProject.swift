@@ -15,10 +15,10 @@ enum CaptureProject {
         imageURL.deletingPathExtension().appendingPathExtension(KadrDocumentFile.fileExtension)
     }
 
-    /// Writes `original` plus `beautify` next to the flattened file the overlay shows.
+    /// Writes `original` plus canvas chrome next to the flattened file the overlay shows.
     static func write(
         original: Capture,
-        beautify: BeautifySpec,
+        beautify: BeautifySpec?,
         alongside flattenedURL: URL
     ) {
         let encoder = ImageEncoder()
@@ -29,10 +29,16 @@ enum CaptureProject {
             width: CGFloat(original.image.width) / scale,
             height: CGFloat(original.image.height) / scale
         )
-        let document = AnnotationDocument(
-            baseImage: BaseImageReference(size: size, scale: scale),
-            commands: [.beautify(beautify)]
+        var document = AnnotationDocument(
+            baseImage: BaseImageReference(size: size, scale: scale)
         )
+        if let look = DefaultCaptureLook.load() {
+            document.applyStylePreset(look)
+        }
+        if let beautify {
+            document.setBeautify(beautify)
+        }
+        guard !document.commands.isEmpty else { return }
         try? KadrDocumentFile.write(
             KadrDocumentFile.Contents(document: document, baseImagePNG: png),
             to: url(alongside: flattenedURL)

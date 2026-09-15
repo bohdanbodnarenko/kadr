@@ -16,11 +16,13 @@ public extension AnnotationCanvasView {
     }
 
     override func mouseMoved(with event: NSEvent) {
+        lastHoverImagePoint = imagePoint(fromWindowPoint: event.locationInWindow)
         model.pointerMoved(
-            to: imagePoint(fromWindowPoint: event.locationInWindow),
+            to: lastHoverImagePoint ?? .zero,
             modifiers: modifiers(from: event)
         )
         updateHighlightPreview()
+        window?.invalidateCursorRects(for: self)
     }
 
     /// A translucent book-style stroke over the word under the pointer.

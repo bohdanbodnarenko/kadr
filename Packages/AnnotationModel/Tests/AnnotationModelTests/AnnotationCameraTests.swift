@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import QuartzCore
 import Testing
 @testable import AnnotationModel
 
@@ -94,6 +95,29 @@ struct HomographyTests {
     func degenerateHasNoInverse() {
         let flat = Homography(m11: 1, m12: 0, m13: 0, m21: 2, m22: 0, m23: 0, m31: 0, m32: 0, m33: 1)
         #expect(flat.inverted == nil)
+    }
+
+    @Test("A CATransform3D maps corners the same way as the 3×3")
+    func caTransformMatchesMap() throws {
+        let quad = CameraQuad(
+            topLeft: CGPoint(x: 40, y: 10),
+            topRight: CGPoint(x: 380, y: 30),
+            bottomRight: CGPoint(x: 340, y: 280),
+            bottomLeft: CGPoint(x: 10, y: 260)
+        )
+        let transform = Homography.rect(rect, to: quad)
+        let layer = transform.caTransform3D
+        for point in [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 400, y: 0),
+            CGPoint(x: 400, y: 300),
+            CGPoint(x: 0, y: 300),
+            CGPoint(x: 123, y: 45)
+        ] {
+            let mapped = try #require(transform.map(point))
+            let layered = try #require(Homography.map(layer, point))
+            #expect(isClose(mapped, layered, tolerance: 0.05), "\(point): \(mapped) vs \(layered)")
+        }
     }
 
     @Test("Composition applies the right-hand transform first")

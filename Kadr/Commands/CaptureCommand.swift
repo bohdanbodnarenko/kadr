@@ -39,32 +39,38 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case hidePins
     /// Pin whatever is on the clipboard — an image, or text drawn as a card (docs/03 §4).
     case pinClipboard
+    /// Opens the History window (docs/16 X-7).
+    case openHistory
+    /// Reveals the capture save folder in Finder (docs/16 X-7).
+    case openSaveFolder
 
     /// Menu title (docs/03 §8.1).
     var title: String {
         switch self {
-        case .allInOne: "All-in-One"
-        case .captureArea: "Capture Area"
-        case .captureWindow: "Capture Window"
-        case .captureFullscreen: "Capture Screen"
-        case .captureText: "Capture Text (OCR)"
-        case .pickColor: "Pick Colour…"
-        case .captureScrolling: "Scrolling Capture…"
-        case .capturePreviousArea: "Capture Previous Area"
-        case .captureAreaAndCopy: "Capture Area and Copy"
-        case .captureAreaAndSave: "Capture Area and Save"
-        case .selfTimer: "Self-Timer"
-        case .recordRegion: "Record Region…"
-        case .recordDisplay: "Record Screen"
-        case .stopRecording: "Stop Recording"
-        case .recordSetup: "Record…"
-        case .freezeScreen: "Freeze Screen"
-        case .toggleDesktopIcons: "Hide Desktop Icons"
-        case .closeAllOverlays: "Close All Overlays"
-        case .saveAllOverlays: "Save All Overlays"
-        case .hideOverlays: "Hide Overlays"
-        case .hidePins: "Hide Pins"
-        case .pinClipboard: "Pin Clipboard"
+        case .allInOne: String(localized: "All-in-One")
+        case .captureArea: String(localized: "Capture Area")
+        case .captureWindow: String(localized: "Capture Window")
+        case .captureFullscreen: String(localized: "Capture Screen")
+        case .captureText: String(localized: "Capture Text (OCR)")
+        case .pickColor: String(localized: "Pick Colour…")
+        case .captureScrolling: String(localized: "Scrolling Capture…")
+        case .capturePreviousArea: String(localized: "Capture Previous Area")
+        case .captureAreaAndCopy: String(localized: "Capture Area and Copy")
+        case .captureAreaAndSave: String(localized: "Capture Area and Save")
+        case .selfTimer: String(localized: "Self-Timer")
+        case .recordRegion: String(localized: "Record Region…")
+        case .recordDisplay: String(localized: "Record Screen")
+        case .stopRecording: String(localized: "Stop Recording")
+        case .recordSetup: String(localized: "Record…")
+        case .freezeScreen: String(localized: "Freeze Screen")
+        case .toggleDesktopIcons: String(localized: "Hide Desktop Icons")
+        case .closeAllOverlays: String(localized: "Close All Overlays")
+        case .saveAllOverlays: String(localized: "Save All Overlays")
+        case .hideOverlays: String(localized: "Hide Overlays")
+        case .hidePins: String(localized: "Hide Pins")
+        case .pinClipboard: String(localized: "Pin Clipboard")
+        case .openHistory: String(localized: "History…")
+        case .openSaveFolder: String(localized: "Open Capture Folder")
         }
     }
 
@@ -75,6 +81,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .hideOverlays: "Hide / Show Overlays"
         case .hidePins: "Hide / Show Pins"
         case .pinClipboard: "Pin Clipboard"
+        case .openHistory: "History"
+        case .openSaveFolder: "Open Capture Folder"
         default: title
         }
     }

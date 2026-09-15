@@ -93,7 +93,7 @@ struct ReframeTests {
     /// viewer a corner of the frame and nothing else.
     @Test("An anchor outside the crop is pulled inside it")
     func anchorsArePulledInside() throws {
-        let reframe = Reframe(aspect: .nineSixteen)
+        let reframe = Reframe(aspect: .nineSixteen, follows: false)
         let crop = reframe.sourceRect(for: landscape)
         // Far left, which a 9:16 crop of a 16:9 recording certainly loses.
         let cue = ZoomCue(start: 0, duration: 1, anchor: .fixed(CGPoint(x: 20, y: 540)))
@@ -106,7 +106,7 @@ struct ReframeTests {
 
     @Test("An anchor already inside the crop is left where it is")
     func anchorsInsideAreKept() throws {
-        let reframe = Reframe(aspect: .nineSixteen)
+        let reframe = Reframe(aspect: .nineSixteen, follows: false)
         let centre = CGPoint(x: 960, y: 540)
         let cue = ZoomCue(start: 0, duration: 1, anchor: .fixed(centre))
 
@@ -118,17 +118,25 @@ struct ReframeTests {
     /// original 2× on top of that shows four pixels.
     @Test("Magnification is reduced by however much the crop already zoomed")
     func magnificationIsReduced() throws {
-        let reframe = Reframe(aspect: .nineSixteen)
+        let reframe = Reframe(aspect: .nineSixteen, follows: false)
         let cue = ZoomCue(start: 0, duration: 1, magnification: 3, anchor: .centre)
 
         let replanned = try #require(replanned([cue], reframe: reframe).first)
         #expect(replanned.magnification < 3)
     }
 
+    @Test("Follow-camera keeps the cue's magnification")
+    func followKeepsMagnification() throws {
+        let reframe = Reframe(aspect: .nineSixteen, follows: true)
+        let cue = ZoomCue(start: 0, duration: 1, magnification: 3, anchor: .centre)
+        let replanned = try #require(replanned([cue], reframe: reframe).first)
+        #expect(abs(replanned.magnification - 3) < 0.001)
+    }
+
     /// A cue that would zoom *out* is a cue that does nothing.
     @Test("Magnification never falls below one")
     func magnificationNeverInverts() throws {
-        let reframe = Reframe(aspect: .nineSixteen)
+        let reframe = Reframe(aspect: .nineSixteen, follows: false)
         let cue = ZoomCue(start: 0, duration: 1, magnification: 1.1, anchor: .centre)
 
         let replanned = try #require(replanned([cue], reframe: reframe).first)
@@ -275,7 +283,7 @@ struct StudioEditTests {
     func renderableZoomsAreReplanned() throws {
         var edit = StudioEdit.untouched(duration: 10)
         edit.zooms = [ZoomCue(start: 0, duration: 2, magnification: 3, anchor: .fixed(CGPoint(x: 20, y: 540)))]
-        edit.reframe = Reframe(aspect: .nineSixteen)
+        edit.reframe = Reframe(aspect: .nineSixteen, follows: false)
 
         let renderable = try #require(edit.renderableZooms(in: size).first)
         #expect(renderable.magnification < 3)
@@ -286,7 +294,7 @@ struct StudioEditTests {
     func pointerFollowSurvivesReframe() throws {
         var edit = StudioEdit.untouched(duration: 10)
         edit.zooms = [ZoomCue(start: 0, duration: 2, magnification: 3, anchor: .pointer)]
-        edit.reframe = Reframe(aspect: .nineSixteen)
+        edit.reframe = Reframe(aspect: .nineSixteen, follows: false)
 
         let renderable = try #require(edit.renderableZooms(in: size).first)
         #expect(renderable.anchor == .pointer)

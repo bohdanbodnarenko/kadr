@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import CoreImage
 import Foundation
@@ -23,9 +24,11 @@ struct StudioPreviewView: View {
     let model: StudioDocumentModel
 
     @State private var frame: CGImage?
+    @State private var skimFrame: CGImage?
     @State private var renderer: StudioPreviewRenderer?
     /// The plan and the composer, rebuilt only when the edit changes (docs/10 R1.1).
     @State private var pipeline: StudioPreviewPipeline?
+    @State private var previewLongestEdge: CGFloat = 1280
 
     var body: some View {
         GeometryReader { geometry in
@@ -48,6 +51,23 @@ struct StudioPreviewView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
+                if let skimFrame, !model.isPlaying, model.hoverPreviewTime != nil {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(decorative: skimFrame, scale: 1)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 160, height: 90)
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                .shadow(radius: 8)
+                                .padding(12)
+                        }
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityLabel("Timeline skim preview")
+                }
                 if model.isCropping {
                     StudioCropOverlay(model: model, fitted: fitted)
                 } else if model.manifest.hasCamera, model.edit.camera.isVisible {
@@ -65,11 +85,20 @@ struct StudioPreviewView: View {
             // playback itself.
             .frame(width: geometry.size.width, height: geometry.size.height)
             .padding(10)
+            .onAppear {
+                previewLongestEdge = max(geometry.size.width, geometry.size.height)
+                    * (NSScreen.main?.backingScaleFactor ?? 2)
+            }
+            .onChange(of: geometry.size) {
+                previewLongestEdge = max(geometry.size.width, geometry.size.height)
+                    * (NSScreen.main?.backingScaleFactor ?? 2)
+            }
         }
         .task {
             renderer = StudioPreviewRenderer(
                 session: model.session,
-                cameraStartOffset: model.manifest.cameraStartOffset
+                cameraStartOffset: model.manifest.cameraStartOffset,
+                maxLongestEdge: previewLongestEdge
             )
             await refresh()
         }
@@ -79,6 +108,10 @@ struct StudioPreviewView: View {
         .task(id: model.playhead) { await refresh() }
         .task(id: model.edit) { await refresh() }
         .task(id: model.isCropping) { await refresh() }
+        .task(id: previewLongestEdge) {
+            await renderer?.setMaximumSize(previewLongestEdge)
+        }
+        .task(id: model.hoverPreviewTime) { await refreshSkim() }
     }
 
     /// The uncropped recording while a crop is being placed, so the overlay can grow.
@@ -103,6 +136,18 @@ struct StudioPreviewView: View {
             at: previewTime,
             using: currentPipeline().composer,
             exact: !model.isPlaying
+        )
+    }
+
+    private func refreshSkim() async {
+        guard let renderer, let time = model.hoverPreviewTime, !model.isPlaying else {
+            skimFrame = nil
+            return
+        }
+        skimFrame = await renderer.image(
+            at: time,
+            using: currentPipeline().composer,
+            exact: false
         )
     }
 
@@ -144,16 +189,23 @@ actor StudioPreviewRenderer {
     /// comments in this file asserting that the preview *is* the export.
     private let cameraStartOffset: TimeInterval
 
-    init(session: RecordingSession, cameraStartOffset: TimeInterval) {
+    init(session: RecordingSession, cameraStartOffset: TimeInterval, maxLongestEdge: CGFloat = 1280) {
         self.cameraStartOffset = cameraStartOffset
-        generator = Self.makeGenerator(for: session.screenURL)
-        cameraGenerator = Self.makeGenerator(for: session.cameraURL)
+        generator = Self.makeGenerator(for: session.screenURL, maxLongestEdge: maxLongestEdge)
+        cameraGenerator = Self.makeGenerator(for: session.cameraURL, maxLongestEdge: maxLongestEdge)
     }
 
-    private static func makeGenerator(for url: URL) -> AVAssetImageGenerator? {
+    func setMaximumSize(_ longestEdge: CGFloat) {
+        let size = CGSize(width: longestEdge, height: longestEdge)
+        generator?.maximumSize = size
+        cameraGenerator?.maximumSize = size
+    }
+
+    private static func makeGenerator(for url: URL, maxLongestEdge: CGFloat) -> AVAssetImageGenerator? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: maxLongestEdge, height: maxLongestEdge)
         // Zero tolerance: the studio's whole claim is that the preview is the export, and a
         // generator allowed to return a nearby keyframe would show a different frame than
         // the one being rendered. The seek costs more; being right is the feature.

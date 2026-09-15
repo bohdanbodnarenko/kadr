@@ -45,7 +45,6 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         // frame, and a 4K webcam track costs more to encode than the screen it sits on.
         session.sessionPreset = .hd1280x720
         let device = RecordingDeviceCatalog.camera(withID: deviceID ?? "")
-            ?? AVCaptureDevice.default(for: .video)
         guard let device,
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input)

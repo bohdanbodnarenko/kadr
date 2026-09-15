@@ -16,6 +16,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     private let openStudio: (HistoryRecord) -> Void
     private let juggler: ActivationJuggler
     private let logger = KadrLog.logger(.history)
+    private lazy var quickLook = QuickLookPresenter { _ in }
 
     private(set) var window: NSWindow?
     private weak var hostingView: NSView?
@@ -43,7 +44,12 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         }
 
         let hosting = NSHostingView(
-            rootView: HistoryView(controller: controller, open: openStudio, openAsCard: reopen)
+            rootView: HistoryView(
+                controller: controller,
+                open: openStudio,
+                openAsCard: reopen,
+                preview: { [weak self] record in self?.toggleQuickLook(record) }
+            )
         )
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 720, height: 520),
@@ -77,9 +83,20 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         window.contentView = nil
         self.window = nil
         controller.cache.removeAll()
+        quickLook.dismiss()
         juggler.endRegularWindow()
         logger.info("History window closed")
         assertTornDown()
+    }
+
+    func toggleQuickLook(_ record: HistoryRecord) {
+        if QuickLookPresenter.isShowing {
+            quickLook.dismiss()
+            return
+        }
+        guard let url = controller.fileURL(for: record) else { return }
+        controller.markAccessed(record)
+        quickLook.show(url)
     }
 
     private func assertTornDown() {

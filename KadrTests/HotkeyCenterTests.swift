@@ -38,8 +38,25 @@ struct HotkeyValidationTests {
         #expect(validate(modifiers) == .allow)
     }
 
-    @Test("Device-dependent flags on the event do not defeat the check")
-    func devicePrivateFlagsAreIgnored() {
+    @Test("A shortcut already used by another command is refused")
+    func duplicateShortcutIsRefused() {
+        let shortcut = KeyboardShortcuts.Shortcut(.a, modifiers: [.control, .shift])
+        let others: [CaptureCommand: KeyboardShortcuts.Shortcut] = [
+            .captureArea: shortcut
+        ]
+        guard case let .disallow(reason) = HotkeyCenter.validate(
+            shortcut,
+            for: .captureWindow,
+            others: others
+        ) else {
+            Issue.record("A duplicate shortcut should have been refused")
+            return
+        }
+        #expect(reason.contains("Capture Area"))
+    }
+
+    @Test("Device-dependent flags do not hide a lone Option")
+    func optionWithDeviceFlagsIsRefused() {
         // Real NSEvents carry flags like the numeric-pad and function bits; the rule
         // must look only at the modifier keys the user actually held.
         let modifiers: NSEvent.ModifierFlags = [.option, .numericPad]

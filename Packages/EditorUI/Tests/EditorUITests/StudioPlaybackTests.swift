@@ -102,8 +102,14 @@ struct StudioPlaybackTests {
 
         studio.play()
         #expect(studio.isPlaying)
-        try await Task.sleep(for: .milliseconds(250))
-        let reached = studio.playhead
+        var reached = 0.0
+        for _ in 0 ..< 20 {
+            try await Task.sleep(for: .milliseconds(50))
+            reached = studio.playhead
+            if reached > 0 {
+                break
+            }
+        }
         #expect(reached > 0, "the playhead did not move")
 
         studio.pausePlayback()

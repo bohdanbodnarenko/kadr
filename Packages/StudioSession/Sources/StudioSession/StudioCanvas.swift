@@ -19,11 +19,71 @@ public struct StudioColor: Sendable, Hashable, Codable {
     public static let white = StudioColor(red: 1, green: 1, blue: 1)
 }
 
+/// A multi-stop studio canvas ramp (docs/16 STU-C7).
+///
+/// Older sessions stored two colours as associated values `_0`/`_1`. Those decode here as
+/// a vertical two-stop ramp so a Presenter look from an earlier Kadr still opens.
+public struct StudioGradient: Sendable, Hashable, Codable {
+    public var stops: [StudioColor]
+    /// Degrees from the positive x-axis, matching beautify: 90 is top to bottom.
+    public var angleDegrees: Double
+
+    public init(stops: [StudioColor], angleDegrees: Double = 90) {
+        if stops.count >= 2 {
+            self.stops = stops
+        } else if let only = stops.first {
+            self.stops = [only, only]
+        } else {
+            self.stops = [.graphite, StudioColor(red: 0.07, green: 0.09, blue: 0.16)]
+        }
+        self.angleDegrees = angleDegrees
+    }
+
+    public init(from start: StudioColor, to end: StudioColor, angleDegrees: Double = 90) {
+        self.init(stops: [start, end], angleDegrees: angleDegrees)
+    }
+
+    public var start: StudioColor {
+        stops[0]
+    }
+
+    public var end: StudioColor {
+        stops[stops.count - 1]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case stops, angleDegrees
+        case start = "_0"
+        case end = "_1"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let stops = try container.decodeIfPresent([StudioColor].self, forKey: .stops), stops.count >= 2 {
+            try self.init(
+                stops: stops,
+                angleDegrees: container.decodeIfPresent(Double.self, forKey: .angleDegrees) ?? 90
+            )
+            return
+        }
+        let start = try container.decodeIfPresent(StudioColor.self, forKey: .start) ?? .graphite
+        let end = try container.decodeIfPresent(StudioColor.self, forKey: .end)
+            ?? StudioColor(red: 0.16, green: 0.12, blue: 0.28)
+        self.init(from: start, to: end)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(stops, forKey: .stops)
+        try container.encode(angleDegrees, forKey: .angleDegrees)
+    }
+}
+
 /// The fill behind a padded recording card.
 public enum StudioBackdrop: Sendable, Hashable, Codable {
     case none
     case solid(StudioColor)
-    case gradient(StudioColor, StudioColor)
+    case gradient(StudioGradient)
     /// An image copied into the session, aspect-filled behind the card.
     case wallpaper
 
@@ -37,6 +97,39 @@ public enum StudioBackdrop: Sendable, Hashable, Codable {
             .gradient
         case .wallpaper:
             .wallpaper
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case none, solid, gradient, wallpaper
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.none) {
+            self = .none
+        } else if let colour = try container.decodeIfPresent(StudioColor.self, forKey: .solid) {
+            self = .solid(colour)
+        } else if container.contains(.wallpaper) {
+            self = .wallpaper
+        } else if let ramp = try container.decodeIfPresent(StudioGradient.self, forKey: .gradient) {
+            self = .gradient(ramp)
+        } else {
+            self = .none
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .none:
+            try container.encodeNil(forKey: .none)
+        case let .solid(colour):
+            try container.encode(colour, forKey: .solid)
+        case let .gradient(ramp):
+            try container.encode(ramp, forKey: .gradient)
+        case .wallpaper:
+            try container.encodeNil(forKey: .wallpaper)
         }
     }
 }
@@ -105,10 +198,10 @@ public struct StudioCanvas: Sendable, Hashable, Codable {
         paddingFraction: 0.06,
         cornerRadiusFraction: 0.022,
         shadow: 0.45,
-        background: .gradient(
-            StudioColor(red: 0.07, green: 0.09, blue: 0.16),
-            StudioColor(red: 0.16, green: 0.12, blue: 0.28)
-        )
+        background: .gradient(StudioGradient(
+            from: StudioColor(red: 0.07, green: 0.09, blue: 0.16),
+            to: StudioColor(red: 0.16, green: 0.12, blue: 0.28)
+        ))
     )
 
     public static let paper = StudioCanvas(
@@ -156,8 +249,19 @@ public struct StudioCanvas: Sendable, Hashable, Codable {
     }
 
     public mutating func setGradient(from start: StudioColor, to end: StudioColor) {
+        setGradient(StudioGradient(from: start, to: end, angleDegrees: currentGradientAngle))
+    }
+
+    public mutating func setGradient(_ ramp: StudioGradient) {
         revealCardIfNeeded()
-        background = .gradient(start, end)
+        background = .gradient(ramp)
+    }
+
+    private var currentGradientAngle: Double {
+        if case let .gradient(ramp) = background {
+            return ramp.angleDegrees
+        }
+        return 90
     }
 
     private mutating func revealCardIfNeeded() {
@@ -169,24 +273,44 @@ public struct StudioCanvas: Sendable, Hashable, Codable {
     }
 
     /// Where the card sits inside the exported frame.
+    ///
+    /// The canvas stays at the reframe output so padding cannot change the aspect ratio
+    /// (docs/16 STU-A6). The card is scaled down, aspect-preserved, and centred.
     public func layout(cardSize: CGSize) -> StudioCanvasLayout {
-        let card = CGSize(width: max(cardSize.width, 1), height: max(cardSize.height, 1))
-        let shortest = min(card.width, card.height)
-        let padding = shortest * paddingFraction
-        let shadowRoom = shortest * shadow * 0.08
-        let inset = max(padding, shadowRoom)
+        layout(canvasSize: cardSize, contentAspect: cardSize.width / max(cardSize.height, 1))
+    }
+
+    public func layout(canvasSize: CGSize, contentAspect: CGFloat) -> StudioCanvasLayout {
+        let canvas = CGSize(width: max(canvasSize.width, 1), height: max(canvasSize.height, 1))
+        let shortest = min(canvas.width, canvas.height)
+        let pad = max(shortest * paddingFraction, shortest * shadow * 0.08)
         let radius = shortest * cornerRadiusFraction
-        if inset < 0.5 {
+        if pad < 0.5 {
             return StudioCanvasLayout(
-                canvasSize: card,
-                cardRect: CGRect(origin: .zero, size: card),
+                canvasSize: canvas,
+                cardRect: CGRect(origin: .zero, size: canvas),
                 cornerRadius: radius
             )
         }
+        let available = CGSize(
+            width: max(canvas.width - pad * 2, 1),
+            height: max(canvas.height - pad * 2, 1)
+        )
+        let aspect = contentAspect > 0.0001 ? contentAspect : canvas.width / canvas.height
+        let fitted = if available.width / available.height > aspect {
+            CGSize(width: available.height * aspect, height: available.height)
+        } else {
+            CGSize(width: available.width, height: available.width / aspect)
+        }
         return StudioCanvasLayout(
-            canvasSize: CGSize(width: card.width + inset * 2, height: card.height + inset * 2),
-            cardRect: CGRect(x: inset, y: inset, width: card.width, height: card.height),
-            cornerRadius: radius
+            canvasSize: canvas,
+            cardRect: CGRect(
+                x: (canvas.width - fitted.width) / 2,
+                y: (canvas.height - fitted.height) / 2,
+                width: fitted.width,
+                height: fitted.height
+            ),
+            cornerRadius: min(radius, min(fitted.width, fitted.height) / 2)
         )
     }
 

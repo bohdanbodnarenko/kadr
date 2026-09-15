@@ -27,6 +27,7 @@ extension EditorDocumentModel {
         case let .arrow(spec):
             styleMemory.remember(spec.stroke, for: .arrow)
             styleMemory.lastArrowHead = spec.head
+            styleMemory.lastStartArrowHead = spec.startHead
         case let .shape(spec):
             styleMemory.remember(spec.stroke, for: .shape)
             styleMemory.remember(spec.fill, for: .shape)
@@ -116,7 +117,13 @@ extension EditorDocumentModel {
         let stroke = styleMemory.stroke(for: annotationTool)
         switch annotationTool {
         case .arrow:
-            return .arrow(ArrowSpec(start: point, end: point, head: styleMemory.lastArrowHead, stroke: stroke))
+            return .arrow(ArrowSpec(
+                start: point,
+                end: point,
+                head: styleMemory.lastArrowHead,
+                startHead: styleMemory.lastStartArrowHead,
+                stroke: stroke
+            ))
         case .line:
             return .line(LineSpec(start: point, end: point, stroke: stroke))
         case .freehand:

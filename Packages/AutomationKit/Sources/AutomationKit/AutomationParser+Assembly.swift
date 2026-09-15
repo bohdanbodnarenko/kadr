@@ -66,6 +66,7 @@ extension AutomationParser {
         case .recordRegion: try .recordRegion(recordOptions(values))
         case .recordGif: try .recordRegion(gifOptions(values))
         case .stopRecording: .stopRecording
+        case .toggleRecording: .toggleRecording
         default: nil
         }
     }

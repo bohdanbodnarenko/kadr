@@ -285,7 +285,11 @@ struct QuickAccessCardView: View {
                     completed: actions.dragCompleted
                 )
             },
-            dragImage: { NSImage(contentsOf: item.fileURL) },
+            dragImage: {
+                ThumbnailLoader().thumbnail(for: item.fileURL, maxPixelSize: 256).map {
+                    NSImage(cgImage: $0, size: .zero)
+                }
+            },
             onTap: {
                 isExpanded.toggle()
             },

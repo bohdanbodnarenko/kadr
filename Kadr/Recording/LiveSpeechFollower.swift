@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import os
+import RecordingCore
 import Shared
 import StudioSession
 
@@ -19,6 +20,7 @@ final class LiveSpeechFollower {
     private var agreement = HypothesisAgreement()
     private let client = VisionClient()
     private var engine: AVAudioEngine?
+    private var isPaused = false
 
     private(set) var position: Int?
 
@@ -26,8 +28,9 @@ final class LiveSpeechFollower {
         self.script = script
     }
 
-    func start() async -> Bool {
+    func start(microphone: AsyncStream<SampleBufferBox>? = nil) async -> Bool {
         guard !script.isEmpty else { return false }
+        isPaused = false
         do {
             try await client.startLiveSpeech(SpeechLiveStartRequest(
                 localeIdentifier: Locale.current.identifier,
@@ -37,7 +40,11 @@ final class LiveSpeechFollower {
                     self?.ingest(hypothesis.words)
                 }
             }
-            try startTap()
+            if let microphone {
+                listen(to: microphone)
+            } else {
+                try startTap()
+            }
             logger.info("Speech following started")
             return true
         } catch {
@@ -55,6 +62,16 @@ final class LiveSpeechFollower {
         position = nil
     }
 
+    func pause() {
+        isPaused = true
+        engine?.pause()
+    }
+
+    func resume() {
+        isPaused = false
+        try? engine?.start()
+    }
+
     func advanceForTesting(heard: [String]) {
         ingest(heard)
     }
@@ -67,6 +84,18 @@ final class LiveSpeechFollower {
             return
         }
         position = next
+    }
+
+    private func listen(to microphone: AsyncStream<SampleBufferBox>) {
+        Task { [weak self] in
+            for await box in microphone {
+                guard let pcm = MicrophonePCM.int16kHzMono(from: box.buffer) else { continue }
+                await MainActor.run {
+                    guard let self, !self.isPaused else { return }
+                    self.client.feedLiveSpeechAudio(pcm)
+                }
+            }
+        }
     }
 
     private func startTap() throws {

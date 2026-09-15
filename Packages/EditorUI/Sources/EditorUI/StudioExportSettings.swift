@@ -98,29 +98,59 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
     public var resolution: Resolution
     public var container: Container
     public var includeAudio: Bool
+    public var frameRate: FrameRate
+
+    public enum FrameRate: String, CaseIterable, Sendable, Codable, Identifiable {
+        case source = "Source"
+        case thirty = "30"
+        case sixty = "60"
+
+        public var id: String {
+            rawValue
+        }
+
+        public var title: String {
+            rawValue
+        }
+
+        func applied(to manifest: Int) -> Int {
+            switch self {
+            case .source: max(manifest, 1)
+            case .thirty: min(30, max(manifest, 1))
+            case .sixty: min(60, max(manifest, 1))
+            }
+        }
+    }
 
     public init(
         quality: Quality = .high,
         codec: Codec = .hevc,
         resolution: Resolution = .original,
         container: Container = .mov,
-        includeAudio: Bool = true
+        includeAudio: Bool = true,
+        frameRate: FrameRate = .source
     ) {
         self.quality = quality
         self.codec = codec
         self.resolution = resolution
         self.container = container
         self.includeAudio = includeAudio
+        self.frameRate = frameRate
     }
 
-    public var rendererOptions: StudioRenderer.Options {
+    public func rendererOptions(manifestFrameRate: Int = 60) -> StudioRenderer.Options {
         StudioRenderer.Options(
             codec: container == .gif ? .h264 : codec.videoCodec,
+            frameRate: frameRate.applied(to: manifestFrameRate),
             bitRateMultiplier: quality.bitRateMultiplier,
             fileType: container == .gif ? .mov : container.fileType,
             includeAudio: container == .gif ? false : includeAudio,
             maxLongestEdge: maxLongestEdge
         )
+    }
+
+    public var rendererOptions: StudioRenderer.Options {
+        rendererOptions()
     }
 
     public var utType: UTType {

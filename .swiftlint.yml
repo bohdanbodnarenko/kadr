@@ -75,3 +75,11 @@ opt_in_rules:
 
 disabled_rules:
   - todo
+
+custom_rules:
+  localized_menu_title:
+    name: "Localized menu title"
+    regex: 'withTitle:\s*"'
+    message: "Use String(localized:) for menu titles so they appear in the catalog."
+    included: ".*(AppMenu|EditorAppDelegate\\+Menu)\\.swift"
+    severity: warning

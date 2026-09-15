@@ -11,8 +11,7 @@ import UniformTypeIdentifiers
 /// One editor window over one capture (docs/03 §3).
 @MainActor
 final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation,
-    RedactionAssisting, SubjectLifting
-{
+    RedactionAssisting, SubjectLifting {
     enum OpenError: LocalizedError {
         case unreadableImage(URL)
 
@@ -135,6 +134,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         window.title = fileURL.lastPathComponent
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
         window.representedURL = fileURL
+        window.isDocumentEdited = model.hasUnsavedChanges
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
@@ -170,11 +170,12 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
         let alert = NSAlert()
         alert.messageText = "Save your changes to “\(fileURL.lastPathComponent)”?"
-        alert.informativeText = "Kadr will write a project file beside the capture so the "
-            + "annotations stay editable. Otherwise they are lost."
-        alert.addButton(withTitle: "Save Project")
-        alert.addButton(withTitle: "Discard")
+        alert.informativeText = "Save writes the flattened image and a project file so the "
+            + "annotations stay editable."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Don't Save")
         alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
         alert.alertStyle = .warning
 
         let responder = FocusRestoration.capture(from: sender)
@@ -182,10 +183,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             guard let self else { return }
             switch response {
             case .alertFirstButtonReturn:
-                saveProject()
-                guard !model.hasUnsavedChanges else { return }
-                isClosingConfirmed = true
-                sender.close()
+                saveFlattenedAndClose(sender)
             case .alertSecondButtonReturn:
                 autosave.discard(for: fileURL)
                 isClosingConfirmed = true
@@ -195,6 +193,43 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             }
         }
         return false
+    }
+
+    /// ⌘Q and the close sheet both need a durable copy before the process dies (docs/16 ED-7).
+    func flushAutosaveSynchronously() {
+        autosaveTask?.cancel()
+        writeAutosave()
+    }
+
+    func saveFlattenedAndClose(_ sender: NSWindow) {
+        let baseImage = baseImage
+        let document = model.document
+        let exportScale = model.exportScale
+        let renderer = renderer
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let image = try renderer.render(
+                    baseImage: baseImage,
+                    document: document,
+                    includeAnnotations: true,
+                    exportScale: exportScale
+                )
+                await MainActor.run {
+                    guard let self else { return }
+                    do {
+                        try self.save(image)
+                        self.isClosingConfirmed = true
+                        sender.close()
+                    } catch {
+                        self.model.failExport(.save, message: error.localizedDescription)
+                    }
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.model.failExport(.save, message: error.localizedDescription)
+                }
+            }
+        }
     }
 
     /// Offers work a previous session left behind — a crash, a force quit, a power cut.
@@ -227,12 +262,13 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     private func trackChangesForAutosave() {
         withObservationTracking {
             _ = model.document.commands
+            _ = model.document.orientation
+            _ = model.styleMemory
         } onChange: { [weak self] in
-            // Weak in the outer closure as well as the inner one: capturing strongly here
-            // and weakly there means the observation holds the window controller alive
-            // until the next change, which for a window nobody touches again is forever.
             Task { @MainActor in
                 guard let self else { return }
+                self.window?.isDocumentEdited = self.model.hasUnsavedChanges
+                StyleMemoryStore.save(self.model.styleMemory)
                 self.scheduleAutosave()
                 self.trackChangesForAutosave()
             }

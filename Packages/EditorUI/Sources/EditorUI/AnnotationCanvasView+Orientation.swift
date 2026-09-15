@@ -14,14 +14,25 @@ extension AnnotationCanvasView {
 
         guard !orientation.isIdentity else {
             drawingHost.position = CGPoint(x: unoriented.width / 2, y: unoriented.height / 2)
-            drawingHost.setAffineTransform(.identity)
+            drawingHost.transform = liveCameraTransform(on: CATransform3DIdentity)
             return
         }
 
         let oriented = orientation.orientedSize(of: unoriented)
         setFrameSize(oriented)
         drawingHost.position = CGPoint(x: oriented.width / 2, y: oriented.height / 2)
-        drawingHost.setAffineTransform(orientation.viewTransform())
+        drawingHost.transform = liveCameraTransform(on: CATransform3DMakeAffineTransform(orientation.viewTransform()))
+    }
+
+    /// Perspective on the live layer tree while editing; identity while cropping or typing
+    /// (docs/16 ED-4).
+    func liveCameraTransform(on base: CATransform3D) -> CATransform3D {
+        guard model.tool != .crop, !textEditor.isEditing,
+              let camera = model.document.cameraGeometry
+        else {
+            return base
+        }
+        return CATransform3DConcat(camera.transform.caTransform3D, base)
     }
 
     /// Maps a click on the view onto image-space points (beautify offsets the card).
@@ -41,7 +52,7 @@ extension AnnotationCanvasView {
         // camera's inverse before anything else looks at it. Without this, clicking a
         // shape on a leaning screenshot selects whatever sits at the same *screen* point
         // on the upright one (docs/09 U1.2).
-        if let camera = model.document.cameraGeometry {
+        if let camera = model.document.cameraGeometry, model.tool != .crop, !textEditor.isEditing {
             guard let unprojected = camera.contentPoint(from: viewPoint) else { return viewPoint }
             viewPoint = unprojected
         }

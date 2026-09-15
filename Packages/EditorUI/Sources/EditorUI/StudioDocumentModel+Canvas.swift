@@ -21,6 +21,7 @@ public extension StudioDocumentModel {
     func importWallpaper(from url: URL) {
         do {
             let fileName = try session.replaceWallpaper(copying: url)
+            BackdropRecents.remember(url.path)
             change {
                 $0.canvas.wallpaperFileName = fileName
                 $0.canvas.setBackdropKind(.wallpaper)

@@ -5,6 +5,7 @@ import os
 import Shared
 import StudioRender
 import StudioSession
+import UserNotifications
 
 /// Rendering the edit to a movie (docs/09 U3.3).
 ///
@@ -170,6 +171,7 @@ public extension StudioDocumentModel {
                 writeCaptions(transcript, beside: destination)
             }
             exportProgress = nil
+            notifyExportFinished(at: destination)
         } catch is CancellationError {
             exportProgress = nil
             logger.info("Studio export cancelled")
@@ -195,11 +197,29 @@ public extension StudioDocumentModel {
             session: session,
             edit: edit,
             to: destination,
-            options: exportSettings.rendererOptions,
+            options: exportSettings.rendererOptions(manifestFrameRate: manifest.frameRate),
             progress: { [weak self] value in
                 Task { @MainActor in self?.exportProgress = value }
             }
         )
+    }
+
+    /// A local notification when the studio window is not key (docs/16 STU-C6).
+    private func notifyExportFinished(at destination: URL) {
+        guard !NSApp.isActive else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Export finished"
+        content.body = destination.lastPathComponent
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "studio.export.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     /// Movie first, then ImageIO (docs/03 §1.8). GIF is not a video container, so the

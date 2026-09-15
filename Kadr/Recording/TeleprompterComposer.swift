@@ -1,6 +1,7 @@
 import AppKit
 import OverlayKit
 import SettingsKit
+import Shared
 import StudioSession
 import SwiftUI
 
@@ -145,22 +146,36 @@ struct TeleprompterComposerView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
-            Text(readingTime)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("Pace")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Slider(
-                value: $settings.teleprompterWordsPerMinute,
-                in: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
-                step: 5
-            )
-            .frame(width: 120)
-            .controlSize(.small)
-            .disabled(!settings.teleprompterEnabled)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text(readingTime)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Pace")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(
+                    value: $settings.teleprompterWordsPerMinute,
+                    in: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
+                    step: 5
+                )
+                .frame(width: 120)
+                .controlSize(.small)
+                .disabled(!settings.teleprompterEnabled)
+            }
+            HStack(spacing: 8) {
+                Toggle("Follow my voice", isOn: $settings.teleprompterFollowsSpeech)
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    .disabled(!settings.teleprompterEnabled)
+                Spacer()
+                Button("Install speech model…") {
+                    Task { await installSpeechModel() }
+                }
+                .controlSize(.small)
+                .disabled(!settings.teleprompterEnabled)
+            }
         }
     }
 
@@ -193,5 +208,15 @@ struct TeleprompterComposerView: View {
                 .rounded()
         )
         return "\(seconds / 60):\(String(format: "%02d", seconds % 60)) · \(script.words.count) words"
+    }
+
+    private func installSpeechModel() async {
+        do {
+            _ = try await VisionClient().installSpeechModel(
+                SpeechInstallRequest(localeIdentifier: Locale.current.identifier)
+            )
+        } catch {
+            FailurePresenter.present(message: error.localizedDescription)
+        }
     }
 }

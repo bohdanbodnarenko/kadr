@@ -102,18 +102,23 @@ extension StudioFrameComposer {
 
     /// Burned-in speech captions with karaoke highlighting (docs/13 T2.2).
     func speechCaption(at time: TimeInterval) -> (image: CGImage?, placement: CGRect)? {
-        guard let cue = CaptionExport.cue(from: transcript, timeline: edit.clips, at: time) else {
+        guard var cue = CaptionExport.cue(in: captionCues, at: time) else {
             return nil
+        }
+        if edit.highlightsSpokenWord {
+            cue = CaptionExport.highlighting(cue, from: transcript, timeline: edit.clips, at: time)
         }
         let reference = min(plan.cardRect.width, plan.cardRect.height)
         let fontSize = max(reference * 0.032 * edit.captionScale, 11)
         let karaoke = edit.highlightsSpokenWord
+        let margin = max(min(plan.cardRect.width, plan.cardRect.height) * 0.05, 8)
         guard let image = CaptionCanvas.image(
             text: cue.text,
             fontSize: fontSize,
             opacity: 0.92,
             activeIndex: karaoke ? cue.activeIndex : nil,
-            spokenCount: karaoke ? cue.spokenCount : 0
+            spokenCount: karaoke ? cue.spokenCount : 0,
+            maxWidth: plan.cardRect.width - margin * 2
         ) else {
             return nil
         }

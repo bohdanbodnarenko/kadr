@@ -28,6 +28,9 @@ public extension AppSettings {
         downscaleRetinaCaptures = SettingKeys.downscaleRetinaCaptures.defaultValue
         convertExportsToSRGB = SettingKeys.convertExportsToSRGB.defaultValue
         askForSaveDestination = SettingKeys.askForSaveDestination.defaultValue
+        playsCaptureSound = SettingKeys.playsCaptureSound.defaultValue
+        lossyQuality = SettingKeys.lossyQuality.defaultValue
+        showsMenuBarIcon = SettingKeys.showsMenuBarIcon.defaultValue
     }
 
     private func resetCapture() {
@@ -39,6 +42,7 @@ public extension AppSettings {
         windowBackdropPadding = SettingKeys.windowBackdropPadding.defaultValue
         autoBeautifyPreset = SettingKeys.autoBeautifyPreset.defaultValue
         cropNotchFromFullscreen = SettingKeys.cropNotchFromFullscreen.defaultValue
+        fullscreenTarget = SettingKeys.fullscreenTarget.defaultValue
         lockCanvasByDefault = SettingKeys.lockCanvasByDefault.defaultValue
         objectShadowsEnabled = SettingKeys.objectShadowsEnabled.defaultValue
         keepOriginalWhenAnnotating = SettingKeys.keepOriginalWhenAnnotating.defaultValue
@@ -97,6 +101,7 @@ public extension AppSettings {
         teleprompterFontSize = SettingKeys.teleprompterFontSize.defaultValue
         teleprompterMirrored = SettingKeys.teleprompterMirrored.defaultValue
         teleprompterFollowsSpeech = SettingKeys.teleprompterFollowsSpeech.defaultValue
+        teleprompterDocksUnderCamera = SettingKeys.teleprompterDocksUnderCamera.defaultValue
         teleprompterFrame = SettingKeys.teleprompterFrame.defaultValue
     }
 
@@ -118,5 +123,6 @@ public extension AppSettings {
         hideDesktopDuringRecording = SettingKeys.hideDesktopDuringRecording.defaultValue
         captureWallpaper = SettingKeys.captureWallpaper.defaultValue
         captureWallpaperImagePath = SettingKeys.captureWallpaperImagePath.defaultValue
+        includesOverlaysInCaptures = SettingKeys.includesOverlaysInCaptures.defaultValue
     }
 }

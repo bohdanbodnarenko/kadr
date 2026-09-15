@@ -35,7 +35,18 @@ public enum AnnotationLayerFactory {
             )
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
+        if let layer {
+            applyRotation(command.rotation, to: layer)
+        }
         return layer
+    }
+
+    private static func applyRotation(_ radians: CGFloat, to layer: CALayer) {
+        if radians == 0 {
+            layer.transform = CATransform3DIdentity
+            return
+        }
+        layer.transform = CATransform3DMakeRotation(radians, 0, 0, 1)
     }
 
     /// The annotations that are one stroked path.
@@ -44,7 +55,8 @@ public enum AnnotationLayerFactory {
         case let .arrow(spec): arrowLayer(spec)
         case let .shape(spec): shapeLayer(spec)
         case let .line(spec): lineLayer(spec)
-        case let .freehand(spec): strokeLayer(spec.points, stroke: spec.stroke)
+        case let .freehand(spec):
+            strokeLayer(spec.isSmoothed ? StrokeSmoothing.smoothed(spec.points) : spec.points, stroke: spec.stroke)
         case let .highlighter(spec): highlighterLayer(spec)
         default: nil
         }
@@ -91,7 +103,11 @@ public enum AnnotationLayerFactory {
         case let .line(spec):
             applyLine(spec, to: layer)
         case let .freehand(spec):
-            applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
+            applyStrokePath(
+                spec.isSmoothed ? StrokeSmoothing.smoothed(spec.points) : spec.points,
+                stroke: spec.stroke,
+                to: layer
+            )
         case let .highlighter(spec):
             applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
         default:
@@ -103,6 +119,7 @@ public enum AnnotationLayerFactory {
                 canvasRect: canvasRect
             )
         }
+        applyRotation(command.rotation, to: layer)
     }
 
     /// The layers that carry text, an effect or an image rather than one stroked path.
@@ -115,8 +132,11 @@ public enum AnnotationLayerFactory {
     ) {
         switch command {
         case let .text(spec):
-            layer.frame = spec.rect
-            (layer as? CATextLayer)?.string = attributedText(spec)
+            if let badge = layer as? TextBadgeLayer {
+                badge.apply(spec)
+            } else {
+                layer.frame = TextRendering.frame(spec)
+            }
         case let .counter(spec):
             applyCounter(spec, to: layer)
         case let .redaction(spec):
@@ -140,29 +160,7 @@ public enum AnnotationLayerFactory {
     // MARK: - Paths
 
     static func arrowPath(_ spec: ArrowSpec) -> CGPath {
-        let path = CGMutablePath()
-        path.move(to: spec.start)
-        if let control = spec.controlPoint {
-            path.addQuadCurve(to: spec.end, control: control)
-        } else {
-            path.addLine(to: spec.end)
-        }
-
-        // The head is part of the same path, so one layer draws the whole arrow.
-        let approach = spec.controlPoint ?? spec.start
-        let angle = atan2(spec.end.y - approach.y, spec.end.x - approach.x)
-        let length = max(spec.stroke.width * 3.5, 12)
-        let spread = CGFloat.pi / 7
-        path.move(to: CGPoint(
-            x: spec.end.x - length * cos(angle - spread),
-            y: spec.end.y - length * sin(angle - spread)
-        ))
-        path.addLine(to: spec.end)
-        path.addLine(to: CGPoint(
-            x: spec.end.x - length * cos(angle + spread),
-            y: spec.end.y - length * sin(angle + spread)
-        ))
-        return path
+        ArrowGeometry.make(spec).shaft
     }
 
     static func shapePath(_ spec: ShapeSpec) -> CGPath {
@@ -220,10 +218,14 @@ public enum AnnotationLayerFactory {
     }
 
     private static func applyArrow(_ spec: ArrowSpec, to layer: CALayer) {
+        if let arrow = layer as? ArrowLayer {
+            arrow.apply(spec)
+            return
+        }
         guard let shape = layer as? CAShapeLayer else { return }
         shape.path = arrowPath(spec)
         apply(stroke: spec.stroke, to: shape)
-        shape.fillColor = spec.head == .open ? nil : spec.stroke.color.cgColor
+        shape.fillColor = nil
     }
 
     private static func applyShape(_ spec: ShapeSpec, to layer: CALayer) {
@@ -244,10 +246,9 @@ public enum AnnotationLayerFactory {
         apply(stroke: stroke, to: shape)
     }
 
-    private static func arrowLayer(_ spec: ArrowSpec) -> CAShapeLayer {
-        let layer = styled(arrowPath(spec), stroke: spec.stroke)
-        // A filled head needs the path filled; an open one must not be.
-        layer.fillColor = spec.head == .open ? nil : spec.stroke.color.cgColor
+    private static func arrowLayer(_ spec: ArrowSpec) -> ArrowLayer {
+        let layer = ArrowLayer()
+        layer.apply(spec)
         return layer
     }
 
@@ -270,26 +271,11 @@ public enum AnnotationLayerFactory {
         return layer
     }
 
-    private static func textLayer(_ spec: TextSpec, contentsScale: CGFloat) -> CATextLayer {
-        let layer = CATextLayer()
-        layer.frame = spec.rect
-        layer.string = attributedText(spec)
-        layer.isWrapped = true
-        layer.truncationMode = .none
+    private static func textLayer(_ spec: TextSpec, contentsScale: CGFloat) -> CALayer {
+        let layer = TextBadgeLayer()
         layer.contentsScale = contentsScale
-        if let background = spec.style.backgroundColor {
-            layer.backgroundColor = background.cgColor
-            layer.cornerRadius = 6
-        }
+        layer.apply(spec)
         return layer
-    }
-
-    private static func attributedText(_ spec: TextSpec) -> NSAttributedString {
-        let font = CTFontCreateWithName(spec.style.fontName as CFString, spec.style.fontSize, nil)
-        return NSAttributedString(string: spec.string, attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): spec.style.color.cgColor
-        ])
     }
 
     private static func counterLayer(_ spec: CounterSpec, contentsScale: CGFloat) -> CALayer {
@@ -314,6 +300,13 @@ public enum AnnotationLayerFactory {
     /// This is built on every mouse-move while a redaction box is dragged, and building one
     /// creates an `os.Logger` each time.
     private static let redactionRasterizer = RedactionRasterizer()
+    private static let redactionCache = RedactionPreviewCache.shared
+
+    private static func cachedPreview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
+        redactionCache.image(for: spec, base: image, scale: scale) {
+            redactionRasterizer.preview(spec, from: image, scale: scale)
+        }
+    }
 
     private static func redactionPreviewLayer(
         _ spec: RedactionSpec,
@@ -339,7 +332,7 @@ public enum AnnotationLayerFactory {
         layer.magnificationFilter = .linear
         layer.minificationFilter = .linear
         layer.borderWidth = 0
-        if let baseImage, let preview = redactionRasterizer.preview(spec, from: baseImage, scale: imageScale) {
+        if let baseImage, let preview = cachedPreview(spec, from: baseImage, scale: imageScale) {
             layer.contents = preview
             let width = max(spec.rect.width, 1)
             layer.contentsScale = max(CGFloat(preview.width) / width, 1)

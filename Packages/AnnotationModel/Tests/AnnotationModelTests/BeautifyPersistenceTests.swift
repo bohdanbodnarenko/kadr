@@ -35,6 +35,15 @@ struct BeautifyPersistenceTests {
         #expect(path == "/tmp/wall.png")
     }
 
+    @Test("A none backdrop round-trips")
+    func noneBackdropRoundTrips() throws {
+        let spec = BeautifySpec(backdrop: .none, border: .mount)
+        guard case .none = try roundTrip(spec).backdrop else {
+            Issue.record("the backdrop changed kind")
+            return
+        }
+    }
+
     // MARK: - Documents from before U1.1
 
     /// The shape a pre-U1.1 Kadr wrote: bare point values, a two-stop gradient, and an

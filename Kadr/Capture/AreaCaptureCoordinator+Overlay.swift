@@ -92,9 +92,10 @@ extension AreaCaptureCoordinator {
     func restorePersistedPins() {
         pins.restore(
             copy: { [weak self] url in self?.quickAccess.copyFile(at: url) },
-            save: { [weak self] url in self?.quickAccess.revealInFinder(url) },
+            save: { [weak self] url in self?.quickAccess.saveCopy(of: url) },
             annotate: { [weak self] url in self?.quickAccess.openInEditor(url) },
-            copyText: { [weak self] url in self?.quickAccess.recognizeText(at: url) }
+            copyText: { [weak self] url in self?.quickAccess.recognizeText(at: url) },
+            reveal: { [weak self] url in self?.quickAccess.revealInFinder(url) }
         )
     }
 

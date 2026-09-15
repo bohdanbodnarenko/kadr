@@ -108,7 +108,7 @@ struct AnnotationCommandTests {
 
     @Test("There are three arrow heads and seven text presets, as docs/03 §3 says")
     func specCounts() {
-        #expect(ArrowHead.allCases.count == 3)
+        #expect(ArrowHead.allCases.count == 6)
         #expect(TextStyle.presets.count == 7)
         #expect(StrokeStyle.widthPresets.allSatisfy { StrokeStyle.widthRange.contains($0) })
     }

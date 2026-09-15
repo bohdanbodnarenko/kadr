@@ -107,6 +107,9 @@ public enum ArrowBindingResolver {
         if case let .shape(shape) = target, shape.kind == .ellipse {
             return ellipseCrossing(from: other, to: anchor, in: box) ?? anchor
         }
+        if case .counter = target {
+            return ellipseCrossing(from: other, to: anchor, in: box) ?? anchor
+        }
         return rectCrossing(from: other, to: anchor, in: box) ?? anchor
     }
 

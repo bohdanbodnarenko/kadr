@@ -40,6 +40,7 @@ final class PointerTelemetryRecorder {
 
     var source: TelemetrySource = .sampler
     var isRecording = false
+    var isPaused = false
     private var journal: TelemetryJournal?
     /// Last recording-time a chunk was flushed. Zero until the first sample.
     private var lastFlushTime: TimeInterval = 0
@@ -47,6 +48,8 @@ final class PointerTelemetryRecorder {
     var lastTapEventTime: TimeInterval = 0
     /// Where the pointer was at the last silence probe, or nil before the first.
     var lastSilenceProbe: CGPoint?
+    /// Host times of tap re-enables in the last 60 s (docs/16 REC-13).
+    var tapReviveTimes: [TimeInterval] = []
 
     var eventTap: CFMachPort?
     var runLoopSource: CFRunLoopSource?
@@ -112,6 +115,7 @@ final class PointerTelemetryRecorder {
         lastFlushTime = 0
         lastTapEventTime = 0
         lastSilenceProbe = nil
+        isPaused = false
         isRecording = true
         // One minute of 60 Hz samples, plus headroom so the first flush does not reallocate.
         pointer.reserveCapacity(Int(TelemetryPolicy.sampleRate * Self.flushInterval) + 16)
@@ -186,6 +190,14 @@ final class PointerTelemetryRecorder {
 
     /// Tells the recorder where the recording is, so events are stamped in the same clock
     /// the frames are.
+    func pause() {
+        isPaused = true
+    }
+
+    func resume() {
+        isPaused = false
+    }
+
     func advance(to time: TimeInterval) {
         // Monotonic (docs/11 S2). A recording's clock only ever goes forwards, and letting
         // it go backwards is worse than losing a tick: the sample gate asks whether enough
@@ -217,20 +229,21 @@ final class PointerTelemetryRecorder {
 
     // MARK: - Recording events
 
-    func recordPointer(at screenPoint: ScreenPoint) {
-        guard isRecording, let position = pointConverter(screenPoint)?.cgPoint else { return }
+    func recordPointer(at screenPoint: ScreenPoint, isDragging: Bool = false) {
+        guard isRecording, !isPaused, let position = pointConverter(screenPoint)?.cgPoint else { return }
         guard TelemetryPolicy.shouldRecord(position, at: recordingTime, lastSample: pointer.last) else {
             return
         }
         pointer.append(PointerSample(
             time: recordingTime,
             position: position,
-            cursorIndex: captureCurrentCursor()
+            cursorIndex: captureCurrentCursor(),
+            isDragging: isDragging
         ))
     }
 
     func recordClick(at screenPoint: ScreenPoint, button: ClickEvent.Button, isDown: Bool) {
-        guard isRecording, let position = pointConverter(screenPoint)?.cgPoint else { return }
+        guard isRecording, !isPaused, let position = pointConverter(screenPoint)?.cgPoint else { return }
         // One event per physical click (docs/11 S0.2). Both rungs of the ladder used to
         // run at once and only the *label* said which had won, so every press appended
         // two events at the same instant — and after the mirror above, one of them was in
@@ -294,7 +307,7 @@ final class PointerTelemetryRecorder {
     }
 
     func recordKeystroke(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) {
-        guard isRecording else { return }
+        guard isRecording, !isPaused else { return }
         // The privacy rule lives in `TelemetryPolicy` and returns nil for plain typing, so
         // there is nothing here to get wrong or to make configurable.
         guard let caption = TelemetryPolicy.caption(

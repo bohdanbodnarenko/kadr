@@ -19,6 +19,7 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
     case recordRegion = "record-region"
     case recordGif = "record-gif"
     case stopRecording = "stop-recording"
+    case toggleRecording = "toggle-recording"
     case pin
     case annotate
     case addToHistory = "add-to-history"
@@ -52,6 +53,7 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
         case .recordRegion: "Select a region and start recording it."
         case .recordGif: "Record a region, then export it as a GIF."
         case .stopRecording: "Stop the recording in progress."
+        case .toggleRecording: "Start or stop a screen recording."
         case .pin: "Pin an image file on top of every window."
         case .annotate: "Open an image file in the editor."
         case .addToHistory: "Add a file to Kadr's capture library."
@@ -92,7 +94,7 @@ public enum AutomationVerb: String, CaseIterable, Sendable, Hashable {
             [.state]
         case .openSettings:
             [.tab]
-        case .stopRecording, .closeAllPins, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
+        case .stopRecording, .toggleRecording, .closeAllPins, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
              .hidePins, .restoreRecentlyClosed, .freezeScreen, .openHistory, .openFromClipboard,
              .version:
             []

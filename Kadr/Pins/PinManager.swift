@@ -50,7 +50,10 @@ final class PinManager {
         copy: @escaping (URL) -> Void,
         save: @escaping (URL) -> Void,
         annotate: @escaping (URL) -> Void = { _ in },
-        copyText: @escaping (URL) -> Void = { _ in }
+        copyText: @escaping (URL) -> Void = { _ in },
+        reveal: @escaping (URL) -> Void = { url in
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     ) -> Bool {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let scale = screen?.backingScaleFactor ?? 2
@@ -61,6 +64,7 @@ final class PinManager {
 
         panel.onCopy = { copy(fileURL) }
         panel.onSave = { save(fileURL) }
+        panel.onReveal = { reveal(fileURL) }
         panel.onAnnotate = { annotate(fileURL) }
         panel.onCopyText = { copyText(fileURL) }
         panel.onClose = { [weak self, weak panel] in
@@ -99,7 +103,10 @@ final class PinManager {
         copy: @escaping (URL) -> Void,
         save: @escaping (URL) -> Void,
         annotate: @escaping (URL) -> Void,
-        copyText: @escaping (URL) -> Void
+        copyText: @escaping (URL) -> Void,
+        reveal: @escaping (URL) -> Void = { url in
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     ) {
         guard let store else { return }
         isRestoring = true
@@ -116,7 +123,8 @@ final class PinManager {
                 copy: copy,
                 save: save,
                 annotate: annotate,
-                copyText: copyText
+                copyText: copyText,
+                reveal: reveal
             )
             pendingRestore = nil
         }

@@ -29,6 +29,7 @@ private func run(_ command: AppCommand) async throws -> AutomationResponse {
     switch response.status {
     case .ok: return response
     case .cancelled: throw KadrIntentError.cancelled
+    case .noText: throw KadrIntentError.failed("No text found")
     case .failed, .unsupported: throw KadrIntentError.failed(response.message ?? "Kadr could not do that.")
     }
 }
@@ -75,6 +76,40 @@ struct CaptureFullscreenIntent: AppIntent {
     }
 }
 
+struct CapturePreviousAreaIntent: AppIntent {
+    static let title: LocalizedStringResource = "Capture Previous Area"
+    static let description = IntentDescription("Re-capture the last selected area.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
+        try await .result(value: file(from: run(.capturePreviousArea(.none))))
+    }
+}
+
+struct CaptureScrollingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Capture Scrolling Area"
+    static let description = IntentDescription("Capture a scrolling region and stitch it.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
+        try await .result(value: file(from: run(.captureScrolling(.none))))
+    }
+}
+
+struct RecordRegionIntent: AppIntent {
+    static let title: LocalizedStringResource = "Record Region"
+    static let description = IntentDescription("Select a region and start recording it.")
+    static let openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        _ = try await run(.recordRegion(RecordOptions()))
+        return .result()
+    }
+}
+
 struct CaptureTextIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Text"
     static let description = IntentDescription("Select an area and read the text in it.")
@@ -109,6 +144,22 @@ struct StopRecordingIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
         try await .result(value: file(from: run(.stopRecording)))
+    }
+}
+
+struct ToggleRecordingIntent: AppIntent {
+    static let title: LocalizedStringResource = "Toggle Recording"
+    static let description = IntentDescription("Start or stop a screen recording.")
+    static let openAppWhenRun = false
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        if AppDelegate.shared.recordingStorage?.isRecording == true {
+            _ = try await run(.stopRecording)
+        } else {
+            _ = try await run(.recordScreen(RecordOptions()))
+        }
+        return .result()
     }
 }
 
@@ -208,6 +259,30 @@ struct KadrShortcuts: AppShortcutsProvider {
             phrases: ["Capture text with \(.applicationName)"],
             shortTitle: "Capture Text",
             systemImageName: "text.viewfinder"
+        )
+        AppShortcut(
+            intent: CaptureWindowIntent(),
+            phrases: ["Capture a window with \(.applicationName)"],
+            shortTitle: "Capture Window",
+            systemImageName: "macwindow"
+        )
+        AppShortcut(
+            intent: CaptureFullscreenIntent(),
+            phrases: ["Capture the screen with \(.applicationName)"],
+            shortTitle: "Capture Screen",
+            systemImageName: "rectangle.dashed"
+        )
+        AppShortcut(
+            intent: StartRecordingIntent(),
+            phrases: ["Start recording with \(.applicationName)"],
+            shortTitle: "Start Recording",
+            systemImageName: "record.circle"
+        )
+        AppShortcut(
+            intent: ToggleRecordingIntent(),
+            phrases: ["Toggle recording with \(.applicationName)"],
+            shortTitle: "Toggle Recording",
+            systemImageName: "record.circle"
         )
         AppShortcut(
             intent: StopRecordingIntent(),

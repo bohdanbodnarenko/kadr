@@ -116,6 +116,13 @@ enum BeautifyCompositor {
         let content = document.contentRect
         context.saveGState()
         context.translateBy(x: imageOrigin.x - content.minX, y: imageOrigin.y - content.minY)
+        if let composite = SpotlightComposite.from(commands: document.resolvedCommands) {
+            context.saveGState()
+            context.setFillColor(gray: 0, alpha: composite.dimOpacity)
+            context.addPath(composite.path(in: document.canvasRect))
+            context.drawPath(using: .eoFill)
+            context.restoreGState()
+        }
         for command in document.resolvedCommands {
             contents.drawCommand(command, context)
         }
@@ -291,6 +298,9 @@ enum BeautifyCompositor {
 
     private static func fillBackdrop(_ backdrop: BeautifyBackdrop, in rect: CGRect, context: CGContext) {
         switch backdrop {
+        case .none:
+            break
+
         case let .solid(colour):
             context.setFillColor(colour.cgColor)
             context.fill(rect)

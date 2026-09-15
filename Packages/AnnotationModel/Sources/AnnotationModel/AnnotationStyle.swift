@@ -97,7 +97,10 @@ public struct FillStyle: Codable, Hashable, Sendable {
     public static let defaultAlpha: Double = 0.25
 }
 
-/// Arrow head shapes (docs/03 §3: three head styles).
+/// Arrow head shapes (docs/03 §3).
+///
+/// Start and end heads share this set. A missing start head is `nil` on `ArrowSpec`,
+/// not a seventh case, so files written before start heads existed still open.
 public enum ArrowHead: String, Codable, CaseIterable, Sendable {
     /// A solid triangle.
     case filled
@@ -105,12 +108,21 @@ public enum ArrowHead: String, Codable, CaseIterable, Sendable {
     case open
     /// A triangle with a notched back edge.
     case concave
+    /// A filled circle at the tip.
+    case dot
+    /// A bar perpendicular to the shaft.
+    case bar
+    /// A filled diamond.
+    case diamond
 
     public var title: String {
         switch self {
         case .filled: "Filled"
         case .open: "Open"
         case .concave: "Concave"
+        case .dot: "Dot"
+        case .bar: "Bar"
+        case .diamond: "Diamond"
         }
     }
 }
@@ -280,6 +292,8 @@ public struct TextStyle: Codable, Hashable, Sendable {
     public var fontName: String
     public var fontSize: CGFloat
     public var isBold: Bool
+    public var isItalic: Bool
+    public var isUnderline: Bool
     public var color: AnnotationColor
     /// A filled pill behind the text; `nil` for plain text.
     public var backgroundColor: AnnotationColor?
@@ -289,6 +303,8 @@ public struct TextStyle: Codable, Hashable, Sendable {
         fontName: String = "Helvetica Neue",
         fontSize: CGFloat = 24,
         isBold: Bool = true,
+        isItalic: Bool = false,
+        isUnderline: Bool = false,
         color: AnnotationColor = .annotationRed,
         backgroundColor: AnnotationColor? = nil,
         alignment: Alignment = .leading
@@ -296,6 +312,8 @@ public struct TextStyle: Codable, Hashable, Sendable {
         self.fontName = fontName
         self.fontSize = max(fontSize, 1)
         self.isBold = isBold
+        self.isItalic = isItalic
+        self.isUnderline = isUnderline
         self.color = color
         self.backgroundColor = backgroundColor
         self.alignment = alignment
@@ -312,6 +330,8 @@ public struct TextStyle: Codable, Hashable, Sendable {
         fontName = try container.decode(String.self, forKey: .fontName)
         fontSize = try max(container.decode(CGFloat.self, forKey: .fontSize), 1)
         isBold = try container.decode(Bool.self, forKey: .isBold)
+        isItalic = try container.decodeIfPresent(Bool.self, forKey: .isItalic) ?? false
+        isUnderline = try container.decodeIfPresent(Bool.self, forKey: .isUnderline) ?? false
         color = try container.decode(AnnotationColor.self, forKey: .color)
         backgroundColor = try container.decodeIfPresent(AnnotationColor.self, forKey: .backgroundColor)
         alignment = try container.decodeIfPresent(Alignment.self, forKey: .alignment) ?? .leading

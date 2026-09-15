@@ -1,6 +1,7 @@
 import AnnotationModel
 import AppKit
 import CoreGraphics
+import CryptoKit
 import EditorUI
 import MediaExport
 import os
@@ -19,22 +20,27 @@ extension EditorWindowController {
             .deletingPathExtension()
             .appendingPathExtension(KadrDocumentFile.fileExtension)
         do {
-            try writeProject(to: destination)
+            try writeProject(to: destination, reveal: true, addToHistory: true)
             logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
         } catch {
             logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    func writeProject(to destination: URL) throws {
+    func writeProject(to destination: URL, reveal: Bool = true, addToHistory: Bool = true) throws {
         try KadrDocumentFile.write(
             KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG),
             to: destination
         )
         model.markSaved()
         autosave.discard(for: fileURL)
-        addToLibrary(destination)
-        NSWorkspace.shared.activateFileViewerSelecting([destination])
+        window?.isDocumentEdited = false
+        if addToHistory {
+            addToLibrary(destination)
+        }
+        if reveal {
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
+        }
     }
 
     func addToLibrary(_ url: URL) {
@@ -58,6 +64,7 @@ extension EditorWindowController {
     }
 
     func save(_ image: CGImage) throws {
+        let previousHash = Self.fileHash(at: fileURL)
         let writer = CaptureFileWriter()
         let directory = fileURL.deletingLastPathComponent()
         let stem = EditorCanvasPreferences.flattenedSaveStem(
@@ -79,10 +86,21 @@ extension EditorWindowController {
             url = fileURL
             try writer.write(image, to: url, options: options)
         }
+        if EditorCanvasPreferences.writesSidecarOnSave() {
+            let sidecar = url.deletingPathExtension().appendingPathExtension(KadrDocumentFile.fileExtension)
+            try writeProject(to: sidecar, reveal: false, addToHistory: false)
+        }
         logger.info("Saved \(url.lastPathComponent, privacy: .public)")
         model.markSaved()
         autosave.discard(for: fileURL)
+        window?.isDocumentEdited = false
+        CaptureSavedNotice.post(.init(original: fileURL, saved: url, previousHash: previousHash))
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    static func fileHash(at url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Flattened image (or a `.kadr`) to a path the user picks (CleanShot §8.5).

@@ -52,16 +52,6 @@
     "%lld" : {
 
     },
-    "%lld × %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld × %2$lld"
-          }
-        }
-      }
-    },
     "%lld captures" : {
       "comment" : "Count of stills and recordings.",
       "localizations" : {
@@ -224,13 +214,22 @@
     "About" : {
 
     },
+    "About Kadr" : {
+
+    },
     "Access updates when you return here." : {
 
     },
     "Action" : {
 
     },
+    "Actions" : {
+
+    },
     "Actions in %@" : {
+
+    },
+    "Active display" : {
 
     },
     "Add" : {
@@ -239,10 +238,19 @@
     "Add an arrow, change the background, then export. No screen access needed." : {
 
     },
+    "Advanced" : {
+
+    },
     "After capturing" : {
 
     },
     "Aim for" : {
+
+    },
+    "All displays" : {
+
+    },
+    "All displays, stitched" : {
 
     },
     "All types" : {
@@ -261,6 +269,9 @@
 
     },
     "Allowed" : {
+
+    },
+    "Already as small as it gets" : {
 
     },
     "Always on the main display" : {
@@ -308,6 +319,9 @@
     "Before recording" : {
 
     },
+    "Bring All to Front" : {
+
+    },
     "Camera" : {
 
     },
@@ -321,6 +335,9 @@
 
     },
     "Cancelled." : {
+
+    },
+    "Capture" : {
 
     },
     "Capture %@, %@" : {
@@ -339,16 +356,34 @@
     "Capture a scrolling region (S)" : {
 
     },
+    "Capture a scrolling region and stitch it." : {
+
+    },
     "Capture Area" : {
+
+    },
+    "Capture Area and Copy" : {
+
+    },
+    "Capture Area and Save" : {
 
     },
     "Capture options" : {
 
     },
+    "Capture Previous Area" : {
+
+    },
     "Capture Screen" : {
 
     },
+    "Capture Scrolling Area" : {
+
+    },
     "Capture Text" : {
+
+    },
+    "Capture Text (OCR)" : {
 
     },
     "Capture the whole display (F)" : {
@@ -417,6 +452,9 @@
     "Close (Esc)" : {
 
     },
+    "Close All Overlays" : {
+
+    },
     "Closes setup. You can finish it later from the menu bar." : {
 
     },
@@ -427,6 +465,9 @@
 
     },
     "Compress" : {
+
+    },
+    "Compressing…" : {
 
     },
     "Compression failed" : {
@@ -453,19 +494,19 @@
     "Copy Link" : {
 
     },
+    "Copy Text" : {
+
+    },
     "Could not read text" : {
       "comment" : "OCR failed to find text in the capture."
     },
     "Countdown" : {
 
     },
-    "Crop the notch from fullscreen screenshots" : {
-
-    },
     "Custom: %lld s" : {
 
     },
-    "Cuts the black camera strip from fullscreen shots on a notched MacBook." : {
+    "Cut" : {
 
     },
     "Default folder" : {
@@ -514,6 +555,9 @@
     "Display" : {
 
     },
+    "Dock under the camera" : {
+
+    },
     "Done" : {
 
     },
@@ -526,6 +570,9 @@
     "Dynamic range" : {
 
     },
+    "Edit" : {
+
+    },
     "Editor is not installed" : {
       "comment" : "The embedded Kadr Editor app is missing from the bundle."
     },
@@ -533,6 +580,12 @@
 
     },
     "Every shortcut can be changed later in Settings." : {
+
+    },
+    "Export…" : {
+
+    },
+    "File" : {
 
     },
     "Filename" : {
@@ -583,6 +636,15 @@
     "Frames per Second" : {
 
     },
+    "Freeze Screen" : {
+
+    },
+    "Fullscreen captures" : {
+
+    },
+    "General" : {
+
+    },
     "GIF" : {
 
     },
@@ -610,6 +672,9 @@
     "Hide all cards" : {
 
     },
+    "Hide Desktop Icons" : {
+
+    },
     "Hide desktop icons while recording" : {
 
     },
@@ -619,13 +684,31 @@
     "Hide icons while recording" : {
 
     },
+    "Hide Kadr" : {
+
+    },
     "Hide or show the icons on the desktop." : {
+
+    },
+    "Hide Others" : {
+
+    },
+    "Hide Overlays" : {
+
+    },
+    "Hide Pins" : {
 
     },
     "Hide Sidebar" : {
 
     },
     "Highlight clicks" : {
+
+    },
+    "History" : {
+
+    },
+    "History…" : {
 
     },
     "Hold ⌥ when picking a window to invert the shadow setting for one capture." : {
@@ -635,6 +718,9 @@
 
     },
     "Image" : {
+
+    },
+    "Include Kadr overlays in captures" : {
 
     },
     "Include the pointer" : {
@@ -649,10 +735,16 @@
     "Install" : {
 
     },
+    "Install speech model…" : {
+
+    },
     "It tidies itself away on its own. Swipe it toward the edge to hide it sooner." : {
 
     },
     "kadr" : {
+
+    },
+    "Kadr Help" : {
 
     },
     "Keep captures" : {
@@ -680,6 +772,9 @@
 
     },
     "Keyboard shortcuts" : {
+
+    },
+    "Keyboard Shortcuts" : {
 
     },
     "Keystroke overlay" : {
@@ -742,6 +837,9 @@
     "Microphone is silent" : {
 
     },
+    "Minimize" : {
+
+    },
     "Mirror the text" : {
 
     },
@@ -752,9 +850,6 @@
 
     },
     "More capture modes" : {
-
-    },
-    "Move %lld Items to Trash" : {
 
     },
     "Move Earlier" : {
@@ -790,6 +885,9 @@
     "Off" : {
 
     },
+    "Off keeps cards, the recording bar and the HUD out of screenshots and recordings." : {
+
+    },
     "On" : {
 
     },
@@ -803,6 +901,9 @@
 
     },
     "Open a review window" : {
+
+    },
+    "Open Capture Folder" : {
 
     },
     "Open History" : {
@@ -865,7 +966,13 @@
     "Padding: %lld pt" : {
 
     },
+    "Paste" : {
+
+    },
     "Paused" : {
+
+    },
+    "Permissions" : {
 
     },
     "Pick a capture mode, or press Return for the last one." : {
@@ -875,6 +982,9 @@
 
     },
     "Pick a window and capture it." : {
+
+    },
+    "Pick Colour…" : {
 
     },
     "Pin" : {
@@ -889,10 +999,16 @@
         }
       }
     },
+    "Pin Clipboard" : {
+
+    },
     "Pin Image" : {
 
     },
     "Placeholders: {app}, {date}, {time}" : {
+
+    },
+    "Play a sound when capturing" : {
 
     },
     "Precision crosshair (press C on the overlay)" : {
@@ -910,6 +1026,15 @@
     "Previous step" : {
 
     },
+    "Quality" : {
+
+    },
+    "Quit Kadr" : {
+
+    },
+    "Re-capture the last selected area." : {
+
+    },
     "Reading time" : {
 
     },
@@ -925,10 +1050,22 @@
     "Record microphone" : {
 
     },
+    "Record Region" : {
+
+    },
+    "Record Region…" : {
+
+    },
+    "Record Screen" : {
+
+    },
     "Record system audio" : {
 
     },
     "Record without the pointer and draw it back" : {
+
+    },
+    "Record…" : {
 
     },
     "Recording" : {
@@ -964,6 +1101,9 @@
     "Recording, %@ elapsed" : {
 
     },
+    "Redo" : {
+
+    },
     "Reduce interruptions while recording" : {
 
     },
@@ -986,9 +1126,6 @@
     "Rename" : {
 
     },
-    "Rename Recording" : {
-
-    },
     "Reset" : {
 
     },
@@ -1005,6 +1142,12 @@
 
     },
     "Restart Kadr" : {
+
+    },
+    "Restore All Shortcuts" : {
+
+    },
+    "Restore Default" : {
 
     },
     "Restricted" : {
@@ -1026,6 +1169,9 @@
 
     },
     "Save" : {
+
+    },
+    "Save All Overlays" : {
 
     },
     "Save Retina captures at 1×" : {
@@ -1061,10 +1207,19 @@
     "Scrolling Capture" : {
 
     },
+    "Scrolling Capture…" : {
+
+    },
     "Search captures" : {
 
     },
     "Search the text in captures" : {
+
+    },
+    "Select a region and start recording it." : {
+
+    },
+    "Select All" : {
 
     },
     "Select an area and read the text in it." : {
@@ -1085,10 +1240,16 @@
     "Self-timer" : {
 
     },
+    "Self-Timer" : {
+
+    },
     "Set Desktop Icons" : {
 
     },
     "Settings" : {
+
+    },
+    "Settings…" : {
 
     },
     "Share" : {
@@ -1100,6 +1261,9 @@
     "Share…" : {
 
     },
+    "Shortcuts" : {
+
+    },
     "Shortcuts work in every app. Option alone is refused — macOS 15 drops those." : {
 
     },
@@ -1107,6 +1271,9 @@
 
     },
     "Show a script while recording" : {
+
+    },
+    "Show All" : {
 
     },
     "Show an image on top of every window." : {
@@ -1119,6 +1286,9 @@
 
     },
     "Show me joins Kadr is unsure about" : {
+
+    },
+    "Show menu bar icon" : {
 
     },
     "Show pressed keys" : {
@@ -1161,6 +1331,9 @@
 
     },
     "Start now" : {
+
+    },
+    "Start or stop a screen recording." : {
 
     },
     "Start recording" : {
@@ -1259,6 +1432,12 @@
     "Toggle Click-Through" : {
 
     },
+    "Toggle Recording" : {
+
+    },
+    "Trim the empty notch strip from fullscreen screenshots" : {
+
+    },
     "Try a practice image" : {
 
     },
@@ -1268,13 +1447,25 @@
     "Type or paste what you plan to say." : {
 
     },
+    "Undo" : {
+
+    },
+    "Updates" : {
+
+    },
     "URL Scheme" : {
+
+    },
+    "Use Default" : {
 
     },
     "Use Without" : {
 
     },
     "Version" : {
+
+    },
+    "View" : {
 
     },
     "Wait before capturing" : {
@@ -1311,6 +1502,9 @@
 
     },
     "Your shortcuts" : {
+
+    },
+    "Zoom" : {
 
     }
   },

@@ -21,10 +21,13 @@ extension PointerTelemetryRecorder {
         let mask = (1 << CGEventType.mouseMoved.rawValue)
             | (1 << CGEventType.leftMouseDragged.rawValue)
             | (1 << CGEventType.rightMouseDragged.rawValue)
+            | (1 << CGEventType.otherMouseDragged.rawValue)
             | (1 << CGEventType.leftMouseDown.rawValue)
             | (1 << CGEventType.leftMouseUp.rawValue)
             | (1 << CGEventType.rightMouseDown.rawValue)
             | (1 << CGEventType.rightMouseUp.rawValue)
+            | (1 << CGEventType.otherMouseDown.rawValue)
+            | (1 << CGEventType.otherMouseUp.rawValue)
 
         let callback: CGEventTapCallBack = { _, type, event, context in
             guard let context else { return Unmanaged.passUnretained(event) }
@@ -79,8 +82,8 @@ extension PointerTelemetryRecorder {
         lastTapEventTime = recordingTime
         let point = DisplayPoint(x: location.x, y: location.y).inScreenSpace(space)
         switch type {
-        case .mouseMoved, .leftMouseDragged, .rightMouseDragged:
-            recordPointer(at: point)
+        case .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+            recordPointer(at: point, isDragging: type != .mouseMoved)
         case .leftMouseDown:
             recordClick(at: point, button: .left, isDown: true)
         case .leftMouseUp:
@@ -89,6 +92,10 @@ extension PointerTelemetryRecorder {
             recordClick(at: point, button: .right, isDown: true)
         case .rightMouseUp:
             recordClick(at: point, button: .right, isDown: false)
+        case .otherMouseDown:
+            recordClick(at: point, button: .other, isDown: true)
+        case .otherMouseUp:
+            recordClick(at: point, button: .other, isDown: false)
         default:
             break
         }
@@ -97,8 +104,9 @@ extension PointerTelemetryRecorder {
     /// AppKit monitors, which need no permission. Returns whether they were installed.
     func startMonitors() -> Bool {
         let mouse: NSEvent.EventTypeMask = [
-            .mouseMoved, .leftMouseDragged, .rightMouseDragged,
-            .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp
+            .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+            .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp,
+            .otherMouseDown, .otherMouseUp
         ]
         // The event itself is not `Sendable`, so what crosses into the isolated call is
         // the handful of values read from it — which is all the recorder wants anyway.
@@ -147,8 +155,8 @@ extension PointerTelemetryRecorder {
     func handleMonitorEvent(type: NSEvent.EventType, at location: CGPoint) {
         let point = ScreenPoint(x: location.x, y: location.y)
         switch type {
-        case .mouseMoved, .leftMouseDragged, .rightMouseDragged:
-            recordPointer(at: point)
+        case .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+            recordPointer(at: point, isDragging: type != .mouseMoved)
         case .leftMouseDown:
             recordClick(at: point, button: .left, isDown: true)
         case .leftMouseUp:
@@ -157,6 +165,10 @@ extension PointerTelemetryRecorder {
             recordClick(at: point, button: .right, isDown: true)
         case .rightMouseUp:
             recordClick(at: point, button: .right, isDown: false)
+        case .otherMouseDown:
+            recordClick(at: point, button: .other, isDown: true)
+        case .otherMouseUp:
+            recordClick(at: point, button: .other, isDown: false)
         default:
             break
         }
@@ -228,15 +240,18 @@ extension PointerTelemetryRecorder {
 
     // MARK: - Dropping a rung (docs/11 S0.2)
 
-    /// Tears the tap down and falls to the next source that works.
-    ///
-    /// Re-enabling is deliberately not attempted. A tap disabled for running long will be
-    /// disabled again the moment it is busy, and a recording that flickers between working
-    /// and not is worse than one that quietly moves to a source that always works — the
-    /// monitors miss movement over other apps' windows, which is a known and documented
-    /// degradation rather than an intermittent one.
+    /// Re-enables a timed-out tap a few times, then drops to monitors (docs/16 REC-13).
     func tapWentDead(reason: CGEventType) {
         guard isRecording, source == .eventTap else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        tapReviveTimes.removeAll { now - $0 > 60 }
+        if reason == .tapDisabledByTimeout, tapReviveTimes.count < 3, let eventTap {
+            tapReviveTimes.append(now)
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+            lastTapEventTime = recordingTime
+            logger.info("Re-enabled the event tap (\(self.tapReviveTimes.count)/3 in 60s)")
+            return
+        }
         logger.error("macOS disabled the event tap (\(reason.rawValue, privacy: .public)); dropping a rung")
         stopEventTap()
 

@@ -126,14 +126,38 @@ public struct HistoryFilter: Sendable, Hashable {
     public var kind: HistoryItemKind?
     public var capturedAfter: Date?
     public var capturedBefore: Date?
+    public var sort: HistorySort
 
-    public init(kind: HistoryItemKind? = nil, capturedAfter: Date? = nil, capturedBefore: Date? = nil) {
+    public init(
+        kind: HistoryItemKind? = nil,
+        capturedAfter: Date? = nil,
+        capturedBefore: Date? = nil,
+        sort: HistorySort = .newest
+    ) {
         self.kind = kind
         self.capturedAfter = capturedAfter
         self.capturedBefore = capturedBefore
+        self.sort = sort
     }
 
     public static let all = HistoryFilter()
+}
+
+/// Grid ordering in History (docs/16 OUT-19).
+public enum HistorySort: String, Sendable, Hashable, CaseIterable {
+    case newest
+    case oldest
+    case largest
+    case name
+
+    public var title: String {
+        switch self {
+        case .newest: "Newest"
+        case .oldest: "Oldest"
+        case .largest: "Largest"
+        case .name: "Name"
+        }
+    }
 }
 
 /// Retention + size cap, as HistoryKit understands them (docs/03 §5).

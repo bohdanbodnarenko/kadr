@@ -43,6 +43,8 @@ extension KeyboardShortcuts.Name {
     static let hideOverlays = Self("hideOverlays", initial: .init(.o, modifiers: [.control, .shift]))
     static let hidePins = Self("hidePins", initial: .init(.u, modifiers: [.control, .shift]))
     static let pinClipboard = Self("pinClipboard", initial: .init(.y, modifiers: [.control, .shift]))
+    static let openHistory = Self("openHistory", initial: .init(.l, modifiers: [.command, .shift]))
+    static let openSaveFolder = Self("openSaveFolder", initial: .init(.o, modifiers: [.command, .shift]))
 }
 
 extension CaptureCommand {
@@ -70,6 +72,8 @@ extension CaptureCommand {
         case .hideOverlays: .hideOverlays
         case .hidePins: .hidePins
         case .pinClipboard: .pinClipboard
+        case .openHistory: .openHistory
+        case .openSaveFolder: .openSaveFolder
         }
     }
 }
@@ -88,9 +92,12 @@ final class HotkeyCenter {
         self.perform = perform
     }
 
+    let health = HotkeyHealth()
+
     /// Registers a handler for every command. Handlers fire on key *up* so a held
     /// shortcut cannot enqueue a burst of captures.
     func start() {
+        health.probeAll()
         for command in CaptureCommand.allCases {
             KeyboardShortcuts.onKeyUp(for: command.shortcutName) { [weak self] in
                 guard let self else { return }
@@ -102,17 +109,51 @@ final class HotkeyCenter {
         logger.info("Registered \(count, privacy: .public) global hotkeys")
     }
 
-    /// Rejects Option-only shortcuts in the recorder.
+    /// Rejects Option-only shortcuts and shortcuts already used by another Kadr command.
     ///
     /// Option-as-the-only-modifier hotkeys do not fire reliably on macOS 15
     /// (docs/04 §3.2), so the recorder refuses to record one rather than handing the
     /// user a shortcut that silently does nothing.
     nonisolated static func validate(
-        _ shortcut: KeyboardShortcuts.Shortcut
+        _ shortcut: KeyboardShortcuts.Shortcut,
+        for command: CaptureCommand = .allInOne,
+        others: [CaptureCommand: KeyboardShortcuts.Shortcut] = [:]
     ) -> KeyboardShortcuts.ValidationResult {
         let modifiers = shortcut.modifiers.intersection(.deviceIndependentFlagsMask)
-        guard modifiers == [.option] else { return .allow }
-        let reason = "Option-only shortcuts don’t fire reliably on macOS 15. Add ⌘, ⌃ or ⇧."
-        return .disallow(reason: reason)
+        if modifiers == [.option] {
+            let reason = "Option-only shortcuts don’t fire reliably on macOS 15. Add ⌘, ⌃ or ⇧."
+            return .disallow(reason: reason)
+        }
+        if let other = others.first(where: { $0.key != command && $0.value == shortcut }) {
+            return .disallow(reason: "Already used by \(other.key.shortcutTitle)")
+        }
+        return .allow
+    }
+
+    @MainActor
+    static func validator(
+        for command: CaptureCommand
+    ) -> (KeyboardShortcuts.Shortcut) -> KeyboardShortcuts.ValidationResult {
+        { shortcut in
+            var others: [CaptureCommand: KeyboardShortcuts.Shortcut] = [:]
+            for candidate in CaptureCommand.allCases {
+                if let value = KeyboardShortcuts.getShortcut(for: candidate.shortcutName) {
+                    others[candidate] = value
+                }
+            }
+            return validate(shortcut, for: command, others: others)
+        }
+    }
+
+    @MainActor
+    static func restoreDefault(for command: CaptureCommand) {
+        KeyboardShortcuts.reset(command.shortcutName)
+    }
+
+    @MainActor
+    static func restoreAll() {
+        for command in CaptureCommand.allCases {
+            KeyboardShortcuts.reset(command.shortcutName)
+        }
     }
 }

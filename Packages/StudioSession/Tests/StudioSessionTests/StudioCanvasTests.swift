@@ -16,32 +16,33 @@ struct StudioCanvasTests {
         #expect(StudioCanvas.identity.isIdentity)
     }
 
-    @Test("Padding grows the canvas and keeps the card centred")
+    @Test("Padding shrinks the card and keeps the canvas aspect")
     func paddingCentresTheCard() {
         let canvas = StudioCanvas(paddingFraction: 0.1)
         let layout = canvas.layout(cardSize: card)
-        #expect(layout.canvasSize.width > card.width)
-        #expect(layout.canvasSize.height > card.height)
-        #expect(abs(layout.cardRect.width - card.width) < 0.001)
-        #expect(abs(layout.cardRect.height - card.height) < 0.001)
+        #expect(layout.canvasSize == card)
+        #expect(layout.cardRect.width < card.width)
+        #expect(layout.cardRect.height < card.height)
         #expect(abs(layout.cardRect.midX - layout.canvasSize.width / 2) < 0.001)
         #expect(abs(layout.cardRect.midY - layout.canvasSize.height / 2) < 0.001)
+        let ratio = layout.cardRect.width / layout.cardRect.height
+        #expect(abs(ratio - card.width / card.height) < 0.001)
     }
 
-    @Test("A shadow with no padding still leaves room so it is not clipped")
+    @Test("A shadow with no padding still insets the card so it is not clipped")
     func shadowReservesInset() {
         let canvas = StudioCanvas(shadow: 1)
         let layout = canvas.layout(cardSize: card)
-        #expect(layout.canvasSize.width > card.width)
+        #expect(layout.canvasSize == card)
         #expect(layout.cardRect.minX > 0)
     }
 
     @Test("Presenter is a padded card, not the raw frame")
     func presenterIsNotIdentity() {
         #expect(!StudioCanvas.presenter.isIdentity)
-        let layout = StudioCanvas.presenter.layout(cardSize: card)
+        let layout = StudioCanvas.presenter.layout(canvasSize: card, contentAspect: card.width / card.height)
         #expect(layout.cornerRadius > 0)
-        #expect(layout.canvasSize.width > card.width)
+        #expect(layout.cardRect.width < card.width)
     }
 
     @Test("A canvas round-trips")
@@ -88,5 +89,37 @@ struct StudioCanvasTests {
         canvas.setBackdropKind(.none)
         #expect(canvas.background == .none)
         #expect(canvas.paddingFraction == StudioCanvas.presenter.paddingFraction)
+    }
+
+    @Test("A two-colour gradient from an older session still opens")
+    func legacyGradientDecodes() throws {
+        let json = Data("""
+        {"background":{"gradient":{"_0":{"red":0.1,"green":0.2,"blue":0.3},"_1":{"red":0.4,"green":0.5,"blue":0.6}}}}
+        """.utf8)
+        let canvas = try JSONDecoder().decode(StudioCanvas.self, from: json)
+        guard case let .gradient(ramp) = canvas.background else {
+            Issue.record("expected a gradient")
+            return
+        }
+        #expect(ramp.stops.count == 2)
+        #expect(abs(ramp.start.red - 0.1) < 0.001)
+        #expect(abs(ramp.end.blue - 0.6) < 0.001)
+        #expect(abs(ramp.angleDegrees - 90) < 0.001)
+    }
+
+    @Test("A multi-stop angled gradient round-trips")
+    func multiStopGradientRoundTrips() throws {
+        var canvas = StudioCanvas.presenter
+        canvas.setGradient(StudioGradient(
+            stops: [
+                StudioColor(red: 1, green: 0, blue: 0),
+                StudioColor(red: 0, green: 1, blue: 0),
+                StudioColor(red: 0, green: 0, blue: 1)
+            ],
+            angleDegrees: 45
+        ))
+        let data = try JSONEncoder().encode(canvas)
+        let decoded = try JSONDecoder().decode(StudioCanvas.self, from: data)
+        #expect(decoded.background == canvas.background)
     }
 }

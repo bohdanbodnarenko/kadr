@@ -28,6 +28,10 @@ private actor GatedWriter: SegmentWriting {
         return length
     }
 
+    var failureReason: String? {
+        nil
+    }
+
     func append(_: SampleBufferBox) -> Bool {
         true
     }

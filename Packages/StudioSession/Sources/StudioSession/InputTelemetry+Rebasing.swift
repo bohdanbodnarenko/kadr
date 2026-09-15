@@ -34,9 +34,15 @@ public extension InputTelemetry {
         var rebased = self
         rebased.pointer = pointer.compactMap { sample in
             clips.editedTime(forSource: sample.time).map { time in
-                PointerSample(time: time, position: sample.position, cursorIndex: sample.cursorIndex)
+                PointerSample(
+                    time: time,
+                    position: sample.position,
+                    cursorIndex: sample.cursorIndex,
+                    isDragging: sample.isDragging
+                )
             }
         }
+        rebased.pointer = Self.seedingClipStarts(rebased.pointer, source: pointer, clips: clips)
         rebased.clicks = clicks.compactMap { click in
             clips.editedTime(forSource: click.time).map { time in
                 ClickEvent(time: time, position: click.position, button: click.button, isDown: click.isDown)
@@ -48,6 +54,48 @@ public extension InputTelemetry {
             }
         }
         return rebased
+    }
+
+    /// Seeds each clip start with the last source sample at or before `clip.sourceStart`
+    /// so the cursor is not stale after a cut (docs/16 STU-A4).
+    private static func seedingClipStarts(
+        _ edited: [PointerSample],
+        source: [PointerSample],
+        clips: ClipTimeline
+    ) -> [PointerSample] {
+        guard !source.isEmpty else { return edited }
+        var seeded = edited
+        var elapsed: TimeInterval = 0
+        for clip in clips.clips {
+            let editedStart = elapsed
+            if let index = lastIndex(atOrBefore: clip.sourceStart, in: source) {
+                let sample = source[index]
+                if !seeded.contains(where: { abs($0.time - editedStart) < 0.0005 }) {
+                    seeded.append(PointerSample(
+                        time: editedStart,
+                        position: sample.position,
+                        cursorIndex: sample.cursorIndex,
+                        isDragging: sample.isDragging
+                    ))
+                }
+            }
+            elapsed += clip.editedDuration
+        }
+        return seeded.sorted { $0.time < $1.time }
+    }
+
+    private static func lastIndex(atOrBefore time: TimeInterval, in samples: [PointerSample]) -> Int? {
+        var low = 0
+        var high = samples.count
+        while low < high {
+            let mid = (low + high) / 2
+            if samples[mid].time <= time {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low > 0 ? low - 1 : nil
     }
 }
 

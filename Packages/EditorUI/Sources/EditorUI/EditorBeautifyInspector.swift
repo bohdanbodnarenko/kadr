@@ -41,6 +41,14 @@ struct EditorBeautifyInspector: View {
             InspectorSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
             InspectorSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
             InspectorToggleRow("Shadow", isOn: shadowBinding)
+            if spec.shadow.isEnabled {
+                InspectorSegmented(
+                    BeautifyShadowStyle.allCases,
+                    selection: shadowStyleBinding,
+                    title: \.title
+                )
+                InspectorSlider(title: "Strength", value: shadowStrengthBinding, range: 0.15 ... 1)
+            }
             InspectorRow("Aspect") {
                 Picker("Aspect", selection: aspectBinding) {
                     ForEach(BeautifyAspect.allCases, id: \.self) { aspect in
@@ -116,6 +124,24 @@ struct EditorBeautifyInspector: View {
         Binding(
             get: { spec.shadow.isEnabled },
             set: { on in commit { $0.shadow = on ? .soft : .none } }
+        )
+    }
+
+    private var shadowStyleBinding: Binding<BeautifyShadowStyle> {
+        Binding(
+            get: { spec.shadow.style },
+            set: { value in
+                commit { $0.shadow = value.shadow.scaled(strength: spec.shadow.strength) }
+            }
+        )
+    }
+
+    private var shadowStrengthBinding: Binding<Double> {
+        Binding(
+            get: { spec.shadow.strength },
+            set: { value in
+                commit { $0.shadow = spec.shadow.style.shadow.scaled(strength: value) }
+            }
         )
     }
 

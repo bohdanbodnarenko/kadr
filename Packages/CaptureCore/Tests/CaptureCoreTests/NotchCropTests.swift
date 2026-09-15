@@ -33,7 +33,7 @@ struct NotchCropTests {
         #expect(result.image.height == 100)
     }
 
-    @Test("A fullscreen still loses the notch strip")
+    @Test("A fullscreen still loses the empty notch strip")
     func cropsFullscreen() {
         let capture = makeCapture(width: 200, height: 100, rect: display)
         let result = NotchCrop.apply(
@@ -43,10 +43,71 @@ struct NotchCropTests {
             displayFrame: display
         )
         #expect(result.image.width == 200)
-        #expect(result.image.height == 80)
-        #expect(result.metadata.pixelSize.height == 80)
-        #expect(result.metadata.pointRect.minY == 10)
-        #expect(result.metadata.pointRect.height == 40)
+        #expect(result.image.height == 78)
+        #expect(result.metadata.pixelSize.height == 78)
+        #expect(result.metadata.pointRect.minY == 11)
+        #expect(result.metadata.pointRect.height == 39)
+    }
+
+    @Test("A black strip is cropped")
+    func cropsEmptyBlackStrip() {
+        let capture = makeCapture(width: 200, height: 100, rect: display) { context in
+            context.setFillColor(CGColor(gray: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 80, width: 200, height: 20))
+        }
+        #expect(NotchCrop.stripIsEmpty(capture.image, rows: 20))
+        let result = NotchCrop.apply(
+            capture,
+            enabled: true,
+            topInsetPoints: 10,
+            displayFrame: display
+        )
+        #expect(result.image.height == 78)
+    }
+
+    @Test("Menu text in the strip is kept")
+    func keepsMenuText() {
+        let capture = makeCapture(width: 200, height: 100, rect: display) { context in
+            context.setFillColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1))
+            context.fill(CGRect(x: 0, y: 80, width: 200, height: 20))
+        }
+        #expect(!NotchCrop.stripIsEmpty(capture.image, rows: 20))
+        let result = NotchCrop.apply(
+            capture,
+            enabled: true,
+            topInsetPoints: 10,
+            displayFrame: display
+        )
+        #expect(result.image.height == 100)
+    }
+
+    @Test("Near-black noise is still cropped")
+    func cropsNearBlackNoise() {
+        let capture = makeCapture(width: 200, height: 100, rect: display) { context in
+            let level = CGFloat(NotchCrop.channelThreshold) / 255
+            context.setFillColor(CGColor(srgbRed: level, green: level, blue: level, alpha: 1))
+            context.fill(CGRect(x: 0, y: 80, width: 200, height: 20))
+        }
+        #expect(NotchCrop.stripIsEmpty(capture.image, rows: 20))
+        let result = NotchCrop.apply(
+            capture,
+            enabled: true,
+            topInsetPoints: 10,
+            displayFrame: display
+        )
+        #expect(result.image.height == 78)
+    }
+
+    @Test("A strip taller than half the image is kept")
+    func keepsStripTallerThanHalf() {
+        let capture = makeCapture(width: 200, height: 100, rect: display)
+        let result = NotchCrop.apply(
+            capture,
+            enabled: true,
+            topInsetPoints: 30,
+            displayFrame: display
+        )
+        #expect(result.image.height == 100)
     }
 
     @Test("A region that is not the full display is left alone")
@@ -96,7 +157,8 @@ struct NotchCropTests {
         width: Int,
         height: Int,
         rect: DisplayRect,
-        source: CaptureSource = .display(1)
+        source: CaptureSource = .display(1),
+        paint: ((CGContext) -> Void)? = nil
     ) -> Capture {
         guard let context = CGContext(
             data: nil,
@@ -106,7 +168,10 @@ struct NotchCropTests {
             bytesPerRow: 0,
             space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ), let image = context.makeImage() else {
+        ), let image: CGImage = {
+            paint?(context)
+            return context.makeImage()
+        }() else {
             fatalError("Could not create a test capture")
         }
         return Capture(

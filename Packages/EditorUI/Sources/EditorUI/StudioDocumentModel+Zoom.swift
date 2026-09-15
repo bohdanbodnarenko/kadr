@@ -39,9 +39,11 @@ public extension StudioDocumentModel {
         let footprint = duration + transition * 2
         let start = max(0, min(playhead, edit.duration - footprint))
         let available = max(edit.duration - start - transition * 2, 0.1)
+        let sourceStart = sourceTime(forEdited: start)
+        let speed = edit.clips.clip(atEdited: start)?.speed ?? 1
         let cue = ZoomCue(
-            start: start,
-            duration: min(duration, available),
+            start: sourceStart,
+            duration: min(duration, available) * speed,
             magnification: magnification,
             anchor: .fixed(pointerPosition(at: start) ?? centreOfFrame),
             transitionDuration: transition
@@ -62,8 +64,8 @@ public extension StudioDocumentModel {
         let transition = min(Self.defaultTransition, length / 4)
         let hold = max(length - transition * 2, 0.2)
         let cue = ZoomCue(
-            start: span.low,
-            duration: hold,
+            start: sourceTime(forEdited: span.low),
+            duration: hold * (edit.clips.clip(atEdited: span.low)?.speed ?? 1),
             magnification: 2,
             anchor: .fixed(pointerPosition(at: span.low) ?? centreOfFrame),
             transitionDuration: transition
@@ -85,11 +87,12 @@ public extension StudioDocumentModel {
     ) -> (low: TimeInterval, high: TimeInterval) {
         let origin = min(max(origin, 0), edit.duration)
         let current = min(max(current, 0), edit.duration)
-        if edit.zooms.contains(where: { $0.start <= origin && origin < $0.end }) {
+        if edit.zooms.contains(where: { editedDisplayRange(of: $0).contains(origin) }) {
             return (origin, origin)
         }
-        let lowerLimit = edit.zooms.filter { $0.end <= origin }.map(\.end).max() ?? 0
-        let upperLimit = edit.zooms.filter { $0.start >= origin }.map(\.start).min() ?? edit.duration
+        let lowerLimit = edit.zooms.map { editedDisplayRange(of: $0).upperBound }.filter { $0 <= origin }.max() ?? 0
+        let upperLimit = edit.zooms.map { editedDisplayRange(of: $0).lowerBound }.filter { $0 >= origin }.min()
+            ?? edit.duration
         let low = max(min(origin, current), lowerLimit)
         let high = min(max(origin, current), upperLimit)
         return (low, high)
@@ -209,9 +212,11 @@ public extension StudioDocumentModel {
     /// runs off the end never finishes playing, and the recording ends mid-zoom.
     func moveZoom(_ id: ZoomCue.ID, to start: TimeInterval) {
         guard let cue = edit.zooms.first(where: { $0.id == id }) else { return }
-        let footprint = cue.duration + cue.transitionDuration * 2
+        let edited = editedDisplayRange(of: cue)
+        let footprint = edited.upperBound - edited.lowerBound
         let latest = max(edit.duration - footprint, 0)
-        updateZoom(id, coalescingAs: "zoom.start.\(id)") { $0.start = min(max(start, 0), latest) }
+        let source = sourceTime(forEdited: min(max(start, 0), latest))
+        updateZoom(id, coalescingAs: "zoom.start.\(id)") { $0.start = source }
     }
 
     /// Sets a cue's occupied range from the lane's resize handles.
@@ -221,8 +226,14 @@ public extension StudioDocumentModel {
     func setZoomRange(_ id: ZoomCue.ID, start: TimeInterval, end: TimeInterval) {
         guard let cue = edit.zooms.first(where: { $0.id == id }) else { return }
         let others = edit.zooms.filter { $0.id != id }
-        let lowerLimit = others.filter { $0.end <= cue.start }.map(\.end).max() ?? 0
-        let upperLimit = others.filter { $0.start >= cue.end }.map(\.start).min() ?? edit.duration
+        let lowerLimit = others
+            .map { editedDisplayRange(of: $0).upperBound }
+            .filter { $0 <= editedDisplayRange(of: cue).lowerBound }
+            .max() ?? 0
+        let upperLimit = others
+            .map { editedDisplayRange(of: $0).lowerBound }
+            .filter { $0 >= editedDisplayRange(of: cue).upperBound }
+            .min() ?? edit.duration
         var low = min(max(min(start, end), lowerLimit), upperLimit)
         var high = min(max(max(start, end), lowerLimit), upperLimit)
         let minHold: TimeInterval = 0.2
@@ -232,10 +243,11 @@ public extension StudioDocumentModel {
         }
         let span = high - low
         let transition = min(max(min(cue.transitionDuration, span / 4), 0.1), 2)
+        let speed = edit.clips.clip(atEdited: low)?.speed ?? 1
         updateZoom(id, coalescingAs: "zoom.range.\(id)") {
-            $0.start = low
+            $0.start = sourceTime(forEdited: low)
             $0.transitionDuration = transition
-            $0.duration = max(span - transition * 2, minHold)
+            $0.duration = max(span - transition * 2, minHold) * speed
         }
     }
 
@@ -249,5 +261,13 @@ public extension StudioDocumentModel {
 
     var centreOfFrame: CGPoint {
         CGPoint(x: manifest.pixelSize.width / 2, y: manifest.pixelSize.height / 2)
+    }
+
+    func sourceTime(forEdited time: TimeInterval) -> TimeInterval {
+        edit.clips.sourceTime(forEdited: time) ?? time
+    }
+
+    func editedDisplayRange(of cue: ZoomCue) -> ClosedRange<TimeInterval> {
+        edit.clips.editedRange(forSource: cue.start ... cue.end) ?? cue.start ... cue.end
     }
 }

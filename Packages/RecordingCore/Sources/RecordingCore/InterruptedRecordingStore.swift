@@ -10,21 +10,40 @@ public enum InterruptedRecordingStore {
     public static let directoryPrefix = "Kadr-Recording-"
     public static let segmentPrefix = "segment-"
 
-    /// Session folders under the process temporary directory.
+    /// Session folders under a temporary or in-progress root.
     public static func directories(
         in temporaryDirectory: URL,
         fileManager: FileManager = .default
     ) -> [URL] {
-        let contents = (try? fileManager.contentsOfDirectory(
-            at: temporaryDirectory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-        return contents
-            .filter { url in
+        directories(in: [temporaryDirectory], fileManager: fileManager)
+    }
+
+    /// Session folders under any of the given roots (docs/16 REC-7).
+    public static func directories(
+        in roots: [URL],
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        roots.flatMap { root in
+            let contents = (try? fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            return contents.filter { url in
                 url.lastPathComponent.hasPrefix(directoryPrefix) && isDirectory(url)
             }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// `~/Library/Application Support/Kadr/InProgress` — recordings in flight live here
+    /// rather than `$TMPDIR`, which macOS may purge (docs/16 REC-7).
+    public static func inProgressRoot(fileManager: FileManager = .default) -> URL {
+        let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        return support
+            .appendingPathComponent("Kadr", isDirectory: true)
+            .appendingPathComponent("InProgress", isDirectory: true)
     }
 
     /// Segment files in recording order.

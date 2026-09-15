@@ -224,3 +224,18 @@ public enum CaptureSelectionAspect: String, CaseIterable, SettingValue {
         }
     }
 }
+
+/// Which displays a fullscreen hotkey captures (docs/16 CAP-3).
+public enum FullscreenTarget: String, CaseIterable, SettingValue {
+    case activeDisplay
+    case allDisplays
+    case allDisplaysStitched
+
+    public var title: String {
+        switch self {
+        case .activeDisplay: "Active display"
+        case .allDisplays: "All displays"
+        case .allDisplaysStitched: "All displays, stitched"
+        }
+    }
+}

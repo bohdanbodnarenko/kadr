@@ -12,6 +12,7 @@ public struct SpotlightSpec: Codable, Hashable, Sendable {
     /// How opaque the dim overlay is. Zero is off; one is a blackout.
     public var dimOpacity: CGFloat
     public var cornerRadius: CGFloat
+    public var rotation: CGFloat
 
     public static let dimOpacityRange: ClosedRange<CGFloat> = 0.15 ... 0.85
     public static let defaultDimOpacity: CGFloat = 0.55
@@ -22,12 +23,14 @@ public struct SpotlightSpec: Codable, Hashable, Sendable {
         id: AnnotationID = AnnotationID(),
         rect: CGRect,
         dimOpacity: CGFloat = SpotlightSpec.defaultDimOpacity,
-        cornerRadius: CGFloat = SpotlightSpec.defaultCornerRadius
+        cornerRadius: CGFloat = SpotlightSpec.defaultCornerRadius,
+        rotation: CGFloat = 0
     ) {
         self.id = id
         self.rect = rect
         self.dimOpacity = Self.clampedDim(dimOpacity)
         self.cornerRadius = Self.clampedCorner(cornerRadius)
+        self.rotation = rotation
     }
 
     public func withDimOpacity(_ value: CGFloat) -> SpotlightSpec {
@@ -53,5 +56,20 @@ public struct SpotlightSpec: Codable, Hashable, Sendable {
 
     static func clampedCorner(_ value: CGFloat) -> CGFloat {
         min(max(value, cornerRadiusRange.lowerBound), cornerRadiusRange.upperBound)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, rect, dimOpacity, cornerRadius, rotation
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: container.decode(AnnotationID.self, forKey: .id),
+            rect: container.decode(CGRect.self, forKey: .rect),
+            dimOpacity: container.decodeIfPresent(CGFloat.self, forKey: .dimOpacity) ?? Self.defaultDimOpacity,
+            cornerRadius: container.decodeIfPresent(CGFloat.self, forKey: .cornerRadius) ?? Self.defaultCornerRadius,
+            rotation: container.decodeIfPresent(CGFloat.self, forKey: .rotation) ?? 0
+        )
     }
 }

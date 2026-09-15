@@ -17,5 +17,6 @@
 --selfrequired log,trace,debug,info,notice,warning,error,fault,critical,beginInterval,endInterval,emitEvent
 --importgrouping testable-bottom
 --header ignore
+--disable wrapMultilineStatementBraces
 
 --exclude .build,build,DerivedData,docs,**/.build

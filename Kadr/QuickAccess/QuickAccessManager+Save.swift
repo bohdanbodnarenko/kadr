@@ -2,6 +2,7 @@ import AppKit
 import MediaExport
 import os
 import SettingsKit
+import Shared
 import UniformTypeIdentifiers
 
 /// Overlay Save, including the optional folder picker (CleanShot §6.2 / §7).
@@ -12,8 +13,11 @@ extension QuickAccessManager {
             promptSave(item, dismissOnSuccess: true)
             return
         }
-        finalizeIfStaged(item)
-        dismiss(item)
+        if finalizeIfStaged(item) {
+            dismiss(item)
+        } else {
+            presentSaveFailure(for: item)
+        }
     }
 
     /// Save As always asks where the file should land, even when silent save is on
@@ -35,8 +39,8 @@ extension QuickAccessManager {
         panel.message = "Save this capture"
         if item.isVideo {
             panel.allowedContentTypes = [.mpeg4Movie]
-        } else if let type = UTType(filenameExtension: item.fileURL.pathExtension) {
-            panel.allowedContentTypes = [type]
+        } else {
+            panel.allowedContentTypes = ImageFormat.writable.map(\.contentType)
         }
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let destination = panel.url else { return false }
@@ -70,6 +74,30 @@ extension QuickAccessManager {
             items[index].isStaged = false
         }
         return moved
+    }
+
+    /// Keep the card and offer another location when the save folder refused the file
+    /// (docs/16 OUT-3).
+    func presentSaveFailure(for item: QuickAccessItem) {
+        let folder = settings.saveFolder.lastPathComponent
+        presentFeedback(.failure(
+            "Couldn't save to \(folder)",
+            retryTitle: "Save As…"
+        ) { [weak self] in
+            self?.promptSave(item, dismissOnSuccess: true)
+        })
+        noteEngagement(with: item)
+    }
+
+    func presentSaveFailureCount(_ count: Int) {
+        let folder = settings.saveFolder.lastPathComponent
+        let message = count == 1
+            ? "Couldn't save 1 capture to \(folder)"
+            : "Couldn't save \(count) captures to \(folder)"
+        presentFeedback(.failure(message, retryTitle: "Save As…") { [weak self] in
+            guard let self, let item = unsavedItems.first else { return }
+            promptSave(item, dismissOnSuccess: true)
+        })
     }
 
     func moveFile(_ original: URL, to destination: URL) -> URL? {

@@ -198,13 +198,34 @@ public struct RecordingResult: Sendable, Hashable {
     public let duration: TimeInterval
     public let pixelSize: PixelSize
     public let options: RecordingOptions
+    /// Why the take ended early, if it did — a dead stream, a full disk (docs/16 REC-1/2).
+    ///
+    /// Nil for a clean Stop. The footage is still the footage; this is how the card and
+    /// the alert know to say "everything captured so far was saved" rather than nothing.
+    public let interruption: String?
 
-    public init(fileURL: URL, duration: TimeInterval, pixelSize: PixelSize, options: RecordingOptions) {
+    public init(
+        fileURL: URL,
+        duration: TimeInterval,
+        pixelSize: PixelSize,
+        options: RecordingOptions,
+        interruption: String? = nil
+    ) {
         self.fileURL = fileURL
         self.duration = duration
         self.pixelSize = pixelSize
         self.options = options
+        self.interruption = interruption
     }
+}
+
+/// What the engine publishes while a recording is running (docs/16 REC-1).
+///
+/// An `AsyncStream` at the delegate boundary, so the coordinator can stop and save
+/// without the SCK callback doing any AppKit work (CLAUDE.md rule 5).
+public enum RecordingEngineEvent: Sendable, Equatable {
+    case streamStopped(String)
+    case writerFailed(String)
 }
 
 public enum RecordingError: Error, Equatable, Sendable {

@@ -141,6 +141,12 @@ public extension EditorDocumentModel {
         rewriteSelection { $0.applying(arrowHead: head) }
     }
 
+    func applyStartArrowHead(_ head: ArrowHead?) {
+        endInspectorStyleEdit()
+        styleMemory.lastStartArrowHead = head
+        rewriteSelection { $0.applying(startArrowHead: head) }
+    }
+
     func applyShapeFill(_ color: AnnotationColor?) {
         endInspectorStyleEdit()
         styleMemory.remember(FillStyle(color: color), for: .shape)
@@ -231,9 +237,10 @@ public extension EditorDocumentModel {
         return true
     }
 
-    private func insertCopies(_ commands: [AnnotationCommand]) {
+    func insertCopies(_ commands: [AnnotationCommand]) {
         guard !commands.isEmpty else { return }
-        let offset = CGSize(width: 16, height: 16)
+        pasteCascadeCount += 1
+        let offset = CGSize(width: 16 * CGFloat(pasteCascadeCount), height: 16 * CGFloat(pasteCascadeCount))
         let copies = commands.map { command in
             Self.translated(command.withNewIdentity(), by: offset)
         }

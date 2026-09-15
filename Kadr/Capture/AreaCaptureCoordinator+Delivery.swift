@@ -23,7 +23,7 @@ extension AreaCaptureCoordinator {
         let delivered = await output.deliverOffMain(prepared, overrides: automation.overrides)
         let spec = autoBeautifySpec()
         for entry in delivered {
-            quickAccess.show(entry.result, capture: entry.capture)
+            presentCapture(entry.result, capture: entry.capture)
             writeBeautifyProject(alongside: entry.result.fileURL, original: entry.capture, beautify: spec)
         }
         let first = delivered.first?.result.fileURL
@@ -49,7 +49,10 @@ extension AreaCaptureCoordinator {
             automation.report(.failed("Kadr could not write the capture."))
             return
         }
-        quickAccess.show(result, capture: prepared)
+        presentCapture(result, capture: prepared)
+        if settings.playsCaptureSound, automation.overrides.isEmpty {
+            CaptureSound.play()
+        }
         writeBeautifyProject(
             alongside: result.fileURL,
             original: preparedOriginal ?? prepared,
@@ -76,12 +79,21 @@ extension AreaCaptureCoordinator {
         automation.report(outcome ?? .failed("Kadr could not write the capture."))
     }
 
+    /// Puts a card up when the matrix asks for one; otherwise History still gets the file.
+    func presentCapture(_ result: ExportResult, capture: Capture) {
+        if settings.afterCaptureActions(for: .screenshot).contains(.overlay) {
+            quickAccess.show(result, capture: capture)
+        } else {
+            quickAccess.ingestWithoutCard(result, capture: capture)
+        }
+    }
+
     func autoBeautifySpec() -> BeautifySpec? {
         skipAutoBeautify ? nil : AutoBeautify.spec(for: settings.autoBeautifyPreset)
     }
 
     func writeBeautifyProject(alongside fileURL: URL?, original: Capture, beautify: BeautifySpec?) {
-        guard let fileURL, let beautify else { return }
+        guard let fileURL else { return }
         CaptureProject.write(original: original, beautify: beautify, alongside: fileURL)
     }
 

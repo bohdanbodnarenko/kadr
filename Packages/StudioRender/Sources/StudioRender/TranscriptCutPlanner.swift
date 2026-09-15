@@ -125,13 +125,18 @@ public struct TranscriptCutPlanner: Sendable {
         removedFraction(of: cuts, duration: duration) > maximumRemovedFraction
     }
 
-    /// Every filler word, cut exactly around itself.
+    /// Every filler word, padded a little into the silence around it.
     private func fillerCuts(in transcript: Transcript) -> [ProposedCut] {
-        transcript.words.compactMap { word in
+        let words = transcript.words
+        return words.enumerated().compactMap { index, word in
             guard Self.fillerWords.contains(word.normalized) else { return nil }
+            let previousEnd = index > 0 ? words[index - 1].end : max(word.start - 0.12, 0)
+            let nextStart = index + 1 < words.count ? words[index + 1].start : word.end + 0.12
+            let padBefore = min(0.12, max((word.start - previousEnd) / 2, 0))
+            let padAfter = min(0.12, max((nextStart - word.end) / 2, 0))
             return ProposedCut(
-                start: word.start,
-                end: word.end,
+                start: word.start - padBefore,
+                end: word.end + padAfter,
                 reason: .fillerWord,
                 label: word.text
             )
@@ -206,25 +211,17 @@ public struct TranscriptCutPlanner: Sendable {
         return merged
     }
 
+    /// The timeline with these cuts subtracted from the current clips (docs/16 STU-C3).
+    public func applying(_ cuts: [ProposedCut], to timeline: ClipTimeline) -> ClipTimeline {
+        timeline.removingSourceRanges(cuts.map(\.range))
+    }
+
     /// The timeline with these cuts applied.
     ///
     /// The planner proposes and the timeline disposes: cuts are turned into clip
     /// boundaries, which are undoable and non-destructive like every other edit. Nothing
     /// here touches the recording.
     public func applying(_ cuts: [ProposedCut], to duration: TimeInterval) -> ClipTimeline {
-        guard !cuts.isEmpty else { return .whole(duration: duration) }
-
-        var clips: [Clip] = []
-        var cursor: TimeInterval = 0
-        for cut in cuts.sorted(by: { $0.start < $1.start }) {
-            if cut.start > cursor {
-                clips.append(Clip(sourceStart: cursor, sourceDuration: cut.start - cursor))
-            }
-            cursor = max(cursor, cut.end)
-        }
-        if cursor < duration {
-            clips.append(Clip(sourceStart: cursor, sourceDuration: duration - cursor))
-        }
-        return ClipTimeline(clips: clips)
+        applying(cuts, to: .whole(duration: duration))
     }
 }

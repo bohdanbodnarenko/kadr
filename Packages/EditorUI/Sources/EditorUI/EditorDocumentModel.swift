@@ -33,6 +33,7 @@ public final class EditorDocumentModel {
 
     public internal(set) var document: AnnotationDocument
     public var tool: EditorTool = .select
+    @ObservationIgnored var pasteCascadeCount = 0
     public var styleMemory = StyleMemory()
     /// The emoji the sticker tool places on the next click (docs/03 §3 P2).
     public var stickerEmoji = "😀"
@@ -118,6 +119,8 @@ public final class EditorDocumentModel {
     /// live ones: applying an origin-relative delta to already-moved commands compounds,
     /// and the selection accelerates away from the pointer (docs/07 C2).
     var dragStartCommands: [AnnotationID: AnnotationCommand] = [:]
+    /// Arrows bound to the dragged annotations, precomputed at gesture start (docs/16 ED-5).
+    var dragDependents: Set<AnnotationID> = []
     var isMovingSelection = false
     /// The handle currently being dragged, if this gesture is a resize rather than a move.
     var resizeHandle: SelectionHandle?
@@ -125,6 +128,7 @@ public final class EditorDocumentModel {
     /// The crop handle being dragged in crop mode (docs/09 U1.8).
     var cropDragHandle: CropHandle?
     var cropDragStartRect: CGRect?
+    @ObservationIgnored var cropBaseline: CropSpec?
     /// A highlighter click that has not yet become a freehand drag (docs/03 §3 P2).
     var pendingSmartHighlight: CGRect?
     /// True while an inspector slider owns the open document gesture, so releasing the
@@ -137,15 +141,18 @@ public final class EditorDocumentModel {
     /// the user started is *clean* again — which is what they will expect when the window
     /// stops asking to save.
     @ObservationIgnored private var savedCommands: [AnnotationCommand]
+    @ObservationIgnored private var savedOrientation: CanvasOrientation
 
     public init(document: AnnotationDocument) {
         self.document = document
         savedCommands = document.commands
+        savedOrientation = document.orientation
+        styleMemory = StyleMemoryStore.load()
     }
 
     /// Whether there is work in this window that only exists in this window (docs/07 M7).
     public var hasUnsavedChanges: Bool {
-        document.commands != savedCommands
+        document.commands != savedCommands || document.orientation != savedOrientation
     }
 
     /// Replaces the whole document, for restoring work a previous session left behind.
@@ -163,11 +170,24 @@ public final class EditorDocumentModel {
     /// came for, and asking them to save again on the way out would be nagging.
     public func markSaved() {
         savedCommands = document.commands
+        savedOrientation = document.orientation
     }
 
     public var selection: Set<AnnotationID> {
         get { document.selection }
         set { document.selection = newValue }
+    }
+
+    /// Layers to refresh while a drag is in flight: the selection plus bound arrows.
+    var layersNeedingUpdateDuringMove: Set<AnnotationID> {
+        dragDependents.union(selection)
+    }
+
+    func captureArrowDependents() {
+        dragDependents = ArrowDependents.layersNeedingUpdate(
+            duringMoveOf: Set(dragStartCommands.keys),
+            in: document.commands
+        )
     }
 
     public var canUndo: Bool {

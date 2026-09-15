@@ -231,6 +231,10 @@ public final class AppSettings {
         didSet { store[SettingKeys.teleprompterFollowsSpeech] = teleprompterFollowsSpeech }
     }
 
+    public var teleprompterDocksUnderCamera: Bool {
+        didSet { store[SettingKeys.teleprompterDocksUnderCamera] = teleprompterDocksUnderCamera }
+    }
+
     /// Nil rather than empty when it has never been placed, so the panel can tell "put it
     /// where I left it" from "this is the first time".
     public var teleprompterFrame: String? {
@@ -434,6 +438,7 @@ public final class AppSettings {
         teleprompterFontSize = store[SettingKeys.teleprompterFontSize]
         teleprompterMirrored = store[SettingKeys.teleprompterMirrored]
         teleprompterFollowsSpeech = store[SettingKeys.teleprompterFollowsSpeech]
+        teleprompterDocksUnderCamera = store[SettingKeys.teleprompterDocksUnderCamera]
         teleprompterFrame = store[SettingKeys.teleprompterFrame]
         scrollAutoScroll = store[SettingKeys.scrollAutoScroll]
         scrollStepPoints = store[SettingKeys.scrollStepPoints]
@@ -475,16 +480,5 @@ public final class AppSettings {
         keepOriginalWhenAnnotating = store[SettingKeys.keepOriginalWhenAnnotating]
         autoBeautifyPreset = store[SettingKeys.autoBeautifyPreset]
         ocrPreservesLineBreaks = store[SettingKeys.ocrPreservesLineBreaks]
-    }
-
-    /// Where captures are written. Falls back to the Desktop until the user picks a folder.
-    public var saveFolder: URL {
-        guard !saveFolderPath.isEmpty else { return Self.defaultSaveFolder }
-        return URL(fileURLWithPath: saveFolderPath, isDirectory: true)
-    }
-
-    public static var defaultSaveFolder: URL {
-        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
     }
 }

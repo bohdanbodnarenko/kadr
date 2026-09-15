@@ -7,9 +7,11 @@ import Foundation
 /// `2026-09-01-142233`.
 public struct SessionProject: Sendable, Hashable, Codable {
     public var displayName: String
+    public var lastOpenedAt: Date?
 
-    public init(displayName: String) {
+    public init(displayName: String, lastOpenedAt: Date? = nil) {
         self.displayName = displayName
+        self.lastOpenedAt = lastOpenedAt
     }
 }
 
@@ -39,7 +41,20 @@ public extension RecordingSession {
     func setDisplayName(_ name: String) throws {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let data = try JSONEncoder().encode(SessionProject(displayName: trimmed))
+        var project = (try? JSONDecoder().decode(SessionProject.self, from: Data(contentsOf: projectURL)))
+            ?? SessionProject(displayName: trimmed)
+        project.displayName = trimmed
+        let data = try JSONEncoder().encode(project)
         try data.write(to: projectURL, options: .atomic)
+    }
+
+    /// Touches last-opened so Recent Recordings can sort by it (docs/16 STU-C9).
+    func markOpened() {
+        var project = (try? JSONDecoder().decode(SessionProject.self, from: Data(contentsOf: projectURL)))
+            ?? SessionProject(displayName: displayName)
+        project.lastOpenedAt = Date()
+        if let data = try? JSONEncoder().encode(project) {
+            try? data.write(to: projectURL, options: .atomic)
+        }
     }
 }

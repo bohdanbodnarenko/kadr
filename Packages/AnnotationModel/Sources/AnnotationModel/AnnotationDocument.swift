@@ -104,16 +104,30 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
     }
 
     /// The canvas the export will produce: beautify's frame, or the crop, or the image.
+    ///
+    /// A perspective camera without beautify still grows the stage to the union of the
+    /// capture and the projected quad, so a lean is not clipped (docs/16 ED-16).
     public var canvasRect: CGRect {
-        guard let beautify else { return contentRect }
-        let layout = BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify)
-        return CGRect(origin: .zero, size: layout.canvasSize)
+        if let beautify {
+            let layout = BeautifyLayout.compute(
+                contentSize: contentRect.size,
+                spec: beautify,
+                camera: camera
+            )
+            return CGRect(origin: .zero, size: layout.canvasSize)
+        }
+        if let camera, !camera.isIdentity {
+            let content = contentRect
+            let quad = AnnotationCameraGeometry.project(spec: camera, contentRect: content)
+            return content.union(quad.boundingBox)
+        }
+        return contentRect
     }
 
     /// Where the capture sits on a beautified canvas, or `nil` when there is no chrome.
     public var beautifyLayout: BeautifyLayout? {
         guard let beautify else { return nil }
-        return BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify)
+        return BeautifyLayout.compute(contentSize: contentRect.size, spec: beautify, camera: camera)
     }
 
     /// Image-space point as a point on the canvas.

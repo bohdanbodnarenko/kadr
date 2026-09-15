@@ -232,11 +232,15 @@ struct CaptureOutput {
         // of saving: a capture nobody asked to save waits in the staging area and is
         // finalised on the first thing the user does with it (docs/03 §2).
         let actions = settings.afterCaptureActions(for: .screenshot)
+        let showsCard = actions.contains(.overlay)
         let savesSilently = actions.contains(.save) && !actions.contains(.promptSave)
+        // No card and no save would leave a staged file that the sweep deletes with
+        // nothing on screen. Force a real save in that case (docs/16 OUT-1).
+        let savesToFolder = savesSilently || (!showsCard && !actions.contains(.promptSave))
         return ExportPolicy(
             copiesToClipboard: actions.contains(.copy),
-            savesToFolder: savesSilently,
-            staging: !savesSilently
+            savesToFolder: savesToFolder,
+            staging: !savesToFolder
         )
     }
 
@@ -260,6 +264,7 @@ struct CaptureOutput {
         }
         return EncodingOptions(
             format: format,
+            quality: settings.lossyQuality,
             scale: capture.metadata.scale,
             downscaleToOneToOne: settings.downscaleRetinaCaptures,
             convertToSRGB: settings.convertExportsToSRGB
@@ -280,17 +285,8 @@ struct CaptureOutput {
     /// PNG rather than TIFF, because that is what other apps paste losslessly, and as
     /// data rather than an `NSImage` so no resampling can creep in.
     private func copyToClipboard(_ data: Data, format: ImageFormat) -> Bool {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
-        let type: NSPasteboard.PasteboardType = switch format {
-        case .png: .png
-        case .jpeg, .heic, .webp: NSPasteboard.PasteboardType(format.contentType.identifier)
-        }
-        let wrote = pasteboard.setData(data, forType: type)
-        if wrote {
-            logger.info("Copied \(data.count, privacy: .public) bytes to the clipboard")
-        }
-        return wrote
+        ClipboardWriter.shared.write(data: data, format: format, fileURL: nil)
+        logger.info("Copied \(data.count, privacy: .public) bytes to the clipboard")
+        return true
     }
 }

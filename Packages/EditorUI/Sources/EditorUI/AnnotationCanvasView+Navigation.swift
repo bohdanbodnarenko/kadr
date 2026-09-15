@@ -118,6 +118,10 @@ extension AnnotationCanvasView {
 
     private func applyEscapeKey(_ event: NSEvent) -> Bool {
         guard event.keyCode == 53 else { return false }
+        if model.tool == .crop {
+            model.cancelCropToBaseline()
+            return true
+        }
         if model.tool != .select {
             model.selectTool(.select)
         } else {

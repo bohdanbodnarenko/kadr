@@ -16,6 +16,9 @@ import Shared
 /// * **All Spaces, full-screen auxiliary, stationary**, so the overlay follows the user
 ///   rather than triggering a Space switch.
 open class NonActivatingPanel: NSPanel {
+    /// Selection, countdown and the scroll HUD stay out of captures even when the user
+    /// opts in (docs/16 X-6).
+    public var alwaysHiddenFromCaptures = false
     /// Without this the panel never becomes key and every keyboard interaction dies.
     override open var canBecomeKey: Bool {
         true
@@ -56,7 +59,7 @@ open class NonActivatingPanel: NSPanel {
         // Invisible to ScreenCaptureKit and to `screencapture`, so a freeze that
         // captures a display rect (without an excludingWindows filter) does not
         // photograph the overlay that is sitting on top of it (docs/10 R3.2).
-        sharingType = .none
+        sharingType = CaptureVisibility.sharingType(alwaysExcluded: alwaysHiddenFromCaptures)
     }
 
     /// Registers for capture exclusion the moment the overlay is on screen (docs/10 R3.2).

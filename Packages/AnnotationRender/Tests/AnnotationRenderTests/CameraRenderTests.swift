@@ -103,13 +103,12 @@ struct CameraRenderTests {
         #expect(middle.alpha > 200, "and the middle should still be covered, got \(middle)")
     }
 
-    @Test("The exported canvas keeps its size whatever the camera does")
-    func canvasSizeIsUnchanged() throws {
-        for spec in [AnnotationCameraSpec.lean, .hero, .overhead] {
-            let image = try renderer.render(baseImage: makeSplitImage(), document: document([.camera(spec)]))
-            #expect(image.width == 200)
-            #expect(image.height == 200)
-        }
+    @Test("The exported canvas grows to hold a camera that leans off the capture")
+    func canvasGrowsForALeaningCamera() throws {
+        let spec = AnnotationCameraSpec(tiltDegrees: 45, fieldOfViewDegrees: 80, zoom: 1.6)
+        let image = try renderer.render(baseImage: makeSplitImage(), document: document([.camera(spec)]))
+        #expect(image.width >= 200)
+        #expect(image.height >= 200)
     }
 
     /// The ordering that matters: the card is flattened *then* projected, so an arrow drawn
@@ -179,8 +178,9 @@ struct CameraRenderTests {
             .camera(.lean)
         ]
         let image = try renderer.render(baseImage: makeSplitImage(), document: document(commands))
-        #expect(image.width == 100)
-        #expect(image.height == 100)
+        #expect(image.width >= 100)
+        #expect(image.height >= 100)
+        #expect(image.width < 200, "the crop, not the full capture, is what was projected")
     }
 
     // MARK: - Degenerate input

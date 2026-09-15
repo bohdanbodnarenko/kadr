@@ -60,7 +60,14 @@ struct EditorBlurInspector: View {
             )
         }
         InspectorToggleRow("Soften the middle instead", isOn: invertedBinding)
+        InspectorRow("Focus") {
+            FocusPad(point: centerBinding)
+                .frame(width: 72, height: 48)
+                .help("Where the sharp area sits")
+        }
         Button("Obscure Centre") { model.applyProgressiveBlur(.obscureCentre) }
+            .buttonStyle(InspectorButtonStyle())
+        Button("Tilt Shift") { model.applyProgressiveBlur(.tiltShift) }
             .buttonStyle(InspectorButtonStyle())
     }
 
@@ -120,5 +127,40 @@ struct EditorBlurInspector: View {
 
     private var invertedBinding: Binding<Bool> {
         Binding(get: { spec.isInverted }, set: { value in commit { $0.isInverted = value } })
+    }
+
+    private var centerBinding: Binding<CGPoint> {
+        Binding(get: { spec.center }, set: { value in commit { $0.center = value } })
+    }
+}
+
+/// A small 2D pad for placing the progressive-blur focus (docs/16 ED-16).
+private struct FocusPad: View {
+    @Binding var point: CGPoint
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.primary.opacity(0.06))
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: 8, height: 8)
+                    .position(
+                        x: min(max(point.x, 0), 1) * size.width,
+                        y: min(max(point.y, 0), 1) * size.height
+                    )
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                guard size.width > 0, size.height > 0 else { return }
+                point = CGPoint(
+                    x: min(max(value.location.x / size.width, 0), 1),
+                    y: min(max(value.location.y / size.height, 0), 1)
+                )
+            })
+        }
+        .accessibilityLabel("Focus position")
     }
 }

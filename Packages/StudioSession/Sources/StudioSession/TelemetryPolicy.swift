@@ -62,6 +62,9 @@ public enum TelemetryPolicy {
         case returnKey, enter, tab, escape, delete, forwardDelete
         case upArrow, downArrow, leftArrow, rightArrow
         case pageUp, pageDown, home, end, space
+        case f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12
+        case f13, f14, f15, f16, f17, f18, f19
+        case fn, capsLock
 
         public var caption: String {
             switch self {
@@ -80,6 +83,27 @@ public enum TelemetryPolicy {
             case .home: "Home"
             case .end: "End"
             case .space: "Space"
+            case .f1: "F1"
+            case .f2: "F2"
+            case .f3: "F3"
+            case .f4: "F4"
+            case .f5: "F5"
+            case .f6: "F6"
+            case .f7: "F7"
+            case .f8: "F8"
+            case .f9: "F9"
+            case .f10: "F10"
+            case .f11: "F11"
+            case .f12: "F12"
+            case .f13: "F13"
+            case .f14: "F14"
+            case .f15: "F15"
+            case .f16: "F16"
+            case .f17: "F17"
+            case .f18: "F18"
+            case .f19: "F19"
+            case .fn: "fn"
+            case .capsLock: "Caps Lock"
             }
         }
     }
@@ -99,8 +123,12 @@ public enum TelemetryPolicy {
     public static func caption(
         characters: String?,
         specialKey: SpecialKey?,
-        modifiers: Modifiers
+        modifiers: Modifiers,
+        isRepeat: Bool = false
     ) -> String? {
+        if isRepeat {
+            return nil
+        }
         if let specialKey {
             // A special key is worth showing with its modifiers when it has them.
             return modifiers.symbols + specialKey.caption

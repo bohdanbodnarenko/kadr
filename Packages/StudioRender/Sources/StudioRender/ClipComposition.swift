@@ -50,10 +50,10 @@ public struct ClipCompositionBuilder: Sendable {
             throw BuildError.noVideoTrack
         }
         let replacement = includeAudio ? await soundtrackFile(at: soundtrack) : nil
-        let sourceAudio: AVAssetTrack? = if includeAudio, replacement == nil {
-            try? await asset.loadTracks(withMediaType: .audio).first
+        let sourceAudioTracks: [AVAssetTrack] = if includeAudio, replacement == nil {
+            await (try? asset.loadTracks(withMediaType: .audio)) ?? []
         } else {
-            nil
+            []
         }
 
         let composition = AVMutableComposition()
@@ -63,10 +63,12 @@ public struct ClipCompositionBuilder: Sendable {
         ) else {
             throw BuildError.couldNotInsert
         }
-        let audio = sourceAudio == nil ? nil : composition.addMutableTrack(
-            withMediaType: .audio,
-            preferredTrackID: kCMPersistentTrackID_Invalid
-        )
+        let audioTracks: [AVMutableCompositionTrack] = sourceAudioTracks.compactMap { _ in
+            composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            )
+        }
 
         // Tracked in seconds and converted once per insert: `CMTime` has no compound
         // addition, and accumulating one by repeated construction invites a timescale
@@ -80,7 +82,7 @@ public struct ClipCompositionBuilder: Sendable {
             )
             do {
                 try video.insertTimeRange(range, of: sourceVideo, at: cursor)
-                if let audio, let sourceAudio {
+                for (audio, sourceAudio) in zip(audioTracks, sourceAudioTracks) {
                     try audio.insertTimeRange(range, of: sourceAudio, at: cursor)
                 }
             } catch {
@@ -91,10 +93,13 @@ public struct ClipCompositionBuilder: Sendable {
             if clip.speed != 1 {
                 let inserted = CMTimeRange(start: cursor, duration: range.duration)
                 let scaled = CMTime(seconds: clip.editedDuration, preferredTimescale: 600)
-                // Both tracks, in the same breath: scaling the picture and leaving the
-                // sound alone drifts by exactly the speed-up, and it compounds per clip.
+                // Every audio track, in the same breath: scaling the picture and leaving
+                // narration behind is how the mic used to vanish whenever system audio was
+                // also recorded (docs/16 STU-A1).
                 video.scaleTimeRange(inserted, toDuration: scaled)
-                audio?.scaleTimeRange(inserted, toDuration: scaled)
+                for audio in audioTracks {
+                    audio.scaleTimeRange(inserted, toDuration: scaled)
+                }
                 elapsed += clip.editedDuration
             } else {
                 elapsed += clip.sourceDuration

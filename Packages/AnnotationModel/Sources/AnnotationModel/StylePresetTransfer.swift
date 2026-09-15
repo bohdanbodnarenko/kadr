@@ -39,7 +39,7 @@ public struct StylePresetTransfer: Codable, Sendable, Hashable {
     public static func decoding(_ data: Data) throws -> StylePreset {
         guard data.count <= maximumByteCount else { throw TransferError.tooLarge }
         let transfer = try JSONDecoder().decode(Self.self, from: data)
-        return strippingLocalPaths(transfer.preset)
+        return strippingLocalPaths(transfer.preset).sanitized()
     }
 
     /// Replaces a local wallpaper with a solid fill so the look can travel.

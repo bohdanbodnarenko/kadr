@@ -64,7 +64,8 @@ struct HistorySelection {
     mutating func moveFocus(
         _ direction: FocusDirection,
         in records: [HistoryRecord],
-        extending: Bool
+        extending: Bool,
+        windowWidth: CGFloat = 560
     ) {
         let ids = records.map(\.id)
         guard !ids.isEmpty else {
@@ -75,7 +76,7 @@ struct HistorySelection {
         let current = focused.flatMap { ids.firstIndex(of: $0) }
             ?? anchor.flatMap { ids.firstIndex(of: $0) }
             ?? 0
-        let columns = HistoryGridMetrics.columns(for: records.count)
+        let columns = HistoryGridMetrics.columns(for: records.count, windowWidth: windowWidth)
         let next = HistoryGridMetrics.index(
             from: current,
             direction: direction,

@@ -89,4 +89,33 @@ extension StatusItemController {
         statusItem.button?.performClick(nil)
         attachIdleMenu()
     }
+
+    func applyMenuBarVisibility(_ visible: Bool) {
+        statusItem.isVisible = visible
+    }
+
+    private static let menuBarVisibilityChanged = Notification.Name("app.kadr.menuBarVisibility")
+
+    static func postMenuBarVisibility(_ visible: Bool) {
+        NotificationCenter.default.post(name: menuBarVisibilityChanged, object: nil, userInfo: ["visible": visible])
+    }
+
+    func observeMenuBarVisibility() {
+        NotificationCenter.default.addObserver(
+            forName: Self.menuBarVisibilityChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let visible = (note.userInfo?["visible"] as? Bool) ?? true
+            MainActor.assumeIsolated {
+                self?.statusItem.isVisible = visible
+            }
+        }
+        visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] item, _ in
+            let visible = item.isVisible
+            Task { @MainActor in
+                self?.onMenuBarVisibilityChange?(visible)
+            }
+        }
+    }
 }

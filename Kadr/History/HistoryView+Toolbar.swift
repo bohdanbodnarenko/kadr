@@ -3,7 +3,7 @@ import SwiftUI
 
 extension HistoryView {
     var currentFilter: HistoryFilter {
-        HistoryFilter(kind: kindFilter, capturedAfter: dateFilter.capturedAfter)
+        HistoryFilter(kind: kindFilter, capturedAfter: dateFilter.capturedAfter, sort: sort)
     }
 
     var renameAlertPresented: Binding<Bool> {
@@ -43,13 +43,45 @@ extension HistoryView {
             .menuStyle(.borderlessButton)
         }
 
+        ToolbarItem(placement: .navigation) {
+            Menu {
+                ForEach(HistorySort.allCases, id: \.self) { option in
+                    Button(option.title) { sort = option }
+                }
+            } label: {
+                Label(sort.title, systemImage: "arrow.up.arrow.down")
+            }
+            .menuStyle(.borderlessButton)
+        }
+
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 revealSelected()
             } label: {
                 Label("Reveal in Finder", systemImage: "folder")
             }
-            .disabled(selection.selected.count != 1)
+            .disabled(selection.isEmpty)
+
+            Menu {
+                Button("Copy") { copySelected() }
+                    .disabled(selection.isEmpty)
+                Button("Annotate") {
+                    selection.selected.compactMap { controller.record(id: $0) }.forEach {
+                        controller.onAnnotate?($0)
+                    }
+                }
+                .disabled(selection.selected.count != 1)
+                Button("Pin") {
+                    selection.selected.compactMap { controller.record(id: $0) }.forEach {
+                        controller.onPin?($0)
+                    }
+                }
+                .disabled(selection.selected.count != 1)
+                Button("Export…") { exportSelected() }
+                    .disabled(selection.isEmpty)
+            } label: {
+                Label("Actions", systemImage: "ellipsis.circle")
+            }
 
             Button(role: .destructive) {
                 Task { await deleteSelected() }

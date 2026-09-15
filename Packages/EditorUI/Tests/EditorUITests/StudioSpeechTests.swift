@@ -182,27 +182,24 @@ struct StudioSpeechTests {
         #expect(studio.failure == nil)
     }
 
-    /// The other half of R0.2 in the editor: cues are planned from clicks on the *edited*
-    /// timeline, because `zooms` is documented as edited time and the sidecar's clicks are
-    /// not.
-    @Test("Smart zooms are planned from clicks on the edited timeline")
-    func smartZoomsUseEditedClicks() throws {
+    /// Cues are stored in source time (docs/16 STU-A3), so a cut of the first ten seconds
+    /// keeps a cluster at 25 s of footage on 25 s of source, not 15 s of edit.
+    @Test("Smart zooms stay on the source frame after a cut")
+    func smartZoomsUseSourceTime() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        // Clicks clustered at 25 s of a 30-second recording.
         var telemetry = InputTelemetry()
         telemetry.clicks = (0 ..< 6).map {
             ClickEvent(time: 25 + Double($0) * 0.2, position: CGPoint(x: 500, y: 500))
         }
         let studio = try model(in: folder, duration: 30, telemetry: telemetry)
 
-        // Cut the first ten seconds away, so 25 s of footage is 15 s of edit.
         studio.change { $0.clips = ClipTimeline(clips: [Clip(sourceStart: 10, sourceDuration: 20)]) }
         studio.planSmartZooms()
 
         let cue = try #require(studio.edit.zooms.first)
-        #expect(abs(cue.start - 15) < 2, "the cue landed at \(cue.start)s rather than about 15s")
+        #expect(abs(cue.start - 25) < 2, "the cue landed at \(cue.start)s rather than about 25s of source")
     }
 
     // MARK: - tidySpeech (docs/13 T0.2)
@@ -264,18 +261,22 @@ struct StudioSpeechTests {
         #expect(studio.edit.duration < 600)
     }
 
-    @Test("An edited timeline is refused before transcription runs")
-    func tidySpeechDoesNotTranscribeAnEditedTimeline() async throws {
+    @Test("Tidy Speech transcribes an already-trimmed timeline")
+    func tidySpeechTranscribesAnEditedTimeline() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let stub = StubTranscriber(transcript: Transcript(words: [
-            TranscriptWord(text: "Hello", start: 0, end: 1)
+            TranscriptWord(text: "Hello", start: 0, end: 1),
+            TranscriptWord(text: "um", start: 1.2, end: 1.5),
+            TranscriptWord(text: "there", start: 1.7, end: 2.2)
         ]))
         let studio = try model(in: folder, transcriber: stub)
-        studio.setSpeedAtPlayhead(2)
+        studio.playhead = 2
+        studio.trimStartToPlayhead()
         await studio.tidySpeech()
-        #expect(stub.calls == 0, "transcription ran despite an edited timeline")
-        #expect(studio.failure?.message == StudioDocumentModel.tidyRefusal)
+        #expect(stub.calls == 1, "transcription should still run after a trim")
+        #expect(studio.failure == nil)
+        #expect(!studio.pendingCuts.isEmpty)
     }
 
     @Test("A persisted transcript is reused on reopen")

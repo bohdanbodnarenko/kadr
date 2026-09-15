@@ -62,7 +62,7 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
     public func applies(to kind: CaptureKind) -> Bool {
         switch kind {
         case .screenshot: self != .openEditor
-        case .recording: self != .annotate && self != .pin
+        case .recording: self != .annotate && self != .pin && self != .save
         }
     }
 }
@@ -91,7 +91,7 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
 
     public init(
         screenshot: AfterCaptureActions = [.overlay, .copy],
-        recording: AfterCaptureActions = [.overlay, .save]
+        recording: AfterCaptureActions = [.overlay]
     ) {
         self.screenshot = screenshot
         self.recording = recording
@@ -123,8 +123,8 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
             .reduce(into: AfterCaptureActions.none) { $0.insert($1) }
     }
 
-    /// The default: a card and the clipboard for a screenshot, a card and a saved file for
-    /// a recording — which nobody wants on their clipboard.
+    /// A card and the clipboard for a screenshot. Recordings always write a file, so the
+    /// row no longer offers Save (docs/16 OUT-1).
     public static let standard = AfterCaptureMatrix()
 
     /// The matrix a pre-U2.2 `DefaultCaptureAction` becomes (docs/09 U2.2).
@@ -142,7 +142,7 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
         }
         // Recordings were never copied, whatever the setting said: the old output path
         // only ever put a still on the clipboard.
-        let recording: AfterCaptureActions = action.savesToFolder ? [.overlay, .save] : [.overlay]
+        let recording: AfterCaptureActions = [.overlay]
         return AfterCaptureMatrix(screenshot: screenshot, recording: recording)
     }
 }

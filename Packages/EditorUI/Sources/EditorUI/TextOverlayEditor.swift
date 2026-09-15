@@ -24,6 +24,8 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     var onChange: ((AnnotationID, String) -> Void)?
     /// Called when editing ends, whether committed or abandoned.
     var onFinish: ((AnnotationID) -> Void)?
+    private var originalString = ""
+    private var abandoned = false
 
     var isEditing: Bool {
         editingID != nil
@@ -50,6 +52,8 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         view.insertionPointColor = NSColor(spec.style.color)
         view.alignment = Self.alignment(for: spec.style)
         view.string = spec.string
+        originalString = spec.string
+        abandoned = false
         view.wantsLayer = true
         view.layer?.cornerRadius = spec.style.backgroundColor == nil
             ? 0
@@ -68,6 +72,10 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     /// Ends editing and removes the field. Safe to call when nothing is being edited.
     func finish() {
         guard let editingID else { return }
+        if abandoned, let spec {
+            onChange?(editingID, originalString)
+            _ = spec
+        }
         textView?.removeFromSuperview()
         textView = nil
         scrollHost = nil
@@ -107,7 +115,11 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     /// a text annotation is often two lines and there is no other way to type one.
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
-        case #selector(NSResponder.cancelOperation(_:)), Selector(("insertNewlineIgnoringLineBreaks:")):
+        case #selector(NSResponder.cancelOperation(_:)):
+            abandoned = true
+            finish()
+            return true
+        case Selector(("insertNewlineIgnoringLineBreaks:")):
             finish()
             return true
         default:

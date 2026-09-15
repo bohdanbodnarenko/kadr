@@ -148,6 +148,7 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     /// and the panel is already the thing that only receives the event when the pointer is
     /// over a card — `hitTest` saw to that.
     override func scrollWheel(with event: NSEvent) {
+        guard event.momentumPhase.isEmpty else { return }
         guard let onScroll else {
             super.scrollWheel(with: event)
             return

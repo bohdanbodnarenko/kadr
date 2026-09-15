@@ -132,7 +132,7 @@ public actor HistoryStore {
         }
 
         return try await dbPool.read { db in
-            let request = Self.apply(filter, to: HistoryRecord.order(Column("captured_at").desc))
+            let request = Self.apply(filter, to: HistoryRecord.order(Self.order(for: filter.sort)))
             return try request.limit(limit, offset: offset).fetchAll(db)
         }
     }
@@ -156,6 +156,15 @@ public actor HistoryStore {
             request = request.filter(Column("captured_at") <= before)
         }
         return request
+    }
+
+    static func order(for sort: HistorySort) -> SQLOrderingTerm {
+        switch sort {
+        case .newest: Column("captured_at").desc
+        case .oldest: Column("captured_at").asc
+        case .largest: Column("byte_size").desc
+        case .name: Column("original_filename").asc
+        }
     }
 
     /// Database access for the search and indexing API in `HistoryIndexing.swift`.

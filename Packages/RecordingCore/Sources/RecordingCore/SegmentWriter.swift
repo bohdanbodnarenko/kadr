@@ -11,27 +11,32 @@ import Shared
 /// wrapper for exactly that, under a documented invariant: **single consumer**. Each
 /// buffer is produced once, handed over once, and read by one writer. Nothing else
 /// retains or mutates it.
-struct SampleBufferBox: @unchecked Sendable {
-    let buffer: CMSampleBuffer
-    let kind: Kind
-    /// Where the recorded content sat on screen when this frame was taken, from SCK's own
-    /// per-frame attachment (docs/09 U3.1).
-    ///
-    /// Carried on the frame rather than asked for separately, because it is only true *of*
-    /// a frame: a window that moves mid-recording has a different answer for every one, and
-    /// a rect read a moment later describes a moment the footage does not show.
-    let contentRect: CGRect?
+public struct SampleBufferBox: @unchecked Sendable {
+    public let buffer: CMSampleBuffer
+    public let kind: Kind
+    public let contentRect: CGRect?
+    public let screenRect: CGRect?
+    public let scaleFactor: CGFloat?
 
-    init(buffer: CMSampleBuffer, kind: Kind, contentRect: CGRect? = nil) {
+    public init(
+        buffer: CMSampleBuffer,
+        kind: Kind,
+        contentRect: CGRect? = nil,
+        screenRect: CGRect? = nil,
+        scaleFactor: CGFloat? = nil
+    ) {
         self.buffer = buffer
         self.kind = kind
         self.contentRect = contentRect
+        self.screenRect = screenRect
+        self.scaleFactor = scaleFactor
     }
 
-    enum Kind: Sendable {
+    public enum Kind: Sendable {
         case video
         case systemAudio
         case microphone
+        case clock
     }
 }
 
@@ -46,6 +51,8 @@ struct SampleBufferBox: @unchecked Sendable {
 protocol SegmentWriting: Actor {
     /// The wall-clock length written so far.
     var duration: TimeInterval { get }
+    /// Why writing stopped, once the encoder has failed (docs/16 REC-2).
+    var failureReason: String? { get }
     @discardableResult
     func append(_ box: SampleBufferBox) -> Bool
     func finish() async -> URL?
@@ -78,6 +85,7 @@ actor SegmentWriter: SegmentWriting {
     private var firstPresentationTime: CMTime?
     private var lastPresentationTime: CMTime?
     private(set) var isFinished = false
+    private(set) var failureReason: String?
 
     init(
         fileURL: URL,
@@ -135,11 +143,32 @@ actor SegmentWriter: SegmentWriting {
     /// Appends one sample. Returns false when the sample was dropped.
     @discardableResult
     func append(_ box: SampleBufferBox) -> Bool {
+        if writer.status == .failed {
+            noteFailure()
+            return false
+        }
         guard !isFinished, writer.status == .writing else { return false }
         let buffer = box.buffer
         guard CMSampleBufferDataIsReady(buffer) else { return false }
+        guard beginSessionIfNeeded(for: box, at: CMSampleBufferGetPresentationTimeStamp(buffer)) else {
+            return false
+        }
+        if box.kind == .clock {
+            return true
+        }
+        let input: AVAssetWriterInput? = switch box.kind {
+        case .video: videoInput
+        case .systemAudio: audioInput
+        case .microphone: microphoneInput
+        case .clock: nil
+        }
+        // Back-pressure: the encoder tells us when it cannot keep up, and dropping a
+        // frame is better than growing an unbounded queue (docs/04 §4.3).
+        guard let input, input.isReadyForMoreMediaData else { return false }
+        return input.append(buffer)
+    }
 
-        let time = CMSampleBufferGetPresentationTimeStamp(buffer)
+    private func beginSessionIfNeeded(for box: SampleBufferBox, at time: CMTime) -> Bool {
         if !hasStartedSession {
             // Only video starts the session: an audio sample arriving first would set the
             // origin before there is a picture, and the file would open with silence.
@@ -149,16 +178,7 @@ actor SegmentWriter: SegmentWriting {
             firstPresentationTime = time
         }
         lastPresentationTime = time
-
-        let input: AVAssetWriterInput? = switch box.kind {
-        case .video: videoInput
-        case .systemAudio: audioInput
-        case .microphone: microphoneInput
-        }
-        // Back-pressure: the encoder tells us when it cannot keep up, and dropping a
-        // frame is better than growing an unbounded queue (docs/04 §4.3).
-        guard let input, input.isReadyForMoreMediaData else { return false }
-        return input.append(buffer)
+        return true
     }
 
     /// The wall-clock length written so far.
@@ -201,10 +221,21 @@ actor SegmentWriter: SegmentWriting {
 
         await writer.finishWriting()
         if writer.status == .failed {
+            noteFailure()
             logger.error("Segment failed: \(self.writer.error?.localizedDescription ?? "unknown", privacy: .public)")
+            // Keep a started file: fragments already on disk are playable, and deleting
+            // them here is how a full disk used to throw the whole take away (docs/16 REC-2).
+            if hasStartedSession, FileManager.default.fileExists(atPath: fileURL.path) {
+                return fileURL
+            }
             return nil
         }
         return fileURL
+    }
+
+    private func noteFailure() {
+        guard failureReason == nil else { return }
+        failureReason = writer.error?.localizedDescription ?? "The recording writer failed."
     }
 
     func cancel() {

@@ -23,31 +23,35 @@ extension EditorAppDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About Kadr Editor",
+            withTitle: String(localized: "About Kadr Editor"),
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Services",
+            withTitle: String(localized: "Services"),
             action: nil,
             keyEquivalent: ""
         ).submenu = NSApp.servicesMenu
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Kadr Editor", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(
-            withTitle: "Hide Others",
+            withTitle: String(localized: "Hide Kadr Editor"),
+            action: #selector(NSApplication.hide(_:)),
+            keyEquivalent: "h"
+        )
+        appMenu.addItem(
+            withTitle: String(localized: "Hide Others"),
             action: #selector(NSApplication.hideOtherApplications(_:)),
             keyEquivalent: "h"
         ).keyEquivalentModifierMask = [.command, .option]
         appMenu.addItem(
-            withTitle: "Show All",
+            withTitle: String(localized: "Show All"),
             action: #selector(NSApplication.unhideAllApplications(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
         appMenu.addItem(
-            withTitle: "Quit Kadr Editor",
+            withTitle: String(localized: "Quit Kadr Editor"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -57,84 +61,108 @@ extension EditorAppDelegate {
 
     private func makeFileMenuItem() -> NSMenuItem {
         let fileItem = NSMenuItem()
-        let fileMenu = NSMenu(title: "File")
-        fileMenu.addItem(withTitle: "Open…", action: #selector(importImage(_:)), keyEquivalent: "o")
+        let fileMenu = NSMenu(title: String(localized: "File"))
+        fileMenu.addItem(withTitle: String(localized: "Open…"), action: #selector(importImage(_:)), keyEquivalent: "o")
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Save", action: #selector(saveDocument(_:)), keyEquivalent: "s")
+        fileMenu.addItem(withTitle: String(localized: "Save"), action: #selector(saveDocument(_:)), keyEquivalent: "s")
         let saveAs = fileMenu.addItem(
-            withTitle: "Save As…",
+            withTitle: String(localized: "Save As…"),
             action: #selector(saveDocumentAs(_:)),
             keyEquivalent: "s"
         )
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         let saveProject = fileMenu.addItem(
-            withTitle: "Save Project…",
+            withTitle: String(localized: "Save Project…"),
             action: #selector(saveProjectDocument(_:)),
             keyEquivalent: "s"
         )
         saveProject.keyEquivalentModifierMask = [.command, .option]
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Print…", action: #selector(printDocument(_:)), keyEquivalent: "p")
+        fileMenu.addItem(
+            withTitle: String(localized: "Print…"),
+            action: #selector(printDocument(_:)),
+            keyEquivalent: "p"
+        )
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(
+            withTitle: String(localized: "Close"),
+            action: #selector(NSWindow.performClose(_:)),
+            keyEquivalent: "w"
+        )
         fileItem.submenu = fileMenu
         return fileItem
     }
 
     private func makeEditMenuItem() -> NSMenuItem {
         let editItem = NSMenuItem()
-        let editMenu = NSMenu(title: "Edit")
-        editMenu.addItem(withTitle: "Undo", action: #selector(EditorWindowController.undo(_:)), keyEquivalent: "z")
+        let editMenu = NSMenu(title: String(localized: "Edit"))
+        editMenu.addItem(
+            withTitle: String(localized: "Undo"),
+            action: #selector(EditorWindowController.undo(_:)),
+            keyEquivalent: "z"
+        )
         let redo = editMenu.addItem(
-            withTitle: "Redo",
+            withTitle: String(localized: "Redo"),
             action: #selector(EditorWindowController.redo(_:)),
             keyEquivalent: "z"
         )
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "Cut", action: #selector(EditorWindowController.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "Copy", action: #selector(EditorWindowController.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(
+            withTitle: String(localized: "Cut"),
+            action: #selector(EditorWindowController.cut(_:)),
+            keyEquivalent: "x"
+        )
+        editMenu.addItem(
+            withTitle: String(localized: "Copy"),
+            action: #selector(EditorWindowController.copy(_:)),
+            keyEquivalent: "c"
+        )
         let copyFlattened = editMenu.addItem(
-            withTitle: "Copy Flattened Image",
+            withTitle: String(localized: "Copy Flattened Image"),
             action: #selector(copyFlattenedImage(_:)),
             keyEquivalent: "c"
         )
         copyFlattened.keyEquivalentModifierMask = [.command, .shift]
-        editMenu.addItem(withTitle: "Paste", action: #selector(EditorWindowController.paste(_:)), keyEquivalent: "v")
         editMenu.addItem(
-            withTitle: "Select All",
+            withTitle: String(localized: "Paste"),
+            action: #selector(EditorWindowController.paste(_:)),
+            keyEquivalent: "v"
+        )
+        editMenu.addItem(
+            withTitle: String(localized: "Select All"),
             action: #selector(EditorWindowController.selectAll(_:)),
             keyEquivalent: "a"
         )
         editMenu.addItem(
-            withTitle: "Duplicate",
+            withTitle: String(localized: "Duplicate"),
             action: #selector(EditorWindowController.duplicate(_:)),
             keyEquivalent: "d"
         )
         editMenu.addItem(.separator())
         editMenu.addItem(
-            withTitle: "Bring to Front",
+            withTitle: String(localized: "Bring to Front"),
             action: #selector(EditorWindowController.bringToFront(_:)),
             keyEquivalent: ""
         )
         editMenu.addItem(
-            withTitle: "Bring Forward",
+            withTitle: String(localized: "Bring Forward"),
             action: #selector(EditorWindowController.bringForward(_:)),
             keyEquivalent: "]"
         )
         editMenu.addItem(
-            withTitle: "Send Backward",
+            withTitle: String(localized: "Send Backward"),
             action: #selector(EditorWindowController.sendBackward(_:)),
             keyEquivalent: "["
         )
         editMenu.addItem(
-            withTitle: "Send to Back",
+            withTitle: String(localized: "Send to Back"),
             action: #selector(EditorWindowController.sendToBack(_:)),
             keyEquivalent: ""
         )
         editMenu.addItem(.separator())
         let lock = editMenu.addItem(
-            withTitle: "Lock Objects",
+            withTitle: String(localized: "Lock Objects"),
             action: #selector(EditorWindowController.toggleCanvasLock(_:)),
             keyEquivalent: "l"
         )
@@ -145,38 +173,42 @@ extension EditorAppDelegate {
 
     private func makeViewMenuItem() -> NSMenuItem {
         let viewItem = NSMenuItem()
-        let viewMenu = NSMenu(title: "View")
+        let viewMenu = NSMenu(title: String(localized: "View"))
         viewMenu.addItem(
-            withTitle: "Show Inspector",
+            withTitle: String(localized: "Show Inspector"),
             action: #selector(EditorWindowController.toggleInspector(_:)),
             keyEquivalent: "i"
         )
         viewMenu.addItem(.separator())
-        viewMenu.addItem(withTitle: "Zoom In", action: #selector(EditorWindowController.zoomIn(_:)), keyEquivalent: "=")
         viewMenu.addItem(
-            withTitle: "Zoom Out",
+            withTitle: String(localized: "Zoom In"),
+            action: #selector(EditorWindowController.zoomIn(_:)),
+            keyEquivalent: "="
+        )
+        viewMenu.addItem(
+            withTitle: String(localized: "Zoom Out"),
             action: #selector(EditorWindowController.zoomOut(_:)),
             keyEquivalent: "-"
         )
         viewMenu.addItem(
-            withTitle: "Fit Canvas",
+            withTitle: String(localized: "Fit Canvas"),
             action: #selector(EditorWindowController.zoomToFit(_:)),
             keyEquivalent: "1"
         )
         viewMenu.addItem(
-            withTitle: "Actual Size",
+            withTitle: String(localized: "Actual Size"),
             action: #selector(EditorWindowController.zoomActualSize(_:)),
             keyEquivalent: "0"
         )
         viewMenu.addItem(.separator())
         let increaseTool = viewMenu.addItem(
-            withTitle: "Increase Tool Size",
+            withTitle: String(localized: "Increase Tool Size"),
             action: #selector(EditorWindowController.increaseToolSize(_:)),
             keyEquivalent: "="
         )
         increaseTool.keyEquivalentModifierMask = [.shift]
         viewMenu.addItem(
-            withTitle: "Decrease Tool Size",
+            withTitle: String(localized: "Decrease Tool Size"),
             action: #selector(EditorWindowController.decreaseToolSize(_:)),
             keyEquivalent: "`"
         )
@@ -186,10 +218,10 @@ extension EditorAppDelegate {
 
     private func makeHelpMenuItem() -> NSMenuItem {
         let helpItem = NSMenuItem()
-        let helpMenu = NSMenu(title: "Help")
-        helpMenu.addItem(withTitle: "Kadr Help", action: #selector(openHelp(_:)), keyEquivalent: "?")
+        let helpMenu = NSMenu(title: String(localized: "Help"))
+        helpMenu.addItem(withTitle: String(localized: "Kadr Help"), action: #selector(openHelp(_:)), keyEquivalent: "?")
         helpMenu.addItem(
-            withTitle: "Keyboard Shortcuts",
+            withTitle: String(localized: "Keyboard Shortcuts"),
             action: #selector(openKeyboardShortcuts(_:)),
             keyEquivalent: ""
         )

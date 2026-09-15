@@ -1,7 +1,46 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "About Kadr Editor" : {
+
+    },
+    "Actual Size" : {
+
+    },
     "Annotation editor" : {
+
+    },
+    "Bring Forward" : {
+
+    },
+    "Bring to Front" : {
+
+    },
+    "Close" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy Flattened Image" : {
+
+    },
+    "Cut" : {
+
+    },
+    "Decrease Tool Size" : {
+
+    },
+    "Duplicate" : {
+
+    },
+    "Edit" : {
+
+    },
+    "File" : {
+
+    },
+    "Fit Canvas" : {
 
     },
     "Flatten" : {
@@ -19,7 +58,31 @@
     "Help" : {
 
     },
+    "Hide Kadr Editor" : {
+
+    },
+    "Hide Others" : {
+
+    },
+    "Increase Tool Size" : {
+
+    },
+    "Kadr Help" : {
+
+    },
     "Keyboard shortcuts" : {
+
+    },
+    "Keyboard Shortcuts" : {
+
+    },
+    "Lock Objects" : {
+
+    },
+    "Open…" : {
+
+    },
+    "Paste" : {
 
     },
     "Pin" : {
@@ -34,7 +97,43 @@
         }
       }
     },
+    "Print…" : {
+
+    },
+    "Quit Kadr Editor" : {
+
+    },
     "Recording studio" : {
+
+    },
+    "Redo" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save As…" : {
+
+    },
+    "Save Project…" : {
+
+    },
+    "Select All" : {
+
+    },
+    "Send Backward" : {
+
+    },
+    "Send to Back" : {
+
+    },
+    "Services" : {
+
+    },
+    "Show All" : {
+
+    },
+    "Show Inspector" : {
 
     },
     "Studio" : {
@@ -48,6 +147,18 @@
           }
         }
       }
+    },
+    "Undo" : {
+
+    },
+    "View" : {
+
+    },
+    "Zoom In" : {
+
+    },
+    "Zoom Out" : {
+
     }
   },
   "version" : "1.0"

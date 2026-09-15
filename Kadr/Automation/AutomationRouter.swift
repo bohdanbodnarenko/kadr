@@ -219,6 +219,13 @@ final class AutomationRouter {
             }
             recording.stop(reportingTo: report)
 
+        case .toggleRecording:
+            if recording.isRecording {
+                recording.stop(reportingTo: report)
+            } else {
+                beginAutomatedRecording(RecordOptions(), wholeDisplay: true, completion: completion)
+            }
+
         default:
             return false
         }

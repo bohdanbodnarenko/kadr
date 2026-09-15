@@ -127,11 +127,19 @@ extension AnnotationCanvasView {
         selectionLayer.addSublayer(outline)
 
         for (handle, point) in SelectionResizer.anchors(for: commands) {
-            let size = handle.isCorner
-                ? SelectionResizer.cornerSize / handleViewScale
-                : SelectionResizer.edgeSize / handleViewScale
-            selectionLayer.addSublayer(handleSquare(at: point, size: size))
+            if handle.isRotate {
+                selectionLayer.addSublayer(handleCircle(at: point, size: sizeForRotate))
+            } else {
+                let size = handle.isCorner
+                    ? SelectionResizer.cornerSize / handleViewScale
+                    : SelectionResizer.edgeSize / handleViewScale
+                selectionLayer.addSublayer(handleSquare(at: point, size: size))
+            }
         }
+    }
+
+    private var sizeForRotate: CGFloat {
+        SelectionResizer.cornerSize / handleViewScale
     }
 
     private func addPathHandles(_ anchors: [(SelectionHandle, CGPoint)]) {
@@ -165,6 +173,8 @@ extension AnnotationCanvasView {
     private func cursor(for handle: SelectionHandle) -> NSCursor {
         switch handle {
         case .pathStart, .pathEnd, .pathMiddle:
+            NSCursor.pointingHand
+        case .rotate:
             NSCursor.pointingHand
         case let .box(crop):
             cursor(for: crop)

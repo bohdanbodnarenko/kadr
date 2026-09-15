@@ -64,6 +64,9 @@ public final class ActivationJuggler {
     }
 
     /// Call when that window has closed.
+    ///
+    /// The accessory drop is deferred by one turn so the Dock icon does not flicker as
+    /// the last window's close animation finishes (docs/16 APP-P4).
     public func endRegularWindow() {
         guard regularWindowCount > 0 else {
             logger.error("endRegularWindow() called more times than beginRegularWindow()")
@@ -71,7 +74,10 @@ public final class ActivationJuggler {
         }
         regularWindowCount -= 1
         guard regularWindowCount == 0 else { return }
-        application.apply(idlePolicy)
-        logger.debug("Activation policy returned to idle")
+        Task { @MainActor in
+            guard self.regularWindowCount == 0 else { return }
+            self.application.apply(self.idlePolicy)
+            self.logger.debug("Activation policy returned to idle")
+        }
     }
 }

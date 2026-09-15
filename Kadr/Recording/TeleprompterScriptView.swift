@@ -58,6 +58,7 @@ final class TeleprompterScriptView: NSView {
 
     private struct Layout {
         let lines: [CTLine]
+        let texts: [String]
         /// Which script word each laid-out line starts at, for finding the reader's line.
         let firstWord: [Int]
         let lineHeight: CGFloat
@@ -124,7 +125,12 @@ final class TeleprompterScriptView: NSView {
                 x: 24,
                 y: offset + CGFloat(index) * layout.lineHeight + layout.lineHeight * 0.75
             )
-            CTLineDraw(layout.lines[index], context)
+            let line: CTLine = if index == currentIndex {
+                highlightedLine(in: layout, index: index, fontSize: layout.fontSize)
+            } else {
+                layout.lines[index]
+            }
+            CTLineDraw(line, context)
         }
         context.setAlpha(1)
         drawProgress(in: context)
@@ -203,11 +209,13 @@ final class TeleprompterScriptView: NSView {
         let width = max(bounds.width - 48, 1)
 
         var lines: [CTLine] = []
+        var texts: [String] = []
         var firstWord: [Int] = []
 
         for line in script.lines {
             guard !line.text.trimmingCharacters(in: .whitespaces).isEmpty else {
                 lines.append(CTLineCreateWithAttributedString(NSAttributedString(string: " ")))
+                texts.append(" ")
                 firstWord.append(line.wordRange.lowerBound)
                 continue
             }
@@ -222,6 +230,7 @@ final class TeleprompterScriptView: NSView {
                 let count = CTTypesetterSuggestLineBreak(typesetter, start, Double(width))
                 guard count > 0 else { break }
                 lines.append(CTTypesetterCreateLine(typesetter, CFRange(location: start, length: count)))
+                texts.append((line.text as NSString).substring(with: NSRange(location: start, length: count)))
                 // Which word this wrapped line starts at, so the reader's position finds
                 // the right one. Counted from the text before it rather than measured,
                 // because the two must agree and the script's split is authoritative.
@@ -237,11 +246,51 @@ final class TeleprompterScriptView: NSView {
         let leading = CTFontGetLeading(font)
         return Layout(
             lines: lines,
+            texts: texts,
             firstWord: firstWord,
             lineHeight: (ascent + descent + leading) * 1.35,
             width: bounds.width,
             fontSize: style.fontSize
         )
+    }
+
+    /// Emphasises the current word with a CoreText colour run (docs/16 REC-19e).
+    private func highlightedLine(in layout: Layout, index: Int, fontSize: CGFloat) -> CTLine {
+        guard layout.texts.indices.contains(index) else { return layout.lines[index] }
+        let text = layout.texts[index]
+        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, fontSize, nil)
+            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+        let attributed = NSMutableAttributedString(string: text, attributes: [
+            .init(kCTFontAttributeName as String): font,
+            .init(kCTForegroundColorAttributeName as String): NSColor.labelColor.cgColor
+        ])
+        let current = Int(position)
+        let startWord = layout.firstWord[index]
+        let relative = current - startWord
+        guard relative >= 0 else {
+            return CTLineCreateWithAttributedString(attributed)
+        }
+        let tokens = text.split(omittingEmptySubsequences: false, whereSeparator: \.isWhitespace)
+        var cursor = 0
+        var wordOrdinal = 0
+        for token in tokens {
+            let length = token.count
+            if !token.isEmpty {
+                if wordOrdinal == relative {
+                    attributed.addAttributes([
+                        .init(kCTForegroundColorAttributeName as String): NSColor.controlAccentColor.cgColor,
+                        .underlineStyle: NSUnderlineStyle.single.rawValue
+                    ], range: NSRange(location: cursor, length: length))
+                    break
+                }
+                wordOrdinal += 1
+            }
+            cursor += length
+            if cursor < text.count {
+                cursor += 1
+            }
+        }
+        return CTLineCreateWithAttributedString(attributed)
     }
 
     // MARK: - Seams

@@ -113,7 +113,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
         window.toolbarStyle = .automatic
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.contentViewController = hosting
         window.delegate = self
         window.contentMinSize = SettingsWindowGeometry.minimumSize

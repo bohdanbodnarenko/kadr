@@ -169,6 +169,7 @@ public enum AppCommand: Codable, Hashable, Sendable {
     case recordScreen(RecordOptions)
     case recordRegion(RecordOptions)
     case stopRecording
+    case toggleRecording
     case pin(FileTarget?)
     case annotate(FileTarget)
     case addToHistory(FileTarget)
@@ -201,6 +202,7 @@ public enum AppCommand: Codable, Hashable, Sendable {
         case .recordScreen: .recordScreen
         case let .recordRegion(options): options.exportAsGIF == true ? .recordGif : .recordRegion
         case .stopRecording: .stopRecording
+        case .toggleRecording: .toggleRecording
         case .pin: .pin
         case .annotate: .annotate
         case .addToHistory: .addToHistory

@@ -205,10 +205,9 @@ struct ZoomCuePlannerTests {
         #expect(cues[0].magnification > 1)
     }
 
-    /// A single click is somebody passing through rather than working.
-    @Test("One click is not a cluster")
-    func singleClickIsNotACluster() {
-        #expect(planner.cues(for: clicks([1], at: CGPoint(x: 400, y: 300)), in: size, duration: 10).isEmpty)
+    @Test("One click still becomes a zoom")
+    func singleClickIsACluster() {
+        #expect(planner.cues(for: clicks([1], at: CGPoint(x: 400, y: 300)), in: size, duration: 10).count == 1)
     }
 
     @Test("Clicks far apart in time are separate zooms")

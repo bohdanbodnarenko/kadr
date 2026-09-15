@@ -105,6 +105,18 @@ struct EditorAutosaveTests {
         #expect(model.hasUnsavedChanges)
     }
 
+    @Test("Rotating the capture makes the window dirty")
+    func rotatingMakesItDirty() {
+        let model = makeModel()
+        #expect(!model.hasUnsavedChanges)
+        model.rotateClockwise()
+        #expect(model.hasUnsavedChanges)
+        model.markSaved()
+        #expect(!model.hasUnsavedChanges)
+        model.flipHorizontal()
+        #expect(model.hasUnsavedChanges)
+    }
+
     @Test("Restored work counts as unsaved, because it is")
     func restoredWorkIsDirty() {
         let model = makeModel()

@@ -1,4 +1,5 @@
 import AnnotationModel
+import AnnotationRender
 import CoreGraphics
 import Foundation
 import os
@@ -47,6 +48,7 @@ extension EditorDocumentModel {
                 return
             }
             spec.string = string
+            spec = TextRendering.fitted(spec)
             commands[index] = .text(spec)
         }
     }

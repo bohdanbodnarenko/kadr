@@ -89,13 +89,28 @@ final class TeleprompterPanel: NonActivatingPanel {
     ///
     /// Top-centre because that is where a reader's eyes should be: a script at the bottom
     /// of the screen films somebody looking down, which is the exact problem a prompter is
-    /// meant to solve.
-    func positionOnScreen(_ savedFrame: NSRect?) {
+    /// meant to solve. "Dock under camera" pins it just below the hardware notch
+    /// (docs/16 REC-19e).
+    func positionOnScreen(_ savedFrame: NSRect?, dockUnderCamera: Bool = false) {
+        if dockUnderCamera, let screen = RecordingNotchScreen.notchScreen ?? ActiveScreen.resolve() {
+            let metrics = RecordingNotchScreen.metrics
+            let size = NSSize(width: min(760, screen.visibleFrame.width - 80), height: 220)
+            setFrame(
+                NSRect(
+                    x: screen.frame.midX - size.width / 2,
+                    y: screen.frame.maxY - metrics.height - size.height - 8,
+                    width: size.width,
+                    height: size.height
+                ),
+                display: false
+            )
+            return
+        }
         if let savedFrame, NSScreen.screens.contains(where: { $0.frame.intersects(savedFrame) }) {
             setFrame(savedFrame, display: false)
             return
         }
-        guard let screen = NSScreen.main else { return }
+        guard let screen = ActiveScreen.resolve() ?? NSScreen.main else { return }
         let size = NSSize(width: min(760, screen.visibleFrame.width - 80), height: 220)
         setFrame(
             NSRect(

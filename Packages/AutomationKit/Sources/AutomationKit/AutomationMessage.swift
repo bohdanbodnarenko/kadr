@@ -8,6 +8,8 @@ public enum AutomationStatus: String, Codable, Sendable, Hashable {
     case failed
     /// The verb parsed but this build cannot do it — a permission is missing, say.
     case unsupported
+    /// Capture Text found nothing to copy (docs/16 X-4).
+    case noText
 }
 
 /// What the agent sends back to a CLI invocation or a Shortcuts action.
@@ -53,6 +55,7 @@ public struct AutomationResponse: Codable, Hashable, Sendable {
         case .failed: 1
         case .cancelled: 2
         case .unsupported: 3
+        case .noText: 4
         }
     }
 

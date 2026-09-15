@@ -9,6 +9,7 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     private var strokes: [AnnotationTool: StrokeStyle]
     private var fills: [AnnotationTool: FillStyle]
     private var arrowHead: ArrowHead
+    private var startArrowHead: ArrowHead?
     private var shapeKind: ShapeKind
     private var textStyle: TextStyle
     private var redactionStyle: RedactionStyle
@@ -64,6 +65,11 @@ public struct StyleMemory: Codable, Hashable, Sendable {
     public var lastArrowHead: ArrowHead {
         get { arrowHead }
         set { arrowHead = newValue }
+    }
+
+    public var lastStartArrowHead: ArrowHead? {
+        get { startArrowHead }
+        set { startArrowHead = newValue }
     }
 
     public var lastShapeKind: ShapeKind {
