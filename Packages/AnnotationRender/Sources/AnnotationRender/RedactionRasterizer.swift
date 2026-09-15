@@ -5,233 +5,87 @@ import Foundation
 import os
 import Shared
 
-/// Burns blur and pixelate regions into the image itself (docs/03 §3, docs/04 §6).
+/// Burns blur, pixelate and erase regions into the image itself (docs/03 §3, docs/04 §6).
 ///
 /// This is the security-relevant part of the editor. A blur drawn as an overlay on top of
 /// a PNG can be removed by anyone who opens the file — the original pixels are still
 /// there. So redaction is *rasterised into the base image* before anything else is drawn,
 /// and the exported file contains no recoverable original.
 ///
-/// Pixelation adds randomised per-cell displacement for a related reason: an even mosaic
-/// over known glyph shapes is attackable, because the average colour of each cell leaks
-/// the character underneath. Jittering which pixel each cell samples breaks that.
+/// Two rules the whole file follows:
+///
+/// * **Strength is in the capture's pixels**, the way Screendrop measures it. Multiplying by
+///   the backing scale doubled every blur and mosaic on a Retina capture, which is what
+///   turned a readable-but-hidden blur into a flat grey slab.
+/// * **Preview and export are the same algorithm.** The canvas used to preview pixelate with
+///   an averaged mosaic and export a different, single-pixel one, so the saved file looked
+///   nothing like what was drawn. Export differs from preview only in its random seed.
 public struct RedactionRasterizer: Sendable {
     private let logger = KadrLog.logger(.capture)
 
     public init() {}
 
-    /// A live crop of the screenshot, blurred or pixelated the way the canvas shows it.
+    /// A live crop of the screenshot, redacted the way export will redact it.
     ///
     /// Editing has to look like the real effect — a grey rectangle is not a redaction.
-    /// Export still goes through `apply`, which burns the same region into the full image
-    /// with the security jitter on pixelate. This path is the preview: sample the
-    /// pixels under the box (Screendrop's `AnnoShapeDrawing.drawRedaction`).
     public func preview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
         let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let box = CGRect(
+            x: spec.rect.minX * scale,
+            y: spec.rect.minY * scale,
+            width: spec.rect.width * scale,
+            height: spec.rect.height * scale
+        ).integral.intersection(bounds)
+        guard !box.isNull, box.width >= 1, box.height >= 1 else { return nil }
+
         switch spec.style {
         case let .blur(radius):
-            return previewBlur(image, rect: spec.rect, radius: max(radius, 1), scale: scale)
+            return previewBlur(image, box: box, sigma: max(radius, 1))
         case let .pixelate(cellSize):
-            let crop = CGRect(
-                x: spec.rect.minX * scale,
-                y: spec.rect.minY * scale,
-                width: spec.rect.width * scale,
-                height: spec.rect.height * scale
-            ).integral.intersection(bounds)
-            guard crop.width >= 1, crop.height >= 1 else { return nil }
-            return previewPixelate(image, crop: crop, cellSize: max(cellSize * scale, 2))
+            guard let crop = image.cropping(to: box) else { return nil }
+            // Seeded from the annotation, so the mosaic holds still while its box is
+            // dragged instead of reshuffling on every mouse-move.
+            var generator = SeededGenerator(seed: Self.previewSeed(for: spec.id))
+            return mosaic(crop, cellSize: Self.cellPixels(cellSize), generator: &generator)
         case .erase:
-            return previewErase(image, rect: spec.rect, scale: scale)
+            guard let crop = image.cropping(to: box) else { return nil }
+            let sample = Self.dominantEdgeColor(of: crop)
+            return solidImage(width: Int(box.width), height: Int(box.height), sample: sample)
         }
     }
 
-    /// Pads the region so the Gaussian samples real neighbours, then cuts back to the box.
+    /// Blurs the box's own pixels, its edges extended outward, the way Screendrop does.
     ///
-    /// The crop happens on the `CGImage`, before CoreImage sees anything. That is the whole
-    /// performance story on this path: `CIImage(cgImage:)` of the full capture, rendered
-    /// through a context that deliberately keeps no intermediates, pushes the entire
-    /// 4K bitmap to the GPU on every call — and this one runs on every mouse-move while a
-    /// redaction box is being dragged. Cropping first bounds the work to the region the user
-    /// is actually blurring. `CGImage.cropping` shares the original's backing store, so the
-    /// crop itself costs nothing.
-    private func previewBlur(_ image: CGImage, rect: CGRect, radius: CGFloat, scale: CGFloat) -> CGImage? {
-        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let sigma = max(radius * scale, 1)
-        let box = CGRect(
-            x: rect.minX * scale,
-            y: rect.minY * scale,
-            width: rect.width * scale,
-            height: rect.height * scale
-        ).integral.intersection(bounds)
-        guard box.width >= 1, box.height >= 1 else { return nil }
-
-        let padded = Self.paddedCropRect(box: box, sigma: sigma, bounds: bounds)
-        guard padded.width >= 1, padded.height >= 1, let crop = image.cropping(to: padded) else { return nil }
-
-        let blurred = blur(CIImage(cgImage: crop).clampedToExtent(), sigma: sigma)
-        // `box` is in the image's top-left space and `crop` is a window onto it;
-        // `CIImage(cgImage:)` puts row zero at the top, so the y has to be flipped within
-        // the crop rather than within the whole image (CLAUDE.md rule 6).
-        let output = CGRect(
-            x: box.minX - padded.minX,
-            y: padded.maxY - box.maxY,
-            width: box.width,
-            height: box.height
-        )
-        return KadrRenderContext.shared.createCGImage(blurred, from: output)
+    /// The crop happens on the `CGImage`, before CoreImage sees anything: `CIImage(cgImage:)`
+    /// of the full capture pushes the entire bitmap to the GPU on every call, and this one
+    /// runs on every mouse-move while a redaction box is dragged. `CGImage.cropping` shares
+    /// the original's backing store, so the crop itself costs nothing.
+    private func previewBlur(_ image: CGImage, box: CGRect, sigma: CGFloat) -> CGImage? {
+        guard let crop = image.cropping(to: box) else { return nil }
+        let input = CIImage(cgImage: crop)
+        return KadrRenderContext.shared.createCGImage(ownPixelsBlur(input, sigma: sigma), from: input.extent)
     }
 
-    /// Fill with the colour of the region's edge, so chrome and buttons disappear.
-    private func previewErase(_ image: CGImage, rect: CGRect, scale: CGFloat) -> CGImage? {
-        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let box = CGRect(
-            x: rect.minX * scale,
-            y: rect.minY * scale,
-            width: rect.width * scale,
-            height: rect.height * scale
-        ).integral.intersection(bounds)
-        guard box.width >= 1, box.height >= 1, let crop = image.cropping(to: box) else { return nil }
-        let sample = edgeColor(of: crop)
-        return solidImage(width: Int(box.width), height: Int(box.height), sample: sample)
-    }
-
-    private func erased(_ image: CIImage, in rect: CGRect, context: CIContext) -> CIImage {
-        let sample = if let region = context.createCGImage(image, from: rect) {
-            edgeColor(of: region)
-        } else {
-            EdgeSample.fallback
-        }
-        let color = CIColor(red: sample.red, green: sample.green, blue: sample.blue)
-        return CIImage(color: color).cropped(to: rect)
-    }
-
-    private func edgeColor(of image: CGImage) -> EdgeSample {
-        let width = image.width
-        let height = image.height
-        guard width > 0, height > 0 else { return .fallback }
-        var sumRed = 0
-        var sumGreen = 0
-        var sumBlue = 0
-        var count = 0
-        let samples: [(Int, Int)] = [
-            (0, 0), (max(width / 2, 0), 0), (max(width - 1, 0), 0),
-            (0, max(height / 2, 0)), (max(width - 1, 0), max(height / 2, 0)),
-            (0, max(height - 1, 0)), (max(width / 2, 0), max(height - 1, 0)),
-            (max(width - 1, 0), max(height - 1, 0))
-        ]
-        for (x, y) in samples {
-            guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)),
-                  let data = pixel.dataProvider?.data,
-                  let bytes = CFDataGetBytePtr(data)
-            else { continue }
-            sumRed += Int(bytes[0])
-            sumGreen += Int(bytes[1])
-            sumBlue += Int(bytes[2])
-            count += 1
-        }
-        guard count > 0 else { return .fallback }
-        return EdgeSample(
-            red: CGFloat(sumRed) / CGFloat(count * 255),
-            green: CGFloat(sumGreen) / CGFloat(count * 255),
-            blue: CGFloat(sumBlue) / CGFloat(count * 255)
-        )
-    }
-
-    private func solidImage(width: Int, height: Int, sample: EdgeSample) -> CGImage? {
-        guard let context = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-        context.setFillColor(CGColor(red: sample.red, green: sample.green, blue: sample.blue, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        return context.makeImage()
-    }
-
-    /// The region handed to CoreImage: the box, plus enough margin for the Gaussian to have
-    /// real neighbours to sample.
+    /// The box's pixels blurred with its own edges repeated outward, then clipped to it.
     ///
-    /// Two sigmas of padding is where a Gaussian's contribution has fallen away to nothing.
-    /// Without it the blur has only the box's own edge to mix in, and a redaction comes out
-    /// looking like a flat rectangle of slightly softened pixels rather than something the
-    /// image continues into.
-    ///
-    /// Exposed because it is the shape of the work: everything outside this rect is data the
-    /// preview must never touch, and a redaction box is usually a small part of a large
-    /// capture.
-    static func paddedCropRect(box: CGRect, sigma: CGFloat, bounds: CGRect) -> CGRect {
-        let pad = ceil(max(sigma, 1) * 2)
-        return box.insetBy(dx: -pad, dy: -pad).integral.intersection(bounds)
+    /// Not padded with the surrounding image. Sampling neighbours past the box bled whatever
+    /// sat just outside — a bright line of text above, a dark bar below — into a band along
+    /// each edge, which read as a smear stuck to a sharp picture. Clamping keeps the box one
+    /// even blur to its edge, and means nothing outside the box ever enters the redaction.
+    private func ownPixelsBlur(_ region: CIImage, sigma: CGFloat) -> CIImage {
+        blur(region.clampedToExtent(), sigma: sigma).cropped(to: region.extent)
     }
 
-    /// A Gaussian that samples past the box, then is clipped to it.
-    ///
-    /// The padding is what keeps a redaction from looking like a flat rectangle of slightly
-    /// softened pixels: crop-then-clamp only repeats the box's own edge, so the blur has no
-    /// neighbours to mix in.
-    private func gaussianBlur(_ image: CIImage, in rect: CGRect, radius: CGFloat) -> CIImage {
-        let sigma = max(radius, 1)
-        let pad = ceil(sigma * 2)
-        let padded = rect.insetBy(dx: -pad, dy: -pad).intersection(image.extent)
-        return blur(image.cropped(to: padded).clampedToExtent(), sigma: sigma)
+    private func gaussianBlur(_ image: CIImage, in rect: CGRect, sigma: CGFloat) -> CIImage {
+        ownPixelsBlur(image.cropped(to: rect), sigma: sigma)
     }
 
     /// The blur itself, on an image already cropped and clamped to what it needs.
     ///
-    /// A plain `CIGaussianBlur`, deliberately. The obvious optimisation is to shrink the
-    /// region, blur with a proportionally smaller sigma and scale back — a Gaussian is
-    /// scale-covariant, so it should cost far less for the same picture. Measured on a 4K
-    /// capture it is the wrong trade: `CIGaussianBlur` is flat in sigma here (0.77 ms at
-    /// sigma 8, 0.88 at sigma 60 — CoreImage already shrinks internally for wide radii),
-    /// and adding a Lanczos pass to shrink it myself took it to 1.38 ms. Slower, and a
-    /// resampling artifact to worry about, for nothing.
+    /// A plain `CIGaussianBlur`, deliberately: it is flat in sigma here (CoreImage already
+    /// shrinks internally for wide radii), and shrinking by hand first measured slower.
     private func blur(_ source: CIImage, sigma: CGFloat) -> CIImage {
         source.applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: sigma])
-    }
-
-    /// Fast mosaic for the canvas: downsample then nearest-neighbour up, the way Screendrop
-    /// previews pixelate. Export uses the jittered mosaic (`PixelateMosaic`) instead.
-    private func previewPixelate(_ image: CGImage, crop: CGRect, cellSize: CGFloat) -> CGImage? {
-        guard let sampled = image.cropping(to: crop) else { return nil }
-        let block = max(1, Int(cellSize.rounded()))
-        let smallWidth = max(1, sampled.width / block)
-        let smallHeight = max(1, sampled.height / block)
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-
-        guard let down = CGContext(
-            data: nil,
-            width: smallWidth,
-            height: smallHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            return nil
-        }
-        down.interpolationQuality = .medium
-        down.draw(sampled, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
-        guard let small = down.makeImage() else { return nil }
-
-        guard let up = CGContext(
-            data: nil,
-            width: sampled.width,
-            height: sampled.height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            return nil
-        }
-        up.interpolationQuality = .none
-        up.draw(small, in: CGRect(x: 0, y: 0, width: sampled.width, height: sampled.height))
-        return up.makeImage()
     }
 
     /// Applies every redaction in a document to a copy of the base image.
@@ -267,15 +121,9 @@ public struct RedactionRasterizer: Sendable {
 
             let obscured = switch redaction.style {
             case let .blur(radius):
-                gaussianBlur(output, in: pixels, radius: max(radius * scale, 1))
+                gaussianBlur(output, in: pixels, sigma: max(radius, 1))
             case let .pixelate(cellSize):
-                pixelated(
-                    output,
-                    in: pixels,
-                    cellSize: cellSize * scale,
-                    context: context,
-                    generator: &generator
-                )
+                pixelated(output, in: pixels, cellSize: cellSize, context: context, generator: &generator)
             case .erase:
                 erased(output, in: pixels, context: context)
             }
@@ -289,11 +137,12 @@ public struct RedactionRasterizer: Sendable {
         return result
     }
 
-    /// A mosaic whose every cell samples from its own displaced point.
+    // MARK: - Pixelate
+
+    /// The region, rendered, mosaicked on the CPU and handed back — see `PixelateMosaic`.
     ///
-    /// `CIPixellate` cannot express this: it averages a fixed grid, and its only knob is
-    /// where that grid's centre sits. So the region is rendered, mosaicked on the CPU, and
-    /// handed back — see `PixelateMosaic` for why per-cell matters (docs/07 M3).
+    /// `CIPixellate` cannot express the jittered windows: it averages a fixed grid, and its
+    /// only knob is where that grid's centre sits (docs/07 M3).
     private func pixelated(
         _ image: CIImage,
         in rect: CGRect,
@@ -301,12 +150,11 @@ public struct RedactionRasterizer: Sendable {
         context: CIContext,
         generator: inout SeededGenerator
     ) -> CIImage {
-        let size = max(cellSize, 2)
         guard let region = context.createCGImage(image, from: rect),
-              let mosaicked = mosaic(region, cellSize: Int(size.rounded()), generator: &generator)
+              let mosaicked = mosaic(region, cellSize: Self.cellPixels(cellSize), generator: &generator)
         else {
             logger.error("Could not build a jittered mosaic; falling back to an even one")
-            return evenMosaic(image, in: rect, cellSize: size)
+            return evenMosaic(image, in: rect, cellSize: max(cellSize, 2))
         }
         // Back into the source image's own coordinates: `CIImage(cgImage:)` starts at the
         // origin, and this region does not.
@@ -333,7 +181,7 @@ public struct RedactionRasterizer: Sendable {
             height: height,
             bitsPerComponent: 8,
             bytesPerRow: bytesPerRow,
-            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+            space: Self.workingSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
@@ -357,15 +205,137 @@ public struct RedactionRasterizer: Sendable {
                 kCIInputScaleKey: cellSize
             ])
     }
+
+    static func cellPixels(_ cellSize: CGFloat) -> Int {
+        max(Int(cellSize.rounded()), 2)
+    }
+
+    /// A stable seed per annotation, for the preview only.
+    ///
+    /// Stability is all it needs: export draws a fresh, unrecorded seed, so nothing about the
+    /// saved file can be reproduced from the document.
+    static func previewSeed(for id: AnnotationID) -> UInt64 {
+        withUnsafeBytes(of: id.rawValue.uuid) { $0.loadUnaligned(as: UInt64.self) }
+    }
+
+    // MARK: - Erase
+
+    private func erased(_ image: CIImage, in rect: CGRect, context: CIContext) -> CIImage {
+        let sample = if let region = context.createCGImage(image, from: rect) {
+            Self.dominantEdgeColor(of: region)
+        } else {
+            EdgeSample.fallback
+        }
+        let color = CIColor(red: sample.red, green: sample.green, blue: sample.blue)
+        return CIImage(color: color).cropped(to: rect)
+    }
+
+    /// The colour the region's border mostly is.
+    ///
+    /// A histogram of the one-pixel ring, not a mean. The old eight-sample mean landed
+    /// between text and its background — a grey box erasing a line of a dark terminal — and
+    /// read the bytes as RGBA whatever the capture's layout was. The border of a box drawn
+    /// over UI is mostly background, so the commonest colour there is the background.
+    static func dominantEdgeColor(of image: CGImage) -> EdgeSample {
+        let width = image.width
+        let height = image.height
+        guard width > 0, height > 0 else { return .fallback }
+
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: workingSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return .fallback }
+
+        var histogram = EdgeHistogram()
+        let perimeter = 2 * (width + height)
+        let step = max(1, perimeter / 4000)
+        for x in stride(from: 0, to: width, by: step) {
+            histogram.add(pixels, offset: x * 4)
+            histogram.add(pixels, offset: ((height - 1) * width + x) * 4)
+        }
+        for y in stride(from: 0, to: height, by: step) {
+            histogram.add(pixels, offset: (y * width) * 4)
+            histogram.add(pixels, offset: (y * width + width - 1) * 4)
+        }
+        return histogram.dominant ?? .fallback
+    }
+
+    private func solidImage(width: Int, height: Int, sample: EdgeSample) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: Self.workingSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(
+            colorSpace: Self.workingSpace,
+            components: [sample.red, sample.green, sample.blue, 1]
+        ) ?? CGColor(gray: 0.85, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
+    }
+
+    /// sRGB throughout, so preview, export and the erase fill agree on what a colour is.
+    static let workingSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
 }
 
-/// Mean colour of eight samples around a region's edge.
-private struct EdgeSample {
+/// A colour sampled from a region's edge, 0 to 1 per channel.
+struct EdgeSample: Equatable {
     var red: CGFloat
     var green: CGFloat
     var blue: CGFloat
 
     static let fallback = EdgeSample(red: 0.85, green: 0.85, blue: 0.85)
+}
+
+/// Counts edge pixels by colour, 16 levels a channel, and keeps each bucket's true mean.
+private struct EdgeHistogram {
+    private struct Sum {
+        var red = 0
+        var green = 0
+        var blue = 0
+    }
+
+    private var counts: [Int: Int] = [:]
+    private var sums: [Int: Sum] = [:]
+
+    mutating func add(_ pixels: [UInt8], offset: Int) {
+        guard offset >= 0, offset + 3 < pixels.count, pixels[offset + 3] > 0 else { return }
+        let red = Int(pixels[offset])
+        let green = Int(pixels[offset + 1])
+        let blue = Int(pixels[offset + 2])
+        let key = (red >> 4) << 8 | (green >> 4) << 4 | (blue >> 4)
+        counts[key, default: 0] += 1
+        sums[key, default: Sum()].red += red
+        sums[key, default: Sum()].green += green
+        sums[key, default: Sum()].blue += blue
+    }
+
+    var dominant: EdgeSample? {
+        guard let (key, count) = counts.max(by: { $0.value < $1.value }), let sum = sums[key] else {
+            return nil
+        }
+        let scale = CGFloat(count * 255)
+        return EdgeSample(
+            red: CGFloat(sum.red) / scale,
+            green: CGFloat(sum.green) / scale,
+            blue: CGFloat(sum.blue) / scale
+        )
+    }
 }
 
 /// A reproducible random source, so pixelate jitter can be pinned in tests.

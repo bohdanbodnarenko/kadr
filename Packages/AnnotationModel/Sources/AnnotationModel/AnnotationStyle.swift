@@ -205,7 +205,8 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
     }
 
     /// Strength on Screendrop's 0...1 slider. Blur radius is `2 + density × 28`;
-    /// pixel block size is `4 + density × 36`. Erase has no strength.
+    /// pixel block size is `4 + density × 36` — both in the capture's pixels, not points,
+    /// so a Retina capture is not redacted twice as heavily. Erase has no strength.
     public var density: CGFloat {
         switch self {
         case let .blur(radius):

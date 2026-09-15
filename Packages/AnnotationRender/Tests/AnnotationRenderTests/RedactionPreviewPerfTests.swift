@@ -14,54 +14,28 @@ import Testing
 /// which pushed the entire 4K bitmap through the context on first use: measured at 12.15 ms
 /// against 1.05 ms for cropping the `CGImage` first, and the same 1.0 ms once warm.
 ///
-/// The guard is the region rather than a stopwatch. Wall-clock here is worthless: these
+/// The guard is the output rather than a stopwatch. Wall-clock here is worthless: these
 /// tests run in parallel and contend for the GPU, which is how an earlier version of this
-/// file reported the same 27 ms for a 300×200 box and a 1600×900 one — and how it reported
-/// 20 ms for work that costs 1, sending me off optimising a Gaussian that was never the
-/// expense.
+/// file reported the same 27 ms for a 300×200 box and a 1600×900 one.
+///
+/// The blur reads the box and nothing else — its own edges are extended outward rather than
+/// the surrounding capture padded in, which is what keeps a redaction's edges clean.
 @Suite("Redaction preview region")
 struct RedactionPreviewRegionTests {
-    private let fourK = CGRect(x: 0, y: 0, width: 3840, height: 2160)
-
-    /// The crop has to hold the box, or the blur is missing the pixels it is blurring.
-    @Test("The region always contains the box")
-    func regionContainsTheBox() {
-        for sigma in [CGFloat(1), 8, 30, 60, 200] {
-            let box = CGRect(x: 900, y: 700, width: 600, height: 400)
-            let padded = RedactionRasterizer.paddedCropRect(box: box, sigma: sigma, bounds: fourK)
-            #expect(padded.contains(box), "sigma \(sigma) cropped inside its own box")
-        }
-    }
-
-    /// A box in the middle of a large capture must not drag the whole capture through
-    /// CoreImage with it.
-    @Test("A small box reads a small part of the capture")
-    func smallBoxReadsASmallRegion() {
-        let box = CGRect(x: 900, y: 700, width: 600, height: 400)
-        let padded = RedactionRasterizer.paddedCropRect(box: box, sigma: 60, bounds: fourK)
-        let fraction = (padded.width * padded.height) / (fourK.width * fourK.height)
-        #expect(fraction < 0.15, "the preview reads \(Int(fraction * 100))% of the capture for one box")
-    }
-
-    /// Padding is what stops a redaction looking like a flat rectangle: the Gaussian needs
-    /// neighbours outside the box to mix in.
-    @Test("The region is padded past the box for the blur to sample")
-    func regionIsPaddedForSampling() {
-        let box = CGRect(x: 900, y: 700, width: 600, height: 400)
-        let padded = RedactionRasterizer.paddedCropRect(box: box, sigma: 30, bounds: fourK)
-        #expect(padded.minX <= box.minX - 60)
-        #expect(padded.maxX >= box.maxX + 60)
-    }
-
-    /// A box against the edge of the capture cannot read past it.
-    @Test("The region never leaves the image")
-    func regionStaysInsideTheImage() {
-        for box in [
-            CGRect(x: 0, y: 0, width: 300, height: 200),
-            CGRect(x: 3540, y: 1960, width: 300, height: 200)
-        ] {
-            let padded = RedactionRasterizer.paddedCropRect(box: box, sigma: 60, bounds: fourK)
-            #expect(fourK.contains(padded), "\(padded) is outside the image")
+    /// The preview is exactly the box, wherever the box is — including flush with an edge,
+    /// where a padded region used to be clipped on one side only.
+    @Test("The preview is the size of its box, anywhere in the capture", arguments: [
+        CGRect(x: 900, y: 500, width: 600, height: 400),
+        CGRect(x: 0, y: 0, width: 300, height: 200),
+        CGRect(x: 1300, y: 800, width: 300, height: 200)
+    ])
+    func previewIsTheBox(rect: CGRect) throws {
+        let image = RedactionPreviewSamplingTests.striped(width: 1600, height: 1000)
+        for radius in [CGFloat(1), 12, 60] {
+            let spec = RedactionSpec(rect: rect, style: .blur(radius: radius))
+            let preview = try #require(RedactionRasterizer().preview(spec, from: image, scale: 1))
+            #expect(preview.width == Int(rect.width), "radius \(radius) grew the preview")
+            #expect(preview.height == Int(rect.height), "radius \(radius) grew the preview")
         }
     }
 }
@@ -116,9 +90,11 @@ struct RedactionPreviewSamplingTests {
         return total / Double(width * height) / 255
     }
 
-    /// The old path: wrap the whole capture, crop inside CoreImage.
+    /// The reference: wrap the whole capture, cut the box out inside CoreImage — whose y runs
+    /// bottom-up — and blur its own pixels with the edges extended.
     ///
-    /// Kept here as the reference the fast path has to agree with.
+    /// The fast path crops the `CGImage` instead, top-down, so the two only agree if the flip
+    /// between those spaces is right.
     static func wholeImagePreview(_ image: CGImage, rect: CGRect, radius: CGFloat, scale: CGFloat) -> CGImage? {
         let ci = CIImage(cgImage: image)
         let extent = ci.extent
@@ -129,20 +105,16 @@ struct RedactionPreviewSamplingTests {
             height: rect.height * scale
         ).integral.intersection(extent)
         guard pixels.width >= 1, pixels.height >= 1 else { return nil }
-        let sigma = max(radius * scale, 1)
-        let padded = pixels.insetBy(dx: -ceil(sigma * 2), dy: -ceil(sigma * 2)).intersection(extent)
-        let out = ci.cropped(to: padded).clampedToExtent()
+        let sigma = max(radius, 1)
+        let out = ci.cropped(to: pixels).clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: sigma])
         return KadrRenderContext.shared.createCGImage(out, from: pixels)
     }
 
     /// Cropping first must produce the same picture, including for a box against an edge.
     ///
-    /// The edge cases are the point. Away from the edges the padding is symmetric, which
-    /// makes the two ways of expressing the flip — `padded.maxY - box.maxY` and
-    /// `box.minY - padded.minY` — arithmetically identical, so a test using only central
-    /// boxes passes with the flip written either way. It has to be a box whose padding the
-    /// image clips on one side and not the other.
+    /// The edge cases are the point: a box whose position differs between the top-down and
+    /// bottom-up spaces only when the flip is written wrong has to be off-centre vertically.
     ///
     /// The radius matters as much as the box. Comparing two heavily blurred images hides
     /// exactly the error being looked for: at sigma 12 the blur washes out any detail fine

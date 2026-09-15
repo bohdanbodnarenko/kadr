@@ -76,42 +76,42 @@ struct PixelateMosaicTests {
         )
     }
 
-    /// The widths of the constant-colour runs along a row.
-    private func runLengths(_ bitmap: Bitmap, row: Int) -> [Int] {
-        var lengths: [Int] = []
-        var current = 1
-        for x in 1 ..< bitmap.width {
-            if bitmap.red(x: x, y: row) == bitmap.red(x: x - 1, y: row) {
-                current += 1
-            } else {
-                lengths.append(current)
-                current = 1
-            }
-        }
-        lengths.append(current)
-        return lengths
-    }
-
     /// The M3 failure in one assertion.
     ///
-    /// Against stripes of exactly one cell's width, a mosaic with a single global offset
-    /// gives every cell the same phase: cell *k* and cell *k + 1* always read different
-    /// stripes, whatever the offset, so the row comes back as constant-width runs of
-    /// exactly one cell — the original pattern, intact. Per-cell displacement lets
-    /// neighbouring cells land on the same stripe, and the widths stop being uniform.
-    @Test("Cell-periodic content does not come back out intact", arguments: [1 as UInt64, 7, 99, 12345])
+    /// Against stripes of exactly one cell's width, a mosaic that averages a fixed grid gives
+    /// every cell the same phase of the pattern, so every cell comes out one of at most two
+    /// values — pure stripe colours when aligned, the same half-grey everywhere when not.
+    /// That uniformity is what an attacker matches against. Windows displaced per cell cover
+    /// a different share of each stripe, so the cells take many values.
+    @Test("Cell-periodic content does not come back as a fixed grid", arguments: [1 as UInt64, 7, 99, 12345])
     func stripesAreScrambled(seed: UInt64) {
         let bitmap = stripes()
         run(bitmap, seed: seed)
 
-        // Interior runs only: the grid starts at a random phase, so the first and last are
-        // partial cells and say nothing either way.
-        let interior = runLengths(bitmap, row: 4).dropFirst().dropLast()
-        #expect(!interior.isEmpty, "the region should still be split into cells")
+        let values = Set((0 ..< width).map { bitmap.red(x: $0, y: 4) })
         #expect(
-            interior.contains { $0 > cell },
-            "every run is one cell wide — the mosaic reproduced the grid it was meant to destroy"
+            values.count > 3,
+            "cells came out \(values.sorted()) — the mosaic reproduced the grid it was meant to destroy"
         )
+    }
+
+    /// The "confetti" regression: a cell is an average of its window, never one sampled pixel.
+    ///
+    /// Sparse bright detail on a dark field — text on a terminal — must pixelate to a dark
+    /// field faintly lifted by the strokes. Filling cells from single pixels scattered bright
+    /// squares wherever a sample happened to land on a stroke.
+    @Test("Sparse detail averages into its field instead of scattering bright cells", arguments: [2 as UInt64, 31, 777])
+    func sparseDetailAverages(seed: UInt64) {
+        let bitmap = Bitmap(width: width, height: height)
+        for y in 0 ..< height {
+            for x in 0 ..< width {
+                bitmap.setPixel(x: x, y: y, red: x % 4 == 0 && y % 4 == 0 ? 255 : 20)
+            }
+        }
+        run(bitmap, seed: seed)
+
+        let brightest = (0 ..< height).flatMap { y in (0 ..< width).map { bitmap.red(x: $0, y: y) } }.max() ?? 0
+        #expect(brightest < 60, "a cell reached \(brightest): it copied a stroke instead of averaging")
     }
 
     /// The property that actually matters: cells do not all read the same phase, so the
