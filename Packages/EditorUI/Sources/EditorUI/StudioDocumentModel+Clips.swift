@@ -151,15 +151,34 @@ public extension StudioDocumentModel {
     }
 
     /// Which clip contains an edited-time instant.
+    ///
+    /// The first clip whose end is past `time`, or the last clip when none is — so the very
+    /// end of the edit belongs to the final clip. A binary search over cached clip ends,
+    /// because this runs on every playhead write.
     func clipIndex(at time: TimeInterval) -> Int? {
-        var elapsed: TimeInterval = 0
-        for (index, clip) in edit.clips.clips.enumerated() {
-            let next = elapsed + clip.editedDuration
-            if time < next || index == edit.clips.clips.count - 1 {
-                return index
+        Self.clipIndex(at: time, ends: clipEnds)
+    }
+
+    /// Where the clip at `index` begins on the edited timeline, from the cached clip ends.
+    func editedStart(ofClipAt index: Int) -> TimeInterval {
+        let ends = clipEnds
+        guard index > 0, !ends.isEmpty else { return 0 }
+        return ends[min(index, ends.count) - 1]
+    }
+
+    /// `clipIndex(at:)` over explicit clip ends, so the search is testable without a model.
+    nonisolated static func clipIndex(at time: TimeInterval, ends: [TimeInterval]) -> Int? {
+        guard !ends.isEmpty else { return nil }
+        var low = 0
+        var high = ends.count
+        while low < high {
+            let mid = (low + high) / 2
+            if ends[mid] > time {
+                high = mid
+            } else {
+                low = mid + 1
             }
-            elapsed = next
         }
-        return nil
+        return min(low, ends.count - 1)
     }
 }

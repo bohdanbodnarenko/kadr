@@ -39,6 +39,8 @@ final class HistoryController {
     }
 
     private var pending: [HistoryIngest] = []
+    /// The open in flight, shared by everyone who asks before it finishes.
+    @ObservationIgnored private var openTask: Task<HistoryStore, any Error>?
 
     /// What the History window's search field holds, and the indexer behind it
     /// (docs/03 §5 P3).
@@ -133,10 +135,6 @@ final class HistoryController {
             cache.store(image, for: url, maxPixelSize: maxPixelSize, scope: scope)
         }
         return image
-    }
-
-    func purgeStripThumbnails() {
-        cache.purgeStrip()
     }
 
     func showWindow(
@@ -296,19 +294,38 @@ final class HistoryController {
 
     // MARK: - Private
 
+    /// Opens the library once, off the main thread, however many callers ask at once.
+    ///
+    /// `HistoryStore.open` creates directories, opens SQLite and runs migrations. It used
+    /// to run synchronously on the main actor inside this `async` function, which made the
+    /// first History action after launch a main-thread stall. Every caller already awaits
+    /// this, so the open simply moves to a detached task; callers that arrive while it is
+    /// running wait on the same task rather than opening a second pool.
     private func openIfNeeded() async {
         if store != nil {
             await drainPending()
             return
         }
+        let opening = openTask ?? Task.detached(priority: .utility) {
+            try HistoryStore.openApplicationSupport(tuning: .agent)
+        }
+        openTask = opening
         do {
-            let opened = try HistoryStore.openApplicationSupport()
+            let opened = try await opening.value
+            guard store == nil else {
+                // Another caller finished the launch work while this one waited.
+                await drainPending()
+                return
+            }
             store = opened
             _ = try await opened.applyRetention(policy)
             recent = try await opened.recent(limit: Self.menuStripCount)
             usage = try await opened.storageUsage()
             await drainPending()
+            // The launch pass read pages nothing will read again soon.
+            await opened.releaseMemory()
         } catch {
+            openTask = nil
             logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
         }
     }

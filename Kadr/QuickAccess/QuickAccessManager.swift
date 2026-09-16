@@ -66,6 +66,9 @@ final class QuickAccessManager {
     /// Hears about captures the editor saved, so the card and History stay current.
     @ObservationIgnored var editorSaveObserver: (any NSObjectProtocol)?
     @ObservationIgnored var dismissTasks: [UUID: Task<Void, Never>] = [:]
+    /// When each card's timeout runs out, so a hover that paused the timer can resume it
+    /// with what was left rather than starting over.
+    @ObservationIgnored var dismissDeadlines: [UUID: ContinuousClock.Instant] = [:]
     /// Cascades multi-card dismiss so each reflow animates (CleanShot §6.3 / 4.7.5).
     @ObservationIgnored var dismissCascadeTask: Task<Void, Never>?
     @ObservationIgnored var overlayExitTask: Task<Void, Never>?

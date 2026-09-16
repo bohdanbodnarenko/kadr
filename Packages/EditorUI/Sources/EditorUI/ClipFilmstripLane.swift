@@ -33,23 +33,15 @@ struct ClipFilmstripLane: View {
                 count: count
             )
             let level = max(Int(log2(Double(max(count, 1))).rounded(.down)), 0)
-            var frames: [CGImage] = []
-            frames.reserveCapacity(times.count)
-            for (index, time) in times.enumerated() {
-                if Task.isCancelled {
-                    return
-                }
-                if let image = await StudioThumbnailStore.shared.tile(
-                    url: url,
-                    time: time,
-                    level: level,
-                    index: index,
-                    size: CGSize(width: 80, height: 80)
-                ) {
-                    frames.append(image)
-                }
-            }
-            images = frames
+            // The whole lane in one request, so its missing tiles decode as one batch.
+            let tiles = await StudioThumbnailStore.shared.tiles(
+                url: url,
+                span: .init(start: clip.sourceStart, duration: clip.sourceDuration, level: level),
+                requests: times.enumerated().map { .init(index: $0.offset, time: $0.element) },
+                size: CGSize(width: 80, height: 80)
+            )
+            guard !Task.isCancelled else { return }
+            images = tiles.compactMap(\.self)
         }
     }
 

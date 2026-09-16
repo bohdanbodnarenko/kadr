@@ -21,6 +21,7 @@
 | [`11-shipping-v1.md`](11-shipping-v1.md) | Post-R review: the telemetry seam is mirrored and doubled; sprints S0 (ship-blockers) → S1 (make the gates real and green) → S2 (finish the partials) → S3 (real-device validation and launch) |
 | [`12-release-checklist.md`](12-release-checklist.md) | What a human has to do before a release, because every finding in docs 07/10/11 is static analysis and none of it was made by running Kadr: the flagship end to end, the lifecycle races, the device matrix, the gates, and the one question only a real Mac can answer |
 | [`13-speech-and-transcription.md`](13-speech-and-transcription.md) | **Current plan.** Speech audit against VoiceInk (GPL-3.0 — study only, never copy): the transcriber is handed a video container, Tidy Speech can delete most of a recording with no review, "Follow my voice" is a toggle for a deleted feature; sprints T0 (stop the bleeding) → T1 (a real speech layer in the helper) → T2 (captions, transcript editing, two-track) → T3 (whisper.cpp, decide on evidence) |
+| [`16-screendrop-parity-plan.md`](16-screendrop-parity-plan.md) | Full parity review against Screendrop (2026-09-15) across capture, cards/pins/History, editor, recording, studio and shell: every missing or worse item with Screendrop and Kadr file references, plan, effort and spec impact, phased P0 (stop losing work) → P1 (trust the output) → P2 (daily-loop quick wins) → P3 (motion and performance) → P4 (feature depth) |
 
 ## The five decisions that matter (summary)
 

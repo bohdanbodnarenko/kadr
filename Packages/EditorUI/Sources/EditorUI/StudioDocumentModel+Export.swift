@@ -198,27 +198,72 @@ public extension StudioDocumentModel {
             edit: edit,
             to: destination,
             options: exportSettings.rendererOptions(manifestFrameRate: manifest.frameRate),
-            progress: { [weak self] value in
-                Task { @MainActor in self?.exportProgress = value }
-            }
+            progress: progressPublisher()
         )
     }
 
+    /// A render progress callback that only reaches the main actor when the percent moves.
+    ///
+    /// The renderer reports once per frame — sixty times a second of footage — and each
+    /// report used to spawn a MainActor task that wrote `exportProgress`, which re-rendered
+    /// the export controls and repainted the Dock tile. A bar 120 points wide cannot show
+    /// more than a hundred steps, so the rest were work for nothing. The filter runs on the
+    /// renderer's side, under a lock, so the dropped reports never become tasks at all.
+    private func progressPublisher() -> @Sendable (Double) -> Void {
+        // `exportProgress` was just set to 0, which is what 0% looks like.
+        publishedExportPercent = 0
+        let lastPercent = OSAllocatedUnfairLock<Int?>(initialState: 0)
+        return { [weak self] value in
+            let percent = Self.exportPercent(value)
+            let changed = lastPercent.withLock { last in
+                guard last != percent else { return false }
+                last = percent
+                return true
+            }
+            guard changed else { return }
+            Task { @MainActor [weak self] in
+                self?.publishExportProgress(value)
+            }
+        }
+    }
+
+    /// Writes `exportProgress` only when its whole percent differs from the last one written.
+    ///
+    /// The second check, on the main actor, covers what the lock cannot: two reports that
+    /// passed it in quick succession arriving in the other order.
+    internal func publishExportProgress(_ value: Double) {
+        guard exportProgress != nil else { return }
+        let percent = Self.exportPercent(value)
+        guard percent != publishedExportPercent else { return }
+        publishedExportPercent = percent
+        exportProgress = value
+    }
+
+    internal nonisolated static func exportPercent(_ value: Double) -> Int {
+        guard value.isFinite else { return 0 }
+        return Int((min(max(value, 0), 1) * 100).rounded(.down))
+    }
+
     /// A local notification when the studio window is not key (docs/16 STU-C6).
+    ///
+    /// Only the file name crosses into the task. The request is built after permission is
+    /// granted, because `UNNotificationRequest` is not `Sendable` and capturing a finished
+    /// one in the authorization callback handed a non-Sendable object across threads.
     private func notifyExportFinished(at destination: URL) {
         guard !NSApp.isActive else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "Export finished"
-        content.body = destination.lastPathComponent
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: "studio.export.\(UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            UNUserNotificationCenter.current().add(request)
+        let fileName = destination.lastPathComponent
+        Task {
+            let center = UNUserNotificationCenter.current()
+            guard await (try? center.requestAuthorization(options: [.alert, .sound])) == true else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Export finished"
+            content.body = fileName
+            content.sound = .default
+            try? await center.add(UNNotificationRequest(
+                identifier: "studio.export.\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            ))
         }
     }
 

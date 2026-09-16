@@ -24,6 +24,8 @@ enum StudioFilmstrip {
         }
     }
 
+    private static let timescale: CMTimeScale = 600
+
     static func tileCount(forWidth width: CGFloat) -> Int {
         max(1, Int((width / tileWidth).rounded(.down)))
     }
@@ -38,21 +40,46 @@ enum StudioFilmstrip {
         guard FileManager.default.fileExists(atPath: url.path), !times.isEmpty else {
             return []
         }
+        let generator = makeGenerator(for: url, maximumSize: maximumSize)
+        return await images(from: generator, times: times).compactMap(\.self)
+    }
+
+    /// A generator configured the way the filmstrip wants its tiles.
+    static func makeGenerator(for url: URL, maximumSize: CGSize) -> AVAssetImageGenerator {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = maximumSize
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.15, preferredTimescale: 600)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.15, preferredTimescale: 600)
+        return generator
+    }
 
-        var frames: [CGImage] = []
-        frames.reserveCapacity(times.count)
-        for time in times {
-            if Task.isCancelled {
-                return frames
+    /// Decodes `times` as one batch, aligned with `times`: nil where a frame failed or the
+    /// task was cancelled before it arrived.
+    ///
+    /// One `images(for:)` request rather than one `image(at:)` per time, so AVFoundation can
+    /// order the work and decode forward through the movie instead of seeking per tile.
+    static func images(from generator: AVAssetImageGenerator, times: [TimeInterval]) async -> [CGImage?] {
+        guard !times.isEmpty else { return [] }
+        // Keyed by the tick count at a fixed timescale: the result echoes the requested
+        // time exactly, and duplicates are asked for once and fanned out.
+        var slots: [Int64: [Int]] = [:]
+        var unique: [CMTime] = []
+        for (index, time) in times.enumerated() {
+            let requested = CMTime(seconds: max(time, 0), preferredTimescale: timescale)
+            if slots[requested.value] == nil {
+                unique.append(requested)
             }
-            let requested = CMTime(seconds: max(time, 0), preferredTimescale: 600)
-            if let image = try? await generator.image(at: requested).image {
-                frames.append(image)
+            slots[requested.value, default: []].append(index)
+        }
+        var frames = [CGImage?](repeating: nil, count: times.count)
+        for await result in generator.images(for: unique) {
+            if Task.isCancelled {
+                break
+            }
+            guard case let .success(requestedTime, image, _) = result else { continue }
+            for index in slots[requestedTime.convertScale(timescale, method: .default).value] ?? [] {
+                frames[index] = image
             }
         }
         return frames

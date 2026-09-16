@@ -61,28 +61,54 @@ public struct CursorReconstruction: Sendable {
     ///
     /// Computed once for a session and sampled by both the preview and the export, which
     /// is what makes them identical rather than merely similar.
+    ///
+    /// One pass over the steps with a cursor into each event list, rather than a search
+    /// of every click at every step. The playhead only moves forward here, so "the next
+    /// press" and "the latest event so far" only move forward too; searching from the start
+    /// each time made a ten-minute recording with a couple of thousand clicks cost well over
+    /// a hundred million comparisons, on the main actor, every time the edit changed. The
+    /// answers are the same ones the searches gave — `CursorReconstructionEquivalenceTests`
+    /// holds the old version to prove it.
     public func path(for telemetry: InputTelemetry, duration: TimeInterval) -> [CGPoint] {
-        let targets = telemetry.pointer.map { (time: $0.time, value: $0.position) }
+        let targets = telemetry.pointer
         guard !targets.isEmpty else { return [] }
-        let presses = telemetry.clicks.filter(\.isDown).sorted { $0.time < $1.time }
-        var x = DampedSpring(position: Double(targets[0].value.x), omega: DampedSpring.omega(settlingIn: 0.22))
-        var y = DampedSpring(position: Double(targets[0].value.y), omega: x.omega)
+        // NaN times dropped: they never matched, and they make the sort's order undefined.
+        let presses = telemetry.clicks
+            .filter { $0.isDown && !$0.time.isNaN }
+            .sorted { $0.time < $1.time }
+        let drags = DragState(clicks: telemetry.clicks)
+        let relaxed = DampedSpring.omega(settlingIn: 0.22)
+        let snappy = DampedSpring.omega(settlingIn: 0.08)
+        var x = DampedSpring(position: Double(targets[0].position.x), omega: relaxed)
+        var y = DampedSpring(position: Double(targets[0].position.y), omega: x.omega)
         var result: [CGPoint] = []
+        if duration >= 0, duration.isFinite {
+            result.reserveCapacity(Int(duration / MotionSpring.step) + 2)
+        }
         var time: TimeInterval = 0
         var index = 0
+        // The first press at or after `time`. Presses are sorted, so every press before it
+        // is behind the playhead for good.
+        var nextPress = 0
+        var dragCursor = drags.makeCursor()
         while time <= duration {
             while index + 1 < targets.count, targets[index + 1].time <= time {
                 index += 1
             }
-            var aim = targets[index].value
-            var omega = DampedSpring.omega(settlingIn: 0.22)
-            if isDragging(at: time, clicks: telemetry.clicks) {
-                aim = targets[index].value
-                omega = DampedSpring.omega(settlingIn: 0.08)
-            } else if let press = presses.first(where: { $0.time >= time && $0.time - time <= Self.anticipation }) {
+            while nextPress < presses.count, !(presses[nextPress].time >= time) {
+                nextPress += 1
+            }
+            var aim = targets[index].position
+            var omega = relaxed
+            if drags.isDragging(at: time, cursor: &dragCursor) {
+                omega = snappy
+            } else if nextPress < presses.count, presses[nextPress].time - time <= Self.anticipation {
+                // Only the first press at or after the playhead can qualify: the ones after
+                // it are later still, so if it is too far ahead to anticipate, so are they.
+                let press = presses[nextPress]
                 aim = press.position
                 if press.time - time <= Self.interceptWindow {
-                    omega = DampedSpring.omega(settlingIn: 0.08)
+                    omega = snappy
                 }
             }
             x.omega = omega
@@ -95,9 +121,50 @@ public struct CursorReconstruction: Sendable {
         return result
     }
 
-    private func isDragging(at time: TimeInterval, clicks: [ClickEvent]) -> Bool {
-        guard let last = clicks.last(where: { $0.time <= time }) else { return false }
-        return last.isDown
+    /// Whether a button is held, answered for a playhead that only moves forward.
+    ///
+    /// "Held" means the last event at or before now — *last in the recording's own order*,
+    /// which is what `clicks.last(where:)` meant — was a press. The telemetry writes events
+    /// in time order, but nothing enforces it, so the order is not assumed: the events are
+    /// visited in time order and the one furthest along the array among those already
+    /// passed is the answer. That is the same event the backwards search found, for any
+    /// ordering at all.
+    private struct DragState {
+        private let clicks: [ClickEvent]
+        /// Indices into `clicks`, by time; ties keep their array order.
+        private let byTime: [Int]
+
+        struct Cursor {
+            var next = 0
+            var latest: Int?
+        }
+
+        init(clicks: [ClickEvent]) {
+            self.clicks = clicks
+            // A NaN time is never "at or before" anything, so it can never be the answer —
+            // and left in, it would sort unpredictably and stall the walk.
+            let comparable = clicks.indices.filter { !clicks[$0].time.isNaN }
+            let inOrder = zip(comparable, comparable.dropFirst()).allSatisfy { earlier, later in
+                clicks[earlier].time <= clicks[later].time
+            }
+            // Ties need no care: the walk keeps the furthest index it has passed, whatever
+            // order equal times are visited in.
+            byTime = inOrder ? comparable : comparable.sorted { clicks[$0].time < clicks[$1].time }
+        }
+
+        func makeCursor() -> Cursor {
+            Cursor()
+        }
+
+        func isDragging(at time: TimeInterval, cursor: inout Cursor) -> Bool {
+            while cursor.next < byTime.count, clicks[byTime[cursor.next]].time <= time {
+                let candidate = byTime[cursor.next]
+                cursor.latest = max(cursor.latest ?? candidate, candidate)
+                cursor.next += 1
+            }
+            guard let latest = cursor.latest else { return false }
+            return clicks[latest].isDown
+        }
     }
 
     /// What to draw at `time`.

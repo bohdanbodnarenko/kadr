@@ -54,23 +54,6 @@ extension EditorWindowController {
         return try Data(contentsOf: URL(fileURLWithPath: maskPath))
     }
 
-    static func pngData(of image: CGImage) throws -> Data {
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw OpenError.unreadableImage(URL(fileURLWithPath: "/"))
-        }
-        return data as Data
-    }
-
     static func writePNG(_ image: CGImage, to url: URL) throws {
         guard let destination = CGImageDestinationCreateWithURL(
             url as CFURL,

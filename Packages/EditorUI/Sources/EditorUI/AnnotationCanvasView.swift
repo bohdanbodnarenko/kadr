@@ -40,6 +40,11 @@ public final class AnnotationCanvasView: NSView {
     /// and touch the next before the first finishes. Without this the older result arrives
     /// second and leaves a stale picture on screen.
     var chromeRenderGeneration: UInt64 = 0
+    /// The offscreen render in flight, so a newer one can cancel it (docs/10 R1.5).
+    var chromeRenderTask: Task<Void, Never>?
+    /// The pixels-per-point the latest offscreen render was asked for, so zooming in past
+    /// it asks for a sharper one.
+    var chromeRenderedScale: CGFloat = 0
 
     /// Edits a text annotation where it sits, laid out by the exporter's own metrics
     /// (docs/09 U1.8).
@@ -52,8 +57,9 @@ public final class AnnotationCanvasView: NSView {
             guard let self else { return }
             model.commitTextEdit(id)
             layers[id]?.isHidden = false
-            rebuildAnnotationLayers()
-            window?.invalidateCursorRects(for: self)
+            // A sync, not a rebuild: the edited label redraws because its text changed,
+            // and an emptied one is removed because membership did (docs/10 R1).
+            documentChangedExternally()
         }
         return editor
     }()
@@ -74,10 +80,23 @@ public final class AnnotationCanvasView: NSView {
     /// does not walk every layer.
     var lastContentsScale: CGFloat = 0
     private let logger = KadrLog.logger(.overlay)
+    let signposter = KadrLog.signposter(.overlay)
 
     /// Layers by annotation, so an update finds its own layer without a search.
     var layers: [AnnotationID: CALayer] = [:]
-    private var draftShapeLayer: CALayer?
+    var draftShapeLayer: CALayer?
+    /// A freehand or highlighter draft's path so far, extended point by point.
+    ///
+    /// Rebuilding the whole polyline (and re-smoothing it) on every mouse-move made a long
+    /// stroke quadratic; the draft is drawn raw and smoothed once it is committed.
+    var draftPath: CGMutablePath?
+    var draftPathPointCount = 0
+    var draftPathID: AnnotationID?
+    /// The document state the layer tree was last brought up to date with.
+    var lastSyncKey: CanvasSyncKey?
+    /// Selection handles, reused from event to event rather than rebuilt (docs/10 R1).
+    var handleLayers: [CALayer] = []
+    let selectionOutlineLayer = CAShapeLayer()
     /// Hover preview for a snapped highlighter stroke.
     var highlightPreviewLayer: CALayer?
     /// Kept so the measure tool can read the image's straight edges the first time it is
@@ -85,8 +104,11 @@ public final class AnnotationCanvasView: NSView {
     let baseImage: CGImage
     /// What the canvas is showing: the capture, or the capture with the subject cut out.
     /// Redaction samples this so a blur lands on the pixels the user sees.
-    private var displayedImage: CGImage
+    private(set) var displayedImage: CGImage
     private let subjectLift = SubjectLiftCompositor()
+    /// Where redaction previews come from: the pixels on screen, and the renders made
+    /// from them. Replaced when those pixels change; releasing it clears its cache entries.
+    private(set) var redactionSource: RedactionPreviewSource
     /// The lift the base layer currently shows, so the composite is not redone per edit.
     private var liftedFrom: SubjectLiftSpec?
     var marqueeLayer = CAShapeLayer()
@@ -106,7 +128,9 @@ public final class AnnotationCanvasView: NSView {
         self.model = model
         self.baseImage = baseImage
         displayedImage = baseImage
+        redactionSource = RedactionPreviewSource(image: baseImage, scale: model.document.baseImage.scale)
         super.init(frame: CGRect(origin: .zero, size: model.document.baseImage.size))
+        observeRedactionPreviews()
 
         wantsLayer = true
         guard let root = layer else { return }
@@ -144,6 +168,11 @@ public final class AnnotationCanvasView: NSView {
         bindingHintLayer.lineDashPattern = [4, 3]
         bindingHintLayer.isHidden = true
         selectionLayer.addSublayer(bindingHintLayer)
+
+        selectionOutlineLayer.fillColor = nil
+        selectionOutlineLayer.lineDashPattern = [3, 3]
+        selectionOutlineLayer.isHidden = true
+        selectionLayer.addSublayer(selectionOutlineLayer)
 
         marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
         marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
@@ -195,13 +224,12 @@ public final class AnnotationCanvasView: NSView {
         updateWatermarkLayer()
         // Resolved, so a bound arrow is drawn against its target's current geometry
         // rather than against the endpoint it was stored with (docs/09 U1.7).
+        let context = layerContext(canvasRect: model.document.canvasRect, isLive: false)
         for command in model.document.resolvedCommands {
             guard let layer = AnnotationLayerFactory.makeLayer(
                 for: command,
                 contentsScale: scale,
-                imageScale: imageScale,
-                baseImage: displayedImage,
-                canvasRect: model.document.canvasRect
+                context: context
             ) else {
                 continue
             }
@@ -217,11 +245,12 @@ public final class AnnotationCanvasView: NSView {
         // pass (docs/10 R1.5). Rebuilding the layers *is* a document change, so it is the
         // right place to say the render is stale.
         updateExpensiveChrome()
+        lastSyncKey = currentSyncKey
         onDocumentChanged?()
     }
 
     /// Dashed candidate chrome. Not a command — accepting is what writes a redaction.
-    private func rebuildReviewLayers() {
+    func rebuildReviewLayers() {
         reviewLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
         let size = model.document.baseImage.size
         for candidate in model.redactionCandidates {
@@ -234,44 +263,6 @@ public final class AnnotationCanvasView: NSView {
             shape.lineDashPattern = [5, 3]
             reviewLayer.addSublayer(shape)
         }
-    }
-
-    /// Refreshes the live drag preview: one layer, replaced only when the kind changes.
-    func updateDraftLayer() {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-
-        guard let draft = model.draft else {
-            draftShapeLayer?.removeFromSuperlayer()
-            draftShapeLayer = nil
-            updateBindingHint()
-            return
-        }
-
-        let scale = window?.backingScaleFactor ?? 2
-        if let existing = draftShapeLayer, existing.name == draft.id.rawValue.uuidString {
-            AnnotationLayerFactory.update(
-                existing,
-                for: draft,
-                imageScale: imageScale,
-                baseImage: displayedImage,
-                canvasRect: model.document.canvasRect
-            )
-        } else {
-            draftShapeLayer?.removeFromSuperlayer()
-            draftShapeLayer = AnnotationLayerFactory.makeLayer(
-                for: draft,
-                contentsScale: scale,
-                imageScale: imageScale,
-                baseImage: displayedImage,
-                canvasRect: model.document.canvasRect
-            )
-            if let layer = draftShapeLayer {
-                draftLayer.addSublayer(layer)
-            }
-        }
-        updateBindingHint()
     }
 
     // MARK: - Mouse
@@ -298,6 +289,8 @@ public final class AnnotationCanvasView: NSView {
 
         window?.makeFirstResponder(self)
         prepareEdgesIfMeasuring()
+        let commandsBefore = model.document.commands
+        let wasInSync = lastSyncKey == currentSyncKey
         model.pointerDown(
             at: imagePoint(from: event),
             modifiers: modifiers(from: event),
@@ -305,13 +298,36 @@ public final class AnnotationCanvasView: NSView {
             cropGrabbing: screenSpaceCropHandle(at: event),
             handleTolerance: SelectionResizer.hitRadius / handleViewScale
         )
-        refreshAfterEdit()
+        refreshAfterPointerDown(commandsBefore: commandsBefore, wasInSync: wasInSync)
+    }
+
+    /// A click usually only changes the selection, and then only the handles need
+    /// redrawing — not every annotation layer, which is what a rebuild re-rasterised.
+    ///
+    /// The command comparison is cheap in that case: an untouched list is the same buffer,
+    /// and `Array ==` checks that before it compares a single element.
+    private func refreshAfterPointerDown(commandsBefore: [AnnotationCommand], wasInSync: Bool) {
+        let key = currentSyncKey
+        guard wasInSync,
+              key.tool == lastSyncKey?.tool,
+              key.candidates == lastSyncKey?.candidates,
+              model.document.commands == commandsBefore
+        else {
+            documentChangedExternally()
+            return
+        }
+        lastSyncKey = key
+        updateSelectionHandles()
+        updateBindingHint()
+        window?.invalidateCursorRects(for: self)
     }
 
     override public func mouseDragged(with event: NSEvent) {
         if continueSpacePan(with: event) {
             return
         }
+        let interval = signposter.beginInterval("editor.drag")
+        defer { signposter.endInterval("editor.drag", interval) }
         model.pointerDragged(to: imagePoint(from: event), modifiers: modifiers(from: event))
         // The hot path: only the draft and the handles move.
         updateDraftLayer()
@@ -331,11 +347,13 @@ public final class AnnotationCanvasView: NSView {
         model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
         updateDraftLayer()
         updateHighlightPreview()
-        rebuildAnnotationLayers()
+        // One sync for the whole gesture. It updates the layers in place and falls back to a
+        // rebuild only when something was added or removed — a drag used to rebuild (and
+        // re-rasterise) every layer here, and again from the SwiftUI update after it.
+        documentChangedExternally()
         if let id = model.consumePendingTextEdit() {
             beginEditingText(id)
         }
-        window?.invalidateCursorRects(for: self)
     }
 
     /// Reads the base image's edges the first time the measure tool is used.
@@ -343,13 +361,13 @@ public final class AnnotationCanvasView: NSView {
     /// Lazy on purpose: it is one pass over every pixel of the capture, and a session that
     /// never measures anything should never pay for it.
     /// The base image's pixels per point, which the measurement readout needs.
-    private var imageScale: CGFloat {
+    var imageScale: CGFloat {
         model.document.baseImage.scale
     }
 
     private func prepareEdgesIfMeasuring() {
         guard model.tool == .measure, model.edgeCandidates.isEmpty else { return }
-        model.loadEdges(from: baseImage)
+        model.loadEdgesInBackground(from: baseImage)
     }
 
     /// While dragging a selection, update the moved layers in place rather than rebuilding
@@ -359,15 +377,11 @@ public final class AnnotationCanvasView: NSView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        for command in model.document.resolvedCommands where model.layersNeedingUpdateDuringMove.contains(command.id) {
+        let moving = model.layersNeedingUpdateDuringMove
+        let context = layerContext(canvasRect: model.document.canvasRect, isLive: true)
+        for command in model.document.resolvedCommands where moving.contains(command.id) {
             guard let layer = layers[command.id] else { continue }
-            AnnotationLayerFactory.update(
-                layer,
-                for: command,
-                imageScale: imageScale,
-                baseImage: displayedImage,
-                canvasRect: model.document.canvasRect
-            )
+            AnnotationLayerFactory.update(layer, for: command, context: context)
         }
         updateCompositeSpotlight()
         updateBindingHint()
@@ -382,7 +396,7 @@ public final class AnnotationCanvasView: NSView {
     }
 
     /// Same IDs in the same order as the document's drawable commands, each with a layer.
-    private func canUpdateLayersInPlace(for commands: [AnnotationCommand]) -> Bool {
+    func canUpdateLayersInPlace(for commands: [AnnotationCommand]) -> Bool {
         let drawableIDs = commands.filter { !$0.tool.isCanvasChrome }.map(\.id)
         guard drawableIDs.allSatisfy({ layers[$0] != nil }) else { return false }
         guard layers.count == drawableIDs.count else { return false }
@@ -403,10 +417,9 @@ public final class AnnotationCanvasView: NSView {
         return modifiers
     }
 
+    /// After a keyboard edit or undo: the same sync every other document change gets.
     func refreshAfterEdit() {
-        refreshBaseImage()
-        rebuildAnnotationLayers()
-        window?.invalidateCursorRects(for: self)
+        documentChangedExternally()
     }
 
     /// Re-composites the base layer when background removal is applied or undone
@@ -415,60 +428,21 @@ public final class AnnotationCanvasView: NSView {
     /// Cached against the spec that produced it: the composite is a full-image CoreImage
     /// pass, and redoing it on every mouse-up while the user draws arrows over a cut-out
     /// would be visible.
-    private func refreshBaseImage() {
+    func refreshBaseImage() {
         let spec = model.document.subjectLift
         guard spec != liftedFrom else { return }
         liftedFrom = spec
         displayedImage = spec.map { subjectLift.apply($0, to: baseImage) } ?? baseImage
         baseLayer.contents = displayedImage
+        // Previews of the old pixels are wrong now; the old source takes them with it.
+        redactionSource = RedactionPreviewSource(image: displayedImage, scale: imageScale)
+        observeRedactionPreviews()
     }
+}
 
-    /// Called after undo, redo or an inspector change.
-    public func documentChangedExternally() {
-        layoutCanvasChromeIfNeeded()
-        refreshBaseImage()
-        syncAnnotationLayers()
-        window?.invalidateCursorRects(for: self)
-    }
-
-    /// Relays the card only when its geometry actually moved — a stroke-width tick
-    /// must not re-lay wallpaper, shadows and the offscreen chrome.
-    private func layoutCanvasChromeIfNeeded() {
-        let key = canvasLayoutKey()
-        guard lastLayoutKey != key else { return }
-        lastLayoutKey = key
-        layoutCanvasChrome()
-    }
-
-    /// Style and geometry edits update the layers that are already on screen. Adding,
-    /// deleting or reordering still rebuilds the tree.
-    private func syncAnnotationLayers() {
-        let commands = model.document.resolvedCommands
-        guard canUpdateLayersInPlace(for: commands) else {
-            rebuildAnnotationLayers()
-            return
-        }
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-
-        for command in commands {
-            guard let layer = layers[command.id] else { continue }
-            AnnotationLayerFactory.update(
-                layer,
-                for: command,
-                imageScale: imageScale,
-                baseImage: displayedImage,
-                canvasRect: model.document.canvasRect
-            )
-        }
-        updateSelectionHandles()
-        updateCropOverlay()
-        rebuildReviewLayers()
-        updateCompositeSpotlight()
-        updateWatermarkLayer()
-        updateExpensiveChrome()
-        onDocumentChanged?()
-    }
+/// The document state a canvas layer tree reflects (see `AnnotationCanvasView.currentSyncKey`).
+struct CanvasSyncKey: Equatable {
+    var revision: UInt64
+    var candidates: [RedactionCandidate]
+    var tool: EditorTool
 }

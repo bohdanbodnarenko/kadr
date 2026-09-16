@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import Kadr
 
+@MainActor
 @Suite("History grid metrics")
 struct HistoryGridMetricsTests {
     @Test("Column count follows the window, not a 560 pt assumption", arguments: [

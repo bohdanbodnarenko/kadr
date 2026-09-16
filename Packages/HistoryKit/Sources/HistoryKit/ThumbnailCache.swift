@@ -17,7 +17,8 @@ import Shared
 @MainActor
 public final class ThumbnailCache {
     public enum Scope: Sendable {
-        /// The last-8 strip in the status menu. Small, stable, purged when the menu closes.
+        /// The last-8 strip in the status menu. Small and stable, so it is kept across menu
+        /// opens — the whole point is that the second open decodes nothing.
         case strip
         /// The History window grid. Larger, purged when the window closes.
         case grid
@@ -64,10 +65,6 @@ public final class ThumbnailCache {
 
     private func key(_ url: URL, maxPixelSize: Int) -> NSString {
         "\(url.path)@\(maxPixelSize)" as NSString
-    }
-
-    public func purgeStrip() {
-        strip.removeAllObjects()
     }
 
     public func removeAll() {

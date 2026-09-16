@@ -288,6 +288,7 @@ extension QuickAccessManager {
 
     func forgetTransientState(for item: QuickAccessItem) {
         dismissTasks.removeValue(forKey: item.id)?.cancel()
+        dismissDeadlines.removeValue(forKey: item.id)
         engagedItems.remove(item.id)
         if hoveredItemID == item.id {
             hoveredItemID = nil

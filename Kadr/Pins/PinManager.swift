@@ -23,6 +23,17 @@ final class PinManager {
 
     private var pendingRestore: PinRecord?
 
+    /// The debounced save, re-armed by every change until the pins sit still (PRD §8).
+    ///
+    /// Scrolling a pin's opacity, zooming it and nudging it each reported a geometry change
+    /// per trackpad tick, and each change encoded pretty-printed JSON and wrote it
+    /// atomically — on the main thread, dozens of times a second. The file is only read at
+    /// the next launch, so the last state after a pause is the only one that matters.
+    private var saveTask: Task<Void, Never>?
+    private var saveGeneration = 0
+    private let writer = PinStoreWriter()
+    static let saveDebounce: Duration = .milliseconds(500)
+
     init(store: PinStore? = PinStore.applicationSupport()) {
         self.store = store
     }
@@ -57,7 +68,10 @@ final class PinManager {
     ) -> Bool {
         let screen = NSScreen.main ?? NSScreen.screens.first
         let scale = screen?.backingScaleFactor ?? 2
-        guard let panel = PinPanel(fileURL: fileURL, scale: scale) else {
+        // A restored pin is built at its remembered frame, so the first decode is already
+        // the right size rather than one texture for the default size and another 120 ms
+        // later for the real one.
+        guard let panel = PinPanel(fileURL: fileURL, scale: scale, frame: pendingRestore?.frame) else {
             logger.error("Could not pin \(fileURL.lastPathComponent, privacy: .public)")
             return false
         }
@@ -164,16 +178,56 @@ final class PinManager {
         persist()
     }
 
+    /// Asks for a save once the pins have been still for `saveDebounce`.
     private func persist() {
-        guard !isRestoring, let store else { return }
-        store.save(pins.map { panel in
+        guard !isRestoring, store != nil else { return }
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.saveDebounce)
+            guard !Task.isCancelled else { return }
+            self?.saveInBackground()
+        }
+    }
+
+    /// Whether a change is waiting for its debounced save.
+    var hasPendingSave: Bool {
+        saveTask != nil
+    }
+
+    /// Snapshots now and writes off the main thread.
+    private func saveInBackground() {
+        saveTask = nil
+        guard let store else { return }
+        let records = snapshot()
+        saveGeneration += 1
+        let generation = saveGeneration
+        let writer = writer
+        Task.detached(priority: .utility) {
+            writer.write(records, generation: generation, to: store)
+        }
+    }
+
+    /// Writes any pending change now, on the calling thread.
+    ///
+    /// For quit, where there is no later: the process ends when
+    /// `applicationWillTerminate` returns, so the debounce would never fire.
+    func flushPendingSave() {
+        guard let saveTask, let store else { return }
+        saveTask.cancel()
+        self.saveTask = nil
+        saveGeneration += 1
+        writer.write(snapshot(), generation: saveGeneration, to: store)
+    }
+
+    private func snapshot() -> [PinRecord] {
+        pins.map { panel in
             PinRecord(
                 path: panel.fileURL.path,
                 frame: panel.frame,
                 alpha: Double(panel.alphaValue),
                 clickThrough: panel.clickThroughEnabled
             )
-        })
+        }
     }
 
     /// Cascades pins down and right from the centre so a burst of them stays reachable.

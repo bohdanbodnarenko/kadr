@@ -33,8 +33,9 @@ struct EditorCropInspector: View {
             InspectorToggleRow("Allow the canvas to grow", isOn: expandBinding)
                 .help("Lets the crop extend past the capture, adding blank space rather than cutting.")
 
-            if let crop {
-                InspectorNote(size(of: crop))
+            if crop != nil {
+                // The working rect, not the stored one: it follows a handle drag live.
+                InspectorNote(size(of: model.cropWorkingRect))
             }
 
             // Return is bound on the canvas crop bar, which is on screen whenever this is.
@@ -50,11 +51,11 @@ struct EditorCropInspector: View {
         }
     }
 
-    private func size(of crop: CropSpec) -> String {
-        let points = "\(Int(crop.rect.width.rounded())) × \(Int(crop.rect.height.rounded())) pt"
+    private func size(of rect: CGRect) -> String {
+        let points = "\(Int(rect.width.rounded())) × \(Int(rect.height.rounded())) pt"
         let scale = model.document.baseImage.scale
         guard scale > 1 else { return points }
-        let pixels = "\(Int((crop.rect.width * scale).rounded())) × \(Int((crop.rect.height * scale).rounded())) px"
+        let pixels = "\(Int((rect.width * scale).rounded())) × \(Int((rect.height * scale).rounded())) px"
         return "\(points)  ·  \(pixels)"
     }
 

@@ -1,14 +1,26 @@
 import AppKit
 import Shared
+import StudioRender
 import StudioSession
 import SwiftUI
 
 /// Click a word to seek, shift-click a range to cut it, search the recording (docs/13 T2.3).
+///
+/// Built so that playback does not re-render the transcript (docs/11 S2). The words and
+/// their track groups are computed when the transcript or the search changes, not per
+/// body; the playhead is watched by `TranscriptPlayheadFollower`, a leaf that only reports
+/// when the *word* under it changes; and each chip is `Equatable`, so a new active word
+/// re-renders the two chips it concerns rather than all of them.
 @MainActor
 struct StudioTranscriptPanel: View {
     let model: StudioDocumentModel
     @State private var selectedIDs: Set<String> = []
     @State private var anchor: TranscriptWord?
+    /// The words shown, and the same words grouped by track. Cached; see the type comment.
+    @State private var displayedWords: [TranscriptWord] = []
+    @State private var groupedTracks: [TranscriptTrackGroup] = []
+    /// The word under the playhead, as last reported by the follower.
+    @State private var activeWordID: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -25,6 +37,9 @@ struct StudioTranscriptPanel: View {
         .padding(10)
         .onDeleteCommand(perform: cutSelection)
         .onExitCommand { clearSelection() }
+        .onAppear(perform: rebuildWords)
+        .onChange(of: model.transcript) { rebuildWords() }
+        .onChange(of: model.transcriptQuery) { rebuildWords() }
     }
 
     private var header: some View {
@@ -52,10 +67,11 @@ struct StudioTranscriptPanel: View {
     }
 
     private var transcriptScroll: some View {
-        ScrollViewReader { proxy in
+        let clips = model.edit.clips
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(groupedTracks, id: \.track) { group in
+                    ForEach(groupedTracks) { group in
                         if groupedTracks.count > 1 {
                             Text(label(for: group.track))
                                 .font(.caption.weight(.semibold))
@@ -64,18 +80,27 @@ struct StudioTranscriptPanel: View {
                         }
                         FlowWords(
                             words: group.words,
+                            clips: clips,
                             selectedIDs: selectedIDs,
-                            activeID: model.activeTranscriptWord(in: displayedWords)?.id,
-                            survives: { model.transcriptWordSurvives($0) },
-                            isFiller: { model.isFillerWord($0) },
-                            onSelect: handleTap,
-                            onCutSentence: { model.cutSentence(containing: $0) }
+                            activeID: activeWordID,
+                            actions: TranscriptChipActions(
+                                onSelect: handleTap,
+                                onCutSentence: { model.cutSentence(containing: $0) }
+                            )
                         )
+                        .equatable()
                     }
                 }
             }
-            .onChange(of: model.playhead) { _, _ in
-                followPlayhead(proxy: proxy)
+            .background {
+                TranscriptPlayheadFollower(
+                    clock: model.playheadClock,
+                    words: displayedWords,
+                    clips: clips
+                ) { active in
+                    activeWordID = active?.id
+                    followPlayhead(to: active, proxy: proxy)
+                }
             }
         }
     }
@@ -90,22 +115,19 @@ struct StudioTranscriptPanel: View {
         .controlSize(.small)
     }
 
-    private var displayedWords: [TranscriptWord] {
-        model.visibleTranscriptWords
-    }
-
     private var selectedWords: [TranscriptWord] {
-        displayedWords.filter { selectedIDs.contains($0.id) }
+        guard !selectedIDs.isEmpty else { return [] }
+        return displayedWords.filter { selectedIDs.contains($0.id) }
     }
 
     private var cutTitle: String {
         selectedWords.count == 1 ? "Cut Word" : "Cut \(selectedWords.count) Words"
     }
 
-    private var groupedTracks: [(track: SpeechTrackKind, words: [TranscriptWord])] {
-        let words = displayedWords
-        let tracks = Array(Set(words.map(\.track))).sorted { $0.rawValue < $1.rawValue }
-        return tracks.map { track in (track, words.filter { $0.track == track }) }
+    private func rebuildWords() {
+        let words = StudioDocumentModel.visibleWords(in: model.transcript, query: model.transcriptQuery)
+        displayedWords = words
+        groupedTracks = TranscriptTrackGroup.groups(of: words)
     }
 
     private func label(for track: SpeechTrackKind) -> String {
@@ -148,10 +170,8 @@ struct StudioTranscriptPanel: View {
         anchor = nil
     }
 
-    private func followPlayhead(proxy: ScrollViewProxy) {
-        guard model.isPlaying, selectedIDs.isEmpty,
-              let active = model.activeTranscriptWord(in: displayedWords)
-        else { return }
+    private func followPlayhead(to active: TranscriptWord?, proxy: ScrollViewProxy) {
+        guard model.isPlaying, selectedIDs.isEmpty, let active else { return }
         if reduceMotion {
             proxy.scrollTo(active.id, anchor: .center)
         } else {
@@ -162,48 +182,131 @@ struct StudioTranscriptPanel: View {
     }
 }
 
-/// Wrapping word chips. A custom layout rather than a single `Text` so a click lands on
-/// a word rather than a character offset we would then have to map back.
-private struct FlowWords: View {
+/// The words of one speech track, in transcript order.
+struct TranscriptTrackGroup: Identifiable, Equatable {
+    var track: SpeechTrackKind
+    var words: [TranscriptWord]
+
+    var id: SpeechTrackKind {
+        track
+    }
+
+    /// Groups in track order, each keeping the words' own order. One pass over the words.
+    static func groups(of words: [TranscriptWord]) -> [TranscriptTrackGroup] {
+        var byTrack: [SpeechTrackKind: [TranscriptWord]] = [:]
+        for word in words {
+            byTrack[word.track, default: []].append(word)
+        }
+        return byTrack
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { TranscriptTrackGroup(track: $0.key, words: $0.value) }
+    }
+}
+
+/// Watches the playhead and reports when the word under it changes.
+///
+/// The only transcript view that reads the playhead, so a playback tick costs one lookup
+/// here and nothing else unless the spoken word actually moved on.
+private struct TranscriptPlayheadFollower: View {
+    let clock: StudioPlayhead
     let words: [TranscriptWord]
-    let selectedIDs: Set<String>
-    let activeID: String?
-    let survives: (TranscriptWord) -> Bool
-    let isFiller: (TranscriptWord) -> Bool
+    let clips: ClipTimeline
+    let onChange: (TranscriptWord?) -> Void
+
+    var body: some View {
+        let active = StudioDocumentModel.activeWord(in: words, atEdited: clock.time, clips: clips)
+        Color.clear
+            .onChange(of: active?.id, initial: true) {
+                onChange(active)
+            }
+    }
+}
+
+/// What a chip does when used. A reference-free bundle so chips can compare by value.
+private struct TranscriptChipActions {
     let onSelect: (TranscriptWord) -> Void
     let onCutSentence: (TranscriptWord) -> Void
+}
+
+/// Wrapping word chips. A custom layout rather than a single `Text` so a click lands on
+/// a word rather than a character offset we would then have to map back.
+///
+/// `Equatable` over what it draws, ignoring the actions: SwiftUI cannot compare closures,
+/// and without this every parent render re-ran the body for every word.
+private struct FlowWords: View, Equatable {
+    let words: [TranscriptWord]
+    let clips: ClipTimeline
+    let selectedIDs: Set<String>
+    let activeID: String?
+    let actions: TranscriptChipActions
+
+    nonisolated static func == (lhs: FlowWords, rhs: FlowWords) -> Bool {
+        lhs.activeID == rhs.activeID
+            && lhs.selectedIDs == rhs.selectedIDs
+            && lhs.clips == rhs.clips
+            && lhs.words == rhs.words
+    }
 
     var body: some View {
         FlexibleWordWrap(words: words) { word in
-            let isCut = !survives(word)
-            Button {
-                onSelect(word)
-            } label: {
-                Text(word.text)
-                    .underline(isFiller(word) && !isCut, pattern: .dot, color: .orange)
-                    .strikethrough(isCut, color: .secondary.opacity(0.6))
-                    .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(background(for: word, isCut: isCut), in: RoundedRectangle(cornerRadius: 4))
-            }
-            .buttonStyle(.plain)
-            .id(word.id)
-            .accessibilityLabel(word.text)
-            .accessibilityAddTraits(selectedIDs.contains(word.id) ? .isSelected : [])
-            .accessibilityHint("Seek to this word. Shift-click to select a range.")
-            .contextMenu {
-                Button("Cut this sentence") { onCutSentence(word) }
-            }
+            TranscriptChip(
+                word: word,
+                isCut: !clips.containsSourceTime((word.start + word.end) / 2),
+                isFiller: TranscriptCutPlanner.fillerWords.contains(word.normalized),
+                isSelected: selectedIDs.contains(word.id),
+                isActive: word.id == activeID,
+                actions: actions
+            )
+            .equatable()
+        }
+    }
+}
+
+/// One word. `Equatable` for the same reason as `FlowWords`.
+private struct TranscriptChip: View, Equatable {
+    let word: TranscriptWord
+    let isCut: Bool
+    let isFiller: Bool
+    let isSelected: Bool
+    let isActive: Bool
+    let actions: TranscriptChipActions
+
+    nonisolated static func == (lhs: TranscriptChip, rhs: TranscriptChip) -> Bool {
+        lhs.word == rhs.word
+            && lhs.isCut == rhs.isCut
+            && lhs.isFiller == rhs.isFiller
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isActive == rhs.isActive
+    }
+
+    var body: some View {
+        Button {
+            actions.onSelect(word)
+        } label: {
+            Text(word.text)
+                .underline(isFiller && !isCut, pattern: .dot, color: .orange)
+                .strikethrough(isCut, color: .secondary.opacity(0.6))
+                .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(background, in: RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .id(word.id)
+        .accessibilityLabel(word.text)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("Seek to this word. Shift-click to select a range.")
+        .contextMenu {
+            Button("Cut this sentence") { actions.onCutSentence(word) }
         }
     }
 
-    private func background(for word: TranscriptWord, isCut: Bool) -> Color {
-        if selectedIDs.contains(word.id) {
+    private var background: Color {
+        if isSelected {
             Color.accentColor.opacity(isCut ? 0.12 : 0.24)
-        } else if word.id == activeID, !isCut {
+        } else if isActive, !isCut {
             Color.accentColor.opacity(0.2)
-        } else if isFiller(word), !isCut {
+        } else if isFiller, !isCut {
             Color.orange.opacity(0.16)
         } else {
             Color.clear

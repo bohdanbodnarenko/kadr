@@ -95,6 +95,55 @@ struct PinPanelTests {
         #expect(panel.decodeCount == settled)
     }
 
+    /// A restored pin used to decode once for its captured size and again, 120 ms later,
+    /// for the size it was restored to.
+    @Test("A pin built at a remembered frame decodes once, at that size")
+    func restoredFrameDecodesOnce() throws {
+        let url = try makeCapture(width: 400, height: 300)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let remembered = CGRect(x: 40, y: 40, width: 100, height: 75)
+        let panel = try #require(PinPanel(fileURL: url, scale: 2, frame: remembered))
+        defer { panel.dismiss() }
+
+        #expect(panel.frame.size == remembered.size)
+        #expect(panel.decodeCount == 1)
+        panel.applyPersistedState(frame: remembered, alpha: 0.5, clickThrough: false)
+        #expect(!panel.hasPendingReload, "the persisted frame must not schedule a second decode")
+        #expect(panel.decodeCount == 1)
+    }
+
+    @Test("The backing texture is decoded off the main thread and lands on the panel")
+    func decodeLandsAsynchronously() async throws {
+        let url = try makeCapture()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let panel = try #require(PinPanel(fileURL: url, scale: 2))
+        defer { panel.dismiss() }
+
+        await panel.decodeTask?.value
+        let image = try #require(panel.contentView?.subviews.compactMap { $0 as? NSImageView }.first?.image)
+        #expect(image.size == panel.frame.size)
+    }
+
+    @Test("The drag image keeps the texture's shape inside 256 points", arguments: [
+        (1024, 512, NSSize(width: 256, height: 128)),
+        (300, 600, NSSize(width: 128, height: 256)),
+        (100, 50, NSSize(width: 100, height: 50)),
+        (256, 256, NSSize(width: 256, height: 256))
+    ])
+    func dragImageSize(width: Int, height: Int, expected: NSSize) throws {
+        let context = try #require(CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let image = try #require(context.makeImage())
+        #expect(PinPanel.dragImageSize(for: image) == expected)
+    }
+
     @Test("A pin over a file that is not an image is refused, not crashed")
     func unreadableFile() throws {
         let url = FileManager.default.temporaryDirectory

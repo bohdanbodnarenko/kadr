@@ -38,6 +38,7 @@ kadr capture-area --json  # {"paths":["/…/Kadr-2026-08-28-14-02-11.png"],"stat
 | 1 | failed — `message` says why |
 | 2 | the user cancelled (pressed Escape, closed the picker) |
 | 3 | the verb is understood but unavailable in this build |
+| 4 | Capture Text found no text (`status: noText`) |
 | 64 | the command line did not parse (`EX_USAGE`) |
 
 Cancel is deliberately not 1: a script wants to tell "the user changed their mind"
@@ -103,6 +104,7 @@ that misspells `action` is told so rather than quietly capturing with the wrong 
 | `record-region` | `fps`, `x`,`y`,`w`,`h`, `microphone`, `system-audio`, `display` | Select a region, then record it. With a region, starts immediately. |
 | `record-gif` | `fps`, `x`,`y`,`w`,`h`, `microphone`, `system-audio`, `display` | Record a region, then encode a GIF when the recording stops. |
 | `stop-recording` | — | Stop and finalise. Returns the `.mp4` path. |
+| `toggle-recording` | `fps`, `microphone`, `system-audio`, `display` | Start a screen recording if idle, or stop the one in progress. |
 
 - `fps` — 1–120 (`framerate`, `frame-rate`). Rounded to the nearest encoder preset
   (24 / 30 / 60).

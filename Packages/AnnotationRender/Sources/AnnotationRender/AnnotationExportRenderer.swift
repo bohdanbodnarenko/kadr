@@ -46,7 +46,36 @@ public struct AnnotationExportRenderer: Sendable {
         applyOrientation: Bool = true,
         exportScale: CGFloat = 1
     ) throws -> CGImage {
+        try render(
+            baseImage: baseImage,
+            document: document,
+            options: RenderOptions(
+                includeAnnotations: includeAnnotations,
+                randomSeed: randomSeed,
+                applyOrientation: applyOrientation,
+                exportScale: exportScale
+            )
+        )
+    }
+
+    /// How one render is asked for.
+    struct RenderOptions {
+        var includeAnnotations = true
+        var randomSeed: UInt64?
+        var applyOrientation = true
+        var exportScale: CGFloat = 1
+        /// The pixels-per-point measurement readouts report, when the render itself is at a
+        /// different density (a preview). Nil means the document's own.
+        var labelScale: CGFloat?
+    }
+
+    func render(baseImage: CGImage, document: AnnotationDocument, options: RenderOptions) throws -> CGImage {
+        let includeAnnotations = options.includeAnnotations
+        let randomSeed = options.randomSeed
+        let applyOrientation = options.applyOrientation
+        let exportScale = options.exportScale
         let scale = document.baseImage.scale
+        let readoutScale = options.labelScale ?? scale
         let canvas = document.canvasRect
 
         // Redactions are burned into the image before anything is drawn over it, so the
@@ -84,7 +113,7 @@ public struct AnnotationExportRenderer: Sendable {
                 includeAnnotations: includeAnnotations,
                 in: context
             ) { command, context in
-                draw(command, in: context, imageScale: scale)
+                draw(command, in: context, imageScale: readoutScale)
             }
         } else {
             context.translateBy(x: -canvas.minX, y: -canvas.minY)
@@ -93,10 +122,11 @@ public struct AnnotationExportRenderer: Sendable {
                     source: source,
                     document: document,
                     includeAnnotations: includeAnnotations,
-                    drawCommand: { command, target in draw(command, in: target, imageScale: scale) }
+                    drawCommand: { command, target in draw(command, in: target, imageScale: readoutScale) }
                 ),
                 canvas: canvas,
                 scale: scale,
+                readoutScale: readoutScale,
                 in: context
             )
         }

@@ -29,7 +29,7 @@ extension EditorWindowController {
 
     func writeProject(to destination: URL, reveal: Bool = true, addToHistory: Bool = true) throws {
         try KadrDocumentFile.write(
-            KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG),
+            basePNG.contents(for: model.document),
             to: destination
         )
         model.markSaved()

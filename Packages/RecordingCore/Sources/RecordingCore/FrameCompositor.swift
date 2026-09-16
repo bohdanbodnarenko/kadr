@@ -15,6 +15,13 @@ import Shared
 /// only in the file (docs/03 §1.8 accept list).
 struct FrameCompositor: Sendable {
     private let logger = KadrLog.logger(.recording)
+    /// The last keystroke caption laid out, so a pill that stays up for a second and a half
+    /// is shaped once rather than once per frame (PRD §8).
+    let keystrokeLines = KeystrokeLineCache()
+
+    /// One colour space for every frame. Creating it per frame was a CoreGraphics object
+    /// allocated and released sixty times a second for a value that never changes.
+    private static let deviceRGB = CGColorSpaceCreateDeviceRGB()
 
     /// How to describe one of ScreenCaptureKit's buffers to CoreGraphics (docs/11 S0.5).
     ///
@@ -75,7 +82,7 @@ struct FrameCompositor: Sendable {
                   height: height,
                   bitsPerComponent: layout.bitsPerComponent,
                   bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
-                  space: CGColorSpaceCreateDeviceRGB(),
+                  space: Self.deviceRGB,
                   bitmapInfo: layout.bitmapInfo
               )
         else {
@@ -173,17 +180,7 @@ struct FrameCompositor: Sendable {
         let position = overlay.keystrokePosition
         let appearance = overlay.keystrokeAppearance
         let fontSize = max(20, size.height * 0.035) * scale
-        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
-        let ink = switch appearance {
-        case .dark: CGColor(gray: 1, alpha: 1)
-        case .light: CGColor(gray: 0.08, alpha: 1)
-        }
-        let attributed = NSAttributedString(string: text, attributes: [
-            .init(kCTFontAttributeName as String): font,
-            .init(kCTForegroundColorAttributeName as String): ink
-        ])
-        let line = CTLineCreateWithAttributedString(attributed)
-        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+        let (line, bounds) = keystrokeLines.line(for: text, fontSize: fontSize, appearance: appearance)
 
         let padding = fontSize * 0.6
         let pillWidth = bounds.width + padding * 2
@@ -318,5 +315,80 @@ struct FrameCompositor: Sendable {
         case .bottomLeading, .bottomTrailing: size.height - side - margin
         }
         return CGRect(x: x, y: y, width: side, height: side)
+    }
+}
+
+/// The keystroke caption, shaped once per distinct text (PRD §8).
+///
+/// A caption lingers for about a second and a half — ninety frames at 60 fps — and each of
+/// them used to build a font, an attributed string and a `CTLine` for the same few
+/// characters. The font is kept per size and the line per text, size and appearance; a
+/// new key press replaces the line.
+///
+/// A class behind a lock rather than state on the compositor: the compositor is a
+/// `Sendable` value the engine actor owns, and this is its only mutable part.
+final class KeystrokeLineCache: @unchecked Sendable {
+    private struct Key: Equatable {
+        let text: String
+        let fontSize: CGFloat
+        let appearance: OverlayChromeAppearance
+    }
+
+    // Invariant for `@unchecked`: every stored property below is touched only inside
+    // `lock.withLockUnchecked`, and CoreText objects are immutable once created.
+    private let lock = OSAllocatedUnfairLock()
+    private var key: Key?
+    private var line: CTLine?
+    private var bounds: CGRect = .zero
+    private var font: CTFont?
+    private var fontSize: CGFloat = 0
+    #if DEBUG
+        /// How many lines have been shaped, for the test that pins the caching down.
+        private var shapedCount = 0
+        var linesShaped: Int {
+            lock.withLockUnchecked { shapedCount }
+        }
+    #endif
+
+    func line(
+        for text: String,
+        fontSize size: CGFloat,
+        appearance: OverlayChromeAppearance
+    ) -> (CTLine, CGRect) {
+        lock.withLockUnchecked {
+            let wanted = Key(text: text, fontSize: size, appearance: appearance)
+            if wanted == key, let line {
+                return (line, bounds)
+            }
+            let font = font(ofSize: size)
+            let ink = switch appearance {
+            case .dark: CGColor(gray: 1, alpha: 1)
+            case .light: CGColor(gray: 0.08, alpha: 1)
+            }
+            let attributed = NSAttributedString(string: text, attributes: [
+                .init(kCTFontAttributeName as String): font,
+                .init(kCTForegroundColorAttributeName as String): ink
+            ])
+            let shaped = CTLineCreateWithAttributedString(attributed)
+            let shapedBounds = CTLineGetBoundsWithOptions(shaped, .useOpticalBounds)
+            key = wanted
+            line = shaped
+            bounds = shapedBounds
+            #if DEBUG
+                shapedCount += 1
+            #endif
+            return (shaped, shapedBounds)
+        }
+    }
+
+    /// Called with the lock held.
+    private func font(ofSize size: CGFloat) -> CTFont {
+        if let font, fontSize == size {
+            return font
+        }
+        let created = CTFontCreateWithName("Helvetica-Bold" as CFString, size, nil)
+        font = created
+        fontSize = size
+        return created
     }
 }

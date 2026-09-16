@@ -5,12 +5,14 @@ import Shared
 extension StatusItemController {
     func showIdleIcon() {
         showsRecordingIcon = false
-        let icon = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Kadr")
-        icon?.isTemplate = true
-        statusItem.button?.image = icon
-        statusItem.button?.title = ""
-        statusItem.length = NSStatusItem.squareLength
-        statusItem.button?.toolTip = "Kadr"
+        apply(StatusItemAppearance(
+            symbol: "camera.viewfinder",
+            accessibilityDescription: "Kadr",
+            isTemplate: true,
+            title: "",
+            length: NSStatusItem.squareLength,
+            toolTip: "Kadr"
+        ))
         attachIdleMenu()
     }
 
@@ -23,12 +25,14 @@ extension StatusItemController {
     /// whose whole design is that it has none.
     func showArmedIcon() {
         showsRecordingIcon = false
-        let icon = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Kadr — capture armed")
-        icon?.isTemplate = true
-        statusItem.button?.image = icon
-        statusItem.button?.title = ""
-        statusItem.length = NSStatusItem.squareLength
-        statusItem.button?.toolTip = "Kadr — capture armed"
+        apply(StatusItemAppearance(
+            symbol: "viewfinder",
+            accessibilityDescription: "Kadr — capture armed",
+            isTemplate: true,
+            title: "",
+            length: NSStatusItem.squareLength,
+            toolTip: "Kadr — capture armed"
+        ))
         attachIdleMenu()
     }
 
@@ -39,35 +43,81 @@ extension StatusItemController {
     /// rendered monochrome like everything else in the menu bar.
     func showRecordingIcon(elapsed: String, isPaused: Bool) {
         showsRecordingIcon = true
-        let name = isPaused ? "pause.circle.fill" : "record.circle"
-        let configuration = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
-        let icon = NSImage(systemSymbolName: name, accessibilityDescription: "Recording")?
-            .withSymbolConfiguration(configuration)
-        icon?.isTemplate = false
-
-        statusItem.button?.image = icon
-        statusItem.button?.title = " \(elapsed)"
-        statusItem.button?.imagePosition = .imageLeading
-        statusItem.length = NSStatusItem.variableLength
-        statusItem.button?.toolTip = "Click to stop · right-click for pause and discard"
+        apply(StatusItemAppearance(
+            symbol: isPaused ? "pause.circle.fill" : "record.circle",
+            accessibilityDescription: "Recording",
+            isTemplate: false,
+            title: " \(elapsed)",
+            length: NSStatusItem.variableLength,
+            toolTip: "Click to stop · right-click for pause and discard"
+        ))
         attachRecordingClick()
+    }
+
+    /// Puts an appearance on the button, touching only what differs (PRD §8).
+    ///
+    /// This runs whenever the recording clock or a capture surface changes. Rebuilding a
+    /// palette symbol and re-assigning an identical image, title, length and tooltip each
+    /// time made AppKit re-lay-out and redraw the status item for nothing; the symbol
+    /// images are built once and kept, and an unchanged property is not assigned at all.
+    func apply(_ appearance: StatusItemAppearance) {
+        guard let button = statusItem.button else { return }
+        if appliedIconKey != appearance.imageKey {
+            button.image = icon(for: appearance)
+            appliedIconKey = appearance.imageKey
+        }
+        if button.title != appearance.title {
+            button.title = appearance.title
+        }
+        if !appearance.title.isEmpty, button.imagePosition != .imageLeading {
+            button.imagePosition = .imageLeading
+        }
+        if statusItem.length != appearance.length {
+            statusItem.length = appearance.length
+        }
+        if button.toolTip != appearance.toolTip {
+            button.toolTip = appearance.toolTip
+        }
+    }
+
+    private func icon(for appearance: StatusItemAppearance) -> NSImage? {
+        if let cached = iconCache[appearance.imageKey] {
+            return cached
+        }
+        var image = NSImage(
+            systemSymbolName: appearance.symbol,
+            accessibilityDescription: appearance.accessibilityDescription
+        )
+        if !appearance.isTemplate {
+            image = image?.withSymbolConfiguration(.init(paletteColors: [.systemRed]))
+        }
+        image?.isTemplate = appearance.isTemplate
+        if let image {
+            iconCache[appearance.imageKey] = image
+        }
+        return image
     }
 
     /// Idle: Option-click opens All-in-One; otherwise the menu opens (docs/03 §8.1).
     func attachIdleMenu() {
-        statusItem.menu = nil
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(didClickIdleStatusItem)
-        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        attachClick(#selector(didClickIdleStatusItem))
     }
 
     /// Recording: a click stops, because that is the only thing the user is likely to want
     /// (docs/03 §1.8). Right-click still opens the menu for pause and discard.
     func attachRecordingClick() {
+        attachClick(#selector(didClickStatusItem))
+    }
+
+    /// Routes clicks to `action`, skipping the work when they already go there — this is
+    /// called on every clock change while recording.
+    private func attachClick(_ action: Selector) {
+        guard let button = statusItem.button else { return }
+        guard statusItem.menu != nil || button.action != action || button.target !== self else { return }
         statusItem.menu = nil
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(didClickStatusItem)
-        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        button.target = self
+        button.action = action
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     @objc
@@ -100,22 +150,55 @@ extension StatusItemController {
         NotificationCenter.default.post(name: menuBarVisibilityChanged, object: nil, userInfo: ["visible": visible])
     }
 
+    /// Follows the menu-bar visibility setting and the user dragging the icon away.
+    ///
+    /// Idempotent, and the token is kept: this used to be called from both the initialiser
+    /// and the app delegate, discarding the token each time, so every post reached two
+    /// block observers that could never be removed.
     func observeMenuBarVisibility() {
-        NotificationCenter.default.addObserver(
-            forName: Self.menuBarVisibilityChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            let visible = (note.userInfo?["visible"] as? Bool) ?? true
-            MainActor.assumeIsolated {
-                self?.statusItem.isVisible = visible
+        if menuBarVisibilityToken == nil {
+            menuBarVisibilityToken = NotificationCenter.default.addObserver(
+                forName: Self.menuBarVisibilityChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] note in
+                let visible = (note.userInfo?["visible"] as? Bool) ?? true
+                MainActor.assumeIsolated {
+                    self?.statusItem.isVisible = visible
+                }
             }
         }
+        guard visibilityObservation == nil else { return }
         visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] item, _ in
             let visible = item.isVisible
             Task { @MainActor in
                 self?.onMenuBarVisibilityChange?(visible)
             }
         }
+    }
+
+    /// Removes both visibility observers. Called when the agent terminates.
+    func stopObservingMenuBarVisibility() {
+        if let menuBarVisibilityToken {
+            NotificationCenter.default.removeObserver(menuBarVisibilityToken)
+            self.menuBarVisibilityToken = nil
+        }
+        visibilityObservation?.invalidate()
+        visibilityObservation = nil
+    }
+}
+
+/// Everything the status item's button shows for one state.
+struct StatusItemAppearance: Equatable {
+    let symbol: String
+    let accessibilityDescription: String
+    let isTemplate: Bool
+    let title: String
+    let length: CGFloat
+    let toolTip: String
+
+    /// Two appearances with the same key share one image.
+    var imageKey: String {
+        "\(symbol)|\(isTemplate)|\(accessibilityDescription)"
     }
 }

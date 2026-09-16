@@ -8,7 +8,7 @@ public extension EditorDocumentModel {
     /// The rect the overlay draws and the handles grab. Before the first drag this is
     /// the whole capture, so entering Crop is immediately interactive.
     var cropWorkingRect: CGRect {
-        document.crop?.rect ?? document.baseImage.bounds
+        liveCropRect ?? document.crop?.rect ?? document.baseImage.bounds
     }
 
     /// Handle hit in image space, with a view-constant tolerance passed from the canvas.
@@ -56,6 +56,11 @@ public extension EditorDocumentModel {
         var spec = document.crop ?? CropSpec(rect: next)
         spec.rect = next
         document.setCrop(spec)
+        // The crop bar's size readout follows the drag; the document is not published
+        // until the pointer comes up.
+        if liveCropRect != next {
+            liveCropRect = next
+        }
     }
 
     /// Corners follow the inspector ratio; ⇧ on a free crop locks the starting aspect.

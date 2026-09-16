@@ -48,6 +48,45 @@ struct ZipArchiveTests {
         #expect(ZipArchive.crc32(Data()) == 0)
     }
 
+    /// Published CRC-32/ISO-HDLC check values. Lengths straddle the eight-byte fold so both
+    /// the sliced loop and the byte tail are exercised.
+    @Test("CRC-32 matches known values", arguments: [
+        ("", UInt32(0)),
+        ("a", UInt32(0xE8B7_BE43)),
+        ("abc", UInt32(0x3524_41C2)),
+        ("12345678", UInt32(0x9AE0_DAAF)),
+        ("123456789", UInt32(0xCBF4_3926)),
+        ("message digest", UInt32(0x2015_9D7F)),
+        ("abcdefghijklmnopqrstuvwxyz", UInt32(0x4C27_50BD)),
+        ("The quick brown fox jumps over the lazy dog", UInt32(0x414F_A339))
+    ])
+    func crcKnownValues(input: String, expected: UInt32) {
+        #expect(ZipArchive.crc32(Data(input.utf8)) == expected)
+    }
+
+    @Test("The sliced CRC agrees with the byte-at-a-time one for every tail length")
+    func slicedMatchesBytewise() {
+        var generator = SystemRandomNumberGenerator()
+        for length in [0, 1, 7, 8, 9, 15, 16, 17, 63, 64, 65, 1000, 4099] {
+            let bytes = (0 ..< length).map { _ in UInt8.random(in: 0 ... 255, using: &generator) }
+            let data = Data(bytes)
+            #expect(ZipArchive.crc32(data) == ZipArchive.crc32Bytewise(data), "length \(length)")
+            // A slice starts at a non-zero index; the checksum must be of its own bytes.
+            let padded = Data([0xAA, 0xBB, 0xCC] + bytes)
+            let slice = padded.dropFirst(3)
+            #expect(ZipArchive.crc32(slice) == ZipArchive.crc32Bytewise(data), "slice \(length)")
+        }
+    }
+
+    @Test("A precomputed CRC is written as given, and matches what would be computed")
+    func precomputedCRC() {
+        let payload = Data(repeating: 42, count: 1000)
+        let crc = KadrDocumentFile.crc32(of: payload)
+        let computed = ZipArchive.archive([ZipArchive.Entry(name: "a", data: payload)])
+        let supplied = ZipArchive.archive([ZipArchive.Entry(name: "a", data: payload, crc: crc)])
+        #expect(computed == supplied)
+    }
+
     @Test("An empty entry survives the round-trip")
     func emptyEntry() throws {
         let archive = ZipArchive.archive([ZipArchive.Entry(name: "empty", data: Data())])
@@ -77,6 +116,14 @@ struct ZipArchiveTests {
 
 @Suite("The .kadr file")
 struct KadrDocumentFileTests {
+    @Test("Supplying the base image's CRC writes the same file as computing it")
+    func cachedBaseCRC() throws {
+        var contents = makeContents()
+        let computed = try KadrDocumentFile.data(for: contents)
+        contents.baseImageCRC32 = KadrDocumentFile.crc32(of: contents.baseImagePNG)
+        #expect(try KadrDocumentFile.data(for: contents) == computed)
+    }
+
     @Test("A document round-trips through a .kadr file unchanged")
     func roundTrip() throws {
         let contents = makeContents()

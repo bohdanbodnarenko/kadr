@@ -39,6 +39,10 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
         var webcamSizeFraction: CGFloat = 0.22
         var webcamFillsFrame = false
         var webcamCorner: OverlayCornerSlot = .bottomTrailing
+        /// The short edge, in recorded pixels, the webcam picture is drawn at — so the
+        /// camera can be asked for frames that size instead of being scaled per frame.
+        /// Nil when the recorded size is not known up front (a window recording).
+        var webcamPixelSide: Int?
         var clickRed: CGFloat = 1
         var clickGreen: CGFloat = 0.25
         var clickBlue: CGFloat = 0.2
@@ -89,7 +93,7 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
             let webcam = WebcamCapture { [weak self] image in
                 self?.lock.withLock { self?.webcamFrame = image }
             }
-            webcam.start(deviceID: configuration.webcamDeviceID)
+            webcam.start(deviceID: configuration.webcamDeviceID, pixelSide: configuration.webcamPixelSide)
             self.webcam = webcam
         }
     }
@@ -327,6 +331,8 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
 /// the user is being recorded and at no other time.
 private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     private let session = AVCaptureSession()
+    // OS-required handler queue (CLAUDE.md rule 5): the sample-buffer delegate needs one,
+    // and the blocking `startRunning`/`stopRunning` are kept on the same serial queue.
     private let queue = DispatchQueue(label: "app.kadr.recording.webcam")
     private let onFrame: @Sendable (CGImage?) -> Void
     private let logger = KadrLog.logger(.recording)
@@ -336,7 +342,8 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
         super.init()
     }
 
-    func start(deviceID: String? = nil) {
+    /// - Parameter pixelSide: the short edge the picture is drawn at, if known.
+    func start(deviceID: String? = nil, pixelSide: Int? = nil) {
         session.sessionPreset = .medium
         let device = RecordingDeviceCatalog.camera(withID: deviceID ?? "")
             ?? AVCaptureDevice.default(for: .video)
@@ -357,6 +364,7 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
         output.setSampleBufferDelegate(self, queue: queue)
         guard session.canAddOutput(output) else { return }
         session.addOutput(output)
+        scaleOutput(output, toShortEdge: pixelSide)
 
         // `startRunning` blocks, so it must not run on the caller's thread; the session is
         // driven only from this one serial queue, which is what makes that safe.
@@ -386,34 +394,34 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
         from connection: AVCaptureConnection
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        guard let cgImage = Self.cgImage(from: pixelBuffer) else { return }
+        guard let cgImage = WebcamFrameImage.image(wrapping: pixelBuffer) else { return }
         onFrame(cgImage)
     }
 
-    /// BGRA bytes to a `CGImage` without CoreImage, so the agent does not link it
-    /// (docs/10 R2.1).
-    private static func cgImage(from pixelBuffer: CVPixelBuffer) -> CGImage? {
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-        guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
-            CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-        )
-        guard let context = CGContext(
-            data: base,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: bitmapInfo.rawValue
-        ) else {
-            return nil
+    /// Asks the camera for frames no larger than the bubble needs (PRD §8).
+    ///
+    /// Every frame is drawn into every recorded frame, on the CPU. A preset-sized picture
+    /// scaled down to a small bubble sixty times a second is work the camera's own scaler
+    /// does once, in hardware, if asked.
+    private func scaleOutput(_ output: AVCaptureVideoDataOutput, toShortEdge side: Int?) {
+        guard let side else { return }
+        // Setting nil makes the output report the preset's own dimensions.
+        output.videoSettings = nil
+        let native = output.videoSettings
+        let format: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ]
+        guard let width = native?[kCVPixelBufferWidthKey as String] as? Int,
+              let height = native?[kCVPixelBufferHeightKey as String] as? Int,
+              let scaled = WebcamOutputSizing.size(nativeWidth: width, nativeHeight: height, shortEdge: side)
+        else {
+            output.videoSettings = format
+            return
         }
-        return context.makeImage()
+        output.videoSettings = format.merging([
+            kCVPixelBufferWidthKey as String: scaled.width,
+            kCVPixelBufferHeightKey as String: scaled.height
+        ]) { _, new in new }
     }
 }
 

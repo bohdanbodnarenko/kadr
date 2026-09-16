@@ -12,7 +12,13 @@ import Shared
 extension AnnotationExportRenderer {
     /// The un-beautified canvas: the capture and whatever is drawn on it, optionally
     /// projected through the camera (docs/09 U1.2).
-    func drawPlainCanvas(_ contents: CardContents, canvas: CGRect, scale: CGFloat, in context: CGContext) {
+    func drawPlainCanvas(
+        _ contents: CardContents,
+        canvas: CGRect,
+        scale: CGFloat,
+        readoutScale: CGFloat? = nil,
+        in context: CGContext
+    ) {
         let document = contents.document
         let source = contents.source
         let includeAnnotations = contents.includeAnnotations
@@ -28,7 +34,7 @@ extension AnnotationExportRenderer {
             if includeAnnotations {
                 drawSpotlights(of: document, in: target)
                 for command in document.resolvedCommands {
-                    draw(command, in: target, imageScale: scale)
+                    draw(command, in: target, imageScale: readoutScale ?? scale)
                 }
             }
             target.restoreGState()

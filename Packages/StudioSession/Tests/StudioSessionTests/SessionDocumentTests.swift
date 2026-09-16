@@ -231,6 +231,98 @@ struct SessionDocumentTests {
         #expect(document.transcript(matchingHash: "abc") != nil)
         #expect(document.transcript(matchingHash: "other") == nil)
     }
+
+    // MARK: - Footage hash cache
+
+    /// Whether a transcript survives reopening, by what happened to the footage in between.
+    enum FootageChange: String, CaseIterable, Sendable {
+        case untouched
+        case rewrittenWithDifferentBytes
+        case rewrittenWithSameBytes
+    }
+
+    @Test("A stored transcript is kept or dropped by what the footage now is", arguments: FootageChange.allCases)
+    func transcriptFollowsFootage(change: FootageChange) throws {
+        let scratch = try scratch()
+        let (session, document, root) = (scratch.session, scratch.document, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let original = Data(repeating: 7, count: 4096)
+        try original.write(to: session.screenURL)
+        let hash = try AudioContentHash.hash(fileAt: session.screenURL)
+        try document.write(Transcript(words: [TranscriptWord(text: "Hi", start: 0, end: 1)], audioContentHash: hash))
+        #expect(try document.transcriptMatchingFootage() != nil)
+
+        switch change {
+        case .untouched:
+            break
+        case .rewrittenWithDifferentBytes:
+            try Data(repeating: 9, count: 4096).write(to: session.screenURL, options: .atomic)
+        case .rewrittenWithSameBytes:
+            try original.write(to: session.screenURL, options: .atomic)
+        }
+
+        let expectKept = change != .rewrittenWithDifferentBytes
+        #expect(try (document.transcriptMatchingFootage() != nil) == expectKept)
+    }
+
+    /// The point of the cache: a matching identity is trusted without reading the file.
+    /// Proven by planting a hash that the bytes would never produce and seeing it returned.
+    @Test("An unchanged file reuses the remembered hash without reading it")
+    func unchangedFileSkipsHashing() throws {
+        let scratch = try scratch()
+        let (session, document, root) = (scratch.session, scratch.document, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Data(repeating: 1, count: 128).write(to: session.screenURL)
+        let real = try document.audioContentHash()
+        #expect(document.audioHashCache()?.hash == real, "the first hash was not remembered")
+
+        let identity = try #require(AudioFileIdentity(fileAt: session.screenURL))
+        try document.write(AudioContentHashCache(identity: identity, hash: "planted"))
+        #expect(try document.audioContentHash() == "planted")
+
+        // Any change to the identity is a miss, and the miss re-hashes.
+        var stale = identity
+        stale.byteCount += 1
+        try document.write(AudioContentHashCache(identity: stale, hash: "planted"))
+        #expect(try document.audioContentHash() == real)
+    }
+
+    @Test("A transcript with no recorded hash is trusted without hashing")
+    func unhashedTranscriptIsTrusted() throws {
+        let scratch = try scratch()
+        let (document, root) = (scratch.document, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+        // No footage at all: hashing would fail, so reaching it would drop the transcript.
+        try document.write(Transcript(words: [TranscriptWord(text: "Hi", start: 0, end: 1)]))
+        #expect(try document.transcriptMatchingFootage() != nil)
+        #expect(document.audioHashCache() == nil, "hashed a file nobody needed hashed")
+    }
+
+    @Test("No transcript means nothing is read")
+    func noTranscriptNoHash() throws {
+        let scratch = try scratch()
+        let (session, document, root) = (scratch.session, scratch.document, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(repeating: 1, count: 128).write(to: session.screenURL)
+        #expect(try document.transcriptMatchingFootage() == nil)
+        #expect(document.audioHashCache() == nil)
+    }
+
+    @Test("Hashing a file stops when its task is cancelled")
+    func hashingIsCancellable() async throws {
+        let scratch = try scratch()
+        let (session, root) = (scratch.session, scratch.root)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(repeating: 1, count: 128).write(to: session.screenURL)
+        let url = session.screenURL
+        let task = Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try AudioContentHash.hash(fileAt: url)
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
 }
 
 /// What is captured alongside the footage (docs/09 U3.1).

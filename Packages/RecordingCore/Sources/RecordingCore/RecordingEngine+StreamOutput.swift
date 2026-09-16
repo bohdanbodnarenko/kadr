@@ -10,6 +10,8 @@ import Shared
 /// It does one thing: forward the buffer. Anything more here — encoding, allocation, a
 /// hop to an actor — would block SCK's queue and drop frames.
 final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+    // OS-required handler queues (CLAUDE.md rule 5): `SCStream.addStreamOutput` takes a
+    // dispatch queue per output type.
     let queue = DispatchQueue(label: "app.kadr.recording.samples", qos: .userInitiated)
     let audioQueue = DispatchQueue(label: "app.kadr.recording.audio", qos: .userInitiated)
     /// Last rect the geometry probe logged, so it reports moves rather than frames.
@@ -48,24 +50,23 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         switch type {
         case .screen:
+            // Bridged once per frame. Reading the status through `isComplete` and
+            // `isIdle` fetched and bridged the attachments array twice more, on SCK's
+            // queue, sixty times a second.
             let attachments = frameAttachments(sampleBuffer)
-            if isComplete(sampleBuffer) {
-                videoContinuation.yield(SampleBufferBox(
-                    buffer: sampleBuffer,
-                    kind: .video,
-                    contentRect: contentRect(attachments),
-                    screenRect: screenRect(attachments),
-                    scaleFactor: scaleFactor(attachments)
-                ))
-            } else if isIdle(sampleBuffer) {
-                videoContinuation.yield(SampleBufferBox(
-                    buffer: sampleBuffer,
-                    kind: .clock,
-                    contentRect: contentRect(attachments),
-                    screenRect: screenRect(attachments),
-                    scaleFactor: scaleFactor(attachments)
-                ))
+            let kind: SampleBufferBox.Kind
+            switch status(in: attachments) {
+            case .complete: kind = .video
+            case .idle: kind = .clock
+            default: return
             }
+            videoContinuation.yield(SampleBufferBox(
+                buffer: sampleBuffer,
+                kind: kind,
+                contentRect: contentRect(attachments),
+                screenRect: screenRect(attachments),
+                scaleFactor: scaleFactor(attachments)
+            ))
         case .audio:
             audioContinuation.yield(SampleBufferBox(buffer: sampleBuffer, kind: .systemAudio))
         default:
@@ -167,17 +168,9 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         #endif
     }
 
-    /// Reads SCK's per-frame status out of the buffer's attachments.
-    func isComplete(_ buffer: CMSampleBuffer) -> Bool {
-        status(of: buffer) == .complete
-    }
-
-    func isIdle(_ buffer: CMSampleBuffer) -> Bool {
-        status(of: buffer) == .idle
-    }
-
-    func status(of buffer: CMSampleBuffer) -> SCFrameStatus? {
-        guard let raw = frameAttachments(buffer)?[.status] as? Int else { return nil }
+    /// Reads SCK's per-frame status out of attachments already fetched for the frame.
+    func status(in attachments: [SCStreamFrameInfo: Any]?) -> SCFrameStatus? {
+        guard let raw = attachments?[.status] as? Int else { return nil }
         return SCFrameStatus(rawValue: raw)
     }
 }

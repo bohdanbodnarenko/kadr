@@ -44,7 +44,8 @@ enum StudioMediaFixtures {
         in folder: URL,
         named name: String = "screen.mov",
         size: CGSize = CGSize(width: 320, height: 180),
-        colour: Colour? = nil
+        colour: Colour? = nil,
+        stacked: Bool = false
     ) async throws -> URL {
         let url = folder.appendingPathComponent(name)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
@@ -66,7 +67,9 @@ enum StudioMediaFixtures {
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
 
-        let source = try CIImage(cgImage: #require(picture(size: size, colour: colour)))
+        let source = try CIImage(cgImage: #require(
+            stacked ? stackedPicture(size: size) : picture(size: size, colour: colour)
+        ))
         for frame in 0 ..< Int(seconds * 30) {
             while !input.isReadyForMoreMediaData {
                 try await Task.sleep(for: .milliseconds(5))
@@ -81,6 +84,18 @@ enum StudioMediaFixtures {
         input.markAsFinished()
         await writer.finishWriting()
         return url
+    }
+
+    /// Red over blue, top-left terms — the picture that catches a render drawn upside down,
+    /// which the left-and-right default cannot.
+    private static func stackedPicture(size: CGSize) -> CGImage? {
+        BitmapCanvas.image(width: Int(size.width), height: Int(size.height)) { context in
+            // A context draws bottom-up, so the top half is the one with the higher y.
+            context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+            context.fill(CGRect(x: 0, y: size.height / 2, width: size.width, height: size.height / 2))
+            context.setFillColor(red: 0, green: 0, blue: 1, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: size.width, height: size.height / 2))
+        }
     }
 
     private static func picture(size: CGSize, colour: Colour?) -> CGImage? {

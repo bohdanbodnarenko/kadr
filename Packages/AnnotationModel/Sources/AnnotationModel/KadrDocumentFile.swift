@@ -17,10 +17,16 @@ public enum KadrDocumentFile {
         public var document: AnnotationDocument
         /// The untouched base image, as PNG data.
         public var baseImagePNG: Data
+        /// `baseImagePNG`'s CRC-32, if the caller has it — see `KadrDocumentFile.crc32(of:)`.
+        ///
+        /// Must describe `baseImagePNG` exactly; a wrong value writes a zip other tools
+        /// reject. Nil means "compute it".
+        public var baseImageCRC32: UInt32?
 
-        public init(document: AnnotationDocument, baseImagePNG: Data) {
+        public init(document: AnnotationDocument, baseImagePNG: Data, baseImageCRC32: UInt32? = nil) {
             self.document = document
             self.baseImagePNG = baseImagePNG
+            self.baseImageCRC32 = baseImageCRC32
         }
     }
 
@@ -52,7 +58,7 @@ public enum KadrDocumentFile {
         let json = try encoder.encode(payload)
 
         return ZipArchive.archive([
-            ZipArchive.Entry(name: baseImageEntry, data: contents.baseImagePNG),
+            ZipArchive.Entry(name: baseImageEntry, data: contents.baseImagePNG, crc: contents.baseImageCRC32),
             ZipArchive.Entry(name: commandsEntry, data: json)
         ])
     }
@@ -81,6 +87,12 @@ public enum KadrDocumentFile {
             document: AnnotationDocument(baseImage: payload.baseImage, commands: payload.commands),
             baseImagePNG: image
         )
+    }
+
+    /// The checksum a `.kadr` stores for `data`, for callers that write the same base image
+    /// repeatedly and want to compute it once (autosave, docs/10 R2.6).
+    public static func crc32(of data: Data) -> UInt32 {
+        ZipArchive.crc32(data)
     }
 
     public static func write(_ contents: Contents, to url: URL) throws {

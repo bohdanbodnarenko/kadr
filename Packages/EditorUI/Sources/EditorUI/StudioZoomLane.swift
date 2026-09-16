@@ -38,7 +38,7 @@ struct StudioZoomLane: View {
                 }
                 .help("Drag across this lane to add a zoom. Click to scrub.")
 
-            ForEach(Array(clickTimes.enumerated()), id: \.offset) { _, time in
+            ForEach(Array(model.clickTicks.enumerated()), id: \.offset) { _, time in
                 Rectangle()
                     .fill(Color.accentColor.opacity(0.4))
                     .frame(width: 1, height: 8)
@@ -170,13 +170,6 @@ struct StudioZoomLane: View {
                 model.moveZoom(cue.id, to: origin + value.translation.width / scale)
             }
             .onEnded { _ in dragging = nil }
-    }
-
-    private var clickTimes: [TimeInterval] {
-        let times = model.editedClickTimes
-        guard times.count > 800 else { return times }
-        let step = max(times.count / 800, 1)
-        return stride(from: 0, to: times.count, by: step).map { times[$0] }
     }
 
     private func clamped(_ time: TimeInterval) -> TimeInterval {

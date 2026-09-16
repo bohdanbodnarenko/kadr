@@ -272,16 +272,23 @@ struct StudioRendererTests {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
 
+        /// Best of two. A render waits its turn at `ExportGate` behind whatever the rest of
+        /// the suite is exporting, and that wait is on the wall clock too; noise only ever
+        /// adds time, so the faster of two runs is the one closer to the render's own cost.
         func timedRender(seconds: Double) async throws -> Duration {
-            let movie = try await Media.makeMovie(seconds: seconds, in: folder)
-            let destination = folder.appendingPathComponent("out-\(seconds).mov")
-            let start = ContinuousClock.now
-            try await StudioRenderer().render(
-                source(screen: movie, edit: Media.edit(duration: seconds)),
-                to: destination,
-                options: options
-            )
-            return ContinuousClock.now - start
+            let movie = try await Media.makeMovie(seconds: seconds, in: folder, named: "screen-\(seconds).mov")
+            var best = Duration.seconds(3600)
+            for attempt in 0 ..< 2 {
+                let destination = folder.appendingPathComponent("out-\(seconds)-\(attempt).mov")
+                let start = ContinuousClock.now
+                try await StudioRenderer().render(
+                    source(screen: movie, edit: Media.edit(duration: seconds)),
+                    to: destination,
+                    options: options
+                )
+                best = min(best, ContinuousClock.now - start)
+            }
+            return best
         }
 
         let four = try await timedRender(seconds: 4)

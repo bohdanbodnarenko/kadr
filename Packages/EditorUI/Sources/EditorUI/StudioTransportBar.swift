@@ -7,6 +7,10 @@ import SwiftUI
 /// Add zoom, Smart zooms, Undo, Redo — into one overflowing row. Screendrop's transport is
 /// icons around a centred play control; this is that layout, plus frame-step which that
 /// bar does not have.
+///
+/// The body reads no playhead (docs/11 S2): the clock and the play button's spoken value
+/// are leaves that watch the playhead clock, and the trim menu reads a flag the model only
+/// writes when it flips.
 struct StudioTransportBar: View {
     let model: StudioDocumentModel
 
@@ -87,8 +91,7 @@ struct StudioTransportBar: View {
 
     private var playback: some View {
         HStack(spacing: 10) {
-            Text(StudioClock.precise(model.playhead))
-                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            StudioPlayheadClockLabel(clock: model.playheadClock)
             HStack(spacing: 2) {
                 icon("backward.end.fill", label: "Go to start", help: "Go to start") {
                     model.seekToStart()
@@ -101,20 +104,7 @@ struct StudioTransportBar: View {
                     model.step(frames: -1)
                 }
                 .keyboardShortcut(.leftArrow, modifiers: [])
-                Button {
-                    model.togglePlayback()
-                } label: {
-                    Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.primary.opacity(0.07)))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.space, modifiers: [])
-                .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
-                .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
-                .accessibilityValue(StudioClock.precise(model.playhead))
+                StudioPlayPauseButton(model: model, clock: model.playheadClock)
                 icon("forward.frame", label: "Forward one frame", help: "Forward one frame (→)") {
                     model.step(frames: 1)
                 }
@@ -146,7 +136,7 @@ struct StudioTransportBar: View {
         }
         .menuStyle(.borderlessButton)
         .buttonStyle(StudioTransportIconStyle())
-        .disabled(model.playhead <= 0 || model.playhead >= model.edit.duration)
+        .disabled(!model.playheadIsInsideEdit)
         .help("Drop everything before or after the playhead")
         .accessibilityLabel("Trim clip")
     }
@@ -189,6 +179,42 @@ struct StudioTransportBar: View {
 
     private func speedLabel(_ speed: Double) -> String {
         speed == speed.rounded() ? "\(Int(speed))" : String(format: "%.1f", speed)
+    }
+}
+
+/// The playhead as a clock. A leaf, so a playback tick re-renders one `Text`.
+private struct StudioPlayheadClockLabel: View {
+    let clock: StudioPlayhead
+
+    var body: some View {
+        Text(StudioClock.precise(clock.time))
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+    }
+}
+
+/// Play and pause, with the playhead as its accessibility value.
+///
+/// Its own view because that value changes every tick; in the bar it re-rendered every
+/// other control with it.
+private struct StudioPlayPauseButton: View {
+    let model: StudioDocumentModel
+    let clock: StudioPlayhead
+
+    var body: some View {
+        Button {
+            model.togglePlayback()
+        } label: {
+            Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.primary.opacity(0.07)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.space, modifiers: [])
+        .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
+        .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+        .accessibilityValue(StudioClock.precise(clock.time))
     }
 }
 

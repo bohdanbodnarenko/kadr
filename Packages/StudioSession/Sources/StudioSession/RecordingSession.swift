@@ -225,7 +225,7 @@ public struct RecordingSession: Sendable, Hashable {
             // session owns" — deleting a session, measuring what it costs — so a file left
             // out is a file left behind on disk and a size that under-reports.
             copyMarkerURL,
-            transcriptURL,
+            transcriptURL, SessionDocument(session: self).audioHashCacheURL,
             projectURL
         ] + soundtrackURLs + wallpaperURLs
     }

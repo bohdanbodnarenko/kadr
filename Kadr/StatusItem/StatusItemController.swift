@@ -18,7 +18,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     let perform: (CaptureCommand) -> Void
     private let openSettings: () -> Void
-    private let restoreRecentlyClosed: () -> Void
+    let restoreRecentlyClosed: () -> Void
     private let closeAllPins: () -> Void
     private let captureWithPicker: () -> Void
     private let showOnboarding: () -> Void
@@ -32,14 +32,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var showsRecordingIcon = false
     /// KVO for the user dragging the icon out of the menu bar (docs/16 APP-2).
     var visibilityObservation: NSKeyValueObservation?
-    private let history: HistoryController?
-    private let reopenFromHistory: (HistoryRecord) -> Void
+    /// The settings-driven visibility observer, kept so it is registered once and can be
+    /// removed.
+    var menuBarVisibilityToken: (any NSObjectProtocol)?
+    /// Symbol images by `StatusItemAppearance.imageKey`, built once each (PRD §8).
+    var iconCache: [String: NSImage] = [:]
+    /// The image currently on the button, so an unchanged one is not reassigned.
+    var appliedIconKey: String?
+    /// The recovery row in the open menu, so a count that arrives late can update it.
+    weak var recoveryItem: NSMenuItem?
+    /// Fills the strip and the Recent submenu with thumbnails after the menu is up.
+    var thumbnailFillTask: Task<Void, Never>?
+    let history: HistoryController?
+    let reopenFromHistory: (HistoryRecord) -> Void
     /// Overlay-menu items live in `StatusItemController+Overlay.swift`, so these
     /// cannot be `private` — that is file-scoped.
     let canRestore: () -> Bool
-    private let openHistory: () -> Void
+    let openHistory: () -> Void
     /// How many recordings a crash left mid-edit, and how to reopen them (docs/09 U3.1).
     let unfinishedRecordings: () -> Int
+    /// Recounts off the main thread and reports the new count on it.
+    let refreshUnfinishedRecordings: (@escaping (Int) -> Void) -> Void
     let recoverRecordings: () -> Void
     private let desktopIconsHidden: () -> Bool
     let overlayCardCount: () -> Int
@@ -67,6 +80,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         canRestore: @escaping () -> Bool = { true },
         openHistory: @escaping () -> Void = {},
         unfinishedRecordings: @escaping () -> Int = { 0 },
+        refreshUnfinishedRecordings: @escaping (@escaping (Int) -> Void) -> Void = { _ in },
         recoverRecordings: @escaping () -> Void = {},
         desktopIconsHidden: @escaping () -> Bool = { false },
         overlayCardCount: @escaping () -> Int = { 0 },
@@ -89,6 +103,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.canRestore = canRestore
         self.openHistory = openHistory
         self.unfinishedRecordings = unfinishedRecordings
+        self.refreshUnfinishedRecordings = refreshUnfinishedRecordings
         self.recoverRecordings = recoverRecordings
         self.desktopIconsHidden = desktopIconsHidden
         self.overlayCardCount = overlayCardCount
@@ -157,8 +172,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         addApplicationItems(to: menu)
     }
 
+    /// Leaves the strip's thumbnails cached (docs/10 R2.4).
+    ///
+    /// They used to be purged here, so the cache the strip has for exactly this purpose
+    /// never once served a hit: every open decoded the same eight images again. Eight
+    /// 112 px thumbnails are well under the strip's own 1.5 MB budget, and the cache still
+    /// empties itself under memory pressure.
     func menuDidClose(_ menu: NSMenu) {
-        history?.purgeStripThumbnails()
+        thumbnailFillTask?.cancel()
+        thumbnailFillTask = nil
     }
 
     /// Builds one command row: title, glyph, target, right-aligned shortcut.
@@ -271,77 +293,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(cancel)
     }
 
-    /// Group 4 — the last few captures, and the window that holds the rest
-    /// (docs/03 §5, §8.1).
-    private func addHistoryItems(to menu: NSMenu) {
-        let recent = Array(history?.recent.prefix(HistoryController.menuStripCount) ?? [])
-        menu.addItem(.separator())
-
-        if !recent.isEmpty {
-            let strip = HistoryStripView(frame: .zero)
-            strip.update(records: recent) { [weak self] record in
-                guard let cgImage = self?.history?.thumbnail(for: record, maxPixelSize: 112, scope: .strip) else {
-                    return nil
-                }
-                return NSImage(cgImage: cgImage, size: HistoryStripView.thumbnailSize)
-            }
-            strip.onSelect = { [weak self] id in
-                guard let record = self?.history?.record(id: id) else { return }
-                self?.reopenFromHistory(record)
-            }
-            let item = NSMenuItem()
-            item.view = strip
-            menu.addItem(item)
-
-            let recentMenu = NSMenu()
-            for record in recent {
-                let row = NSMenuItem(
-                    title: record.originalFilename,
-                    action: #selector(didSelectRecent(_:)),
-                    keyEquivalent: ""
-                )
-                row.target = self
-                row.representedObject = record.id
-                if let cgImage = history?.thumbnail(for: record, maxPixelSize: 32, scope: .strip) {
-                    let icon = NSImage(cgImage: cgImage, size: NSSize(width: 16, height: 16))
-                    row.image = icon
-                }
-                recentMenu.addItem(row)
-            }
-            let recentItem = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
-            recentItem.submenu = recentMenu
-            menu.addItem(recentItem)
-        }
-
-        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "l")
-        historyItem.keyEquivalentModifierMask = [.command, .shift]
-        historyItem.target = self
-        historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
-        menu.addItem(historyItem)
-
-        let folderItem = NSMenuItem(
-            title: "Open Capture Folder",
-            action: #selector(didSelectOpenSaveFolder),
-            keyEquivalent: ""
-        )
-        folderItem.target = self
-        folderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
-        menu.addItem(folderItem)
-
-        if canRestore() {
-            let restoreItem = NSMenuItem(
-                title: "Restore Recently Closed",
-                action: #selector(didSelectRestore),
-                keyEquivalent: "t"
-            )
-            restoreItem.keyEquivalentModifierMask = [.command, .shift]
-            restoreItem.target = self
-            menu.addItem(restoreItem)
-        }
-
-        addRecoveryItem(to: menu)
-    }
-
     // MARK: - Actions
 
     @objc
@@ -350,31 +301,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
               let command = CaptureCommand(rawValue: rawValue)
         else { return }
         perform(command)
-    }
-
-    @objc
-    func didSelectRestore() {
-        restoreRecentlyClosed()
-    }
-
-    @objc
-    func didSelectHistory() {
-        openHistory()
-    }
-
-    @objc
-    func didSelectOpenSaveFolder() {
-        perform(.openSaveFolder)
-    }
-
-    @objc
-    func didSelectRecent(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID,
-              let record = history?.record(id: id)
-        else {
-            return
-        }
-        reopenFromHistory(record)
     }
 
     @objc

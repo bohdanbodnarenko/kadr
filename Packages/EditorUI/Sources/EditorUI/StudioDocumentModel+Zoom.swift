@@ -145,13 +145,13 @@ public extension StudioDocumentModel {
         }
     }
 
-    /// Recorded clicks on the edited timeline, for ticks on the zoom lane.
-    var editedClickTimes: [TimeInterval] {
-        editedTelemetry.clicks.filter(\.isDown).map(\.time)
-    }
-
+    /// Whether there is any pointer sample to aim at.
+    ///
+    /// `pointerPosition(at:)` falls back to the first sample, so the answer never depended
+    /// on the playhead — and reading the playhead here made the inspector re-render on
+    /// every playback tick to recompute a constant.
     var hasPointerAtPlayhead: Bool {
-        pointerPosition(at: playhead) != nil
+        !editedTelemetry.pointer.isEmpty
     }
 
     /// Replaces the zooms with ones planned from the recorded clicks.
@@ -254,13 +254,42 @@ public extension StudioDocumentModel {
     /// Where the pointer was at an instant, in recorded pixels.
     ///
     /// Asked in edited time, because that is what the playhead is.
+    ///
+    /// The samples are in time order, so this is a binary search rather than the linear
+    /// `last(where:)` it replaced — a long recording has hundreds of thousands of them.
     func pointerPosition(at time: TimeInterval) -> CGPoint? {
         let pointer = editedTelemetry.pointer
-        return pointer.last { $0.time <= time }?.position ?? pointer.first?.position
+        guard let first = pointer.first else { return nil }
+        let index = Self.lastIndex(in: pointer, atOrBefore: time)
+        return index.map { pointer[$0].position } ?? first.position
+    }
+
+    /// The last sample whose time is at or before `time`, in a time-ordered array.
+    nonisolated static func lastIndex(in samples: [PointerSample], atOrBefore time: TimeInterval) -> Int? {
+        var low = 0
+        var high = samples.count
+        while low < high {
+            let mid = (low + high) / 2
+            if samples[mid].time <= time {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low > 0 ? low - 1 : nil
     }
 
     var centreOfFrame: CGPoint {
         CGPoint(x: manifest.pixelSize.width / 2, y: manifest.pixelSize.height / 2)
+    }
+
+    /// Most click ticks the zoom lane draws. More than the lane has points is wasted layout.
+    static let maximumClickTicks = 800
+
+    nonisolated static func decimated(_ times: [TimeInterval], limit: Int) -> [TimeInterval] {
+        guard limit > 0, times.count > limit else { return times }
+        let step = max(times.count / limit, 1)
+        return stride(from: 0, to: times.count, by: step).map { times[$0] }
     }
 
     func sourceTime(forEdited time: TimeInterval) -> TimeInterval {

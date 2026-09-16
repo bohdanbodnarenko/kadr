@@ -25,9 +25,14 @@ final class PinPanel: NonActivatingPanel {
     private var isClickThrough = false
     private var clickThroughBadge: NSView?
 
-    /// The longest edge, in pixels, of the texture currently loaded. A resize that does not
-    /// change it needs no decode at all.
+    /// The longest edge, in pixels, of the texture loaded or on its way. A resize that
+    /// does not change it needs no decode at all.
     private var loadedTarget = 0
+    /// The texture on screen, kept so an ⌥-drag can use it rather than decoding again on
+    /// mouse-down.
+    private var backingImage: CGImage?
+    /// The decode in flight, off the main thread. Internal so tests can wait for it.
+    private(set) var decodeTask: Task<Void, Never>?
     /// The pending reload for a gesture that has not settled yet.
     private var reloadTask: Task<Void, Never>?
     /// Set while a live resize defers its reload to `viewDidEndLiveResize`.
@@ -38,7 +43,16 @@ final class PinPanel: NonActivatingPanel {
         /// How many times the capture has actually been decoded from disk. The point of
         /// the debounce is that this stays small however much the pin is resized.
         private(set) var decodeCount = 0
+        /// Decodes on the calling thread instead, for the memory-budget test: it measures
+        /// the textures pins hold, and awaiting background decodes would let every other
+        /// test suite run — and allocate — in the middle of the measurement.
+        static var decodesInlineForTesting = false
     #endif
+
+    /// Whether a settle-then-reload is waiting, for tests.
+    var hasPendingReload: Bool {
+        reloadTask != nil
+    }
 
     /// Fired for the menu commands the pin does not implement itself.
     var onCopy: (() -> Void)?
@@ -56,7 +70,9 @@ final class PinPanel: NonActivatingPanel {
     var onClose: (() -> Void)?
     private var hoverBar: PinHoverBar?
 
-    init?(fileURL: URL, scale: CGFloat) {
+    /// - Parameter frame: where a restored pin was, so the panel is built at its final
+    ///   size and the first decode is the only one. Nil shows the capture at 1:1.
+    init?(fileURL: URL, scale: CGFloat, frame initialFrame: CGRect? = nil) {
         guard let pixelSize = ThumbnailLoader().pixelSize(for: fileURL) else { return nil }
         self.fileURL = fileURL
         self.pixelSize = pixelSize
@@ -64,9 +80,11 @@ final class PinPanel: NonActivatingPanel {
         // Shown at captured size: pixels divided by the display scale gives points.
         let width = CGFloat(pixelSize.width) / scale
         let height = CGFloat(pixelSize.height) / scale
+        let contentRect = initialFrame.flatMap { $0.isEmpty ? nil : $0 }
+            ?? CGRect(x: 0, y: 0, width: width, height: height)
 
         super.init(
-            contentRect: CGRect(x: 0, y: 0, width: width, height: height),
+            contentRect: contentRect,
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
@@ -86,7 +104,7 @@ final class PinPanel: NonActivatingPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.frame = CGRect(x: 0, y: 0, width: width, height: height)
+        imageView.frame = CGRect(origin: .zero, size: contentRect.size)
         imageView.autoresizingMask = [.width, .height]
 
         let container = PinContentView(frame: imageView.frame)
@@ -119,6 +137,9 @@ final class PinPanel: NonActivatingPanel {
     func dismiss() {
         reloadTask?.cancel()
         reloadTask = nil
+        decodeTask?.cancel()
+        decodeTask = nil
+        backingImage = nil
         hoverBar?.removeFromSuperview()
         hoverBar = nil
         contentView = nil
@@ -148,14 +169,43 @@ final class PinPanel: NonActivatingPanel {
             return
         }
 
-        guard let image = loader.thumbnail(for: fileURL, maxPixelSize: target) else {
-            logger.error("Could not load a backing image for \(self.fileURL.lastPathComponent, privacy: .public)")
-            return
-        }
+        // Claimed now, so a resize while the decode runs does not start a second one for
+        // the same size.
+        let previousTarget = loadedTarget
         loadedTarget = target
         #if DEBUG
             decodeCount += 1
         #endif
+        decodeTask?.cancel()
+        let loader = loader
+        let url = fileURL
+        #if DEBUG
+            if Self.decodesInlineForTesting {
+                decodeTask = nil
+                applyDecoded(loader.thumbnail(for: url, maxPixelSize: target), previousTarget: previousTarget)
+                return
+            }
+        #endif
+        // Off the main thread: a pin restored at launch, or zoomed on a 5K capture, is an
+        // ImageIO decode of tens of megabytes of PNG. The texture already on screen (or
+        // the empty panel) stays until the new one is ready.
+        decodeTask = Task { [weak self] in
+            let image = await Task.detached(priority: .userInitiated) {
+                loader.thumbnail(for: url, maxPixelSize: target)
+            }.value
+            guard let self, !Task.isCancelled, loadedTarget == target else { return }
+            decodeTask = nil
+            applyDecoded(image, previousTarget: previousTarget)
+        }
+    }
+
+    private func applyDecoded(_ image: CGImage?, previousTarget: Int) {
+        guard let image else {
+            loadedTarget = previousTarget
+            logger.error("Could not load a backing image for \(self.fileURL.lastPathComponent, privacy: .public)")
+            return
+        }
+        backingImage = image
         imageView.image = NSImage(cgImage: image, size: frame.size)
     }
 
@@ -210,19 +260,28 @@ final class PinPanel: NonActivatingPanel {
         }
     }
 
-    /// Double-click returns the pin to 100% (docs/03 §4).
     /// Starts a file-promise drag of the pinned capture (docs/03 §6).
+    ///
+    /// The drag image is the texture the pin already shows, scaled to the same 256 pt the
+    /// drag used to decode for itself — on mouse-down, on the main thread.
     func beginFileDrag(from view: NSView, event: NSEvent) {
         dragController.beginDrag(
             from: view,
             event: event,
             payload: .file(at: fileURL),
-            image: ThumbnailLoader().thumbnail(for: fileURL, maxPixelSize: 256).map {
-                NSImage(cgImage: $0, size: .zero)
-            }
+            image: backingImage.map { NSImage(cgImage: $0, size: Self.dragImageSize(for: $0)) }
         )
     }
 
+    private static let dragImageLongestEdge: CGFloat = 256
+
+    static func dragImageSize(for image: CGImage) -> NSSize {
+        let longest = CGFloat(max(image.width, image.height, 1))
+        let factor = min(1, dragImageLongestEdge / longest)
+        return NSSize(width: CGFloat(image.width) * factor, height: CGFloat(image.height) * factor)
+    }
+
+    /// Double-click returns the pin to 100% (docs/03 §4).
     func resetZoom() {
         setZoom(1)
     }
@@ -385,79 +444,5 @@ final class PinPanel: NonActivatingPanel {
         badge.layer?.cornerRadius = 4
         contentView?.addSubview(badge)
         clickThroughBadge = badge
-    }
-}
-
-/// The pin's content view, which turns AppKit events into panel commands.
-@MainActor
-final class PinContentView: NSView {
-    weak var panel: PinPanel?
-
-    override var acceptsFirstResponder: Bool {
-        true
-    }
-
-    /// The end of a corner drag: now the sharp texture is worth fetching (docs/07 M9).
-    override func viewDidEndLiveResize() {
-        super.viewDidEndLiveResize()
-        panel?.reloadBackingImageIfNeeded()
-        panel?.onGeometryChanged?()
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach { removeTrackingArea($0) }
-        addTrackingArea(NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        ))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        panel?.setHoverBarVisible(true)
-        super.mouseEntered(with: event)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        panel?.setHoverBarVisible(false)
-        super.mouseExited(with: event)
-    }
-
-    override func scrollWheel(with event: NSEvent) {
-        panel?.handleScroll(event)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 {
-            panel?.resetZoom()
-        } else if event.modifierFlags.contains(.option) {
-            // ⌥-drag hands the file to another app; a plain drag still moves the pin,
-            // which is the gesture people already know (docs/03 §6, docs/09 U0.1).
-            panel?.beginFileDrag(from: self, event: event)
-        } else {
-            super.mouseDown(with: event)
-        }
-    }
-
-    override func otherMouseDown(with event: NSEvent) {
-        if event.buttonNumber == 2 {
-            panel?.closeFromMiddleClick()
-            return
-        }
-        super.otherMouseDown(with: event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
-        switch event.keyCode {
-        case 123: panel?.nudge(dx: -step, dy: 0)
-        case 124: panel?.nudge(dx: step, dy: 0)
-        case 125: panel?.nudge(dx: 0, dy: -step)
-        case 126: panel?.nudge(dx: 0, dy: step)
-        case 53: panel?.onClose?()
-        default: super.keyDown(with: event)
-        }
     }
 }

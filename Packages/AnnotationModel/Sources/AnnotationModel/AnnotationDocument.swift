@@ -103,6 +103,19 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         baseImage.visibleBounds = BaseImageReference.validated(rect, size: baseImage.size)
     }
 
+    /// The same document, drawn at a different pixel density.
+    ///
+    /// For on-screen previews only (docs/10 R1.5): the editor renders the camera and the
+    /// progressive blur through the export path, and at Fit on a 5K capture most of those
+    /// pixels are thrown away by the view. Everything in the document is in points, so a
+    /// lower `scale` simply draws the same picture with fewer pixels. Deliberately
+    /// unclamped — a 1× capture seen at 30% wants a scale below one — and never saved.
+    public func atPixelScale(_ scale: CGFloat) -> AnnotationDocument {
+        var copy = self
+        copy.baseImage.scale = max(scale, 0.01)
+        return copy
+    }
+
     /// The canvas the export will produce: beautify's frame, or the crop, or the image.
     ///
     /// A perspective camera without beautify still grows the stage to the union of the

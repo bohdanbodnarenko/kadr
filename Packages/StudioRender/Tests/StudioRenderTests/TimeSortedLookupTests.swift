@@ -161,6 +161,7 @@ struct TimeSortedLookupTests {
         private let source: CIImage
         private let duration: TimeInterval
         private static let frames = 200
+        private static let goldenFraction = (5.0.squareRoot() - 1) / 2
 
         init(sampleCount: Int) throws {
             let size = CGSize(width: 320, height: 180)
@@ -201,14 +202,18 @@ struct TimeSortedLookupTests {
 
         /// Seconds per frame, sampled across the whole recording so the lookups cannot be
         /// helped by every query landing at the same place.
+        ///
+        /// Spread by the golden ratio rather than evenly. Evenly spaced samples alias with
+        /// the evenly spaced clicks: on the long recording every other sample landed exactly
+        /// on a press, on the short one about one in seven did, so the long one drew three
+        /// times as many ripples and the "per-frame cost" was really a ripple count. That
+        /// hid behind the caption, which used to be drawn on every frame; once captions were
+        /// cached the ripple was most of the bill and the ratio crept past two.
         func measure() -> Double {
             let start = ContinuousClock.now
             for step in 0 ..< Self.frames {
-                _ = composer.frame(
-                    at: duration * Double(step) / Double(Self.frames),
-                    source: source,
-                    camera: nil
-                )
+                let spread = (Double(step) * Self.goldenFraction).truncatingRemainder(dividingBy: 1)
+                _ = composer.frame(at: duration * spread, source: source, camera: nil)
             }
             let elapsed = ContinuousClock.now - start
             return Double(elapsed.components.attoseconds) / 1e18 / Double(Self.frames)

@@ -1,4 +1,5 @@
 import AnnotationModel
+import AnnotationRender
 import AppKit
 import EditorUI
 import os
@@ -231,7 +232,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         do {
             let controller = try EditorWindowController(fileURL: url)
             controller.onClose = { [weak self, weak controller] in
-                self?.windows.removeAll { $0 === controller }
+                guard let self else { return }
+                windows.removeAll { $0 === controller }
+                // Each window's redaction previews leave with it; what the windows shared
+                // (decoded inserts) goes once none is left to use it.
+                if windows.isEmpty {
+                    AnnotationRenderCaches.removeAll()
+                }
             }
             windows.append(controller)
             controller.show()

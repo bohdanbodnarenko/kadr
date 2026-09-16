@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreVideo
 import Foundation
+import Shared
 import Testing
 @testable import RecordingCore
 
@@ -116,6 +117,38 @@ struct FrameCompositorTests {
         #expect(pixel(buffer, x: x, y: drawn) != .untouched)
         // The other end of the frame is untouched, which is what pins the position down.
         #expect(pixel(buffer, x: x, y: clear) == .untouched)
+    }
+
+    /// A caption lingers for dozens of frames; shaping it on each of them was a font, an
+    /// attributed string and a line per frame for the same few characters (PRD §8).
+    @Test("A caption is shaped once per distinct text, size and appearance", arguments: [
+        (["⌘C", "⌘C", "⌘C"], [OverlayChromeAppearance.dark, .dark, .dark], 1),
+        (["⌘C", "⌘V", "⌘V"], [OverlayChromeAppearance.dark, .dark, .dark], 2),
+        (["⌘C", "⌘C", "⌘C"], [OverlayChromeAppearance.dark, .light, .light], 2),
+        (["⌘C", "⌘V", "⌘C"], [OverlayChromeAppearance.dark, .dark, .dark], 3)
+    ])
+    func captionIsShapedOnce(texts: [String], appearances: [OverlayChromeAppearance], shaped: Int) {
+        let compositor = FrameCompositor()
+        for (text, appearance) in zip(texts, appearances) {
+            for _ in 0 ..< 10 {
+                compositor.draw(
+                    RecordingOverlay(keystrokes: text, keystrokeAppearance: appearance),
+                    into: makeBuffer()
+                )
+            }
+        }
+        #expect(compositor.keystrokeLines.linesShaped == shaped)
+    }
+
+    @Test("The cached caption draws exactly what a fresh one does")
+    func cachedCaptionMatchesFresh() {
+        let overlay = RecordingOverlay(keystrokes: "⌘⇧4")
+        let compositor = FrameCompositor()
+        let first = makeBuffer()
+        compositor.draw(overlay, into: first)
+        let second = makeBuffer()
+        compositor.draw(overlay, into: second)
+        #expect(bytes(first) == bytes(second))
     }
 
     @Test("The webcam picture is not drawn upside down")

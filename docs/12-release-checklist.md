@@ -58,6 +58,7 @@ Hardware and OS (docs/11 S3.1):
 - [ ] macOS 14 (the floor)
 - [ ] macOS 15
 - [ ] macOS 26
+- [ ] Overlapping windows on a light wallpaper, macOS 14: window and display captures still show drop shadows (docs/16 CAP-11). Verify.
 
 Displays — this is where the coordinate bugs live:
 

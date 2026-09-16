@@ -53,7 +53,7 @@ struct EditorCanvasHost: NSViewRepresentable {
         _ = zoomToFit
         context.coordinator.session = session
         context.coordinator.isCropping = isCropping
-        context.coordinator.syncCanvasIfNeeded(model: model)
+        context.coordinator.syncCanvasIfNeeded()
         context.coordinator.apply()
     }
 
@@ -74,9 +74,6 @@ struct EditorCanvasHost: NSViewRepresentable {
         weak var scrollView: EditorCanvasScrollView?
         weak var session: EditorCanvasSession?
         var isCropping = false
-        /// Last document the canvas was told about, so a SwiftUI body refresh that only
-        /// touched inspector memory does not tear down every annotation layer.
-        private var syncKey: CanvasSyncKey?
 
         /// Avoid echoing a magnification we just wrote back through the pinch callback.
         private var isApplying = false
@@ -121,16 +118,14 @@ struct EditorCanvasHost: NSViewRepresentable {
             magnifyEndObserver = nil
         }
 
-        func syncCanvasIfNeeded(model: EditorDocumentModel) {
-            let key = CanvasSyncKey(
-                commands: model.document.commands,
-                selection: model.document.selection,
-                candidates: model.redactionCandidates,
-                tool: model.tool
-            )
-            guard syncKey != key else { return }
-            syncKey = key
-            canvas?.documentChangedExternally()
+        /// Brings the canvas up to date with the model, when it is not already.
+        ///
+        /// The canvas keeps the key itself — a revision counter rather than a copy of the
+        /// command list — so its own mouse-up sync and this one do not both run for the
+        /// same change, and a SwiftUI refresh that only touched inspector memory does not
+        /// touch a single layer.
+        func syncCanvasIfNeeded() {
+            canvas?.syncWithModelIfNeeded()
         }
 
         func apply() {
@@ -319,13 +314,4 @@ final class EditorCanvasScrollView: NSScrollView {
         // scrolling back to it afterwards.
         zoom(by: step, at: contentView.convert(event.locationInWindow, from: nil))
     }
-}
-
-/// What the canvas actually draws. Inspector style memory is not in here, so picking a
-/// colour for the *next* stroke does not rebuild every layer already on screen.
-private struct CanvasSyncKey: Equatable {
-    var commands: [AnnotationCommand]
-    var selection: Set<AnnotationID>
-    var candidates: [RedactionCandidate]
-    var tool: EditorTool
 }

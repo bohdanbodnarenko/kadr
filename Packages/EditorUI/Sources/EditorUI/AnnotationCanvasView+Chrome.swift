@@ -36,6 +36,7 @@ extension AnnotationCanvasView {
     /// faster than the detail anybody can see, and the base image is a bitmap that has no
     /// more detail to give in any case.
     func updateContentsScale(forMagnification magnification: CGFloat) {
+        refreshChromeDensityIfNeeded()
         let backing = window?.backingScaleFactor ?? 2
         let scale = min(max(backing * magnification, backing), backing * 4)
         guard abs(scale - lastContentsScale) > 0.01 else { return }
@@ -48,6 +49,16 @@ extension AnnotationCanvasView {
             parent.contentsScale = scale
             applyContentsScale(scale, to: parent.sublayers)
         }
+    }
+
+    /// The offscreen render was made for the zoom at the time. Zooming in past what it holds
+    /// asks for a sharper one, once the zoom settles; zooming out keeps it, since it already
+    /// has the pixels.
+    private func refreshChromeDensityIfNeeded() {
+        guard needsOffscreenRender, chromeRenderedScale > 0,
+              desiredChromePixelScale > chromeRenderedScale * 1.2
+        else { return }
+        chromeSettle.touch()
     }
 
     /// Depth-first, because a composed annotation is a layer with layers inside it.
@@ -70,6 +81,9 @@ extension AnnotationCanvasView {
     func updateExpensiveChrome() {
         guard needsOffscreenRender else {
             chromeSettle.cancel()
+            chromeRenderTask?.cancel()
+            chromeRenderTask = nil
+            chromeRenderedScale = 0
             cameraLayer.isHidden = true
             cameraLayer.contents = nil
             contentHost.isHidden = false
@@ -92,7 +106,7 @@ extension AnnotationCanvasView {
     }
 
     /// Whether the chrome needs a full offscreen render rather than the plain layer tree.
-    private var needsOffscreenRender: Bool {
+    var needsOffscreenRender: Bool {
         model.document.cameraGeometry != nil || model.document.progressiveBlur != nil
     }
 
@@ -105,6 +119,11 @@ extension AnnotationCanvasView {
     /// The stretched preview already on screen is the right thing to show meanwhile: it is
     /// the previous render at the wrong scale, which is a far better guess than a blank
     /// canvas and is what the settle pattern puts there anyway.
+    ///
+    /// Rendered at the density the canvas is seen at, not at the capture's: at Fit on a 5K
+    /// capture most of a full-size render is thrown away by Core Animation. A newer render
+    /// cancels the one in flight, and the preview draws a fixed pixelate seed so a mosaic
+    /// holds still from one render to the next.
     func renderExpensiveChrome() {
         guard needsOffscreenRender else { return }
 
@@ -115,18 +134,50 @@ extension AnnotationCanvasView {
         let generation = chromeRenderGeneration
         let document = model.document
         let image = baseImage
+        let pixelScale = desiredChromePixelScale
+        // Recorded now rather than on arrival, so the zoom check does not ask again for a
+        // render that is already on its way.
+        chromeRenderedScale = pixelScale
+        let seed = Self.chromePreviewSeed
+        let signposter = signposter
 
-        Task.detached(priority: .userInitiated) {
-            let rendered = try? AnnotationExportRenderer().render(
+        chromeRenderTask?.cancel()
+        chromeRenderTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard !Task.isCancelled else { return }
+            let interval = signposter.beginInterval("editor.chrome.render")
+            let rendered = try? AnnotationExportRenderer().renderPreview(
                 baseImage: image,
                 document: document,
-                applyOrientation: false
+                pixelScale: pixelScale,
+                randomSeed: seed
             )
-            await MainActor.run { [weak self] in
-                guard let self, generation == chromeRenderGeneration else { return }
-                applyRenderedChrome(rendered)
-            }
+            signposter.endInterval("editor.chrome.render", interval)
+            guard !Task.isCancelled else { return }
+            await self?.finishChromeRender(rendered, generation: generation)
         }
+    }
+
+    /// Any fixed value: the preview only needs a mosaic that does not reshuffle.
+    nonisolated static let chromePreviewSeed: UInt64 = 0x4B61_6472_5072_6576
+
+    /// The pixels per point worth rendering the offscreen chrome at right now, rounded up
+    /// to a quarter so small zoom changes reuse the render.
+    var desiredChromePixelScale: CGFloat {
+        let exact = AnnotationExportRenderer.previewPixelScale(
+            imageScale: imageScale,
+            magnification: enclosingScrollView?.magnification ?? 1,
+            backingScale: window?.backingScaleFactor ?? 2
+        )
+        return min((exact * 4).rounded(.up) / 4, imageScale)
+    }
+
+    private func finishChromeRender(_ rendered: CGImage?, generation: UInt64) {
+        guard generation == chromeRenderGeneration else { return }
+        chromeRenderTask = nil
+        if rendered == nil {
+            chromeRenderedScale = 0
+        }
+        applyRenderedChrome(rendered)
     }
 
     private func applyRenderedChrome(_ rendered: CGImage?) {
@@ -409,6 +460,9 @@ extension AnnotationCanvasView {
 /// re-lay the canvas on every mouse-move (that was the jump).
 struct CanvasLayoutKey: Equatable {
     var canvas: CGSize
+    /// Whether the capture has a measured transparent margin: the plain canvas drops its
+    /// hairline for one, and the measurement can now arrive after the window opens.
+    var hasVisibleBounds: Bool
     var content: CGRect
     var imageSpace: CGRect
     var beautify: BeautifySpec?
@@ -423,6 +477,7 @@ extension AnnotationCanvasView {
             let bounds = model.document.baseImage.bounds
             return CanvasLayoutKey(
                 canvas: bounds.size,
+                hasVisibleBounds: model.document.baseImage.visibleBounds != nil,
                 content: bounds,
                 imageSpace: CGRect(origin: .zero, size: bounds.size),
                 beautify: nil,
@@ -433,6 +488,7 @@ extension AnnotationCanvasView {
         }
         return CanvasLayoutKey(
             canvas: model.document.canvasRect.size,
+            hasVisibleBounds: model.document.baseImage.visibleBounds != nil,
             content: model.document.contentRect,
             imageSpace: model.document.imageSpaceFrame,
             beautify: model.document.beautify,

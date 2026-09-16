@@ -221,9 +221,7 @@ extension AppDelegate {
             cancel: { [weak self] in self?.recording.cancel() },
             restart: { [weak self] in self?.recording.restart() },
             audioLevel: recording.audioMeter.peak,
-            microphoneIsSilent: recording.settings.recordsMicrophone
-                && recording.elapsed > 2
-                && recording.microphonePeakMax < AudioMeter.silence,
+            microphoneIsSilent: recording.microphoneIsSilent,
             notice: recording.liveNotice,
             isTransitioning: recording.isTransitioning
         )

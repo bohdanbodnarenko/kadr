@@ -164,7 +164,15 @@ public struct StudioAudioExporter: Sendable {
             throw ExportError.writingFailed("Could not start an audio writer.")
         }
         writer.add(input)
-        try await pump(output, from: reader, into: input, writer: writer, destination: destination)
+        // Through the same gate as the video export: the pump blocks a pool thread too.
+        try await ExportGate.shared.acquire()
+        do {
+            try await pump(output, from: reader, into: input, writer: writer, destination: destination)
+            await ExportGate.shared.release()
+        } catch {
+            await ExportGate.shared.release()
+            throw error
+        }
     }
 
     private static func pcmSettings(channels: Int) -> [String: Any] {

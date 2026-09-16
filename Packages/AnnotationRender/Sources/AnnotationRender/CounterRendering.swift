@@ -69,8 +69,30 @@ enum CounterRendering {
 
 /// Editing-time badge: redraws the digits whenever the radius changes, so a resize does
 /// not leave a stale number sitting on a growing disc.
+///
+/// And only then — or when the number, the colours or the density change. Dragging a badge
+/// is a pure translation, and redrawing CoreText for it on every mouse-move was waste.
 public final class CounterBadgeLayer: CALayer {
     private var spec: CounterSpec?
+    /// What the backing store currently shows, or nil before the first draw.
+    private var drawnKey: DrawKey?
+    /// Redraws so far. Internal, for the tests that pin the early return.
+    private(set) var displayCount = 0
+
+    /// The spec with its position taken out, plus the size and density it is drawn at.
+    struct DrawKey: Equatable {
+        var spec: CounterSpec
+        var size: CGSize
+        var scale: CGFloat
+
+        init(spec: CounterSpec, size: CGSize, scale: CGFloat) {
+            var normalized = spec
+            normalized.center = .zero
+            self.spec = normalized
+            self.size = size
+            self.scale = scale
+        }
+    }
 
     override public init() {
         super.init()
@@ -91,8 +113,18 @@ public final class CounterBadgeLayer: CALayer {
     func apply(_ spec: CounterSpec) {
         self.spec = spec
         frame = CounterRendering.frame(spec)
+        let key = DrawKey(spec: spec, size: bounds.size, scale: contentsScale)
+        guard key != drawnKey || needsDisplay() else { return }
         setNeedsDisplay()
         displayIfNeeded()
+    }
+
+    override public func display() {
+        if let spec {
+            drawnKey = DrawKey(spec: spec, size: bounds.size, scale: contentsScale)
+        }
+        displayCount += 1
+        super.display()
     }
 
     override public func draw(in ctx: CGContext) {

@@ -163,6 +163,34 @@ struct ImageRenderingTests {
         #expect(first === second)
     }
 
+    @Test("A rebuild asking for the same bytes again does not hash them again")
+    func sameBufferIsNotRehashed() throws {
+        let cache = ImageCache()
+        let png = makePNG()
+        let first = try #require(cache.image(for: png))
+        let copyOfValue = png // Same buffer: `Data` is copy-on-write.
+        let second = try #require(cache.image(for: copyOfValue))
+        #expect(first === second)
+        #expect(cache.hashCount == 1)
+
+        // Equal bytes in a different buffer are hashed, and still find the same decode.
+        let rebuilt = Data(Array(png))
+        let third = try #require(cache.image(for: rebuilt))
+        #expect(third === first)
+        #expect(cache.hashCount == 2)
+    }
+
+    @Test("Clearing the cache forgets decodes")
+    func removeAllForgets() throws {
+        let cache = ImageCache()
+        let png = makePNG()
+        let first = try #require(cache.image(for: png))
+        cache.removeAll()
+        let second = try #require(cache.image(for: png))
+        #expect(first !== second)
+        #expect(cache.hashCount == 2)
+    }
+
     @Test("Two different PNGs of the same size are not returned as each other")
     func distinctImagesAreNotAliased() throws {
         // Darwin's Data.hashValue hashes a bounded prefix. Two same-size PNGs share a

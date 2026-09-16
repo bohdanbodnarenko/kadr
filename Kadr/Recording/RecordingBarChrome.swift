@@ -256,6 +256,17 @@ struct RecordingBarFilledCircleButton: View {
 
 /// Live loudness while recording (CleanShot §13.3). No animation of its own — the
 /// control bar already refreshes from the sample buffers.
+/// The meter bound to the live level, as its own view so the 10 Hz level redraws only
+/// this and not the transport around it (PRD §8).
+struct RecordingLiveAudioMeter: View {
+    let meter: RecordingAudioMeterModel
+    var compact: Bool = false
+
+    var body: some View {
+        RecordingAudioMeter(level: meter.level, compact: compact)
+    }
+}
+
 struct RecordingAudioMeter: View {
     var level: Float
     /// Tighter bars for the notch island so hover only needs a small width grow.

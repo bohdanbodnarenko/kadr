@@ -18,7 +18,7 @@ extension StudioTimelineView {
                 .onChanged { value in
                     model.selectedClip = clip.id
                     model.pausePlayback()
-                    let start = model.edit.clips.editedStartTime(ofClipAt: index)
+                    let start = model.editedStart(ofClipAt: index)
                     let raw = start + (isLeading ? 0 : clip.editedDuration) + value.translation.width / scale
                     let time = snapEditedTime(raw, scale: scale)
                     if isLeading {
@@ -45,9 +45,9 @@ extension StudioTimelineView {
         let option = press.modifiers.contains(.option)
         if shift, let index = model.selectedClip.flatMap({ id in
             model.edit.clips.clips.firstIndex(where: { $0.id == id })
-        }) ?? model.clipIndex(at: model.playhead) {
+        }) ?? model.currentClipIndex {
             let clip = model.edit.clips.clips[index]
-            let start = model.edit.clips.editedStartTime(ofClipAt: index)
+            let start = model.editedStart(ofClipAt: index)
             let step = option ? 1.0 : (1.0 / 30.0)
             let delta = Double(frames) * step
             if frames < 0 {
@@ -70,11 +70,9 @@ extension StudioTimelineView {
         if !excludingPlayhead {
             candidates.append(model.playhead)
         }
-        for (index, clip) in model.edit.clips.clips.enumerated() {
-            let start = model.edit.clips.editedStartTime(ofClipAt: index)
-            candidates.append(start)
-            candidates.append(start + clip.editedDuration)
-        }
+        // Every clip boundary, from the model's cached ends: once for the start of the
+        // edit and once per clip end. The loop it replaced summed a prefix per clip.
+        candidates.append(contentsOf: model.clipEnds)
         for cue in model.edit.zooms {
             candidates.append(cue.start)
             candidates.append(cue.end)

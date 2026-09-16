@@ -27,6 +27,9 @@ extension AppDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         automationListener?.stop()
+        statusItemController?.stopObservingMenuBarVisibility()
+        // Pin moves are saved on a debounce; the last one must not be lost to ⌘Q.
+        areaCaptureStorage?.pins.flushPendingSave()
         desktopHygiene.prepareForTermination()
     }
 

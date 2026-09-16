@@ -218,6 +218,78 @@ public struct SessionDocument: Sendable {
         return stored
     }
 
+    // MARK: - Transcript validation
+
+    /// Where the footage's remembered content hash lives.
+    ///
+    /// Beside the transcript rather than inside it: the transcript is written by the
+    /// transcriber and describes words, and this describes a file on disk. Losing it costs
+    /// one re-hash and nothing else. Listed in `RecordingSession.allURLs`, so deleting or
+    /// measuring a session accounts for it.
+    public var audioHashCacheURL: URL {
+        session.directory.appendingPathComponent("transcript.fingerprint.json")
+    }
+
+    public func audioHashCache() -> AudioContentHashCache? {
+        read(AudioContentHashCache.self, from: audioHashCacheURL)
+    }
+
+    public func write(_ cache: AudioContentHashCache) throws {
+        try write(cache, to: audioHashCacheURL)
+    }
+
+    /// The footage's content hash, reusing the remembered one when the file is unchanged.
+    ///
+    /// Blocking and linear in the footage on a miss — call it off the main actor. A file
+    /// whose size, modification time or inode differ from the remembered ones is hashed
+    /// again, so the invalidation is exactly as strict as hashing every time; only the
+    /// cost of proving "nothing changed" goes away.
+    ///
+    /// - Throws: whatever reading the footage throws, including `CancellationError`.
+    public func audioContentHash() throws -> String {
+        let url = session.screenURL
+        let before = AudioFileIdentity(fileAt: url)
+        if let before, let cached = audioHashCache(), cached.identity == before, !cached.hash.isEmpty {
+            return cached.hash
+        }
+        let hash = try AudioContentHash.hash(fileAt: url)
+        // Only remembered if the file did not change underneath the read: a hash of a file
+        // that was being written is a hash of neither version.
+        if let before, AudioFileIdentity(fileAt: url) == before {
+            do {
+                try write(AudioContentHashCache(identity: before, hash: hash))
+            } catch {
+                logger.error("Could not remember the footage hash: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        return hash
+    }
+
+    /// The persisted transcript, if it still describes this footage.
+    ///
+    /// The same rule as `transcript(matchingHash:)` with the footage's own hash: a transcript
+    /// without a recorded hash is trusted, and a hash that cannot be computed does not
+    /// discard one. Skips hashing entirely when there is no transcript to validate, which is
+    /// every recording nobody has transcribed.
+    ///
+    /// - Throws: `CancellationError` if the calling task is cancelled mid-hash.
+    public func transcriptMatchingFootage() throws -> Transcript? {
+        guard let stored = read(Transcript.self, from: session.transcriptURL) else { return nil }
+        guard !stored.audioContentHash.isEmpty else { return stored }
+        let hash: String?
+        do {
+            hash = try audioContentHash()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            hash = nil
+        }
+        if let hash, stored.audioContentHash != hash {
+            return nil
+        }
+        return stored
+    }
+
     /// The edit to open: the draft if there is one, otherwise the committed edit.
     ///
     /// The draft wins because it is newer by construction — it is what the user was doing

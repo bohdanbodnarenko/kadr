@@ -10,22 +10,16 @@ import StudioSession
 /// so the only way to see whether an edit worked was to export it and wait minutes for the
 /// answer.
 ///
-/// Playback is a *preview*, and deliberately not a promise of exactness. While it runs the
-/// frame generator is allowed a tenth of a second of slack so it can keep up, and frames are
-/// dropped rather than queued when it cannot. The moment it pauses, the exact frame is drawn
-/// again — so "the preview is the export" still holds everywhere it is being relied on to.
-/// The soundtrack plays from the same clip composition the export muxes, so a cut or an
-/// imported file is heard here rather than only in the finished movie.
+/// Playback is an `AVPlayer` over the same clip composition the export reads, composed by
+/// the same frame builder (`StudioPlaybackController`). The player is the only clock: the
+/// playhead follows it while it rolls, and the soundtrack is the composition's own audio, so
+/// picture and sound cannot drift apart. Paused, every playhead move is a zero-tolerance
+/// seek — so "the preview is the export" holds on every frame somebody stops on.
 @MainActor
 public extension StudioDocumentModel {
-    /// Whether the edit is playing.
-    var isPlaying: Bool {
-        playbackTask != nil
-    }
-
-    /// Whether the preview currently has a soundtrack rolling.
+    /// Whether the preview is making sound right now.
     var isPreviewAudioPlaying: Bool {
-        previewAudio.isPlaying
+        playback.isAudible
     }
 
     func togglePlayback() {
@@ -37,63 +31,17 @@ public extension StudioDocumentModel {
     }
 
     func play() {
-        guard !isPlaying, edit.duration > 0 else { return }
-        // Playing from the end means playing from the start. Anything else leaves the user
-        // pressing a play button that visibly does nothing.
-        if playhead >= edit.duration - 0.05 {
-            playhead = 0
-        }
-
-        // Derived from a clock rather than accumulated per tick, so a slow frame costs a
-        // dropped frame and not a drifting playhead — the difference between playback that
-        // is a moment behind and playback whose timing cannot be trusted, which for judging
-        // a cut is the whole point.
-        let from = playhead
-        playbackTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            let origin = ContinuousClock.now
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                await previewAudio.start(from: from, session: session, edit: edit)
-            }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: Self.playbackTick)
-                guard !Task.isCancelled else { return }
-                let elapsed = ContinuousClock.now - origin
-                let seconds = Double(elapsed.components.seconds)
-                    + Double(elapsed.components.attoseconds) / 1e18
-                let next = from + seconds
-                guard next < edit.duration else {
-                    playhead = edit.duration
-                    pausePlayback()
-                    return
-                }
-                playhead = next
-                previewAudio.resync(to: next)
-            }
-        }
+        previewPlayback.play()
     }
 
     func pausePlayback() {
-        playbackTask?.cancel()
-        playbackTask = nil
-        previewAudio.pause()
+        previewPlayback.pause()
     }
 
-    /// Releases the audio decoder. Closing the window has to call this; pausing alone
-    /// leaves an `AVPlayer` item sitting on a composition.
+    /// Releases the player and its decoder. Closing the window has to call this; pausing
+    /// alone leaves an `AVPlayer` item sitting on a composition.
     func stopPlayback() {
-        pausePlayback()
-        previewAudio.stop()
-    }
-
-    /// How often the playhead is moved while playing.
-    ///
-    /// Thirty a second, not sixty: every tick costs a decode and a compose, and past the
-    /// rate the renderer can actually sustain the extra ticks only cancel each other. The
-    /// clock is what keeps time — this is just how often it is read.
-    static var playbackTick: Duration {
-        .milliseconds(33)
+        previewPlayback.stop()
     }
 
     // MARK: - Stepping
@@ -123,5 +71,13 @@ public extension StudioDocumentModel {
     func seekToEnd() {
         pausePlayback()
         playhead = edit.duration
+    }
+}
+
+extension StudioDocumentModel {
+    /// The playback controller, bound to this model.
+    var previewPlayback: StudioPlaybackController {
+        playback.attach(self)
+        return playback
     }
 }

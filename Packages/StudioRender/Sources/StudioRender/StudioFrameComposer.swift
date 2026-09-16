@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import os
+import Shared
 import StudioSession
 
 /// One output frame, built from one source frame (docs/09 U3.2, U3.3).
@@ -38,13 +40,25 @@ public struct StudioFrameComposer: Sendable {
     let wallpaper: CIImage?
     let captionCues: [CaptionCue]
     let cachedCardMask: CIImage?
-    let cachedCardShadow: CIImage?
+    /// The fill behind the card with the card's shadow already on it, rendered once.
+    ///
+    /// Nil when the frame has no card chrome. Everything in it depends on the plan and the
+    /// edit alone, and CoreImage cannot be relied on to remember it between frames — the
+    /// shared context is built with `cacheIntermediates: false` — so leaving it as a recipe
+    /// meant a full-canvas gradient rasterised on the CPU and a full-canvas Gaussian blur on
+    /// the GPU for every frame of every export. Baked here, a frame samples one texture.
+    let cachedGround: CIImage?
+    /// The camera bubble's mask, shadow and hairline, drawn once (docs/09 U3.4).
+    let cachedBubble: BubbleChrome?
+    /// Rasterised captions, so a caption that stays on screen for eighty frames is laid
+    /// out and drawn once rather than eighty times.
+    let overlayCache: OverlayImageCache
 
     /// Opaque black the size of the output, to put letterbox bars on.
-    private var backdrop: CIImage {
-        CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1))
-            .cropped(to: CGRect(origin: .zero, size: plan.outputSize))
-    }
+    ///
+    /// Stored rather than computed: it is a generator and a crop, which is cheap, but it is
+    /// the same generator and crop on every frame and there is no reason to build it twice.
+    private let backdrop: CIImage
 
     /// The most the camera may enlarge an overlay.
     ///
@@ -53,6 +67,12 @@ public struct StudioFrameComposer: Sendable {
     /// like a sticker on the lens. But only so far: at 4× an unclamped system cursor
     /// becomes a dinner plate, which is its own kind of wrong.
     static let maximumOverlayScale: CGFloat = 2.5
+
+    /// Per-frame composition, for PRD §8's export budget (CLAUDE.md rule 8).
+    ///
+    /// Building the recipe is CPU work that happens before CoreImage renders anything, and
+    /// the caption rasterisation inside it is the part that used to dominate.
+    static let signposter = OSSignposter(logger: KadrLog.logger(.recording))
 
     public init(
         plan: StudioRenderPlan,
@@ -85,30 +105,68 @@ public struct StudioFrameComposer: Sendable {
         cursorImages = self.telemetry.cursors.map { CursorArtwork.decode($0.pngData) }
         self.wallpaper = wallpaper.map { CIImage(cgImage: $0) }
         captionCues = CaptionExport.cues(from: transcript, timeline: edit.clips)
+        backdrop = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1))
+            .cropped(to: CGRect(origin: .zero, size: plan.outputSize))
         cachedCardMask = Self.makeCardMask(plan: plan, edit: edit)
-        cachedCardShadow = Self.makeCardShadow(plan: plan, edit: edit)
+        cachedGround = Self.usesCardChrome(plan: plan, edit: edit)
+            ? Self.makeGround(plan: plan, edit: edit, wallpaper: self.wallpaper)
+            : nil
+        cachedBubble = edit.camera.isVisible ? BubbleChrome(plan: plan, camera: edit.camera) : nil
+        overlayCache = OverlayImageCache()
+    }
+
+    /// `source` scaled so its extent is the recording's own pixel size.
+    ///
+    /// Every crop the composer takes is in recorded pixels, because that is what the plan
+    /// and the telemetry speak. A caller that decodes the screen at a lower resolution — a
+    /// preview asking the decoder for a half-size frame, or a compositor handed whatever
+    /// the track's natural size is — would otherwise have its frame cropped as though it
+    /// were full size, and show the top-left quarter of the recording blown up.
+    ///
+    /// A transform rather than a resample: CoreImage folds it into the crop and scale that
+    /// follow, so the only cost is one more matrix in the recipe. The identity when the
+    /// sizes already agree, which is the export's case. Camera frames need none of this —
+    /// the bubble aspect-fills whatever it is given.
+    public func normalizedSource(_ image: CIImage) -> CIImage {
+        let extent = image.extent
+        let target = plan.sourceSize
+        guard !extent.isInfinite, extent.width > 0, extent.height > 0,
+              target.width > 0, target.height > 0,
+              extent.size != target
+        else {
+            return image
+        }
+        return image
+            .transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+            .transformed(by: CGAffineTransform(
+                scaleX: target.width / extent.width,
+                y: target.height / extent.height
+            ))
     }
 
     /// The output frame at `time`.
     ///
+    /// Safe to call from several threads at once — an `AVVideoCompositing` implementation
+    /// does. Everything the composer holds is immutable except its caption cache, which is
+    /// behind a lock.
+    ///
     /// - Parameters:
-    ///   - source: the screen frame, with its extent in recorded pixels.
+    ///   - source: the screen frame. Its extent is normalised to the recording's pixel size
+    ///     first (`normalizedSource(_:)`), so a downscaled decode is fine.
     ///   - camera: the webcam frame, if there is one for this instant.
     public func frame(at time: TimeInterval, source: CIImage, camera: CIImage?) -> CIImage {
-        var image = viewport(at: time, source: source)
+        let interval = Self.signposter.beginInterval("studio.compose")
+        defer { Self.signposter.endInterval("studio.compose", interval) }
+        var image = viewport(at: time, source: normalizedSource(source))
         image = overlays(at: time, over: image)
-        if usesCardChrome {
+        if let ground = cachedGround {
             image = clipToCard(image.composited(over: backdrop))
-            var ground = canvasBackdrop
-            if let shadow = cardShadow {
-                ground = shadow.composited(over: ground)
-            }
             image = image.composited(over: ground)
         }
         if let camera, edit.camera.isVisible {
             image = bubble(camera, over: image)
         }
-        if !usesCardChrome {
+        if cachedGround == nil {
             // Over opaque black, so a letterboxed `.fit` frame has bars rather than holes.
             image = image.composited(over: backdrop)
         }
@@ -329,24 +387,33 @@ public struct StudioFrameComposer: Sendable {
 /// the one place this went wrong before was a hand-rolled buffer passed to `CGContext` as
 /// `data: &bytes` — which is undefined behaviour the moment the call returns (docs/07).
 enum BitmapCanvas {
+    /// Device RGB, as it always has been — made once rather than once per overlay.
+    private static let colourSpace = CGColorSpaceCreateDeviceRGB()
+
+    /// Draws into a fresh, cleared bitmap and hands back the picture.
+    ///
+    /// The context allocates its own memory. The previous version allocated a buffer,
+    /// drew into it and then called `makeImage()`, which copies — two full allocations per
+    /// overlay, and at 4K a full-canvas plate is 33 MB each. A context that owns its
+    /// storage makes an image that shares it copy-on-write, and since the context is
+    /// thrown away straight after, the copy never happens.
     static func image(width: Int, height: Int, action: (CGContext) -> Void) -> CGImage? {
         guard width > 0, height > 0 else { return nil }
-        let bytesPerRow = width * 4
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bytesPerRow * height)
-        defer { buffer.deallocate() }
-        buffer.initialize(repeating: 0, count: bytesPerRow * height)
-
         guard let context = CGContext(
-            data: buffer,
+            data: nil,
             width: width,
             height: height,
             bitsPerComponent: 8,
-            bytesPerRow: bytesPerRow,
-            space: CGColorSpaceCreateDeviceRGB(),
+            bytesPerRow: width * 4,
+            space: colourSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else {
             return nil
         }
+        // Explicitly transparent. CoreGraphics does zero the memory it allocates, but that
+        // is an implementation detail, and a plate with garbage in its corners is the kind
+        // of bug that only shows on somebody else's machine.
+        context.clear(CGRect(x: 0, y: 0, width: width, height: height))
         context.setShouldAntialias(true)
         action(context)
         return context.makeImage()
@@ -379,6 +446,9 @@ enum CursorArtwork {
 public enum StudioRenderContext {
     public static let shared = CIContext(options: [
         .cacheIntermediates: false,
-        .workingColorSpace: CGColorSpace(name: CGColorSpace.sRGB) as Any
+        .workingColorSpace: sRGB
     ])
+
+    /// sRGB, made once. The export used to look it up by name for every frame it wrote.
+    public static let sRGB: CGColorSpace = .init(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
 }

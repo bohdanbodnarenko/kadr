@@ -22,6 +22,8 @@ final class HistoryStripView: NSView {
 
     private var buttons: [NSButton] = []
 
+    /// - Parameter thumbnail: what is already in hand for a record, or nil for a
+    ///   placeholder. Must not decode: this runs while the menu is opening.
     func update(records: [HistoryRecord], thumbnail: (HistoryRecord) -> NSImage?) {
         buttons.forEach { $0.removeFromSuperview() }
         buttons.removeAll()
@@ -47,6 +49,13 @@ final class HistoryStripView: NSView {
             buttons.append(button)
         }
         needsLayout = true
+    }
+
+    /// Swaps a placeholder for the real thumbnail once it has been decoded off the main
+    /// thread (docs/10 R2.4).
+    func setThumbnail(_ image: NSImage, for id: UUID) {
+        let identifier = NSUserInterfaceItemIdentifier(id.uuidString)
+        buttons.first { $0.identifier == identifier }?.image = image
     }
 
     override func layout() {

@@ -327,16 +327,48 @@ public struct StudioRootView: View {
 
     /// A percent on the Dock icon so an export still reports after the window is covered.
     static func updateDockProgress(_ progress: Double?) {
+        StudioDockProgress.update(progress)
+    }
+}
+
+/// The Dock tile's export progress (docs/16 STU-C6).
+///
+/// One drawing view, reused, and the tile touched only when the whole percent changes. It
+/// used to build a new `NSView`, install it and force a tile `display()` on every progress
+/// report — which during a render is every frame.
+@MainActor
+enum StudioDockProgress {
+    private static var view: DockProgressView?
+    private static var shownPercent: Int?
+
+    static func update(_ progress: Double?) {
         let tile = NSApp.dockTile
-        if let progress {
-            let bar = DockProgressView(progress: progress)
-            bar.frame = NSRect(x: 0, y: 0, width: 128, height: 128)
-            tile.contentView = bar
-            tile.badgeLabel = "\(Int((progress * 100).rounded()))"
-        } else {
+        guard let progress else {
+            guard view != nil || shownPercent != nil else { return }
+            view = nil
+            shownPercent = nil
             tile.contentView = nil
             tile.badgeLabel = nil
+            tile.display()
+            return
         }
+        let percent = Int((min(max(progress, 0), 1) * 100).rounded())
+        guard percent != shownPercent else { return }
+        shownPercent = percent
+        let bar: DockProgressView
+        if let view {
+            bar = view
+        } else {
+            bar = DockProgressView(progress: progress)
+            bar.frame = NSRect(x: 0, y: 0, width: 128, height: 128)
+            view = bar
+        }
+        bar.progress = progress
+        if tile.contentView !== bar {
+            tile.contentView = bar
+        }
+        bar.needsDisplay = true
+        tile.badgeLabel = "\(percent)"
         tile.display()
     }
 }

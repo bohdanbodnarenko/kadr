@@ -279,24 +279,73 @@ struct StudioSpeechTests {
         #expect(!studio.pendingCuts.isEmpty)
     }
 
+    /// The transcript is validated after the window opens, not before (docs/11 S2): the
+    /// check hashes the whole recording, which used to block the main thread for seconds.
     @Test("A persisted transcript is reused on reopen")
-    func transcriptPersists() throws {
+    func transcriptPersists() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder)
-        let transcript = Transcript(
+        let transcript = try Transcript(
             words: [TranscriptWord(text: "Hello", start: 0, end: 1)],
-            audioContentHash: (try? AudioContentHash.hash(fileAt: studio.session.screenURL)) ?? ""
+            audioContentHash: AudioContentHash.hash(fileAt: studio.session.screenURL)
         )
         try studio.document.write(transcript)
         let reopened = try #require(StudioDocumentModel(session: studio.session, transcriber: StubTranscriber(
             transcript: Transcript()
         )))
+        await reopened.transcriptLoaded()
         #expect(reopened.transcript?.words.first?.text == "Hello")
+        #expect(reopened.document.audioHashCache() != nil, "the footage hash was not remembered")
+    }
+
+    @Test("A transcript of different footage is not loaded")
+    func staleTranscriptIsDropped() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        try studio.document.write(Transcript(
+            words: [TranscriptWord(text: "Hello", start: 0, end: 1)],
+            audioContentHash: "not-this-footage"
+        ))
+        let reopened = try #require(StudioDocumentModel(session: studio.session))
+        await reopened.transcriptLoaded()
+        #expect(reopened.transcript == nil)
+        #expect(reopened.chapters.isEmpty)
+    }
+
+    /// Closing mid-check must not leave a transcript appearing on a studio that is gone.
+    @Test("Closing cancels the transcript check")
+    func closingCancelsTheCheck() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        try studio.document.write(Transcript(words: [TranscriptWord(text: "Hello", start: 0, end: 1)]))
+        let reopened = try #require(StudioDocumentModel(session: studio.session))
+        reopened.commitOnClose()
+        await reopened.transcriptLoaded()
+        #expect(reopened.transcript == nil, "a cancelled check still delivered")
+    }
+
+    /// Tidy Speech finishing first wins: the stored transcript is older by construction.
+    @Test("A fresh transcript is not replaced by the stored one")
+    func freshTranscriptWins() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Fresh", start: 0, end: 0.4),
+            TranscriptWord(text: "words", start: 0.5, end: 1.9)
+        ]))
+        let studio = try model(in: folder, duration: 2, transcriber: stub)
+        try studio.document.write(Transcript(words: [TranscriptWord(text: "Stale", start: 0, end: 1)]))
+        let reopened = try #require(StudioDocumentModel(session: studio.session, transcriber: stub))
+        await reopened.tidySpeech()
+        await reopened.transcriptLoaded()
+        #expect(reopened.transcript?.words.first?.text == "Fresh")
     }
 
     @Test("Cutting selected words removes that stretch of the recording")
-    func cutWordsRemovesTheRange() throws {
+    func cutWordsRemovesTheRange() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder, duration: 10)
@@ -306,6 +355,7 @@ struct StudioSpeechTests {
             TranscriptWord(text: "world", start: 1.6, end: 2.2)
         ]))
         let reopened = try #require(StudioDocumentModel(session: studio.session))
+        await reopened.transcriptLoaded()
 
         let um = try #require(reopened.transcript?.words.first { $0.text == "um" })
         #expect(reopened.transcriptWordSurvives(um))
@@ -318,7 +368,7 @@ struct StudioSpeechTests {
     }
 
     @Test("Cutting a sentence still removes the whole spoken stretch")
-    func cutSentenceRemovesTheWordsAroundIt() throws {
+    func cutSentenceRemovesTheWordsAroundIt() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder, duration: 10)
@@ -328,6 +378,7 @@ struct StudioSpeechTests {
             TranscriptWord(text: "Next", start: 2.2, end: 2.6)
         ]))
         let reopened = try #require(StudioDocumentModel(session: studio.session))
+        await reopened.transcriptLoaded()
         let hello = try #require(reopened.transcript?.words.first)
 
         reopened.cutSentence(containing: hello)

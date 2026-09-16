@@ -101,6 +101,41 @@ extension RecordingCoordinator {
         return screen.backingScaleFactor
     }
 
+    /// The recorded frame's size in pixels, when it is fixed before the first frame.
+    ///
+    /// Nil for a window: its size is whatever ScreenCaptureKit reports once the stream runs.
+    static func recordedPixelSize(for target: RecordingTarget) -> PixelSize? {
+        let points: CGSize
+        switch target {
+        case let .display(displayID):
+            guard let screen = NSScreen.screens.compactMap(ScreenDescriptor.init)
+                .first(where: { $0.displayID == displayID })
+            else {
+                return nil
+            }
+            points = CGSize(width: screen.frame.width, height: screen.frame.height)
+        case let .region(rect, _):
+            points = CGSize(width: rect.width, height: rect.height)
+        case .window:
+            return nil
+        }
+        let scale = DisplayScale(pointPixelScale(for: target)).factor
+        return PixelSize(
+            width: Int((points.width * scale).rounded()),
+            height: Int((points.height * scale).rounded())
+        )
+    }
+
+    /// The short edge the baked-in webcam is drawn at, in recorded pixels — the size the
+    /// camera is asked for (PRD §8). Mirrors `FrameCompositor`'s bubble geometry.
+    static func webcamPixelSide(recordedPixels: PixelSize?, sizeFraction: CGFloat, fillsFrame: Bool) -> Int? {
+        guard let recordedPixels else { return nil }
+        let shortEdge = CGFloat(min(recordedPixels.width, recordedPixels.height))
+        let side = fillsFrame ? shortEdge : shortEdge * sizeFraction
+        guard side >= 1 else { return nil }
+        return Int(side.rounded())
+    }
+
     /// The dim around a region, or around a window once we know where it is.
     func presentHighlight(for target: RecordingTarget) {
         switch target {

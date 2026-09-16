@@ -28,21 +28,80 @@ public final class StudioDocumentModel {
     public let manifest: CaptureManifest
 
     /// The edit itself. Assigning records undo, so callers change it and nothing else.
+    ///
+    /// Every assignment goes through `replaceEdit(with:)`, which keeps the derived caches
+    /// and the clip under the playhead in step. A `didSet` would say the same thing more
+    /// quietly, but it would also run from inside `init` before the model is whole.
     public private(set) var edit: StudioEdit
+
+    /// The single writer of `edit`.
+    func replaceEdit(with next: StudioEdit) {
+        let clipsChanged = next.clips != edit.clips
+        edit = next
+        if clipsChanged {
+            cachedClipEnds = nil
+            cachedClickTimes = nil
+            cachedEditedTelemetry = nil
+        }
+        refreshPlayheadDerivedState()
+    }
 
     /// Where the playhead is, in edited time.
     ///
-    /// Computed over a stored value rather than a stored property with a `didSet` that
-    /// clamps. `@Observable` rewrites stored properties into computed ones, so a `didSet`
-    /// that assigns back to itself re-enters its own setter and recurses until the stack
-    /// runs out — a crash, not a warning, and one that only appears once the property is
-    /// actually written to.
+    /// Stored on `playheadClock`, not on this model (docs/11 S2). Playback writes it thirty
+    /// times a second, and every SwiftUI body that had read it — the timeline's whole
+    /// geometry, the transport bar, the inspector's form, the transcript — was invalidated
+    /// on every one of those writes, because an `@Observable` property invalidates whoever
+    /// read it. Keeping the time on its own tiny observable means only the leaf views that
+    /// actually draw the time (the needle, the clock label, the active word) re-render per
+    /// tick; everything else reads `currentClipIndex` and friends, which change only when
+    /// the answer does.
+    ///
+    /// Computed rather than a stored property with a `didSet` that clamps. `@Observable`
+    /// rewrites stored properties into computed ones, so a `didSet` that assigns back to
+    /// itself re-enters its own setter and recurses until the stack runs out — a crash, not
+    /// a warning, and one that only appears once the property is actually written to.
     public var playhead: TimeInterval {
-        get { storedPlayhead }
-        set { storedPlayhead = min(max(newValue, 0), edit.duration) }
+        get { playheadClock.time }
+        set {
+            let clamped = min(max(newValue, 0), edit.duration)
+            guard clamped != playheadClock.time else { return }
+            playheadClock.time = clamped
+            refreshPlayheadDerivedState()
+        }
     }
 
-    private var storedPlayhead: TimeInterval = 0
+    /// The observable that owns the playhead and hover times. Views that draw the time
+    /// every frame read it here, so nothing else is invalidated per tick.
+    @ObservationIgnored public let playheadClock = StudioPlayhead()
+
+    /// The index of the clip under the playhead, or nil when there are no clips.
+    ///
+    /// Stored and only written when the index actually changes, so the inspector's form and
+    /// the timeline's selection highlight re-render when the playhead crosses a cut rather
+    /// than on every playback tick.
+    public private(set) var currentClipIndex: Int?
+
+    /// Whether the playhead sits strictly inside the edit, which is when trimming to it
+    /// means anything. Stored for the same reason as `currentClipIndex`.
+    public private(set) var playheadIsInsideEdit = false
+
+    /// Re-derives the state that depends on the playhead, writing only what changed.
+    ///
+    /// The comparisons are the point: an `@Observable` write invalidates readers even when
+    /// the value is equal, so assigning unconditionally here would put the per-tick storm
+    /// straight back.
+    func refreshPlayheadDerivedState() {
+        let time = playheadClock.time
+        let index = clipIndex(at: time)
+        if index != currentClipIndex {
+            currentClipIndex = index
+        }
+        let inside = time > 0 && time < edit.duration
+        if inside != playheadIsInsideEdit {
+            playheadIsInsideEdit = inside
+        }
+    }
 
     /// The selected zoom cue, if one is.
     public var selectedZoom: ZoomCue.ID?
@@ -62,7 +121,17 @@ public final class StudioDocumentModel {
 
     /// Timeline hover, for a skim thumbnail. Does not move the playhead or the main preview
     /// (docs/16 STU-C5, user preference: no seek-on-hover).
-    public var hoverPreviewTime: TimeInterval?
+    ///
+    /// Forwarded to `playheadClock` for the same reason the playhead is: the timeline writes
+    /// it on every mouse move, and on this model that invalidated the root view, the
+    /// preview and the timeline together.
+    public var hoverPreviewTime: TimeInterval? {
+        get { playheadClock.hoverTime }
+        set {
+            guard newValue != playheadClock.hoverTime else { return }
+            playheadClock.hoverTime = newValue
+        }
+    }
 
     /// Whether an export is running, and how far along.
     public internal(set) var exportProgress: Double?
@@ -117,19 +186,22 @@ public final class StudioDocumentModel {
         isTranscribing || installTask != nil
     }
 
+    /// The preview's player and its clock (docs/08 §2 item 10).
+    @ObservationIgnored let playback = StudioPlaybackController()
+    /// Whether the edit is playing. Written only by `playback`, which is the one thing that
+    /// knows whether the player is actually rolling.
+    public internal(set) var isPlaying = false
+
     /// Held so closing the window or quitting can stop it (docs/11 S0.4).
     ///
     /// Unstructured on purpose: an export outlives the save panel's completion handler, and
     /// nothing on the way in owns a scope that lasts as long as the render does.
-    /// The playback loop, or nil when paused (docs/08 §2 item 10).
-    ///
-    /// Its own presence *is* `isPlaying`: two pieces of state that have to agree about one
-    /// thing is a way for them to disagree, and the one that would have gone wrong here is a
-    /// play button stuck on after a cancelled task.
-    @ObservationIgnored var playbackTask: Task<Void, Never>?
-    @ObservationIgnored let previewAudio = StudioPreviewAudio()
-
     @ObservationIgnored var exportTask: Task<Void, Never>?
+    /// Validating and loading the persisted transcript; cancelled on close.
+    @ObservationIgnored var transcriptLoadTask: Task<Void, Never>?
+    /// The last integer percent published to `exportProgress`, so a render's per-frame
+    /// callbacks only reach the main actor's observers when the bar would visibly move.
+    @ObservationIgnored var publishedExportPercent: Int?
 
     @ObservationIgnored var installTask: Task<Void, Never>?
     @ObservationIgnored var transcribeTask: Task<Void, Never>?
@@ -153,6 +225,7 @@ public final class StudioDocumentModel {
         guard session.hasFootage else { return nil }
         self.session = session
         document = SessionDocument(session: session)
+        draftWriter = StudioDraftWriter(document: document)
         telemetry = document.telemetry() ?? InputTelemetry()
         guard let manifest = document.manifest() else { return nil }
         self.manifest = manifest
@@ -168,10 +241,15 @@ public final class StudioDocumentModel {
             edit.showsCursor = !manifest.hasBakedCursor
         }
 
-        let hash = try? AudioContentHash.hash(fileAt: session.screenURL)
-        transcript = document.transcript(matchingHash: hash)
-        if let transcript {
-            chapters = ChapterMarks.marks(from: transcript, duration: manifest.duration)
+        refreshPlayheadDerivedState()
+
+        // The transcript arrives after the window does (docs/11 S2). Validating it means
+        // hashing the whole of `screen.mov`, which on a long recording was seconds of
+        // spinning cursor on the main thread before the studio drew anything. Everything
+        // that reads `transcript` already handles nil — it is nil for every recording that
+        // was never transcribed — so arriving late changes nothing but the wait.
+        transcriptLoadTask = Task { [weak self] in
+            await self?.loadTranscript()
         }
     }
 
@@ -211,14 +289,14 @@ public final class StudioDocumentModel {
         }
         activeGesture = gesture
         redoStack.removeAll()
-        edit = updated
+        replaceEdit(with: updated)
         saveDraft()
     }
 
     /// A default look on a recording nobody has edited yet is the starting point, not a
     /// step they should have to undo to reach "as recorded".
     func adoptEditWithoutUndo(_ next: StudioEdit) {
-        edit = next
+        replaceEdit(with: next)
     }
 
     /// The interaction currently being coalesced, if one is.
@@ -243,7 +321,7 @@ public final class StudioDocumentModel {
         activeGesture = nil
         guard let previous = undoStack.popLast() else { return }
         redoStack.append(edit)
-        edit = previous.edit
+        replaceEdit(with: previous.edit)
         clampAfterEdit()
         saveDraft()
     }
@@ -252,7 +330,7 @@ public final class StudioDocumentModel {
         activeGesture = nil
         guard let next = redoStack.popLast() else { return }
         undoStack.append((edit: edit, name: "Redo"))
-        edit = next
+        replaceEdit(with: next)
         clampAfterEdit()
         saveDraft()
     }
@@ -273,16 +351,60 @@ public final class StudioDocumentModel {
     ///
     /// Cached against the clips it was built for. Rebasing walks every sample, and this is
     /// read while somebody drags a playhead.
+    ///
+    /// Invalidated by `replaceEdit(with:)` when the clips change, rather than by comparing
+    /// the whole timeline on every read — the comparison was itself O(clips) per tick.
     var editedTelemetry: InputTelemetry {
-        if let cached = cachedEditedTelemetry, cached.clips == edit.clips {
-            return cached.telemetry
+        if let cachedEditedTelemetry {
+            return cachedEditedTelemetry
         }
         let rebased = telemetry.rebased(to: edit.clips)
-        cachedEditedTelemetry = (edit.clips, rebased)
+        cachedEditedTelemetry = rebased
         return rebased
     }
 
-    @ObservationIgnored private var cachedEditedTelemetry: (clips: ClipTimeline, telemetry: InputTelemetry)?
+    @ObservationIgnored private var cachedEditedTelemetry: InputTelemetry?
+
+    /// Where each clip ends on the edited timeline, ascending. Built on demand, dropped
+    /// whenever the clips change.
+    var clipEnds: [TimeInterval] {
+        if let cachedClipEnds {
+            return cachedClipEnds
+        }
+        var elapsed: TimeInterval = 0
+        let ends = edit.clips.clips.map { clip in
+            elapsed += clip.editedDuration
+            return elapsed
+        }
+        cachedClipEnds = ends
+        return ends
+    }
+
+    @ObservationIgnored var cachedClipEnds: [TimeInterval]?
+
+    /// Recorded clicks on the edited timeline.
+    var editedClickTimes: [TimeInterval] {
+        clickTimes.all
+    }
+
+    /// The zoom lane's click ticks: `editedClickTimes`, evenly thinned for drawing.
+    var clickTicks: [TimeInterval] {
+        clickTimes.ticks
+    }
+
+    /// The lane used to filter and map every recorded click — then decimate — in its body,
+    /// on every render. Cached like `editedTelemetry`, and dropped with it.
+    private var clickTimes: (all: [TimeInterval], ticks: [TimeInterval]) {
+        if let cachedClickTimes {
+            return cachedClickTimes
+        }
+        let all = editedTelemetry.clicks.filter(\.isDown).map(\.time)
+        let computed = (all: all, ticks: Self.decimated(all, limit: Self.maximumClickTicks))
+        cachedClickTimes = computed
+        return computed
+    }
+
+    @ObservationIgnored var cachedClickTimes: (all: [TimeInterval], ticks: [TimeInterval])?
 
     // MARK: - Presets
 
@@ -305,62 +427,17 @@ public final class StudioDocumentModel {
 
     // MARK: - Saving
 
-    /// Writes the draft. Failures are logged rather than surfaced.
-    ///
-    /// A dialog every time an autosave misses would be worse than the miss: the user is in
-    /// the middle of something, the work is still on screen, and the next keystroke tries
-    /// again. What must not happen silently is losing an *export*, and that reports.
-    private func saveDraft() {
-        // Throttled, not debounced (docs/11 S2).
-        //
-        // A slider drag calls `change` per pixel of travel, and each call used to write the
-        // whole draft atomically on the MainActor — a temporary file, a rename and an fsync
-        // per tick, while the preview was trying to redraw on the same actor.
-        //
-        // A plain debounce would have been wrong, and the existing tests said so: with one,
-        // a session that had just been edited had no draft on disk yet, so it did not look
-        // unfinished to the recovery prompt and reopening it found nothing to restore. The
-        // first change in a burst therefore still writes immediately, and only the ones
-        // treading on its heels are collapsed into a single trailing write. Durability is
-        // unchanged; what goes away is writing the same file forty times a second.
-        let now = ContinuousClock.now
-        if let last = lastDraftWrite, now - last < Self.draftInterval {
-            draftSave?.cancel()
-            draftSave = Task { [weak self] in
-                try? await Task.sleep(for: Self.draftInterval)
-                guard !Task.isCancelled else { return }
-                self?.writeDraftNow()
-            }
-            return
-        }
-        writeDraftNow()
-    }
-
     /// How close together two writes have to be before the second one waits.
     static let draftInterval: Duration = .milliseconds(400)
 
-    @ObservationIgnored private var draftSave: Task<Void, Never>?
-    @ObservationIgnored private var lastDraftWrite: ContinuousClock.Instant?
-
-    /// Writes the draft immediately, cancelling any debounced write.
-    ///
-    /// Called wherever the model is about to be committed or let go, because a debounce is
-    /// only safe if something reliably flushes it.
-    func flushDraft() {
-        guard draftSave != nil else { return }
-        draftSave?.cancel()
-        draftSave = nil
-        writeDraftNow()
-    }
-
-    private func writeDraftNow() {
-        lastDraftWrite = ContinuousClock.now
-        do {
-            try document.writeDraft(edit)
-        } catch {
-            logger.error("Could not autosave the studio edit: \(error.localizedDescription, privacy: .public)")
-        }
-    }
+    /// Encodes and writes drafts off the main actor. See `StudioDocumentModel+Draft.swift`.
+    @ObservationIgnored let draftWriter: StudioDraftWriter
+    @ObservationIgnored var draftSave: Task<Void, Never>?
+    @ObservationIgnored var lastDraftWrite: ContinuousClock.Instant?
+    /// Bumped on every change, so a write can tell whether it is still the newest.
+    @ObservationIgnored var draftGeneration = 0
+    /// Whether this model has put a draft on disk yet. The first one is written in place.
+    @ObservationIgnored var hasWrittenDraft = false
 
     /// The guard `tidySpeech` applies before it rebuilds the timeline.
     ///
@@ -386,12 +463,21 @@ public final class StudioDocumentModel {
     /// The draft stays. It is what reopening reads first, and after a clean close the two
     /// agree — so keeping it costs nothing and losing it would throw away the position the
     /// user left off at.
+    ///
+    /// Also where the studio lets go of what it started: the transcript check stops reading
+    /// the footage, and the filmstrip forgets this recording's decoders and tiles.
     public func commitOnClose() {
+        transcriptLoadTask?.cancel()
+        transcriptLoadTask = nil
         flushDraft()
         do {
             try document.commit(edit)
         } catch {
             logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
+        }
+        let path = session.screenURL.path
+        Task.detached(priority: .utility) {
+            await StudioThumbnailStore.shared.purge(path: path)
         }
     }
 }

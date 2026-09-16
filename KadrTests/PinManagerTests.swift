@@ -130,6 +130,10 @@ struct PinManagerTests {
         }
 
         // Pin one first, so framework warm-up is not counted against the budget.
+        // Pins decode off the main thread; inline here, so the textures are all in hand
+        // when the footprint is read and nothing else runs in between.
+        PinPanel.decodesInlineForTesting = true
+        defer { PinPanel.decodesInlineForTesting = false }
         manager.pin(url, copy: { _ in }, save: { _ in })
         let baseline = footprintBytes()
 
@@ -158,9 +162,11 @@ struct PinManagerTests {
 
         let writer = PinManager(store: store)
         #expect(writer.pin(url, copy: { _ in }, save: { _ in }))
+        writer.flushPendingSave()
         let saved = store.load()
         #expect(saved.count == 1)
         writer.closeAll()
+        writer.flushPendingSave()
         #expect(store.load().isEmpty)
 
         store.save(saved)
@@ -168,7 +174,84 @@ struct PinManagerTests {
         reader.restore(copy: { _ in }, save: { _ in }, annotate: { _ in }, copyText: { _ in })
         #expect(reader.count == 1)
         reader.closeAll()
+        reader.flushPendingSave()
         #expect(store.load().isEmpty)
+    }
+
+    /// Opacity scrolls and nudges arrive at trackpad rate; each used to be a pretty-printed
+    /// JSON encode and an atomic write on the main thread (PRD §8).
+    @Test("A burst of pin changes is one save, after the pins sit still")
+    func savesAreCoalesced() async throws {
+        let (manager, storeURL) = makeManager()
+        defer {
+            manager.closeAll()
+            manager.flushPendingSave()
+            try? FileManager.default.removeItem(at: storeURL)
+        }
+        let url = try writeCapture(width: 400, height: 300)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(manager.pin(url, copy: { _ in }, save: { _ in }))
+        let panel = try #require(pinPanels(showing: url).first)
+        for step in 0 ..< 30 {
+            panel.nudge(dx: 1, dy: CGFloat(step % 2))
+        }
+        #expect(manager.hasPendingSave)
+        #expect(!FileManager.default.fileExists(atPath: storeURL.path), "nothing is written mid-gesture")
+
+        try await Task.sleep(for: PinManager.saveDebounce + .milliseconds(400))
+        #expect(!manager.hasPendingSave)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while PinStore(fileURL: storeURL).load().isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let saved = PinStore(fileURL: storeURL).load()
+        #expect(saved.count == 1)
+        #expect(saved.first?.x == Double(panel.frame.origin.x), "the save holds the last position")
+    }
+
+    @Test("Quitting writes a pending change at once")
+    func flushWritesImmediately() throws {
+        let (manager, storeURL) = makeManager()
+        defer {
+            manager.closeAll()
+            manager.flushPendingSave()
+            try? FileManager.default.removeItem(at: storeURL)
+        }
+        let url = try writeCapture(width: 400, height: 300)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(manager.pin(url, copy: { _ in }, save: { _ in }))
+        #expect(manager.hasPendingSave)
+        manager.flushPendingSave()
+        #expect(!manager.hasPendingSave)
+        #expect(PinStore(fileURL: storeURL).load().count == 1)
+    }
+
+    /// Background writes may land in any order; an older snapshot must never overwrite a
+    /// newer one — least of all the one flushed at quit.
+    @Test("An older snapshot never overwrites a newer one", arguments: [
+        ([1, 2, 3], [true, true, true], 3),
+        ([2, 1], [true, false], 2),
+        ([3, 1, 2], [true, false, false], 3),
+        ([1, 1], [true, false], 1)
+    ])
+    func writerKeepsTheNewest(generations: [Int], written: [Bool], survivor: Int) {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kadr-pins-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: storeURL) }
+        let store = PinStore(fileURL: storeURL)
+        let writer = PinStoreWriter()
+
+        let results = generations.map { generation in
+            writer.write(
+                [PinRecord(path: "/\(generation)", frame: .zero, alpha: 1, clickThrough: false)],
+                generation: generation,
+                to: store
+            )
+        }
+        #expect(results == written)
+        #expect(store.load().map(\.path) == ["/\(survivor)"])
     }
 
     @Test("Hide makes pins invisible without closing them")
@@ -185,10 +268,10 @@ struct PinManagerTests {
         manager.toggleHidden()
         #expect(manager.isHidden)
         #expect(manager.count == 1)
-        #expect(NSApp.windows.filter { $0 is PinPanel }.allSatisfy { !$0.isVisible })
+        #expect(pinPanels(showing: url).allSatisfy { !$0.isVisible })
         manager.toggleHidden()
         #expect(!manager.isHidden)
-        #expect(NSApp.windows.contains { $0 is PinPanel && $0.isVisible })
+        #expect(pinPanels(showing: url).contains { $0.isVisible })
     }
 
     @Test("Middle-click closes a pin (CleanShot §11, §22.4)")
@@ -202,8 +285,14 @@ struct PinManagerTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         #expect(manager.pin(url, copy: { _ in }, save: { _ in }))
-        let panel = try #require(NSApp.windows.compactMap { $0 as? PinPanel }.first)
+        let panel = try #require(pinPanels(showing: url).first { $0.isVisible })
         panel.closeFromMiddleClick()
         #expect(manager.isEmpty)
+    }
+
+    /// This test's own pins. Other suites run on the main actor too, and their panels are
+    /// in `NSApp.windows` whenever one of them is waiting on something.
+    private func pinPanels(showing url: URL) -> [PinPanel] {
+        NSApp.windows.compactMap { $0 as? PinPanel }.filter { $0.fileURL == url }
     }
 }

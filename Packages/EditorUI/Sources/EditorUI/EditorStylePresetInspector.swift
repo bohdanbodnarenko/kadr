@@ -22,11 +22,15 @@ struct EditorStylePresetInspector: View {
     private let store = StylePresetStore()
 
     var body: some View {
-        EditorInspectorSection(title: "Look", key: "look", accessory: { headerAccessory }, content: {
+        // Captured once per evaluation. Every row, the header and the status line all ask
+        // "which look is this?", and each asking used to rebuild the document's look from
+        // its commands and compare it against every preset again.
+        let look = LookState(document: model.document, presets: presets)
+        EditorInspectorSection(title: "Look", key: "look", accessory: { headerAccessory(look) }, content: {
             VStack(spacing: 0) {
                 EditorLookRow(
                     name: "None",
-                    isActive: matchedPreset == nil && !hasAnyChrome,
+                    isActive: look.matched == nil && !look.hasAnyChrome,
                     onDelete: nil
                 ) {
                     model.clearStylePreset()
@@ -35,7 +39,7 @@ struct EditorStylePresetInspector: View {
                 .help("Remove the current look")
 
                 ForEach(presets) { preset in
-                    row(preset)
+                    row(preset, look: look)
                 }
             }
         })
@@ -51,23 +55,23 @@ struct EditorStylePresetInspector: View {
 
     /// What is being worn, and the save / export / import actions in one menu rather than
     /// three buttons squeezed into a row.
-    private var headerAccessory: some View {
+    private func headerAccessory(_ look: LookState) -> some View {
         HStack(spacing: 2) {
-            Text(statusText)
+            Text(statusText(look))
                 .font(.inspectorNote)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Menu {
                 Button("Save Look…") {
-                    draftName = matchedPreset?.name ?? ""
+                    draftName = look.matched?.name ?? ""
                     isNaming = true
                 }
-                .disabled(!hasAnyChrome)
+                .disabled(!look.hasAnyChrome)
                 Button("Export Look…") { exportCurrent() }
-                    .disabled(!hasAnyChrome)
+                    .disabled(!look.hasAnyChrome)
                 Button("Use for New Captures") { saveAsDefault() }
-                    .disabled(!hasAnyChrome)
+                    .disabled(!look.hasAnyChrome)
                 Divider()
                 Button("Import Look…") { importPreset() }
             } label: {
@@ -82,15 +86,15 @@ struct EditorStylePresetInspector: View {
         }
     }
 
-    private func row(_ preset: StylePreset) -> some View {
+    private func row(_ preset: StylePreset, look: LookState) -> some View {
         EditorLookRow(
             name: preset.name,
-            isActive: preset.id == matchedPreset?.id,
+            isActive: preset.id == look.matched?.id,
             onDelete: isUserPreset(preset)
                 ? { presets = StylePreset.builtIn + store.remove(id: preset.id) }
                 : nil
         ) {
-            if preset.id == matchedPreset?.id {
+            if preset.id == look.matched?.id {
                 model.clearStylePreset()
                 appliedID = nil
             } else {
@@ -102,22 +106,29 @@ struct EditorStylePresetInspector: View {
 
     // MARK: - State
 
-    private var hasAnyChrome: Bool {
-        !StylePreset(name: "", capturing: model.document).isEmpty
+    /// The document's look, captured once, and the preset it matches.
+    private struct LookState {
+        let hasAnyChrome: Bool
+        let matched: StylePreset?
+
+        init(document: AnnotationDocument, presets: [StylePreset]) {
+            let current = StylePreset(name: "", capturing: document)
+            hasAnyChrome = !current.isEmpty
+            // The same test as `StylePreset.matches`, against one capture instead of one per
+            // preset.
+            let appearance = current.appearance
+            matched = presets.first { $0.appearance == appearance }
+        }
     }
 
-    private var matchedPreset: StylePreset? {
-        model.document.matchingStylePreset(among: presets)
-    }
-
-    private var statusText: String {
-        if let matched = matchedPreset {
+    private func statusText(_ look: LookState) -> String {
+        if let matched = look.matched {
             return matched.name
         }
         if let appliedID, let applied = presets.first(where: { $0.id == appliedID }) {
             return "\(applied.name) (edited)"
         }
-        return hasAnyChrome ? "Custom" : "None"
+        return look.hasAnyChrome ? "Custom" : "None"
     }
 
     private func isUserPreset(_ preset: StylePreset) -> Bool {
@@ -133,7 +144,7 @@ struct EditorStylePresetInspector: View {
     }
 
     private func exportCurrent() {
-        let name = matchedPreset?.name ?? "Look"
+        let name = model.document.matchingStylePreset(among: presets)?.name ?? "Look"
         let transfer = StylePresetTransfer(preset: StylePreset(name: name, capturing: model.document))
         guard let data = try? transfer.encoded() else { return }
         let panel = NSSavePanel()

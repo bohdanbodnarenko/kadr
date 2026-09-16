@@ -57,16 +57,32 @@ extension StatusItemController {
     /// invites somebody to wonder what went wrong every time they open the menu, and the
     /// answer is almost always nothing. It appears when there is something to recover and
     /// disappears once there is not.
+    ///
+    /// The count shown is the cached one: listing and stat-ing every session folder on the
+    /// main thread was part of what made the menu slow to open. The item is always added,
+    /// hidden when there is nothing to recover, and a fresh count is taken off the main
+    /// thread each time the menu opens — if it differs, the open menu is updated in place.
     func addRecoveryItem(to menu: NSMenu) {
-        let count = unfinishedRecordings()
-        guard count > 0 else { return }
-
-        let title = count == 1
-            ? "Recover Unfinished Recording…"
-            : "Recover \(count) Unfinished Recordings…"
-        let item = NSMenuItem(title: title, action: #selector(didSelectRecover), keyEquivalent: "")
+        let item = NSMenuItem(title: "", action: #selector(didSelectRecover), keyEquivalent: "")
         item.target = self
         menu.addItem(item)
+        recoveryItem = item
+        updateRecoveryItem(count: unfinishedRecordings())
+        refreshUnfinishedRecordings { [weak self] count in
+            self?.updateRecoveryItem(count: count)
+        }
+    }
+
+    func updateRecoveryItem(count: Int) {
+        guard let recoveryItem else { return }
+        recoveryItem.isHidden = count == 0
+        recoveryItem.title = Self.recoveryTitle(count: count)
+    }
+
+    static func recoveryTitle(count: Int) -> String {
+        count == 1
+            ? "Recover Unfinished Recording…"
+            : "Recover \(count) Unfinished Recordings…"
     }
 
     @objc

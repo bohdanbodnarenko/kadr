@@ -66,8 +66,32 @@ public enum TextRendering {
 }
 
 /// Editing-time text: `draw(in:)` calls the same code the export uses (docs/16 ED-1).
+///
+/// CoreText layout is the expensive part, so the glyphs are redrawn only when something
+/// that changes them did. Dragging a text box is a pure translation — the drawing is laid
+/// out relative to the layer's own frame — so a move only moves the frame.
 public final class TextBadgeLayer: CALayer {
     private var spec: TextSpec?
+    /// What the backing store currently shows, or nil before the first draw.
+    private var drawnKey: DrawKey?
+    /// Redraws so far. Internal, for the tests that pin the early return.
+    private(set) var displayCount = 0
+
+    /// Everything that affects the pixels: the spec with its position taken out, the size
+    /// of the box, and the density it is rasterised at.
+    struct DrawKey: Equatable {
+        var spec: TextSpec
+        var size: CGSize
+        var scale: CGFloat
+
+        init(spec: TextSpec, size: CGSize, scale: CGFloat) {
+            var normalized = spec
+            normalized.rect.origin = .zero
+            self.spec = normalized
+            self.size = size
+            self.scale = scale
+        }
+    }
 
     override public init() {
         super.init()
@@ -91,8 +115,18 @@ public final class TextBadgeLayer: CALayer {
         self.spec = spec
         let frame = TextRendering.frame(spec)
         self.frame = frame
+        let key = DrawKey(spec: spec, size: bounds.size, scale: contentsScale)
+        guard key != drawnKey || needsDisplay() else { return }
         setNeedsDisplay()
         displayIfNeeded()
+    }
+
+    override public func display() {
+        if let spec {
+            drawnKey = DrawKey(spec: spec, size: bounds.size, scale: contentsScale)
+        }
+        displayCount += 1
+        super.display()
     }
 
     override public func draw(in ctx: CGContext) {

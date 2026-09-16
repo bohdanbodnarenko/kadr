@@ -91,18 +91,36 @@ public struct ViewportTimeline: Sendable {
         var xSpring = DampedSpring(position: centre.x, omega: magSpring.omega)
         var ySpring = DampedSpring(position: centre.y, omega: magSpring.omega)
 
+        // Both lookups are built once, here, rather than searched once per step. At 120 Hz
+        // a ten-minute recording is 72,000 steps, and each step used to walk the clip list
+        // once and the cue list twice — once for the target, once again for the spring.
+        let walk = EditedToSource(clips)
+        var cursor = walk.makeCursor()
+        let lookup = CueLookup(ordered)
+        let stiffness = spring.stiffness / 12
+
         for step in 0 ..< steps {
             let time = Double(step) * MotionSpring.step
-            let source = Self.sourceTime(forEdited: time, clips: clips) ?? time
+            // The source time only ever decides which cue applies, so the quick estimate
+            // is enough wherever it cannot change that answer, and the exact walk is kept
+            // for the steps where it might.
+            let index: Int? = if let estimate = walk.estimate(forEdited: time, cursor: &cursor),
+                                 let decided = lookup.last(containing: estimate.source, within: estimate.tolerance) {
+                decided
+            } else {
+                lookup.last(containing: walk.sourceTime(forEdited: time) ?? time)
+            }
+            // One answer for both questions: which cue aims the camera and how fast it gets
+            // there. They were asked separately and had to agree.
+            let cue = index.map { ordered[$0] }
             let target = Self.target(
-                times: (source: source, edited: time),
-                cues: ordered,
+                cue: cue,
+                edited: time,
                 size: size,
                 centre: centre,
                 pointer: pointer
             )
-            let omega = DampedSpring.omega(settlingIn: Self.transition(at: source, cues: ordered))
-                * (spring.stiffness / 12)
+            let omega = DampedSpring.omega(settlingIn: cue?.transitionDuration ?? 0.6) * stiffness
             magSpring.omega = omega
             xSpring.omega = omega
             ySpring.omega = omega
@@ -117,17 +135,6 @@ public struct ViewportTimeline: Sendable {
         self.centres = centres
     }
 
-    private static func sourceTime(forEdited time: TimeInterval, clips: ClipTimeline) -> TimeInterval? {
-        if clips.clips.isEmpty {
-            return time
-        }
-        return clips.sourceTime(forEdited: time)
-    }
-
-    private static func transition(at source: TimeInterval, cues: [ZoomCue]) -> TimeInterval {
-        cues.last { $0.range.contains(source) }?.transitionDuration ?? 0.6
-    }
-
     /// What the camera is aiming at, before smoothing.
     ///
     /// A cue's magnification applies across its whole range including its transitions; the
@@ -140,11 +147,26 @@ public struct ViewportTimeline: Sendable {
         centre: CGPoint,
         pointer: [PointerSample]
     ) -> Viewport {
-        let source = times.source
-        let time = times.edited
         // The last cue that contains this moment wins, so a cue placed over another
         // replaces it rather than averaging with it.
-        guard let cue = cues.last(where: { $0.range.contains(source) }) else {
+        target(
+            cue: cues.last { $0.range.contains(times.source) },
+            edited: times.edited,
+            size: size,
+            centre: centre,
+            pointer: pointer
+        )
+    }
+
+    /// The same, for a cue the caller has already found.
+    static func target(
+        cue: ZoomCue?,
+        edited time: TimeInterval,
+        size: CGSize,
+        centre: CGPoint,
+        pointer: [PointerSample]
+    ) -> Viewport {
+        guard let cue else {
             return Viewport(magnification: 1, centre: centre)
         }
         let aim: CGPoint = if cue.anchor.followsPointer {

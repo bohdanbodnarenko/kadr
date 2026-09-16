@@ -18,25 +18,41 @@ extension AnnotationCanvasView {
     }
 
     /// Handles around the selection, and the marquee while one is being dragged.
+    ///
+    /// Runs on every mouse-move of a drag, so the handle layers are kept and repositioned
+    /// rather than removed and recreated each time (docs/10 R1).
     func updateSelectionHandles() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
-        selectionLayer.sublayers?
-            .filter { $0 !== marqueeLayer }
-            .forEach { $0.removeFromSuperlayer() }
-
+        var used = 0
+        selectionOutlineLayer.isHidden = true
         let selected = model.selectedCommands
         if !selected.isEmpty {
             if SelectionResizer.usesPathHandles(selected) {
-                addPathHandles(SelectionResizer.anchors(for: selected))
+                addPathHandles(SelectionResizer.anchors(for: selected), used: &used)
             } else {
-                addBoxHandles(for: selected)
+                addBoxHandles(for: selected, used: &used)
             }
+        }
+        for spare in handleLayers.dropFirst(used) {
+            spare.isHidden = true
         }
 
         marqueeLayer.path = model.marquee.map { CGPath(rect: $0, transform: nil) }
+    }
+
+    /// The next pooled handle layer, created the first time it is needed.
+    private func nextHandleLayer(_ used: inout Int) -> CALayer {
+        defer { used += 1 }
+        if used < handleLayers.count {
+            return handleLayers[used]
+        }
+        let layer = CALayer()
+        selectionLayer.addSublayer(layer)
+        handleLayers.append(layer)
+        return layer
     }
 
     override public func resetCursorRects() {
@@ -116,24 +132,22 @@ extension AnnotationCanvasView {
         )
     }
 
-    private func addBoxHandles(for commands: [AnnotationCommand]) {
+    private func addBoxHandles(for commands: [AnnotationCommand], used: inout Int) {
         let box = SelectionResizer.frame(for: commands)
-        let outline = CAShapeLayer()
-        outline.path = CGPath(rect: box, transform: nil)
-        outline.strokeColor = NSColor.controlAccentColor.cgColor
-        outline.fillColor = nil
-        outline.lineWidth = 1 / handleViewScale
-        outline.lineDashPattern = [3, 3]
-        selectionLayer.addSublayer(outline)
+        selectionOutlineLayer.path = CGPath(rect: box, transform: nil)
+        selectionOutlineLayer.strokeColor = NSColor.controlAccentColor.cgColor
+        selectionOutlineLayer.lineWidth = 1 / handleViewScale
+        selectionOutlineLayer.isHidden = false
 
         for (handle, point) in SelectionResizer.anchors(for: commands) {
+            let layer = nextHandleLayer(&used)
             if handle.isRotate {
-                selectionLayer.addSublayer(handleCircle(at: point, size: sizeForRotate))
+                styleHandle(layer, at: point, size: sizeForRotate, isCircle: true)
             } else {
                 let size = handle.isCorner
                     ? SelectionResizer.cornerSize / handleViewScale
                     : SelectionResizer.edgeSize / handleViewScale
-                selectionLayer.addSublayer(handleSquare(at: point, size: size))
+                styleHandle(layer, at: point, size: size, isCircle: false)
             }
         }
     }
@@ -142,32 +156,32 @@ extension AnnotationCanvasView {
         SelectionResizer.cornerSize / handleViewScale
     }
 
-    private func addPathHandles(_ anchors: [(SelectionHandle, CGPoint)]) {
+    private func addPathHandles(_ anchors: [(SelectionHandle, CGPoint)], used: inout Int) {
         let size = SelectionResizer.cornerSize / handleViewScale
         for (_, point) in anchors {
-            selectionLayer.addSublayer(handleCircle(at: point, size: size))
+            styleHandle(nextHandleLayer(&used), at: point, size: size, isCircle: true)
         }
     }
 
     func handleSquare(at point: CGPoint, size: CGFloat) -> CALayer {
         let handle = CALayer()
+        styleHandle(handle, at: point, size: size, isCircle: false)
+        return handle
+    }
+
+    /// Positions and styles one handle; the same whether the layer is new or reused.
+    private func styleHandle(_ handle: CALayer, at point: CGPoint, size: CGFloat, isCircle: Bool) {
+        handle.isHidden = false
         handle.frame = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
         handle.backgroundColor = NSColor.white.cgColor
         handle.borderColor = NSColor.controlAccentColor.cgColor
         handle.borderWidth = max(1 / handleViewScale, 0.5)
-        handle.cornerRadius = 1 / handleViewScale
+        handle.cornerRadius = isCircle ? size / 2 : 1 / handleViewScale
         handle.contentsScale = window?.backingScaleFactor ?? 2
         handle.shadowOpacity = 0.35
         handle.shadowRadius = 1 / handleViewScale
         handle.shadowOffset = .zero
         handle.shadowColor = NSColor.black.cgColor
-        return handle
-    }
-
-    private func handleCircle(at point: CGPoint, size: CGFloat) -> CALayer {
-        let handle = handleSquare(at: point, size: size)
-        handle.cornerRadius = size / 2
-        return handle
     }
 
     private func cursor(for handle: SelectionHandle) -> NSCursor {

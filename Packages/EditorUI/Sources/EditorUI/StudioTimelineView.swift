@@ -20,6 +20,12 @@ import SwiftUI
 /// Screendrop: hovering shows a split marker, and **C** splits there without moving the
 /// playhead. The preview stays on the playhead until the time bar is dragged. Drag across
 /// the zoom lane to place a cue; a click still only scrubs.
+///
+/// Nothing in this body reads the playhead or the hover time (docs/11 S2). Both move many
+/// times a second, and a read here re-evaluated the geometry, the ruler, every clip lane
+/// and the zoom lane on each tick. They are read by the leaves that draw them —
+/// `StudioTimelinePlayhead`, `PlayheadScrollAnchor`, `PlayheadFollower`, `HoverSplitMarker`
+/// — and by closures, which run later and register nothing.
 @MainActor
 struct StudioTimelineView: View {
     let model: StudioDocumentModel
@@ -43,7 +49,13 @@ struct StudioTimelineView: View {
     /// A zoom being drawn on the lane, in edited time.
     @State var creating: (start: TimeInterval, end: TimeInterval)?
     /// Edited time under the pointer, for the split marker and hover-C.
-    @State var hoverTime: TimeInterval?
+    ///
+    /// Read from the model's playhead clock rather than kept in `@State`: a state write on
+    /// every mouse move re-rendered this whole view to move one hairline.
+    var hoverTime: TimeInterval? {
+        model.playheadClock.hoverTime
+    }
+
     /// Latest timeline viewport width, so the zoom buttons can pin around the same axis.
     @State var viewportWidth: CGFloat = 1
     @FocusState private var isFocused: Bool
@@ -59,9 +71,7 @@ struct StudioTimelineView: View {
                     ScrollView(.horizontal, showsIndicators: zoom > 1) {
                         bands(scale: scale, width: width)
                             .overlay(alignment: .topLeading) {
-                                Color.clear
-                                    .frame(width: 1, height: 1)
-                                    .offset(x: model.playhead * scale)
+                                PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
                                     .id(Self.playheadAnchor)
                             }
                             .overlay(alignment: .topLeading) {
@@ -71,9 +81,10 @@ struct StudioTimelineView: View {
                                     .id(Self.zoomAnchor)
                             }
                     }
-                    .onChange(of: model.playhead) {
-                        guard zoom > 1 else { return }
-                        scroller.scrollTo(Self.playheadAnchor, anchor: .center)
+                    .background {
+                        PlayheadFollower(clock: model.playheadClock, isFollowing: zoom > 1) {
+                            scroller.scrollTo(Self.playheadAnchor, anchor: .center)
+                        }
                     }
                     .onChange(of: zoom) {
                         if zoom <= 1 {
@@ -142,41 +153,35 @@ struct StudioTimelineView: View {
         VStack(alignment: .leading, spacing: 3) {
             Color.clear
                 .frame(width: width, height: crownLane)
-            ruler(scale: scale, width: width)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            model.pausePlayback()
-                            model.playhead = StudioTimelinePlayhead.time(
-                                atX: value.location.x,
-                                scale: scale,
-                                duration: model.edit.duration
-                            )
-                        }
-                )
+            StudioTimelineRuler(
+                duration: model.edit.duration,
+                width: width,
+                scale: scale,
+                height: rulerHeight
+            )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        model.pausePlayback()
+                        model.playhead = StudioTimelinePlayhead.time(
+                            atX: value.location.x,
+                            scale: scale,
+                            duration: model.edit.duration
+                        )
+                    }
+            )
             laneStack(scale: scale, width: width)
         }
         .frame(width: width, height: bandsHeight, alignment: .topLeading)
         .coordinateSpace(name: StudioTimelinePlayhead.coordinateSpace)
         .contentShape(Rectangle())
         .onContinuousHover { phase in
-            switch phase {
-            case let .active(location):
-                hoverTime = StudioTimelinePlayhead.time(
-                    atX: location.x,
-                    scale: scale,
-                    duration: model.edit.duration
-                )
-                model.hoverPreviewTime = hoverTime
-            case .ended:
-                hoverTime = nil
-                model.hoverPreviewTime = nil
-            }
+            hover(phase, scale: scale)
         }
         .overlay(alignment: .topLeading) {
             StudioTimelinePlayhead(
-                time: model.playhead,
+                clock: model.playheadClock,
                 scale: scale,
                 height: bandsHeight,
                 duration: model.edit.duration
@@ -196,6 +201,27 @@ struct StudioTimelineView: View {
         }
     }
 
+    /// Moves the hover time with the pointer.
+    ///
+    /// Less than a point of travel is the same place on screen, and every write re-renders
+    /// the skim preview, so sub-point moves are dropped.
+    private func hover(_ phase: HoverPhase, scale: CGFloat) {
+        switch phase {
+        case let .active(location):
+            let time = StudioTimelinePlayhead.time(
+                atX: location.x,
+                scale: scale,
+                duration: model.edit.duration
+            )
+            if let current = model.hoverPreviewTime, scale > 0, abs(current - time) * scale < 1 {
+                return
+            }
+            model.hoverPreviewTime = time
+        case .ended:
+            model.hoverPreviewTime = nil
+        }
+    }
+
     private func laneStack(scale: CGFloat, width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 6) {
@@ -210,13 +236,7 @@ struct StudioTimelineView: View {
                 clips(scale: scale)
             }
             .contentShape(Rectangle())
-            if let hoverTime {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.28))
-                    .frame(width: 1, height: cueHeight + clipHeight + 6)
-                    .offset(x: hoverTime * scale)
-                    .allowsHitTesting(false)
-            }
+            HoverSplitMarker(clock: model.playheadClock, scale: scale, height: cueHeight + clipHeight + 6)
         }
     }
 
@@ -224,30 +244,6 @@ struct StudioTimelineView: View {
     private static let zoomAnchor = "studio.timeline.zoom"
 
     // MARK: - Bands
-
-    private func ruler(scale: CGFloat, width: CGFloat) -> some View {
-        let step = Self.tickInterval(forDuration: model.edit.duration, width: width)
-        let count = step > 0 ? Int(model.edit.duration / step) : 0
-        return ZStack(alignment: .topLeading) {
-            ForEach(0 ... max(count, 0), id: \.self) { index in
-                let time = Double(index) * step
-                if time <= model.edit.duration {
-                    HStack(spacing: 2) {
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.4))
-                            .frame(width: 1, height: 4)
-                        Text(Self.tickLabel(time, step: step))
-                            .font(.system(size: 10).monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .fixedSize()
-                    .offset(x: time * scale)
-                }
-            }
-        }
-        .frame(width: width, height: rulerHeight, alignment: .topLeading)
-        .clipped()
-    }
 
     private func clips(scale: CGFloat) -> some View {
         HStack(spacing: 2) {
@@ -258,8 +254,10 @@ struct StudioTimelineView: View {
     }
 
     private func clipLane(_ clip: Clip, index: Int, scale: CGFloat) -> some View {
+        // `currentClipIndex` rather than `clipIndex(at: playhead)`: it changes when the
+        // playhead crosses a cut, not on every tick.
         let selected = model.selectedClip == clip.id
-            || (model.selectedClip == nil && model.clipIndex(at: model.playhead) == index)
+            || (model.selectedClip == nil && model.currentClipIndex == index)
         let width = max(clip.editedDuration * scale - 2, 3)
         return ZStack(alignment: .leading) {
             RoundedRectangle(cornerRadius: 4)
@@ -295,7 +293,7 @@ struct StudioTimelineView: View {
                                 model.selectedClip = clip.id
                                 model.selectedZoom = nil
                                 model.pausePlayback()
-                                let start = model.edit.clips.editedStartTime(ofClipAt: index)
+                                let start = model.editedStart(ofClipAt: index)
                                 model.playhead = start + (handleWidth + value.location.x) / scale
                             }
                     )
@@ -331,5 +329,86 @@ struct StudioTimelineView: View {
         speed == speed.rounded()
             ? "\(Int(speed))×"
             : String(format: "%.1f×", speed)
+    }
+}
+
+/// The ruler, as its own view so it re-renders only when its inputs change.
+///
+/// Every field is a plain value, so SwiftUI compares them and skips the body — the tick
+/// `ForEach` — when the duration, width and scale are what they were.
+struct StudioTimelineRuler: View {
+    let duration: TimeInterval
+    let width: CGFloat
+    let scale: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        let step = StudioTimelineView.tickInterval(forDuration: duration, width: width)
+        let count = step > 0 ? Int(duration / step) : 0
+        ZStack(alignment: .topLeading) {
+            ForEach(0 ... max(count, 0), id: \.self) { index in
+                let time = Double(index) * step
+                if time <= duration {
+                    HStack(spacing: 2) {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.4))
+                            .frame(width: 1, height: 4)
+                        Text(StudioTimelineView.tickLabel(time, step: step))
+                            .font(.system(size: 10).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .fixedSize()
+                    .offset(x: time * scale)
+                }
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .clipped()
+    }
+}
+
+/// The invisible marker `ScrollViewReader` scrolls to, moved with the playhead.
+private struct PlayheadScrollAnchor: View {
+    let clock: StudioPlayhead
+    let scale: CGFloat
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .offset(x: clock.time * scale)
+    }
+}
+
+/// Keeps a zoomed timeline scrolled to the playhead while it moves.
+///
+/// A leaf so the per-tick `onChange` lives in a body that has nothing else to rebuild.
+private struct PlayheadFollower: View {
+    let clock: StudioPlayhead
+    let isFollowing: Bool
+    let follow: () -> Void
+
+    var body: some View {
+        Color.clear
+            .onChange(of: clock.time) {
+                guard isFollowing else { return }
+                follow()
+            }
+    }
+}
+
+/// The hairline under the pointer that shows where hover-C would split.
+private struct HoverSplitMarker: View {
+    let clock: StudioPlayhead
+    let scale: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        if let time = clock.hoverTime {
+            Rectangle()
+                .fill(Color.primary.opacity(0.28))
+                .frame(width: 1, height: height)
+                .offset(x: time * scale)
+                .allowsHitTesting(false)
+        }
     }
 }

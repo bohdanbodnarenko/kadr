@@ -1,3 +1,7 @@
+> The parity table in this document is **partial**. Recording, telemetry and studio exist,
+> but several ports are incomplete relative to Screendrop. The live gap list is
+> `docs/16-screendrop-parity-plan.md`.
+
 # Screendrop Analysis — What to Learn, What to Port, What to Avoid
 
 > Source-level study of Screendrop (fayazara, CC0-licensed CleanShot alternative; ~42.6k lines, 176 Swift files) against Kadr's implemented M0–M18 state. Conclusion up front: **Screendrop validates Kadr's thesis twice** — its editor and recording *features* are 12–18 months ahead of our spec and largely adoptable, while its *architecture* (one flat target, one process, zero tests, SwiftUI shell, `screencapture` CLI for stills, macOS 26.4 floor) is exactly the debt our three-process layered design avoids. Port the features, keep our bones.

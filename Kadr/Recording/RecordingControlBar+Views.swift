@@ -90,7 +90,7 @@ struct RecordingLiveControls: View {
 
     private var transport: some View {
         HStack(spacing: RecordingBarMetrics.controlSpacing) {
-            RecordingAudioMeter(level: model.audioLevel)
+            RecordingLiveAudioMeter(meter: model.meter)
                 .padding(.horizontal, 6)
 
             if model.microphoneIsSilent {

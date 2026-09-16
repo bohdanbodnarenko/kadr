@@ -13,6 +13,18 @@ enum ZipArchive {
     struct Entry: Hashable {
         let name: String
         let data: Data
+        /// The entry's CRC-32, when the caller already knows it.
+        ///
+        /// The base image of an editing session never changes, yet autosave rewrites it
+        /// every few seconds; checksumming the same 20 MB each time is pure waste, so the
+        /// owner computes it once and hands it back (docs/10 R2.6).
+        let crc: UInt32?
+
+        init(name: String, data: Data, crc: UInt32? = nil) {
+            self.name = name
+            self.data = data
+            self.crc = crc
+        }
     }
 
     enum ArchiveError: Error, Equatable {
@@ -33,7 +45,7 @@ enum ZipArchive {
 
         for entry in entries {
             let nameBytes = Data(entry.name.utf8)
-            let crc = crc32(entry.data)
+            let crc = entry.crc ?? crc32(entry.data)
             let offset = UInt32(output.count)
 
             output.append(uint32: localHeaderSignature)
@@ -124,22 +136,79 @@ enum ZipArchive {
 
     // MARK: - CRC32
 
-    /// IEEE CRC-32 table, built once. A byte-at-a-time bit loop over a 5K PNG is tens of
-    /// millions of iterations on the main actor during autosave (docs/10 R2.6).
-    private static let table: [UInt32] = (0 ..< 256).map { index in
-        var crc = UInt32(index)
-        for _ in 0 ..< 8 {
-            crc = (crc >> 1) ^ (0xEDB8_8320 & (0 &- (crc & 1)))
+    /// IEEE CRC-32 slicing-by-8 tables, built once.
+    ///
+    /// A 256-entry table is one lookup per byte; slicing-by-8 folds eight bytes per step
+    /// through eight tables, which is roughly four times faster on a 5K PNG — and this runs
+    /// on every autosave and project save (docs/10 R2.6). `tables[0]` is the classic table.
+    private static let tables: [[UInt32]] = {
+        var tables = [[UInt32]](repeating: [UInt32](repeating: 0, count: 256), count: 8)
+        for index in 0 ..< 256 {
+            var crc = UInt32(index)
+            for _ in 0 ..< 8 {
+                crc = (crc >> 1) ^ (0xEDB8_8320 & (0 &- (crc & 1)))
+            }
+            tables[0][index] = crc
         }
-        return crc
-    }
+        for index in 0 ..< 256 {
+            var crc = tables[0][index]
+            for slice in 1 ..< 8 {
+                crc = tables[0][Int(crc & 0xFF)] ^ (crc >> 8)
+                tables[slice][index] = crc
+            }
+        }
+        return tables
+    }()
+
+    /// The flattened tables, `tables[slice][byte]` at `slice * 256 + byte`, so the hot loop
+    /// indexes one contiguous buffer rather than an array of arrays.
+    private static let flatTable: [UInt32] = tables.flatMap(\.self)
 
     /// The standard CRC-32 zip files carry, so other tools accept what this writes.
     static func crc32(_ data: Data) -> UInt32 {
         var crc: UInt32 = 0xFFFF_FFFF
         data.withUnsafeBytes { buffer in
+            crc = update(crc, buffer)
+        }
+        return crc ^ 0xFFFF_FFFF
+    }
+
+    /// Folds `buffer` into a running (pre-inverted) CRC.
+    private static func update(_ start: UInt32, _ buffer: UnsafeRawBufferPointer) -> UInt32 {
+        var crc = start
+        let count = buffer.count
+        guard count > 0, let base = buffer.baseAddress else { return crc }
+        flatTable.withUnsafeBufferPointer { table in
+            var offset = 0
+            while offset + 8 <= count {
+                let low = UInt32(littleEndian: base.loadUnaligned(fromByteOffset: offset, as: UInt32.self)) ^ crc
+                let high = UInt32(littleEndian: base.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self))
+                crc = table[7 * 256 + Int(low & 0xFF)]
+                    ^ table[6 * 256 + Int((low >> 8) & 0xFF)]
+                    ^ table[5 * 256 + Int((low >> 16) & 0xFF)]
+                    ^ table[4 * 256 + Int(low >> 24)]
+                    ^ table[3 * 256 + Int(high & 0xFF)]
+                    ^ table[2 * 256 + Int((high >> 8) & 0xFF)]
+                    ^ table[1 * 256 + Int((high >> 16) & 0xFF)]
+                    ^ table[Int(high >> 24)]
+                offset += 8
+            }
+            while offset < count {
+                let byte = base.load(fromByteOffset: offset, as: UInt8.self)
+                crc = table[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
+                offset += 1
+            }
+        }
+        return crc
+    }
+
+    /// The reference one-table implementation, kept so tests can check the fast path
+    /// against something obviously right on arbitrary input.
+    static func crc32Bytewise(_ data: Data) -> UInt32 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        data.withUnsafeBytes { buffer in
             for byte in buffer {
-                crc = Self.table[Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
+                crc = tables[0][Int((crc ^ UInt32(byte)) & 0xFF)] ^ (crc >> 8)
             }
         }
         return crc ^ 0xFFFF_FFFF

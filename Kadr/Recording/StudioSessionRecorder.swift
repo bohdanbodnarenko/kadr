@@ -295,7 +295,7 @@ final class StudioSessionRecorder {
     /// Not the temporary directory: macOS purges that on its own schedule, and a session
     /// holding the only copy of an unfinished edit is not something to leave where the
     /// system may decide to reclaim it.
-    static func root() -> URL? {
+    nonisolated static func root() -> URL? {
         guard let support = try? FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -310,7 +310,7 @@ final class StudioSessionRecorder {
     // MARK: - Housekeeping
 
     /// The store over the sessions folder, if there is one to look at.
-    static func store() -> RecordingSessionStore? {
+    nonisolated static func store() -> RecordingSessionStore? {
         root().map(RecordingSessionStore.init(root:))
     }
 
@@ -336,11 +336,13 @@ final class StudioSessionRecorder {
     /// A session with a committed edit was finished with at some point, so reopening it is
     /// the user's business rather than a rescue. The distinction is what keeps the recovery
     /// prompt rare enough to mean something.
-    static func unfinishedSessions() -> [RecordingSession] {
+    nonisolated static func unfinishedSessions() -> [RecordingSession] {
         store()?.sessionsNeedingRecovery() ?? []
     }
 
-    static func unfinishedCount() -> Int {
+    /// Nonisolated because it lists and stats every session folder: the agent calls it
+    /// from a detached task, never on the main thread (`UnfinishedRecordingsCounter`).
+    nonisolated static func unfinishedCount() -> Int {
         unfinishedSessions().count
     }
 

@@ -25,9 +25,13 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
     let fileURL: URL
     let baseImage: CGImage
-    /// The immutable capture, encoded once at open so autosave does not re-PNG a 5K
-    /// image every 1.5 s (docs/10 R2.6).
-    let cachedBasePNG: Data
+    /// The immutable capture as PNG, worked out once and off the main actor, so neither
+    /// opening the window nor autosave re-encodes a 5K image (docs/10 R2.6).
+    let basePNG: BaseImagePNG
+    /// Whether the capture's transparent margin still has to be measured.
+    let needsVisibleBounds: Bool
+    /// The measurement, once it has been made.
+    var measuredVisibleBounds: CGRect?
     let model: EditorDocumentModel
     let canvasSession = EditorCanvasSession()
     let renderer = AnnotationExportRenderer()
@@ -39,11 +43,22 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
     /// Keeps a recoverable copy while the user works (docs/07 M7).
     let autosave = EditorAutosave()
-    private var autosaveTask: Task<Void, Never>?
+    var autosaveTask: Task<Void, Never>?
+    /// The coalesced reaction to a document change, while one is pending.
+    var pendingChangeTask: Task<Void, Never>?
+    /// Writes the style memory once it has been still for a moment.
+    var styleMemoryTask: Task<Void, Never>?
+    /// What was last written to the defaults, so an unchanged memory is not re-encoded.
+    var savedStyleMemory: StyleMemory?
+    /// False once this window has discarded any autosave and not written a new one, so a
+    /// clean document does not delete a file that is not there on every change.
+    var autosaveMayExist = true
     /// True once the user has been asked about closing, so the second close goes through.
     var isClosingConfirmed = false
     /// How long the document has to be still before a copy is written.
-    private static let autosaveSettleMilliseconds = 1500
+    static let autosaveSettleMilliseconds = 1500
+    /// How long the style memory has to be still before it is written to the defaults.
+    static let styleMemorySettleMilliseconds = 500
 
     var onClose: (() -> Void)?
 
@@ -57,24 +72,23 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 throw OpenError.unreadableImage(fileURL)
             }
             baseImage = image
-            cachedBasePNG = contents.baseImagePNG
+            basePNG = BaseImagePNG(image: image, png: contents.baseImagePNG)
             // Documents saved before the window was measured, and the agent's auto-beautify
-            // projects (the agent cannot read pixels this way), are measured on open.
-            var document = contents.document
-            if document.baseImage.visibleBounds == nil {
-                document.adoptVisibleBounds(
-                    CaptureVisibleBounds.find(in: image, scale: document.baseImage.scale)
-                )
-            }
-            model = EditorDocumentModel(document: document)
+            // projects (the agent cannot read pixels this way), are measured after open.
+            needsVisibleBounds = contents.document.baseImage.visibleBounds == nil
+            model = EditorDocumentModel(document: contents.document)
         } else {
-            guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+            // Read once: decoded from these bytes, and kept as the base PNG when that is
+            // what they already are. Kept in memory rather than mapped, because saving a
+            // flattened image may overwrite this very file.
+            guard let bytes = try? Data(contentsOf: fileURL),
+                  let source = CGImageSourceCreateWithData(bytes as CFData, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
             else {
                 throw OpenError.unreadableImage(fileURL)
             }
             baseImage = image
-            cachedBasePNG = try Self.pngData(of: image)
+            basePNG = BaseImagePNG(image: image, png: BaseImagePNG.isPNG(source) ? bytes : nil)
 
             // Captures are written with a DPI tag that records their scale, so the editor
             // shows a Retina screenshot at the size the user selected rather than double.
@@ -84,13 +98,11 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 height: CGFloat(image.height) / scale
             )
             // A window captured with its shadow is the window plus a transparent margin;
-            // Beautify composes the window, not the margin (docs/03 §3 P2).
+            // Beautify composes the window, not the margin (docs/03 §3 P2). Measured after
+            // open, off the main actor: it is a full decode of the capture.
+            needsVisibleBounds = true
             model = EditorDocumentModel(document: AnnotationDocument(
-                baseImage: BaseImageReference(
-                    size: size,
-                    scale: scale,
-                    visibleBounds: CaptureVisibleBounds.find(in: image, scale: scale)
-                )
+                baseImage: BaseImageReference(size: size, scale: scale)
             ))
         }
         model.isCanvasLocked = EditorCanvasPreferences.lockCanvasByDefault()
@@ -103,6 +115,33 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     }
 
     func show() {
+        guard needsVisibleBounds else {
+            present()
+            return
+        }
+        // A beautified project composes the window inside the capture, so its canvas size
+        // depends on the measurement: wait for it rather than open at one size and jump to
+        // another. Anything else opens now and picks the measurement up when it lands.
+        let waits = model.document.beautify != nil
+        if !waits {
+            present()
+        }
+        let image = baseImage
+        let scale = model.document.baseImage.scale
+        Task { [weak self] in
+            let bounds = await Task.detached(priority: .userInitiated) {
+                CaptureVisibleBounds.find(in: image, scale: scale)
+            }.value
+            guard let self else { return }
+            measuredVisibleBounds = bounds
+            model.adoptVisibleBounds(bounds)
+            if waits {
+                present()
+            }
+        }
+    }
+
+    private func present() {
         let root = EditorRootView(
             model: model,
             baseImage: baseImage,
@@ -195,12 +234,6 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         return false
     }
 
-    /// ⌘Q and the close sheet both need a durable copy before the process dies (docs/16 ED-7).
-    func flushAutosaveSynchronously() {
-        autosaveTask?.cancel()
-        writeAutosave()
-    }
-
     func saveFlattenedAndClose(_ sender: NSWindow) {
         let baseImage = baseImage
         let document = model.document
@@ -232,83 +265,12 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         }
     }
 
-    /// Offers work a previous session left behind — a crash, a force quit, a power cut.
-    private func offerRecoveryIfAny() {
-        guard let window, let recovered = autosave.read(for: fileURL) else { return }
-        guard recovered.document.commands != model.document.commands else {
-            autosave.discard(for: fileURL)
-            return
-        }
-
-        let alert = NSAlert()
-        alert.messageText = "Kadr has unsaved changes to “\(fileURL.lastPathComponent)”."
-        alert.informativeText = "The editor closed before these annotations were saved."
-        alert.addButton(withTitle: "Restore")
-        alert.addButton(withTitle: "Discard")
-        alert.alertStyle = .informational
-
-        alert.beginSheetModal(for: window) { [weak self] response in
-            guard let self else { return }
-            if response == .alertFirstButtonReturn {
-                model.replaceDocument(recovered.document)
-                logger.info("Restored autosaved annotations")
-            } else {
-                autosave.discard(for: fileURL)
-            }
-        }
-    }
-
-    /// Re-arms itself after every change, which is how Observation reports more than once.
-    private func trackChangesForAutosave() {
-        withObservationTracking {
-            _ = model.document.commands
-            _ = model.document.orientation
-            _ = model.styleMemory
-        } onChange: { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                self.window?.isDocumentEdited = self.model.hasUnsavedChanges
-                StyleMemoryStore.save(self.model.styleMemory)
-                self.scheduleAutosave()
-                self.trackChangesForAutosave()
-            }
-        }
-    }
-
-    /// Writes a copy once the document has been still for a moment.
-    ///
-    /// Debounced rather than written per edit: a drag is dozens of committed changes, and
-    /// re-encoding the base image PNG for each of them would make the editor stutter.
-    private func scheduleAutosave() {
-        autosaveTask?.cancel()
-        guard model.hasUnsavedChanges else {
-            autosave.discard(for: fileURL)
-            return
-        }
-        autosaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(Self.autosaveSettleMilliseconds))
-            guard !Task.isCancelled else { return }
-            self?.writeAutosave()
-        }
-    }
-
-    private func writeAutosave() {
-        let contents = KadrDocumentFile.Contents(document: model.document, baseImagePNG: cachedBasePNG)
-        let snapshotURL = fileURL
-        let snapshotAutosave = autosave
-        let snapshotLogger = logger
-        Task.detached {
-            do {
-                try snapshotAutosave.write(contents, for: snapshotURL)
-            } catch {
-                snapshotLogger.error("Could not autosave: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
     func windowWillClose(_ notification: Notification) {
         autosaveTask?.cancel()
         autosaveTask = nil
+        pendingChangeTask?.cancel()
+        pendingChangeTask = nil
+        flushStyleMemory()
         window?.delegate = nil
         window?.contentView = nil
         window = nil

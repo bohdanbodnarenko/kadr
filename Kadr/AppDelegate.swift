@@ -88,6 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return created
     }
 
+    /// How many recordings are waiting to be recovered, counted off the main thread so the
+    /// status menu can show it without touching the disk (docs/09 U3.1).
+    let unfinishedRecordings = UnfinishedRecordingsCounter()
+
     /// The floating Stop/Pause/Discard bar, built only while recording (docs/03 §1.8).
     let recordingControlBar = RecordingControlBar()
     /// One camera session for the picker preview and the studio file. Constructed empty;
@@ -151,6 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         created.onFinished = { [weak self] result, exportGIF in
             self?.areaCapture.showRecording(at: result.fileURL, exportGIF: exportGIF)
+            self?.unfinishedRecordings.refresh()
         }
         created.onStudioSessionReady = { [weak self] session, _ in
             guard let self else { return }
@@ -159,6 +164,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         created.onStateChanged = { [weak self] in
             self?.refreshStatusItemIcon()
+        }
+        created.onAudioLevel = { [weak self] level in
+            self?.recordingControlBar.setAudioLevel(level)
         }
         recordingStorage = created
         return created
@@ -238,6 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 RecordingCrashRecovery.announce(count)
             }
             StudioSessionRecorder.sweep()
+            unfinishedRecordings.refresh()
         }
     }
 
@@ -271,7 +280,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
             },
             openHistory: { [weak self] in self?.openHistory() },
-            unfinishedRecordings: { StudioSessionRecorder.unfinishedCount() },
+            unfinishedRecordings: { [weak self] in self?.unfinishedRecordings.latest ?? 0 },
+            refreshUnfinishedRecordings: { [weak self] completion in
+                self?.unfinishedRecordings.refresh(completion: completion)
+            },
             recoverRecordings: { [weak self] in self?.recoverUnfinishedRecordings() },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
             overlayCardCount: { [weak self] in self?.areaCaptureStorage?.overlayCardCount ?? 0 },
@@ -284,7 +296,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController?.onMenuBarVisibilityChange = { [weak self] visible in
             self?.settings.showsMenuBarIcon = visible
         }
-        statusItemController?.observeMenuBarVisibility()
         endStatusItemInterval()
     }
 

@@ -17,11 +17,29 @@ public actor HistoryStore {
     private let signposter = KadrLog.signposter(.history)
     private let loader = ThumbnailLoader()
 
-    /// Opens (or creates) the library at `root`. Cheap: a few SQLite pages, no images.
-    public nonisolated static func open(root: URL) throws -> HistoryStore {
+    /// How much memory the database connections may hold.
+    public struct Tuning: Sendable, Equatable {
+        /// Concurrent read connections.
+        public var maximumReaderCount: Int
+        /// SQLite's page cache per connection, in KiB.
+        public var pageCacheKiB: Int
+
+        public init(maximumReaderCount: Int, pageCacheKiB: Int) {
+            self.maximumReaderCount = max(1, maximumReaderCount)
+            self.pageCacheKiB = max(1, pageCacheKiB)
+        }
+
+        /// For the resident agent (PRD §8): one reader and a 512 KiB page cache per
+        /// connection, instead of GRDB's five readers at SQLite's 2 MB each.
+        public static let agent = Tuning(maximumReaderCount: 1, pageCacheKiB: 512)
+    }
+
+    /// Opens (or creates) the library at `root`. Cheap: a few SQLite pages, no images —
+    /// but still file I/O and migrations, so call it off the main thread.
+    public nonisolated static func open(root: URL, tuning: Tuning = .agent) throws -> HistoryStore {
         let layout = HistoryLayout(root: root)
         try layout.prepare()
-        let pool = try HistoryDatabase.makePool(at: layout.databaseURL)
+        let pool = try HistoryDatabase.makePool(at: layout.databaseURL, tuning: tuning)
         do {
             try HistoryDatabase.migrator.migrate(pool)
         } catch {
@@ -31,8 +49,16 @@ public actor HistoryStore {
     }
 
     /// Application Support library used by the agent.
-    public nonisolated static func openApplicationSupport() throws -> HistoryStore {
-        try open(root: HistoryLayout.applicationSupport().root)
+    public nonisolated static func openApplicationSupport(tuning: Tuning = .agent) throws -> HistoryStore {
+        try open(root: HistoryLayout.applicationSupport().root, tuning: tuning)
+    }
+
+    /// Gives back what SQLite cached while the library was being read.
+    ///
+    /// For after one-off work — the launch-time retention pass, a closed History window —
+    /// so the agent does not keep pages around that it will not read again soon.
+    public func releaseMemory() {
+        dbPool.releaseMemory()
     }
 
     private init(layout: HistoryLayout, dbPool: DatabasePool) {

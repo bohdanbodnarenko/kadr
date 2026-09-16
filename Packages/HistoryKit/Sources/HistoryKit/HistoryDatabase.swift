@@ -35,11 +35,18 @@ enum HistoryDatabase {
         return migrator
     }
 
-    static func makePool(at url: URL) throws -> DatabasePool {
+    static func makePool(at url: URL, tuning: HistoryStore.Tuning) throws -> DatabasePool {
         var config = Configuration()
         config.busyMode = .timeout(5)
+        // One reader: the agent reads the library a page at a time, and every extra reader
+        // is its own SQLite connection with its own page cache (PRD §8).
+        config.maximumReaderCount = tuning.maximumReaderCount
+        let cacheSize = -tuning.pageCacheKiB
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON")
+            // Negative means KiB. SQLite's default is 2 MB per connection, which an index
+            // of a few thousand rows never needs and the agent's idle budget cannot spare.
+            try db.execute(sql: "PRAGMA cache_size = \(cacheSize)")
         }
         return try DatabasePool(path: url.path, configuration: config)
     }

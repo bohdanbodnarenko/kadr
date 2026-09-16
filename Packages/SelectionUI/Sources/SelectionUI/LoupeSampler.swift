@@ -1,4 +1,5 @@
 import CoreGraphics
+import os
 import Shared
 
 /// Reads pixels out of the frozen screenshot for the magnifier loupe (docs/03 §1.1).
@@ -12,6 +13,9 @@ public struct LoupeSampler: Sendable {
     private let image: CGImage
     /// Pixels per point on this display.
     private let scale: CGFloat
+    /// The one-pixel canvas every colour read draws into, made once per freeze rather than
+    /// once per mouse move.
+    private let probe = PixelProbe()
 
     public init(image: CGImage, scale: DisplayScale) {
         self.image = image
@@ -59,15 +63,35 @@ public struct LoupeSampler: Sendable {
         let y = Int((point.y * scale).rounded(.down))
         guard x >= 0, y >= 0, x < image.width, y < image.height else { return nil }
         guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        return probe.color(of: pixel)
+    }
+}
 
-        // Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is
-        // given and writes through it during `draw`, which is past the end of the inout
-        // access an array would give it. That is undefined behaviour, and it does crash.
-        let bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+/// A reusable 1×1 sRGB canvas for reading one pixel's colour (docs/03 §1.1).
+///
+/// The loupe reads a colour on every mouse move. Allocating a buffer and a `CGContext` for
+/// each read was the bulk of that work; the canvas is the same every time, so it is made
+/// once. Only the crop is per move, and cropping a `CGImage` shares its pixels rather than
+/// copying them.
+///
+/// Reading straight out of the frozen image's data provider would skip the draw as well,
+/// but asking a provider for its bytes copies the whole display — tens of megabytes per
+/// freeze — and would need a decoder for every pixel format ScreenCaptureKit can hand
+/// back. Drawing one pixel through CoreGraphics gets the colour management right for free.
+final class PixelProbe: @unchecked Sendable {
+    /// Invariant for `@unchecked`: `bytes` and `context` are used only inside
+    /// `lock.withLockUnchecked`, and `bytes` lives exactly as long as the probe.
+    private let lock = OSAllocatedUnfairLock()
+    /// Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is given
+    /// and writes through it during `draw`, which is past the end of the inout access an
+    /// array would give it. That is undefined behaviour, and it does crash.
+    private let bytes: UnsafeMutablePointer<UInt8>
+    private let context: CGContext?
+
+    init() {
+        bytes = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
         bytes.initialize(repeating: 0, count: 4)
-        defer { bytes.deallocate() }
-
-        guard let context = CGContext(
+        context = CGContext(
             data: bytes,
             width: 1,
             height: 1,
@@ -75,10 +99,23 @@ public struct LoupeSampler: Sendable {
             bytesPerRow: 4,
             space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
+        )
+    }
 
-        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-        return PixelColor(red: bytes[0], green: bytes[1], blue: bytes[2])
+    deinit {
+        bytes.deinitialize(count: 4)
+        bytes.deallocate()
+    }
+
+    /// The colour of a one-pixel image.
+    func color(of pixel: CGImage) -> PixelColor? {
+        lock.withLockUnchecked {
+            guard let context else { return nil }
+            // Cleared by hand so a translucent pixel is not composited over the last one.
+            bytes.update(repeating: 0, count: 4)
+            context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return PixelColor(red: bytes[0], green: bytes[1], blue: bytes[2])
+        }
     }
 }
 

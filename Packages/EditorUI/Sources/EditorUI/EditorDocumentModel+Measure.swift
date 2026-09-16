@@ -71,8 +71,28 @@ extension EditorDocumentModel {
     }
 
     /// Reads the base image's straight edges once, so the measure tool can snap to them.
-    public func loadEdges(from image: CGImage) {
+    func loadEdges(from image: CGImage) {
         edgeCandidates = EdgeDetector.candidates(in: image)
+    }
+
+    /// The same, off the main actor (docs/10 R1).
+    ///
+    /// Detection is a pass over every pixel of the capture, and it used to run inline in
+    /// the mouse-down of the first measurement — a visible hitch exactly as the user starts
+    /// to drag. Until it lands nothing snaps, which is what an empty set already means.
+    func loadEdgesInBackground(from image: CGImage) {
+        guard edgeCandidates.isEmpty, !isLoadingEdges else { return }
+        isLoadingEdges = true
+        Task { [weak self] in
+            let candidates = await Task.detached(priority: .userInitiated) {
+                EdgeDetector.candidates(in: image)
+            }.value
+            guard let self else { return }
+            isLoadingEdges = false
+            if edgeCandidates.isEmpty {
+                edgeCandidates = candidates
+            }
+        }
     }
 
     /// Moves an annotation, whatever its geometry.

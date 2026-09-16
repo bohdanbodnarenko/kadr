@@ -60,7 +60,17 @@ public extension EditorDocumentModel {
         draft = makeDraft(annotationTool, at: snappedIfMeasuring(point))
     }
 
+    /// One mouse-moved event of a drag.
+    ///
+    /// Document writes in here are not published: the canvas redraws the layers that moved
+    /// itself, and the chrome catches up once at `pointerUp` (docs/10 R1).
     func pointerDragged(to point: CGPoint, modifiers: EditorModifiers = []) {
+        withDocumentPublishingDeferred {
+            applyPointerDrag(to: point, modifiers: modifiers)
+        }
+    }
+
+    private func applyPointerDrag(to point: CGPoint, modifiers: EditorModifiers) {
         guard let origin = dragOrigin else { return }
 
         if continueSmartHighlightDrag(to: point, modifiers: modifiers) {
@@ -97,6 +107,12 @@ public extension EditorDocumentModel {
     }
 
     func pointerUp(at point: CGPoint, modifiers: EditorModifiers = []) {
+        // Declared first, so it runs last: whatever the drag did is published once, after
+        // the gesture has been closed.
+        defer {
+            liveCropRect = nil
+            publishDeferredDocumentChanges()
+        }
         defer {
             // Closes the drag's single undo step. Safe unconditionally: with no gesture
             // open it does nothing, so every exit from this method leaves history tidy.

@@ -66,7 +66,9 @@ struct StudioInspector: View {
         if let id = model.selectedClip {
             return model.edit.clips.clips.first(where: { $0.id == id })
         }
-        guard let index = model.clipIndex(at: model.playhead) else { return nil }
+        // `currentClipIndex`, not `clipIndex(at: playhead)`: the form re-renders when the
+        // playhead crosses into another clip, not on every playback tick (docs/11 S2).
+        guard let index = model.currentClipIndex, model.edit.clips.clips.indices.contains(index) else { return nil }
         return model.edit.clips.clips[index]
     }
 

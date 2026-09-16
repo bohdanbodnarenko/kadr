@@ -13,9 +13,18 @@ import Shared
 /// the picture for the rest of the recording.
 final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
+    /// OS-required handler queue (CLAUDE.md rule 5): `startRunning`/`stopRunning` block, and
+    /// AVFoundation asks for them off the main thread on one serial queue.
     private let sessionQueue = DispatchQueue(label: "app.kadr.recording.camera-session")
+    /// OS-required handler queue (CLAUDE.md rule 5): `setSampleBufferDelegate(_:queue:)`.
+    ///
+    /// Also the writer's queue. Every piece of writer state below is touched only here: the
+    /// delegate appends synchronously on it, and the pause/resume/finish commands hop onto
+    /// it. A separate write queue used to sit behind this one, which meant a copy of every
+    /// sample buffer and an async hop per frame — and, when the encoder fell behind, an
+    /// unbounded backlog of retained camera frames where `alwaysDiscardsLateVideoFrames`
+    /// would otherwise have dropped them.
     private let videoQueue = DispatchQueue(label: "app.kadr.recording.camera-video")
-    private let writeQueue = DispatchQueue(label: "app.kadr.recording.camera-write")
     private let logger = KadrLog.logger(.recording)
     private let lock = NSLock()
 
@@ -107,7 +116,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         writer.add(video)
         guard writer.startWriting() else { return false }
 
-        writeQueue.sync {
+        videoQueue.sync {
             self.writer = writer
             writerInput = video
             outputURL = url
@@ -126,7 +135,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     }
 
     func pauseWriting() {
-        writeQueue.async { [self] in
+        videoQueue.async { [self] in
             guard isWriting, !isPaused else { return }
             isPaused = true
             pauseBegan = latestSample
@@ -134,7 +143,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     }
 
     func resumeWriting() {
-        writeQueue.async { [self] in
+        videoQueue.async { [self] in
             guard isWriting, isPaused else { return }
             isPaused = false
             resumeNeedsOffset = true
@@ -143,7 +152,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
 
     func finish() async -> Bool {
         await withCheckedContinuation { continuation in
-            writeQueue.async { [self] in
+            videoQueue.async { [self] in
                 guard let writer, isWriting else {
                     stopSessionNow()
                     continuation.resume(returning: false)
@@ -152,7 +161,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
                 isWriting = false
                 writerInput?.markAsFinished()
                 writer.finishWriting { [self] in
-                    writeQueue.async { [self] in
+                    videoQueue.async { [self] in
                         let succeeded = self.writer?.status == .completed
                         if succeeded != true, let outputURL {
                             try? FileManager.default.removeItem(at: outputURL)
@@ -172,7 +181,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     }
 
     func stopSession() {
-        writeQueue.async { [self] in
+        videoQueue.async { [self] in
             isWriting = false
             writer?.cancelWriting()
             resetWriter()
@@ -181,7 +190,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     }
 
     func cancel() {
-        writeQueue.async { [self] in
+        videoQueue.async { [self] in
             isWriting = false
             writer?.cancelWriting()
             if let outputURL {
@@ -197,11 +206,8 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         didOutput sampleBuffer: CMSampleBuffer,
         from _: AVCaptureConnection
     ) {
-        guard let copy = Self.copy(sampleBuffer) else { return }
-        let boxed = SampleBox(sample: copy)
-        writeQueue.async { [self] in
-            append(boxed.sample)
-        }
+        // Already on `videoQueue`, which owns the writer: no copy, no hop.
+        append(sampleBuffer)
     }
 
     private func append(_ sampleBuffer: CMSampleBuffer) {
@@ -280,16 +286,6 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         isWriting = false
     }
 
-    private static func copy(_ sampleBuffer: CMSampleBuffer) -> CMSampleBuffer? {
-        var copy: CMSampleBuffer?
-        let status = CMSampleBufferCreateCopy(
-            allocator: kCFAllocatorDefault,
-            sampleBuffer: sampleBuffer,
-            sampleBufferOut: &copy
-        )
-        return status == noErr ? copy : nil
-    }
-
     private static func retime(_ sampleBuffer: CMSampleBuffer, to presentation: CMTime) -> CMSampleBuffer? {
         var timing = CMSampleTimingInfo(
             duration: CMSampleBufferGetDuration(sampleBuffer),
@@ -305,10 +301,5 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
             sampleBufferOut: &retimed
         )
         return status == noErr ? retimed : nil
-    }
-
-    /// Carries a sample buffer onto the write queue.
-    private struct SampleBox: @unchecked Sendable {
-        let sample: CMSampleBuffer
     }
 }

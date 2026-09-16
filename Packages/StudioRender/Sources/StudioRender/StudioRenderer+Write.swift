@@ -59,12 +59,13 @@ extension StudioRenderer {
         }
         writer.writer.startSession(atSourceTime: CMTime.zero)
 
+        var throttle = ProgressThrottle(progress)
         let frameCount = try await renderLoop(
             state,
             composer: composer,
             io: (reader, writer),
             options: options,
-            progress: progress
+            progress: &throttle
         )
 
         // Ask the reader *why* it stopped (docs/11 S0.4).
@@ -94,7 +95,7 @@ extension StudioRenderer {
         guard frameCount > 0 else {
             throw RenderError.writingFailed("no frames were composed")
         }
-        progress?(1)
+        throttle.update(1)
         // Past every throw: the file at the destination is now the whole export.
         finished = true
 
@@ -106,24 +107,39 @@ extension StudioRenderer {
         )
     }
 
+    /// The render loop, staged so the decoder and the GPU work at the same time.
+    ///
+    /// Each pass decodes and composes frame *N* and starts it on the GPU, then waits for
+    /// frame *N − 1* — started on the previous pass — and hands that to the encoder. So
+    /// while the GPU draws one frame, the decoder is already producing the next, where the
+    /// old loop left each idle while the other worked. See `StudioRenderer+Pipeline.swift`
+    /// for why the stages overlap by one frame inside one task rather than running as
+    /// separate tasks with queues between them.
+    ///
+    /// Which frames are written is unchanged, line for line: a clip change forgets the last
+    /// screen frame, each output time takes the latest decoded frame at or before it, a
+    /// frame with no screen yet is skipped, and audio is interleaved after each frame is
+    /// appended, up to that frame's time.
     private func renderLoop(
         _ state: RenderState,
         composer: StudioFrameComposer,
         io: (reader: ReaderBundle, writer: WriterBundle),
         options: Options,
-        progress: (@Sendable (Double) -> Void)?
+        progress: inout ProgressThrottle
     ) async throws -> Int {
         let reader = io.reader
         let writer = io.writer
         var lastCamera: CIImage?
-        var pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
+        var pendingCamera = reader.camera.flatMap { signpostedCopy(from: $0) }
         var lastScreen: CIImage?
-        var pendingScreen = copyImage(from: reader.screen)
+        var pendingScreen = signpostedCopy(from: reader.screen)
         var lastClipID: Clip.ID?
         let fps = max(options.frameRate, 1)
         let frameCountTarget = VariableFrameClock.frameCount(duration: state.duration, frameRate: fps)
         var frameCount = 0
-        let size = composer.plan.outputSize
+        let bounds = CGRect(origin: .zero, size: composer.plan.outputSize)
+        // The frame on the GPU, waiting to be written.
+        var inFlight: RenderedJob?
 
         for frame in 0 ..< frameCountTarget {
             try Task.checkCancellation()
@@ -136,20 +152,86 @@ extension StudioRenderer {
             }
             while let pending = pendingScreen, pending.time <= seconds {
                 lastScreen = pending.image
-                pendingScreen = copyImage(from: reader.screen)
+                pendingScreen = signpostedCopy(from: reader.screen)
             }
             while let pending = pendingCamera, pending.time <= seconds {
                 lastCamera = pending.image
-                pendingCamera = reader.camera.flatMap { copyImage(from: $0) }
+                pendingCamera = reader.camera.flatMap { signpostedCopy(from: $0) }
             }
             guard let sourceImage = lastScreen else { continue }
-            let composed = composer.frame(at: seconds, source: sourceImage, camera: lastCamera)
-            try await append(composed, at: time, to: writer, size: size)
+            let started = try await start(
+                FrameJob(frame: frame, time: time, seconds: seconds, source: sourceImage, camera: lastCamera),
+                composer: composer,
+                bounds: bounds,
+                writer: writer
+            )
+            if let previous = inFlight {
+                try await finish(previous, frames: frameCountTarget, io: io, progress: &progress)
+                frameCount += 1
+            }
+            inFlight = started
+        }
+        if let last = inFlight {
+            try await finish(last, frames: frameCountTarget, io: io, progress: &progress)
             frameCount += 1
-            try await drainAudio(upTo: time, reader: reader, writer: writer)
-            progress?(min(Double(frame + 1) / Double(frameCountTarget), 1))
         }
         return frameCount
+    }
+
+    /// Composes a frame and starts drawing it into a buffer from the writer's pool.
+    ///
+    /// `startTask` rather than `render(_:to:)`: the recipe is compiled and the GPU work
+    /// queued, and control comes straight back.
+    private func start(
+        _ job: FrameJob,
+        composer: StudioFrameComposer,
+        bounds: CGRect,
+        writer: WriterBundle
+    ) async throws -> RenderedJob {
+        // Waited for here, as before, so a writer that is not yet taking frames is not
+        // asked for a buffer; the pool exists from `startWriting` on.
+        try await waitUntilReady(writer.video)
+        let interval = Self.signposter.beginInterval("studio.export.compose")
+        defer { Self.signposter.endInterval("studio.export.compose", interval) }
+        guard let pool = writer.adaptor.pixelBufferPool else {
+            throw RenderError.writingFailed("the writer produced no pixel-buffer pool")
+        }
+        var buffer: CVPixelBuffer?
+        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess,
+              let buffer
+        else {
+            throw RenderError.writingFailed("could not take a pixel buffer from the pool")
+        }
+        let image = composer.frame(at: job.seconds, source: job.source, camera: job.camera)
+        // Rendered through the shared context so the compiled kernels and the texture
+        // cache survive between frames — building a context per frame is most of the cost
+        // of a frame. The same colour space and bounds the synchronous render used.
+        let destination = CIRenderDestination(pixelBuffer: buffer)
+        destination.colorSpace = StudioRenderContext.sRGB
+        destination.alphaMode = .premultiplied
+        do {
+            let task = try StudioRenderContext.shared.startTask(
+                toRender: image,
+                from: bounds,
+                to: destination,
+                at: .zero
+            )
+            return RenderedJob(frame: job.frame, time: job.time, buffer: buffer, task: task)
+        } catch {
+            throw RenderError.writingFailed(error.localizedDescription)
+        }
+    }
+
+    /// Waits for a started frame, writes it, and brings the audio up to it.
+    private func finish(
+        _ job: RenderedJob,
+        frames: Int,
+        io: (reader: ReaderBundle, writer: WriterBundle),
+        progress: inout ProgressThrottle
+    ) async throws {
+        try await append(job, to: io.writer)
+        try await drainAudio(upTo: job.time, reader: io.reader, writer: io.writer)
+        progress.update(min(Double(job.frame + 1) / Double(frames), 1))
     }
 
     /// Fails the render if the reader stopped for any reason but reaching the end.
@@ -210,6 +292,12 @@ extension StudioRenderer {
         // BGRA out of the decoder: CoreImage's native layout, so composing costs no
         // conversion. Asking for the compressed format and converting per frame is the
         // single most expensive thing a render loop can get wrong.
+        //
+        // IOSurface/Metal-compatible keys were tried here and left out for now: they were
+        // in place while the suite was hunting a process-wide reader stall, which turned
+        // out to be cooperative-pool starvation (`ExportGate`), and they have not been
+        // re-measured on their own since. The writer's side, which is ours to allocate, is
+        // IOSurface-backed (`makeWriter`).
         let settings: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
@@ -306,40 +394,25 @@ extension StudioRenderer {
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: Int(size.width),
                 kCVPixelBufferHeightKey as String: Int(size.height),
-                kCVPixelBufferMetalCompatibilityKey as String: true
+                kCVPixelBufferMetalCompatibilityKey as String: true,
+                // So CoreImage draws straight into the encoder's own memory.
+                kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()
             ]
         )
         return WriterBundle(writer: writer, video: video, audio: audio, adaptor: adaptor)
     }
 
-    /// Composes one frame into a pooled buffer and appends it.
-    private func append(
-        _ image: CIImage,
-        at time: CMTime,
-        to writer: WriterBundle,
-        size: CGSize
-    ) async throws {
+    /// Waits for a frame's pixels and hands them to the encoder.
+    private func append(_ job: RenderedJob, to writer: WriterBundle) async throws {
+        let interval = Self.signposter.beginInterval("studio.export.write")
+        defer { Self.signposter.endInterval("studio.export.write", interval) }
+        do {
+            _ = try job.task.waitUntilCompleted()
+        } catch {
+            throw RenderError.writingFailed(error.localizedDescription)
+        }
         try await waitUntilReady(writer.video)
-        guard let pool = writer.adaptor.pixelBufferPool else {
-            throw RenderError.writingFailed("the writer produced no pixel-buffer pool")
-        }
-        var buffer: CVPixelBuffer?
-        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess,
-              let buffer
-        else {
-            throw RenderError.writingFailed("could not take a pixel buffer from the pool")
-        }
-
-        // Rendered through the shared context so the compiled kernels and the texture
-        // cache survive between frames — building a context per frame is most of the cost
-        // of a frame.
-        StudioRenderContext.shared.render(
-            image,
-            to: buffer,
-            bounds: CGRect(origin: .zero, size: size),
-            colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
-        )
-        guard writer.adaptor.append(buffer, withPresentationTime: time) else {
+        guard writer.adaptor.append(job.buffer, withPresentationTime: job.time) else {
             throw RenderError.writingFailed(writer.writer.error?.localizedDescription ?? "a frame was refused")
         }
     }
@@ -366,14 +439,24 @@ extension StudioRenderer {
     ///
     /// A poll rather than `requestMediaDataWhenReady(on:using:)`, which would mean a
     /// dispatch queue and a continuation to hand each frame back to the render — for a
-    /// flag that is almost always already true by the time the next frame is composed.
-    /// The sleep is what stops the rare stall from becoming a spin.
+    /// flag that is almost always already true by the time the next frame is composed
+    /// (CLAUDE.md rule 5).
+    ///
+    /// The sleep is what stops the rare stall from becoming a spin, and it backs off: a
+    /// stall that clears within a millisecond — the encoder finishing one frame — costs
+    /// half of one, and one that does not — the writer interleaving a long run of audio —
+    /// settles at ten milliseconds between looks rather than a thousand wake-ups a second.
     private func waitUntilReady(_ input: AVAssetWriterInput) async throws {
+        var pause = Self.readyPollInitial
         while !input.isReadyForMoreMediaData {
             try Task.checkCancellation()
-            try await Task.sleep(nanoseconds: 1_000_000)
+            try await Task.sleep(nanoseconds: pause)
+            pause = min(pause * 2, Self.readyPollLimit)
         }
     }
+
+    static let readyPollInitial: UInt64 = 500_000
+    static let readyPollLimit: UInt64 = 10_000_000
 
     // MARK: - Pixels
 
@@ -381,6 +464,13 @@ extension StudioRenderer {
     private func image(from sample: CMSampleBuffer) -> CIImage? {
         guard let buffer = CMSampleBufferGetImageBuffer(sample) else { return nil }
         return CIImage(cvPixelBuffer: buffer)
+    }
+
+    /// The same, inside the decode stage's signpost.
+    private func signpostedCopy(from output: AVAssetReaderTrackOutput) -> (image: CIImage, time: TimeInterval)? {
+        let interval = Self.signposter.beginInterval("studio.export.decode")
+        defer { Self.signposter.endInterval("studio.export.decode", interval) }
+        return copyImage(from: output)
     }
 
     /// The next camera frame and the instant it belongs to.

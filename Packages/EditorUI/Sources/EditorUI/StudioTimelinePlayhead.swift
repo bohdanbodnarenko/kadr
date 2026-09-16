@@ -6,8 +6,11 @@ import SwiftUI
 /// needle itself ignores clicks so trims and zooms underneath still work. Kadr's playhead
 /// used to be `allowsHitTesting(false)` on the line alone, so the only way to scrub was to
 /// drag the ruler or a clip — which is how a timeline feels raw.
+///
+/// Takes the playhead clock rather than a time, so it is the view that re-renders while
+/// playback moves the playhead — not the timeline that contains it (docs/11 S2).
 struct StudioTimelinePlayhead: View {
-    let time: TimeInterval
+    let clock: StudioPlayhead
     let scale: CGFloat
     let height: CGFloat
     let duration: TimeInterval
@@ -25,7 +28,7 @@ struct StudioTimelinePlayhead: View {
     }
 
     var body: some View {
-        let x = time * scale
+        let x = clock.time * scale
         ZStack(alignment: .topLeading) {
             Rectangle()
                 .fill(Color.accentColor)

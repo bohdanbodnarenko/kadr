@@ -31,7 +31,68 @@ public struct EditorModifiers: OptionSet, Sendable, Hashable {
 public final class EditorDocumentModel {
     @ObservationIgnored private let logger = KadrLog.logger(.overlay)
 
-    public internal(set) var document: AnnotationDocument
+    /// The document itself. Observers are told about it through `document`'s accessors.
+    @ObservationIgnored private var storedDocument: AnnotationDocument
+
+    /// Bumped on every write to `document`, published or not.
+    ///
+    /// The canvas compares this rather than the command list: comparing two 128-deep
+    /// histories' worth of commands per SwiftUI update was itself a cost on the drag path.
+    @ObservationIgnored public private(set) var documentRevision: UInt64 = 0
+    /// The last revision observers were told about.
+    @ObservationIgnored private var publishedRevision: UInt64 = 0
+    /// True while the canvas is applying a pointer drag (docs/10 R1).
+    @ObservationIgnored private var defersDocumentPublishing = false
+    /// What `selection`, `canUndo` and `canRedo` observers last saw, so they are told
+    /// only when those actually change — not on every edit to the document around them.
+    @ObservationIgnored private var publishedSelection: Set<AnnotationID> = []
+    @ObservationIgnored private var publishedCanUndo = false
+    @ObservationIgnored private var publishedCanRedo = false
+
+    /// The annotated capture.
+    ///
+    /// Hand-written accessors rather than plain observed storage, for the drag path. A
+    /// drag rewrites the document on every mouse-moved event, and every view that read
+    /// anything from it — the toolbar, the style pane, the look inspector and the canvas
+    /// representable — was re-evaluated on each one, on top of the canvas updating its own
+    /// layers in place. While the canvas applies a pointer drag, writes here are kept from
+    /// observers (`withDocumentPublishingDeferred`) and published once when the pointer
+    /// comes up. Every other write — undo, an inspector edit, a keystroke — is published
+    /// as it happens, exactly as before.
+    ///
+    /// Views that only need the selection or the undo state read `selection`, `canUndo`
+    /// and `canRedo`, which are published on their own and only when they change.
+    public internal(set) var document: AnnotationDocument {
+        get {
+            access(keyPath: \.document)
+            return storedDocument
+        }
+        set {
+            documentRevision &+= 1
+            if defersDocumentPublishing {
+                storedDocument = newValue
+            } else {
+                publishedRevision = documentRevision
+                withMutation(keyPath: \.document) {
+                    storedDocument = newValue
+                }
+            }
+            publishDerivedState()
+        }
+        _modify {
+            documentRevision &+= 1
+            if defersDocumentPublishing {
+                yield &storedDocument
+            } else {
+                publishedRevision = documentRevision
+                _$observationRegistrar.willSet(self, keyPath: \.document)
+                defer { _$observationRegistrar.didSet(self, keyPath: \.document) }
+                yield &storedDocument
+            }
+            publishDerivedState()
+        }
+    }
+
     public var tool: EditorTool = .select
     @ObservationIgnored var pasteCascadeCount = 0
     public var styleMemory = StyleMemory()
@@ -74,6 +135,8 @@ public final class EditorDocumentModel {
     /// Supplied by the canvas, which is the only thing here that holds the pixels. Empty
     /// until then, and an empty set simply means nothing snaps — measuring still works.
     public internal(set) var edgeCandidates: EdgeCandidates = .none
+    /// True while `loadEdgesInBackground` is reading the capture.
+    @ObservationIgnored var isLoadingEdges = false
     /// How close a measurement endpoint has to be to a detected line before it snaps, in
     /// base-image points. Zero turns snapping off.
     public var edgeSnapTolerance: CGFloat = 6
@@ -112,7 +175,9 @@ public final class EditorDocumentModel {
     /// The marquee being dragged in select mode.
     public internal(set) var marquee: CGRect?
 
-    var dragOrigin: CGPoint?
+    /// Where the current pointer gesture started, or nil between gestures. Not observed:
+    /// the canvas reads it on every SwiftUI update to know whether it is mid-drag.
+    @ObservationIgnored var dragOrigin: CGPoint?
     /// The selected annotations exactly as they were when the drag began.
     ///
     /// The move is recomputed from these on every event rather than accumulated onto the
@@ -143,11 +208,73 @@ public final class EditorDocumentModel {
     @ObservationIgnored private var savedCommands: [AnnotationCommand]
     @ObservationIgnored private var savedOrientation: CanvasOrientation
 
+    /// The crop rect while a crop handle is being dragged.
+    ///
+    /// Published on its own because the crop bar shows the live size, and the document —
+    /// which it would otherwise read — is not published mid-drag.
+    public internal(set) var liveCropRect: CGRect?
+
     public init(document: AnnotationDocument) {
-        self.document = document
+        storedDocument = document
         savedCommands = document.commands
         savedOrientation = document.orientation
+        publishedSelection = document.selection
+        publishedCanUndo = document.canUndo
+        publishedCanRedo = document.canRedo
         styleMemory = StyleMemoryStore.load()
+    }
+
+    /// True while the canvas has a pointer gesture open, from mouse-down to mouse-up.
+    public var isPointerGestureActive: Bool {
+        dragOrigin != nil
+    }
+
+    /// Runs `body` with its document writes kept from observers.
+    ///
+    /// For the canvas's per-event drag path only: the canvas updates its own layers for
+    /// those writes, and everything else catches up at `publishDeferredDocumentChanges`.
+    func withDocumentPublishingDeferred<Result>(_ body: () -> Result) -> Result {
+        let wasDeferring = defersDocumentPublishing
+        defersDocumentPublishing = true
+        defer { defersDocumentPublishing = wasDeferring }
+        return body()
+    }
+
+    /// Tells observers about any document writes they have not heard about yet.
+    public func publishDeferredDocumentChanges() {
+        guard publishedRevision != documentRevision, !defersDocumentPublishing else { return }
+        publishedRevision = documentRevision
+        withMutation(keyPath: \.document) {}
+    }
+
+    /// Publishes the cheap derived values, each only if it changed.
+    private func publishDerivedState() {
+        let selection = storedDocument.selection
+        if selection != publishedSelection {
+            withMutation(keyPath: \.selection) {
+                publishedSelection = selection
+            }
+        }
+        let canUndo = storedDocument.canUndo
+        if canUndo != publishedCanUndo {
+            withMutation(keyPath: \.canUndo) {
+                publishedCanUndo = canUndo
+            }
+        }
+        let canRedo = storedDocument.canRedo
+        if canRedo != publishedCanRedo {
+            withMutation(keyPath: \.canRedo) {
+                publishedCanRedo = canRedo
+            }
+        }
+    }
+
+    /// Records where the opaque capture sits, once it has been measured off the main actor.
+    ///
+    /// Not an edit: it describes the pixels, so it is neither undoable nor unsaved work.
+    public func adoptVisibleBounds(_ rect: CGRect?) {
+        guard storedDocument.baseImage.visibleBounds == nil, rect != nil else { return }
+        document.adoptVisibleBounds(rect)
     }
 
     /// Whether there is work in this window that only exists in this window (docs/07 M7).
@@ -174,7 +301,10 @@ public final class EditorDocumentModel {
     }
 
     public var selection: Set<AnnotationID> {
-        get { document.selection }
+        get {
+            access(keyPath: \.selection)
+            return storedDocument.selection
+        }
         set { document.selection = newValue }
     }
 
@@ -191,11 +321,13 @@ public final class EditorDocumentModel {
     }
 
     public var canUndo: Bool {
-        document.canUndo
+        access(keyPath: \.canUndo)
+        return storedDocument.canUndo
     }
 
     public var canRedo: Bool {
-        document.canRedo
+        access(keyPath: \.canRedo)
+        return storedDocument.canRedo
     }
 
     public func undo() {

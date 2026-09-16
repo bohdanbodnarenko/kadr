@@ -163,10 +163,21 @@ struct ThumbnailCacheTests {
         let grid = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .grid))
         #expect(strip !== grid, "scopes should not share an entry")
 
-        cache.purgeStrip()
-        let stripAgain = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .strip))
-        let gridAgain = try #require(cache.thumbnail(for: url, maxPixelSize: 100, scope: .grid))
-        #expect(stripAgain !== strip, "the strip should have been purged")
-        #expect(gridAgain === grid, "purging the strip must not drop the grid")
+        #expect(cache.cached(for: url, maxPixelSize: 100, scope: .grid) === grid)
+    }
+
+    /// The strip is kept across menu opens now, so grid churn is the only thing that could
+    /// take its thumbnails away — and must not (docs/10 R2.4).
+    @Test("Filling the grid past its budget leaves the strip's thumbnails alone")
+    func gridChurnKeepsTheStrip() throws {
+        // A 1.5 MB grid budget: a handful of 400 px thumbnails overflows it.
+        let cache = ThumbnailCache(costLimit: 2 * 1024 * 1024, stripCostLimit: 512 * 1024)
+        let url = try writeImage(width: 800, height: 600)
+        let strip = try #require(cache.thumbnail(for: url, maxPixelSize: 112, scope: .strip))
+
+        for size in 380 ..< 400 {
+            _ = cache.thumbnail(for: url, maxPixelSize: size, scope: .grid)
+        }
+        #expect(cache.cached(for: url, maxPixelSize: 112, scope: .strip) === strip)
     }
 }

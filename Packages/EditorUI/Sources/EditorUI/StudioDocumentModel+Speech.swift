@@ -9,6 +9,41 @@ import StudioSession
 public extension StudioDocumentModel {
     // MARK: - Speech
 
+    /// Loads the persisted transcript once it has been checked against the footage.
+    ///
+    /// Started by `init` and awaited by nobody on the way in: validating a transcript means
+    /// proving the footage is the one it was made from, and on a miss that is a SHA-256 of
+    /// the whole movie. That runs detached at utility priority, stops reading when the studio
+    /// closes, and is skipped outright when the fingerprint beside the transcript says the
+    /// file has not changed (`SessionDocument.audioContentHash()`).
+    ///
+    /// A transcript produced by Tidy Speech while this was running wins: it is newer by
+    /// construction, and overwriting it with the stored one would undo what the user just
+    /// asked for.
+    func loadTranscript() async {
+        let document = document
+        let check = Task.detached(priority: .utility) { () -> Transcript? in
+            let signposter = KadrLog.signposter(.app)
+            let state = signposter.beginInterval("studio.transcript.hash")
+            defer { signposter.endInterval("studio.transcript.hash", state) }
+            return try? document.transcriptMatchingFootage()
+        }
+        let loaded = await withTaskCancellationHandler {
+            await check.value
+        } onCancel: {
+            check.cancel()
+        }
+        guard !Task.isCancelled, let loaded, transcript == nil else { return }
+        transcript = loaded
+        chapters = ChapterMarks.marks(from: loaded, duration: manifest.duration)
+    }
+
+    /// Waits for the transcript check `init` started. For tests, and for anything that
+    /// needs the stored transcript before it acts.
+    func transcriptLoaded() async {
+        await transcriptLoadTask?.value
+    }
+
     func refreshSpeechStatus() async {
         let locale = SpeechLanguage.currentIdentifier(speechLocaleIdentifier)
         do {
@@ -256,14 +291,30 @@ public extension StudioDocumentModel {
 
     /// The word being said at the playhead, if the transcript covers that moment.
     func activeTranscriptWord(in words: [TranscriptWord]) -> TranscriptWord? {
-        let source = edit.clips.sourceTime(forEdited: playhead) ?? playhead
+        Self.activeWord(in: words, atEdited: playhead, clips: edit.clips)
+    }
+
+    /// The word being said at an edited-time instant.
+    ///
+    /// Static and explicit about its inputs so the transcript's playhead leaf can call it
+    /// without reading the model — which would subscribe it to every edit.
+    nonisolated static func activeWord(
+        in words: [TranscriptWord],
+        atEdited time: TimeInterval,
+        clips: ClipTimeline
+    ) -> TranscriptWord? {
+        let source = clips.sourceTime(forEdited: time) ?? time
         return words.first { source >= $0.start && source < $0.end }
             ?? words.last { $0.start <= source }
     }
 
     var visibleTranscriptWords: [TranscriptWord] {
+        Self.visibleWords(in: transcript, query: transcriptQuery)
+    }
+
+    nonisolated static func visibleWords(in transcript: Transcript?, query: String) -> [TranscriptWord] {
         guard let transcript else { return [] }
-        let query = transcriptQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return transcript.words }
         return transcript.words.filter { $0.text.lowercased().contains(query) }
     }

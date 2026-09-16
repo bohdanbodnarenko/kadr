@@ -30,12 +30,7 @@ public struct RedactionRasterizer: Sendable {
     /// Editing has to look like the real effect — a grey rectangle is not a redaction.
     public func preview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
         let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let box = CGRect(
-            x: spec.rect.minX * scale,
-            y: spec.rect.minY * scale,
-            width: spec.rect.width * scale,
-            height: spec.rect.height * scale
-        ).integral.intersection(bounds)
+        let box = Self.pixelBox(of: spec.rect, scale: scale).intersection(bounds)
         guard !box.isNull, box.width >= 1, box.height >= 1 else { return nil }
 
         switch spec.style {
@@ -52,6 +47,17 @@ public struct RedactionRasterizer: Sendable {
             let sample = Self.dominantEdgeColor(of: crop)
             return solidImage(width: Int(box.width), height: Int(box.height), sample: sample)
         }
+    }
+
+    /// A box in points as the integral pixel rect the preview crops, top-left origin.
+    static func pixelBox(of rect: CGRect, scale: CGFloat) -> CGRect {
+        let rect = rect.standardized
+        return CGRect(
+            x: rect.minX * scale,
+            y: rect.minY * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
+        ).integral
     }
 
     /// Blurs the box's own pixels, its edges extended outward, the way Screendrop does.
@@ -241,6 +247,34 @@ public struct RedactionRasterizer: Sendable {
         let height = image.height
         guard width > 0, height > 0 else { return .fallback }
 
+        // Only the one-pixel ring is read, so only the ring is drawn: four strips rather than
+        // the whole region. Drawing a 2000×1000 box to look at its border was a 8 MB
+        // allocation and a full decode on the main actor, per mouse-move (docs/10 R1).
+        guard let top = Self.strip(of: image, CGRect(x: 0, y: 0, width: width, height: 1)),
+              let bottom = Self.strip(of: image, CGRect(x: 0, y: height - 1, width: width, height: 1)),
+              let left = Self.strip(of: image, CGRect(x: 0, y: 0, width: 1, height: height)),
+              let right = Self.strip(of: image, CGRect(x: width - 1, y: 0, width: 1, height: height))
+        else { return .fallback }
+
+        var histogram = EdgeHistogram()
+        let perimeter = 2 * (width + height)
+        let step = max(1, perimeter / 4000)
+        for x in stride(from: 0, to: width, by: step) {
+            histogram.add(top, offset: x * 4)
+            histogram.add(bottom, offset: x * 4)
+        }
+        for y in stride(from: 0, to: height, by: step) {
+            histogram.add(left, offset: y * 4)
+            histogram.add(right, offset: y * 4)
+        }
+        return histogram.dominant ?? .fallback
+    }
+
+    /// One edge of `image` as RGBA8 bytes, row-major from the top.
+    private static func strip(of image: CGImage, _ rect: CGRect) -> [UInt8]? {
+        guard let cropped = image.cropping(to: rect) else { return nil }
+        let width = cropped.width
+        let height = cropped.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(
@@ -252,23 +286,10 @@ public struct RedactionRasterizer: Sendable {
                 space: workingSpace,
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
             ) else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
-        guard drawn else { return .fallback }
-
-        var histogram = EdgeHistogram()
-        let perimeter = 2 * (width + height)
-        let step = max(1, perimeter / 4000)
-        for x in stride(from: 0, to: width, by: step) {
-            histogram.add(pixels, offset: x * 4)
-            histogram.add(pixels, offset: ((height - 1) * width + x) * 4)
-        }
-        for y in stride(from: 0, to: height, by: step) {
-            histogram.add(pixels, offset: (y * width) * 4)
-            histogram.add(pixels, offset: (y * width + width - 1) * 4)
-        }
-        return histogram.dominant ?? .fallback
+        return drawn ? pixels : nil
     }
 
     private func solidImage(width: Int, height: Int, sample: EdgeSample) -> CGImage? {

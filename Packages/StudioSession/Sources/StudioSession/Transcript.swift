@@ -209,19 +209,82 @@ public enum TranscriptionError: Error, Equatable, Sendable {
 }
 
 /// SHA-256 of a media file, so a persisted transcript invalidates when the audio changes.
+///
+/// Hashing is linear in the size of the footage — seconds for a multi-gigabyte recording —
+/// so callers run it off the main actor, and `SessionDocument.audioContentHash()` skips it
+/// entirely when the file is provably the one that was hashed last time.
 public enum AudioContentHash {
+    /// How much is read per step. Large enough that the syscall count stays small on a
+    /// multi-gigabyte file, small enough that cancellation is noticed within a few
+    /// milliseconds and the resident footprint stays flat.
+    static let chunkSize = 4 * 1024 * 1024
+
+    /// - Throws: `CancellationError` when the calling task is cancelled between chunks, so
+    ///   closing a studio mid-hash stops reading the footage rather than finishing the pass.
     public static func hash(fileAt url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {
-            let chunk = try handle.read(upToCount: 1024 * 1024) ?? Data()
+            try Task.checkCancellation()
+            let chunk = try handle.read(upToCount: chunkSize) ?? Data()
             if chunk.isEmpty {
                 break
             }
             hasher.update(data: chunk)
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+/// What a file *is* on disk, cheaply: enough to say "this is the same bytes as last time"
+/// without reading them (docs/13 T2.3).
+///
+/// Size, modification time and the file's inode on its volume. A re-recorded or replaced
+/// `screen.mov` changes at least one of those — an atomic replace gets a new inode even when
+/// the size and timestamp happen to agree — so a match is a safe reason to reuse a hash, and
+/// anything else falls back to hashing the footage again.
+public struct AudioFileIdentity: Codable, Sendable, Hashable {
+    public var byteCount: Int64
+    /// Seconds since the reference date. A `TimeInterval` rather than a `Date` so the JSON
+    /// round trip is a plain number and cannot pick up a formatting strategy.
+    public var modified: TimeInterval
+    public var fileNumber: UInt64
+    public var volumeNumber: Int64
+
+    public init(byteCount: Int64, modified: TimeInterval, fileNumber: UInt64, volumeNumber: Int64) {
+        self.byteCount = byteCount
+        self.modified = modified
+        self.fileNumber = fileNumber
+        self.volumeNumber = volumeNumber
+    }
+
+    /// The identity of the file at `url`, or nil if it cannot be read.
+    public init?(fileAt url: URL) {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = (attributes[.size] as? NSNumber)?.int64Value,
+              let modified = attributes[.modificationDate] as? Date
+        else { return nil }
+        self.init(
+            byteCount: size,
+            modified: modified.timeIntervalSinceReferenceDate,
+            fileNumber: (attributes[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0,
+            volumeNumber: (attributes[.systemNumber] as? NSNumber)?.int64Value ?? 0
+        )
+    }
+}
+
+/// A content hash remembered against the identity of the file it was computed from.
+///
+/// Written beside the transcript so reopening a studio does not re-read the whole
+/// recording to prove what the fingerprint already proves.
+public struct AudioContentHashCache: Codable, Sendable, Hashable {
+    public var identity: AudioFileIdentity
+    public var hash: String
+
+    public init(identity: AudioFileIdentity, hash: String) {
+        self.identity = identity
+        self.hash = hash
     }
 }
 

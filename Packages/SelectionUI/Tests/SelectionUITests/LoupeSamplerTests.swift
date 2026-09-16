@@ -95,6 +95,34 @@ struct LoupeSamplerTests {
         #expect(sampler.color(at: CGPoint(x: 30, y: 10)) == PixelColor(red: 0, green: 0, blue: 255))
     }
 
+    /// The canvas is reused across reads, so nothing of one read may leak into the next —
+    /// including a translucent pixel, which would otherwise composite over the last colour.
+    @Test("Repeated reads on one sampler never carry a colour over", arguments: [
+        [(10, PixelColor(red: 255, green: 0, blue: 0)), (90, PixelColor(red: 0, green: 0, blue: 255))],
+        [(90, PixelColor(red: 0, green: 0, blue: 255)), (10, PixelColor(red: 255, green: 0, blue: 0))],
+        [(10, PixelColor(red: 255, green: 0, blue: 0)), (10, PixelColor(red: 255, green: 0, blue: 0))]
+    ])
+    func reusedCanvasIsClean(reads: [(Int, PixelColor)]) {
+        let sampler = LoupeSampler(image: makeImage(), scale: .oneToOne)
+        for _ in 0 ..< 3 {
+            for (x, colour) in reads {
+                #expect(sampler.color(at: CGPoint(x: x, y: 10)) == colour)
+            }
+        }
+    }
+
+    @Test("A transparent pixel after an opaque one reads as black, not the previous colour")
+    func transparentAfterOpaque() {
+        let context = makeContext(width: 2, height: 1)
+        context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        context.clear(CGRect(x: 1, y: 0, width: 1, height: 1))
+        let sampler = LoupeSampler(image: finish(context), scale: .oneToOne)
+
+        #expect(sampler.color(at: CGPoint(x: 0, y: 0)) == PixelColor(red: 255, green: 0, blue: 0))
+        #expect(sampler.color(at: CGPoint(x: 1, y: 0)) == PixelColor(red: 0, green: 0, blue: 0))
+    }
+
     @Test("A pointer outside the image has no colour")
     func outOfBoundsColour() {
         let sampler = LoupeSampler(image: makeImage(), scale: .oneToOne)

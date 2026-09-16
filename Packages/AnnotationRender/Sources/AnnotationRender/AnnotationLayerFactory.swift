@@ -25,14 +25,22 @@ public enum AnnotationLayerFactory {
         baseImage: CGImage? = nil,
         canvasRect: CGRect? = nil
     ) -> CALayer? {
+        makeLayer(
+            for: command,
+            contentsScale: contentsScale,
+            context: AnnotationLayerContext(imageScale: imageScale, baseImage: baseImage, canvasRect: canvasRect)
+        )
+    }
+
+    /// Makes the layer for one annotation, with everything the canvas knows about where
+    /// its pixels and previews come from.
+    public static func makeLayer(
+        for command: AnnotationCommand,
+        contentsScale: CGFloat,
+        context: AnnotationLayerContext
+    ) -> CALayer? {
         let layer = strokeShapeLayer(for: command)
-            ?? contentLayer(
-                for: command,
-                contentsScale: contentsScale,
-                imageScale: imageScale,
-                baseImage: baseImage,
-                canvasRect: canvasRect
-            )
+            ?? contentLayer(for: command, contentsScale: contentsScale, context: context)
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
         if let layer {
@@ -66,22 +74,24 @@ public enum AnnotationLayerFactory {
     private static func contentLayer(
         for command: AnnotationCommand,
         contentsScale: CGFloat,
-        imageScale: CGFloat,
-        baseImage: CGImage?,
-        canvasRect: CGRect?
+        context: AnnotationLayerContext
     ) -> CALayer? {
         switch command {
         case let .text(spec): textLayer(spec, contentsScale: contentsScale)
         case let .counter(spec): counterLayer(spec, contentsScale: contentsScale)
-        case let .redaction(spec): redactionPreviewLayer(spec, baseImage: baseImage, imageScale: imageScale)
+        case let .redaction(spec): redactionPreviewLayer(spec, context: context)
         case let .spotlight(spec):
-            spotlightLayer(spec, canvasRect: resolvedCanvas(canvasRect, baseImage: baseImage, imageScale: imageScale))
-        case let .measure(spec): measureLayer(spec, contentsScale: contentsScale, imageScale: imageScale)
+            spotlightLayer(spec, canvasRect: resolvedCanvas(context))
+        case let .measure(spec): measureLayer(spec, contentsScale: contentsScale, imageScale: context.imageScale)
         case let .image(spec): imageLayer(spec)
         // The crop and the beautify backdrop are chrome around the canvas, not objects
         // on it, so they have no layer of their own here.
         default: nil
         }
+    }
+
+    private static func resolvedCanvas(_ context: AnnotationLayerContext) -> CGRect {
+        resolvedCanvas(context.canvasRect, baseImage: context.baseImage, imageScale: context.imageScale)
     }
 
     /// Updates an existing layer in place.
@@ -95,6 +105,15 @@ public enum AnnotationLayerFactory {
         baseImage: CGImage? = nil,
         canvasRect: CGRect? = nil
     ) {
+        update(
+            layer,
+            for: command,
+            context: AnnotationLayerContext(imageScale: imageScale, baseImage: baseImage, canvasRect: canvasRect)
+        )
+    }
+
+    /// Updates an existing layer in place, with the canvas's full context.
+    public static func update(_ layer: CALayer, for command: AnnotationCommand, context: AnnotationLayerContext) {
         switch command {
         case let .arrow(spec):
             applyArrow(spec, to: layer)
@@ -111,13 +130,7 @@ public enum AnnotationLayerFactory {
         case let .highlighter(spec):
             applyStrokePath(spec.points, stroke: spec.stroke, to: layer)
         default:
-            updateContentLayer(
-                layer,
-                for: command,
-                imageScale: imageScale,
-                baseImage: baseImage,
-                canvasRect: canvasRect
-            )
+            updateContentLayer(layer, for: command, context: context)
         }
         applyRotation(command.rotation, to: layer)
     }
@@ -126,9 +139,7 @@ public enum AnnotationLayerFactory {
     private static func updateContentLayer(
         _ layer: CALayer,
         for command: AnnotationCommand,
-        imageScale: CGFloat,
-        baseImage: CGImage?,
-        canvasRect: CGRect?
+        context: AnnotationLayerContext
     ) {
         switch command {
         case let .text(spec):
@@ -140,15 +151,11 @@ public enum AnnotationLayerFactory {
         case let .counter(spec):
             applyCounter(spec, to: layer)
         case let .redaction(spec):
-            applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
+            applyRedactionPreview(to: layer, spec: spec, context: context)
         case let .spotlight(spec):
-            applySpotlight(
-                to: layer,
-                spec: spec,
-                canvasRect: resolvedCanvas(canvasRect, baseImage: baseImage, imageScale: imageScale)
-            )
+            applySpotlight(to: layer, spec: spec, canvasRect: resolvedCanvas(context))
         case let .measure(spec):
-            updateMeasureLayer(layer, spec: spec, imageScale: imageScale)
+            updateMeasureLayer(layer, spec: spec, imageScale: context.imageScale)
         case let .image(spec):
             updateImageLayer(layer, spec: spec)
         default:
@@ -291,56 +298,5 @@ public enum AnnotationLayerFactory {
             return
         }
         layer.frame = CounterRendering.frame(spec)
-    }
-
-    /// Samples the capture under the box so the editor shows a real blur, not a grey
-    /// stand-in (Screendrop's live redaction). Export still burns the effect in.
-    /// One rasterizer, not one per frame.
-    ///
-    /// This is built on every mouse-move while a redaction box is dragged, and building one
-    /// creates an `os.Logger` each time.
-    private static let redactionRasterizer = RedactionRasterizer()
-    private static let redactionCache = RedactionPreviewCache.shared
-
-    private static func cachedPreview(_ spec: RedactionSpec, from image: CGImage, scale: CGFloat) -> CGImage? {
-        redactionCache.image(for: spec, base: image, scale: scale) {
-            redactionRasterizer.preview(spec, from: image, scale: scale)
-        }
-    }
-
-    private static func redactionPreviewLayer(
-        _ spec: RedactionSpec,
-        baseImage: CGImage?,
-        imageScale: CGFloat
-    ) -> CALayer {
-        let layer = CALayer()
-        applyRedactionPreview(to: layer, spec: spec, baseImage: baseImage, imageScale: imageScale)
-        return layer
-    }
-
-    private static func applyRedactionPreview(
-        to layer: CALayer,
-        spec: RedactionSpec,
-        baseImage: CGImage?,
-        imageScale: CGFloat
-    ) {
-        layer.frame = spec.rect.standardized
-        layer.masksToBounds = true
-        layer.contentsGravity = .resize
-        // Linear, not nearest: a nearest-neighbour upsample of a Gaussian looks like a
-        // mosaic, which is the pixelate tool's job (docs/03 §3).
-        layer.magnificationFilter = .linear
-        layer.minificationFilter = .linear
-        layer.borderWidth = 0
-        if let baseImage, let preview = cachedPreview(spec, from: baseImage, scale: imageScale) {
-            layer.contents = preview
-            let width = max(spec.rect.width, 1)
-            layer.contentsScale = max(CGFloat(preview.width) / width, 1)
-            layer.backgroundColor = nil
-            return
-        }
-        // Tests and a failed sample still need a visible region.
-        layer.contents = nil
-        layer.backgroundColor = CGColor(gray: 0.45, alpha: 0.55)
     }
 }

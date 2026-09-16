@@ -98,43 +98,42 @@ struct StudioPlaybackTests {
     func playbackAdvancesAndStops() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
-        let studio = try model(in: folder)
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 3)
+        defer { studio.stopPlayback() }
 
         studio.play()
         #expect(studio.isPlaying)
-        var reached = 0.0
-        for _ in 0 ..< 20 {
-            try await Task.sleep(for: .milliseconds(50))
-            reached = studio.playhead
-            if reached > 0 {
-                break
-            }
-        }
-        #expect(reached > 0, "the playhead did not move")
+        let moved = try await StudioPlaybackFixtures.wait { studio.playhead > 0 }
+        #expect(moved, "the playhead did not move")
 
         studio.pausePlayback()
         #expect(!studio.isPlaying)
+        let reached = studio.playhead
         try await Task.sleep(for: .milliseconds(150))
         #expect(studio.playhead == reached, "the playhead kept moving after pause")
     }
 
-    /// Timing comes from a clock rather than an accumulator, so a slow frame costs a dropped
-    /// frame and not a drifting playhead.
+    /// The player is the clock, so the playhead keeps the recording's own time rather than
+    /// a scheduler's idea of it.
     @Test("Playback keeps real time")
     func playbackKeepsRealTime() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
-        let studio = try model(in: folder)
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 3)
+        defer { studio.stopPlayback() }
 
         studio.play()
+        // Measured from the first tick, so building the composition is not counted.
+        try await StudioPlaybackFixtures.wait { studio.playhead > 0 }
+        let origin = studio.playhead
         try await Task.sleep(for: .milliseconds(400))
-        let elapsed = studio.playhead
+        let elapsed = studio.playhead - origin
         studio.pausePlayback()
 
         // Generous either way: this asserts "it tracks the clock", not the scheduler's
         // punctuality on a machine running fifteen test suites at once.
-        #expect(elapsed > 0.15, "playback ran far behind the clock (\(elapsed)s in 0.4s)")
-        #expect(elapsed < 0.9, "playback ran ahead of the clock (\(elapsed)s in 0.4s)")
+        #expect(elapsed > 0.2, "playback ran far behind the clock (\(elapsed)s in 0.4s)")
+        #expect(elapsed < 0.8, "playback ran ahead of the clock (\(elapsed)s in 0.4s)")
     }
 
     @Test("Playing from the end starts again from the beginning")
@@ -145,7 +144,7 @@ struct StudioPlaybackTests {
         studio.playhead = studio.edit.duration
 
         studio.play()
-        defer { studio.pausePlayback() }
+        defer { studio.stopPlayback() }
         #expect(studio.playhead < 1, "play did nothing visible at the end of the recording")
     }
 
@@ -153,14 +152,27 @@ struct StudioPlaybackTests {
     func playbackStopsAtTheEnd() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
-        let studio = try model(in: folder, duration: 0.2)
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 0.5)
+        defer { studio.stopPlayback() }
         studio.play()
 
-        for _ in 0 ..< 40 where studio.isPlaying {
-            try await Task.sleep(for: .milliseconds(25))
-        }
-        #expect(!studio.isPlaying, "playback ran past the end of the recording")
+        let stopped = try await StudioPlaybackFixtures.wait { !studio.isPlaying }
+        #expect(stopped, "playback ran past the end of the recording")
         #expect(studio.playhead == studio.edit.duration)
+    }
+
+    /// A play button stuck on over a black well is the one failure worse than not playing.
+    @Test("A recording that will not open stops playing")
+    func unplayableFootageStops() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        defer { studio.stopPlayback() }
+        studio.play()
+
+        let stopped = try await StudioPlaybackFixtures.wait { !studio.isPlaying }
+        #expect(stopped, "placeholder footage kept claiming to play")
+        #expect(studio.playback.player?.currentItem == nil)
     }
 
     /// Stepping while playing is two things moving one value, and the user loses.
@@ -169,6 +181,7 @@ struct StudioPlaybackTests {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder)
+        defer { studio.stopPlayback() }
         studio.play()
 
         studio.step(frames: 1)

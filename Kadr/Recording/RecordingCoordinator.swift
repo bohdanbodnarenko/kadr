@@ -47,12 +47,33 @@ final class RecordingCoordinator {
         didSet { onStateChanged?() }
     }
 
-    var elapsed: TimeInterval = 0 {
-        didSet { onStateChanged?() }
-    }
+    /// Seconds recorded so far, pauses taken out.
+    ///
+    /// Deliberately *not* a trigger for `onStateChanged`. The tick writes this ten times a
+    /// second so the meter can move, and every notification rebuilds the menu-bar icon and
+    /// rewrites the floating bar — while the clock text only changes once a second. The
+    /// tick asks `RecordingTickPolicy` whether anything a person can see has changed, and
+    /// notifies only then.
+    var elapsed: TimeInterval = 0
 
     /// Last-buffer loudness for the control bar meter (CleanShot §13.3).
-    var audioMeter = AudioMeter()
+    @ObservationIgnored var audioMeter = AudioMeter()
+
+    /// Where the tick sends the meter level, ten times a second.
+    ///
+    /// A channel of its own rather than `onStateChanged`: the level feeds one small view in
+    /// the floating bar, and routing it through the state change dragged the status item and
+    /// every other control along with it (PRD §8).
+    var onAudioLevel: ((Float) -> Void)?
+
+    /// Whether the microphone is on but has picked nothing up this take.
+    var microphoneIsSilent: Bool {
+        RecordingTickPolicy.microphoneIsSilent(
+            recordsMicrophone: settings.recordsMicrophone,
+            elapsed: elapsed,
+            peak: microphonePeakMax
+        )
+    }
 
     /// Loudest microphone sample so far this take, for the silent-mic notice.
     @ObservationIgnored var microphonePeakMax: Float = 0
@@ -293,6 +314,11 @@ final class RecordingCoordinator {
         configuration.webcamCorner = OverlayCornerSlot(
             rawValue: settings.recordingWebcamCorner.rawValue
         ) ?? .bottomTrailing
+        configuration.webcamPixelSide = Self.webcamPixelSide(
+            recordedPixels: Self.recordedPixelSize(for: target),
+            sizeFraction: configuration.webcamSizeFraction,
+            fillsFrame: configuration.webcamFillsFrame
+        )
         configuration.clickRed = settings.recordingClickRed
         configuration.clickGreen = settings.recordingClickGreen
         configuration.clickBlue = settings.recordingClickBlue

@@ -86,7 +86,7 @@ The Screen-Studio-class editor, built on Screendrop's proven designs but in our 
 Sanitized event stream → edited-timeline re-integration with one shared damped spring; presses pixel-exact, motion smoothed; click ripple + keystroke captions rendered identically in preview and export (shared metrics). Replaces the M14 live-composited overlays for studio-edited exports (live overlays remain for instant MP4s).
 
 **U3.3 — Virtual camera: zoom cues + smooth motion**
-Cue model (range, magnification, anchor mode) editable on a timeline; auto-generation from click clusters ("Add smart zooms"); smart anchors with immutable cluster centers; fixed-rate spring integration along the edited timeline; motion-blur supersampling at export. Preview and export share the precomputed timeline — determinism tested by frame-hash comparison.
+Cue model stored in *source* time (range, magnification, anchor mode) editable on a timeline; auto-generation from click clusters ("Add smart zooms"); smart anchors with immutable cluster centers; damped-spring integration along the edited timeline with follow-camera for 9:16/1:1/4:5; motion-blur supersampling at export. Preview and export share the precomputed timeline — determinism tested by frame-hash comparison.
 
 **U3.4 — Clips, speed, camera bubble**
 Non-destructive clip cuts + per-clip 1–8× speed via `AVMutableComposition.scaleTimeRange`; camera bubble from the separately-recorded camera.mov (position/size/roundness, layouts as presets).

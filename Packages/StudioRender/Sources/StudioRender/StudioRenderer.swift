@@ -18,7 +18,7 @@ import StudioSession
 /// away the ability to say how far along the render is.
 public struct StudioRenderer: Sendable {
     private let logger = KadrLog.logger(.recording)
-    private static let signposter = OSSignposter(logger: KadrLog.logger(.recording))
+    static let signposter = OSSignposter(logger: KadrLog.logger(.recording))
 
     public init() {}
 
@@ -240,13 +240,22 @@ public struct StudioRenderer: Sendable {
         let interval = Self.signposter.beginInterval("studio.render")
         defer { Self.signposter.endInterval("studio.render", interval) }
 
-        return try await write(
-            state,
-            composer: composer,
-            destination: destination,
-            options: options,
-            progress: progress
-        )
+        // Through the gate: the write blocks a pool thread for as long as it reads.
+        try await ExportGate.shared.acquire()
+        do {
+            let output = try await write(
+                state,
+                composer: composer,
+                destination: destination,
+                options: options,
+                progress: progress
+            )
+            await ExportGate.shared.release()
+            return output
+        } catch {
+            await ExportGate.shared.release()
+            throw error
+        }
     }
 
     // MARK: - Preparation

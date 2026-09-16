@@ -131,6 +131,15 @@ final class RecordingControlBar {
         setContents(picker: nil, session: true, preRoll: preRoll, settings: settings)
     }
 
+    /// Moves the level meter, and nothing else (PRD §8).
+    ///
+    /// The recording tick calls this ten times a second. It touches one observable that one
+    /// small view reads, rather than going through `update`, which re-resolves the chrome.
+    func setAudioLevel(_ level: Float) {
+        guard panel != nil else { return }
+        model.meter.set(level)
+    }
+
     /// What the bar offers while the countdown is running.
     ///
     /// The three things a recording is usually got wrong by forgetting — microphone, system
@@ -398,83 +407,5 @@ final class RecordingBarHostingView: NSHostingView<RecordingControlBarView> {
         // SwiftUI reports a top-left origin and NSHostingView is flipped, so they agree.
         guard bar != .zero, bar.contains(convert(point, from: superview)) else { return nil }
         return super.hitTest(point)
-    }
-}
-
-/// What the bar shows, as one observable value the panel can update in place.
-@MainActor
-@Observable
-final class RecordingControlBarModel {
-    enum Mode: Equatable {
-        case picker
-        case preRoll
-        case live
-    }
-
-    var elapsedText = "0:00"
-    var isPaused = false
-    var audioLevel: Float = 0
-    var microphoneIsSilent = false
-    var notice: String?
-    var isTransitioning = false
-    var picker: RecordSetupModel?
-    /// Non-nil once a recording (or its countdown) owns the bar.
-    var session: Bool?
-    var preRoll: RecordingControlBar.PreRoll?
-    var settings: AppSettings?
-    var chrome: RecordingControlChrome = .island
-    var docksToNotch = false
-    var notchVisible = false
-    var notchExpanded = false
-    var notchMetrics = RecordingNotchMetrics.fallback
-    /// The transport has turned into "Discard this recording?". Shared by both chromes so
-    /// the notch stays expanded while it is asking.
-    var isConfirmingDiscard = false
-    /// The bar's frame inside the panel, reported by SwiftUI. Not observed: nothing
-    /// renders from it, and it changes every frame of a morph.
-    @ObservationIgnored var barFrameInPanel: CGRect = .zero
-
-    var mode: Mode {
-        Self.mode(
-            hasPicker: picker != nil,
-            hasSession: session != nil,
-            hasPreRoll: preRoll != nil && settings != nil
-        )
-    }
-
-    static func mode(hasPicker: Bool, hasSession: Bool, hasPreRoll: Bool) -> Mode {
-        if hasPicker, !hasSession {
-            return .picker
-        }
-        return hasPreRoll ? .preRoll : .live
-    }
-
-    /// Hovering expands the notch; so does anything that needs the controls without a
-    /// hover — a countdown, the discard confirmation, VoiceOver.
-    var notchLayout: RecordingNotchLayout {
-        RecordingNotchLayout(
-            hardware: notchMetrics,
-            isExpanded: notchExpanded || preRoll != nil || isConfirmingDiscard
-                || AccessibilityChrome.voiceOverEnabled,
-            isVisible: notchVisible
-        )
-    }
-
-    @ObservationIgnored var stop: () -> Void = {}
-    @ObservationIgnored var togglePause: () -> Void = {}
-    @ObservationIgnored var cancel: () -> Void = {}
-    @ObservationIgnored var restart: () -> Void = {}
-
-    func apply(_ controls: RecordingControls) {
-        elapsedText = controls.elapsedText
-        isPaused = controls.isPaused
-        audioLevel = controls.audioLevel
-        microphoneIsSilent = controls.microphoneIsSilent
-        notice = controls.notice
-        isTransitioning = controls.isTransitioning
-        stop = controls.stop
-        togglePause = controls.togglePause
-        cancel = controls.cancel
-        restart = controls.restart
     }
 }

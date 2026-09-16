@@ -14,8 +14,9 @@ import Sparkle
 /// Updates are on by default with a visible switch, which is what the PRD asks for: the
 /// user can see the one thing that talks to the network and turn it off.
 ///
-/// The controller is constructed in `start()`, after the launch interval closes, so Sparkle
-/// is not mapped before the app can answer a hotkey. Automatic checks go through
+/// The controller is constructed only when a check actually runs — inside the coalesced
+/// background activity, or when the user picks "Check for Updates…" — so an idle agent
+/// never maps Sparkle's updater or its UI driver (PRD §8). Automatic checks go through
 /// `NSBackgroundActivityScheduler` so the OS coalesces them rather than leaving a repeating
 /// timer in the resident process (docs/10 R2.3).
 @MainActor
@@ -34,9 +35,12 @@ final class UpdaterManager: NSObject {
 
     /// How long to hold the activation policy if Sparkle never reports back.
     private static let checkBackstopSeconds = 120
+    /// Sparkle's record of its last check, read directly so Settings can show it without
+    /// building the updater.
+    private static let lastCheckTimeKey = "SULastCheckTime"
     /// Separate from Sparkle's `SUEnableAutomaticChecks` so disabling Sparkle's own timer
     /// does not forget the user's preference.
-    private static let automaticChecksKey = "app.kadr.automaticUpdateChecks"
+    @ObservationIgnored private let preference = UpdateCheckPreference(defaults: .standard)
 
     override private init() {
         super.init()
@@ -84,13 +88,10 @@ final class UpdaterManager: NSObject {
     /// Whether Kadr checks for updates on its own.
     var automaticallyChecksForUpdates: Bool {
         get {
-            if UserDefaults.standard.object(forKey: Self.automaticChecksKey) == nil {
-                return UserDefaults.standard.object(forKey: "SUEnableAutomaticChecks") as? Bool ?? true
-            }
-            return UserDefaults.standard.bool(forKey: Self.automaticChecksKey)
+            preference.isEnabled
         }
         set {
-            UserDefaults.standard.set(newValue, forKey: Self.automaticChecksKey)
+            preference.isEnabled = newValue
             if newValue {
                 scheduleCoalescedCheck()
             } else {
@@ -111,23 +112,50 @@ final class UpdaterManager: NSObject {
     private(set) var lastCheckDate: Date?
 
     var lastUpdateCheckDate: Date? {
-        lastCheckDate ?? controller?.updater.lastUpdateCheckDate
+        lastCheckDate
+            ?? controller?.updater.lastUpdateCheckDate
+            ?? UserDefaults.standard.object(forKey: Self.lastCheckTimeKey) as? Date
     }
 
-    /// Starts the updater. Called once, after hotkeys are armed.
+    /// Arms automatic checks. Called once, after hotkeys are armed.
+    ///
+    /// Builds nothing from Sparkle: that waits for the first check that actually runs.
     func start() {
         #if DEBUG
             logger.info("Updates are disabled in debug builds")
         #else
+            preference.migrateIfNeeded()
+            // No check is running, so one may start — the menu offers the command without
+            // the updater having been built to say so.
+            setCanCheckForUpdates(true)
+            if automaticallyChecksForUpdates {
+                scheduleCoalescedCheck()
+            }
+        #endif
+    }
+
+    /// The Sparkle controller, built and started on first use.
+    private func updaterController() -> SPUStandardUpdaterController? {
+        #if DEBUG
+            return nil
+        #else
+            if let controller {
+                return controller
+            }
             let created = SPUStandardUpdaterController(
                 startingUpdater: false,
                 updaterDelegate: nil,
                 userDriverDelegate: nil
             )
-            controller = created
+            // Before `start()`: Sparkle's repeating check is a timer in the resident
+            // process, and an explicit value here also keeps it from asking the user a
+            // permission question Kadr's own switch already answers (docs/10 R2.3). This
+            // persists `SUEnableAutomaticChecks = false`, which is why Kadr never reads
+            // that key back (`UpdateCheckPreference`).
+            created.updater.automaticallyChecksForUpdates = false
             canCheckObservation = created.updater.observe(
                 \.canCheckForUpdates,
-                options: [.initial, .new]
+                options: [.new]
             ) { [weak self] updater, _ in
                 MainActor.assumeIsolated {
                     self?.setCanCheckForUpdates(updater.canCheckForUpdates)
@@ -136,15 +164,13 @@ final class UpdaterManager: NSObject {
             }
             do {
                 try created.updater.start()
-                // Sparkle's repeating check is a timer in the resident process. Take it
-                // off and ask the OS to coalesce a daily check instead (docs/10 R2.3).
-                created.updater.automaticallyChecksForUpdates = false
-                if automaticallyChecksForUpdates {
-                    scheduleCoalescedCheck()
-                }
+                controller = created
                 logger.info("Sparkle started")
+                return created
             } catch {
+                canCheckObservation = nil
                 logger.error("Sparkle could not start: \(error.localizedDescription, privacy: .public)")
+                return nil
             }
         #endif
     }
@@ -156,17 +182,20 @@ final class UpdaterManager: NSObject {
         scheduler.interval = 24 * 60 * 60
         scheduler.tolerance = 6 * 60 * 60
         scheduler.qualityOfService = .utility
+        // The block arrives on a queue of the scheduler's choosing, not the main thread,
+        // so it hops rather than assuming isolation.
         scheduler.schedule { [weak self] completion in
-            MainActor.assumeIsolated {
-                guard let self, self.automaticallyChecksForUpdates else {
-                    completion(.finished)
-                    return
-                }
-                self.controller?.updater.checkForUpdatesInBackground()
+            Task { @MainActor in
+                self?.runBackgroundCheck()
                 completion(.finished)
             }
         }
         activity = scheduler
+    }
+
+    private func runBackgroundCheck() {
+        guard automaticallyChecksForUpdates else { return }
+        updaterController()?.updater.checkForUpdatesInBackground()
     }
 
     /// The menu command.
@@ -178,7 +207,7 @@ final class UpdaterManager: NSObject {
         #if DEBUG
             logger.info("Ignoring an update check in a debug build")
         #else
-            guard let controller else { return }
+            guard let controller = updaterController() else { return }
             ActivationJuggler.shared.beginRegularWindow()
             controller.checkForUpdates(nil)
             // Sparkle's window has no close callback to hook, so the policy is released
