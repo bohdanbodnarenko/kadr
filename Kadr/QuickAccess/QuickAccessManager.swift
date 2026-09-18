@@ -59,8 +59,6 @@ final class QuickAccessManager {
     @ObservationIgnored var overlayPanel: QuickAccessOverlayPanel?
     /// Cards the user opened in the editor (or studio / trim). Hover does not belong here.
     @ObservationIgnored var engagedItems: Set<UUID> = []
-    /// Watches for the editor exiting, so the cards come back. Nil while not peeking.
-    @ObservationIgnored var editorExitObserver: (any NSObjectProtocol)?
     /// Hears about captures the editor moved to the Trash, for the agent's whole life.
     @ObservationIgnored var editorDeletionObserver: (any NSObjectProtocol)?
     /// Hears about captures the editor saved, so the card and History stay current.

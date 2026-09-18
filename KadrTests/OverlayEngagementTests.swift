@@ -111,7 +111,7 @@ struct OverlayEngagementTests { // swiftlint:disable:this type_body_length
 
     /// Peeking tucks the cards away and leaves a tab. Both are mounted in the same panel,
     /// so this is a flag the stack animates on, and the items stay put (docs/03 §2).
-    @Test("Opening the editor collapses the cards to a tab")
+    @Test("A flick to the edge collapses the cards to a tab")
     func peekingCollapses() throws {
         let harness = makeHarness()
         _ = try showCard(harness)
@@ -137,15 +137,14 @@ struct OverlayEngagementTests { // swiftlint:disable:this type_body_length
         harness.manager.dismissAll()
     }
 
-    /// Opening the editor tucks the cards away — but only if an editor actually opened.
+    /// Opening a capture in the editor retires its card — but only if an editor opened.
     ///
-    /// The overlay collapsed first and launched second, so when the launch did nothing (no
-    /// editor embedded in the bundle, or a failure) the stack sat in the peek tab reading
-    /// "1 Screenshot" forever: the only thing that expands it again is the editor process
-    /// terminating, and none had started. The test bundle has no embedded editor, so this is
-    /// that case exactly.
-    @Test("A failed editor launch does not strand the cards in the peek tab")
-    func failedEditorLaunchDoesNotStrandThePeekTab() throws {
+    /// The card is the only copy of that capture the overlay has. Retiring it for a launch
+    /// that did nothing (no editor embedded in the bundle, or a failure) would take the
+    /// capture off the screen with nothing opened to show for it. The test bundle has no
+    /// embedded editor, so this is that case exactly.
+    @Test("A failed editor launch leaves the card where it is")
+    func failedEditorLaunchKeepsTheCard() throws {
         let harness = makeHarness()
         let item = try showCard(harness)
         // A launcher that cannot open anything, standing in for a build with no editor
@@ -155,8 +154,28 @@ struct OverlayEngagementTests { // swiftlint:disable:this type_body_length
 
         harness.manager.annotate(item)
 
-        #expect(!harness.manager.isPeeking, "the cards were hidden for an editor that never opened")
-        #expect(harness.manager.items.count == 1)
+        #expect(harness.manager.items.count == 1, "the card went for an editor that never opened")
+        #expect(!harness.manager.isPeeking, "opening the editor no longer hides the other cards")
+        harness.manager.dismissAll()
+    }
+
+    /// The overlay is not a second copy of what is already open in a window (docs/03 §2).
+    @Test("Opening the editor retires that card and leaves the others")
+    func editorRetiresOnlyItsOwnCard() throws {
+        let harness = makeHarness()
+        let first = try showCard(harness)
+        let second = try showCard(harness)
+        #expect(harness.manager.items.count == 2)
+
+        // What the launcher's completion does on success, without launching anything.
+        harness.manager.noteEngagement(with: second)
+        harness.manager.dismiss(second)
+
+        #expect(harness.manager.items.map(\.id) == [first.id])
+        #expect(!harness.manager.isPeeking)
+        // Dismissed, not deleted: the capture is still on disk and still recoverable.
+        #expect(FileManager.default.fileExists(atPath: second.fileURL.path))
+        #expect(harness.manager.recentlyClosed.contains { $0.id == second.id })
         harness.manager.dismissAll()
     }
 
@@ -193,14 +212,17 @@ struct OverlayEngagementTests { // swiftlint:disable:this type_body_length
     }
 
     @Test("Dismissing the last peeked card tears the tab down")
-    func lastPeekedCardTearsDownTheTab() throws {
+    func lastPeekedCardTearsDownTheTab() async throws {
         let harness = makeHarness()
         let item = try showCard(harness)
         harness.manager.setPeeking(true)
         harness.manager.dismiss(item)
         #expect(!harness.manager.isPeeking)
         // The last card takes the panel with it: an agent with nothing to show owns no
-        // windows (CLAUDE.md rule 2).
+        // windows (CLAUDE.md rule 2). Awaited, because the tab slides out first
+        // (docs/16 OUT-15) — the panel is what the slide is drawn in, so it outlives the
+        // dismissal by the length of the animation.
+        await waitUntil { harness.manager.overlayPanel == nil }
         #expect(harness.manager.overlayPanel == nil)
     }
 

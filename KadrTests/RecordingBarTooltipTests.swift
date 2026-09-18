@@ -10,18 +10,10 @@ struct RecordingBarTooltipTests {
     private let frameA = CGRect(x: 0, y: 0, width: 40, height: 40)
     private let frameB = CGRect(x: 42, y: 0, width: 40, height: 40)
 
-    /// Polls rather than sleeping a fixed time: the whole suite shares the main actor, and
-    /// a busy one can hold a 160 ms show delay for much longer.
-    private func wait(until condition: () -> Bool) async {
-        for _ in 0 ..< 300 where !condition() {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-    }
-
     private func warmedUp() async -> RecordingBarTooltipModel {
         let model = RecordingBarTooltipModel()
         model.hover(id: "a", text: "Area", key: "A", frame: frameA)
-        await wait { model.visible != nil }
+        await waitUntil { model.visible != nil }
         return model
     }
 
@@ -54,7 +46,7 @@ struct RecordingBarTooltipTests {
     func leavingHides() async {
         let model = await warmedUp()
         model.endHover(id: "a")
-        await wait { model.visible == nil }
+        await waitUntil { model.visible == nil }
         #expect(model.visible == nil)
     }
 

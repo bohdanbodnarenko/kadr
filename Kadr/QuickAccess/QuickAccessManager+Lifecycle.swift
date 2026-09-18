@@ -312,7 +312,6 @@ extension QuickAccessManager {
         isPeeking = false
         overlayExitTask?.cancel()
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            stopWatchingForEditorExit()
             teardownOverlay()
             isExiting = false
             return
@@ -325,7 +324,6 @@ extension QuickAccessManager {
                 isExiting = false
                 return
             }
-            stopWatchingForEditorExit()
             teardownOverlay()
             isExiting = false
         }

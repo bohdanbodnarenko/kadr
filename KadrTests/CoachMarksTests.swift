@@ -25,12 +25,6 @@ struct CoachMarksTests {
         return (window, view)
     }
 
-    private func wait(until condition: () -> Bool) async {
-        for _ in 0 ..< 200 where !condition() {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-    }
-
     @Test("A new user has every tip ahead of them")
     func freshFlags() {
         let settings = settings()
@@ -49,7 +43,7 @@ struct CoachMarksTests {
         coach.startIslandTour(pointingAt: NSRect(x: 20, y: 20, width: 500, height: 52), in: view)
         #expect(!settings.hasSeenIslandTour, "shown is not the same as seen")
         coach.islandDidClose()
-        await wait { settings.hasSeenIslandTour }
+        await waitUntil { settings.hasSeenIslandTour }
         #expect(settings.hasSeenIslandTour)
         #expect(!coach.isTourNeeded)
 

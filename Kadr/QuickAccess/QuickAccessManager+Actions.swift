@@ -208,25 +208,30 @@ extension QuickAccessManager {
         openInEditor(url)
     }
 
-    /// Opens the editor and tucks the cards into the peek tab (docs/03 §2).
+    /// Opens a capture in the editor, and retires its card (docs/03 §2).
     ///
-    /// The cards hide rather than sit over the editor. A peek tab stays in the same
-    /// corner so the user can bring them back without waiting for the editor to quit.
-    /// Opening the editor is high-intent: that card stops auto-dismissing.
+    /// The card has done its job: the capture is now open in a window of its own, and a
+    /// thumbnail of it in the corner is a second copy of something already on screen. It
+    /// used to collapse the *whole stack* into the peek tab instead, which hid captures
+    /// that had nothing to do with the edit and left a pill in the corner to be dealt with
+    /// afterwards. Any other cards stay exactly as they are.
+    ///
+    /// Dismiss, not delete: the file is wherever the save policy put it, History has it,
+    /// and Restore Recently Closed brings the card back.
+    ///
+    /// Only once the editor is actually up, never when it is merely asked for. A launch
+    /// that does nothing — a build with no editor embedded, or a failure — must leave the
+    /// card where it is, or the capture would vanish from the overlay with nothing opened
+    /// to show for it. A sibling `.kadr` keeps window backdrops and auto-beautify editable
+    /// (docs/03 §1.2).
     func openInEditor(_ url: URL) {
         if let item = items.first(where: { $0.fileURL == url }) {
             noteEngagement(with: item)
         }
-        // Tucked away when the editor is actually up, not when it is asked for (docs/03 §2).
-        //
-        // This used to collapse first and launch afterwards, so a launch that did nothing —
-        // a build with no editor embedded, or a failure — left the stack in the peek tab
-        // with nothing to come back from. The tab reads "1 Screenshot" and stays: the only
-        // thing that expands it again is the editor process terminating, and none started.
-        // A sibling `.kadr` keeps window backdrops and auto-beautify editable (docs/03 §1.2).
         editor.open(CaptureProject.editorURL(for: url)) { [weak self] opened in
-            guard let self, opened, !items.isEmpty else { return }
-            setPeeking(true)
+            guard let self, opened else { return }
+            guard let item = items.first(where: { $0.fileURL == url }) else { return }
+            dismiss(item)
         }
     }
 

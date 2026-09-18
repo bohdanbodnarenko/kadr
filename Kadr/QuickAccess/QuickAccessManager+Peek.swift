@@ -14,51 +14,19 @@ import SettingsKit
 extension QuickAccessManager {
     /// Collapses every card to the peek tab, or restores them.
     ///
-    /// Called when an editor window opens over the cards, or when the user flicks the stack
-    /// toward the screen edge. Clicking the tab expands even while the editor is still open;
-    /// a new capture expands on its own so the new card is seen.
+    /// The user's own gesture, now: a flick of the stack toward the screen edge, or Quick
+    /// Look taking the screen. Opening the editor used to collapse the stack too, and an
+    /// observer on the editor's termination put it back — but hiding captures that have
+    /// nothing to do with the edit, and leaving a pill to deal with afterwards, was worse
+    /// than letting the edited card retire and the rest stay put.
+    ///
+    /// Clicking the tab expands; a new capture expands on its own so the new card is seen.
     func setPeeking(_ peeking: Bool) {
         if peeking, items.isEmpty {
             return
         }
         guard isPeeking != peeking else { return }
         isPeeking = peeking
-        if peeking {
-            watchForEditorExit()
-        } else {
-            stopWatchingForEditorExit()
-        }
         restack()
-    }
-
-    /// Restores the cards when the editor process goes away.
-    ///
-    /// The editor is a separate app that exits with its last window, so its termination is
-    /// the signal that the user is done with it — and it is a notification rather than a
-    /// poll, so a peeking agent costs nothing while it waits (CLAUDE.md rule 2). Clicking
-    /// the tab also expands, so this is a convenience rather than the only way back.
-    func watchForEditorExit() {
-        guard editorExitObserver == nil else { return }
-        editorExitObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didTerminateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            let key = NSWorkspace.applicationUserInfoKey
-            guard let application = notification.userInfo?[key] as? NSRunningApplication,
-                  application.bundleIdentifier == Self.editorBundleIdentifier
-            else {
-                return
-            }
-            MainActor.assumeIsolated {
-                self?.setPeeking(false)
-            }
-        }
-    }
-
-    func stopWatchingForEditorExit() {
-        guard let editorExitObserver else { return }
-        NSWorkspace.shared.notificationCenter.removeObserver(editorExitObserver)
-        self.editorExitObserver = nil
     }
 }
