@@ -49,6 +49,8 @@ struct StudioPreviewView: View {
                 }
                 if model.isCropping {
                     StudioCropOverlay(model: model, fitted: fitted)
+                } else if let id = model.aimingZoom {
+                    StudioZoomTargetOverlay(model: model, id: id, fitted: fitted)
                 } else if let imageSize, model.manifest.hasCamera, model.edit.camera.isVisible {
                     StudioCameraOverlay(
                         model: model,
@@ -68,6 +70,7 @@ struct StudioPreviewView: View {
         // decides what, if anything, has to be rebuilt, and does it off the main actor.
         .onChange(of: model.edit) { playback.update() }
         .onChange(of: model.isCropping) { playback.update() }
+        .onChange(of: model.isAimingZoom) { playback.update() }
         .onChange(of: model.transcript) { playback.update() }
     }
 

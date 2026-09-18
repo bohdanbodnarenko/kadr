@@ -124,6 +124,18 @@ public final class StudioDocumentModel {
     /// How a forthcoming export should be encoded. Remembered across recordings.
     public var exportSettings = StudioExportSettings.remembered
 
+    /// The zoom being aimed on the preview, if one is (docs/09 U3.3).
+    ///
+    /// Aiming shows the recording *unzoomed* with the cue's target drawn on it, because a
+    /// target drawn over an already-zoomed picture is a rectangle inside itself. Like
+    /// `isCropping` this is what the user is doing, not part of the edit: it is never
+    /// saved and never undone.
+    public var aimingZoom: ZoomCue.ID?
+
+    public var isAimingZoom: Bool {
+        aimingZoom != nil
+    }
+
     /// Whether the preview is in crop mode: the full recording is shown with a handle
     /// overlay, rather than four sliders in the inspector.
     public var isCropping = false

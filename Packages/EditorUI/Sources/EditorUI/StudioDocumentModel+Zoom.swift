@@ -52,6 +52,7 @@ public extension StudioDocumentModel {
         )
         change { $0.zooms.append(cue) }
         selectedZoom = cue.id
+        beginAimingZoom(cue.id)
     }
 
     /// Places a zoom across a dragged range on the zoom lane.
@@ -74,6 +75,7 @@ public extension StudioDocumentModel {
         )
         change { $0.zooms.append(cue) }
         selectedZoom = cue.id
+        beginAimingZoom(cue.id)
     }
 
     /// Shortest drag on the zoom lane that still becomes a cue rather than a scrub.
@@ -98,6 +100,38 @@ public extension StudioDocumentModel {
         let low = max(min(origin, current), lowerLimit)
         let high = min(max(origin, current), upperLimit)
         return (low, high)
+    }
+
+    /// Shows the cue's target on the preview, with the recording unzoomed behind it.
+    ///
+    /// Opened by hand from the inspector, and on its own when a zoom is added by hand —
+    /// which is the moment the question "where does this zoom to?" arises, and the moment
+    /// the answer is easiest to change. A cue that follows the pointer has no target to
+    /// place, so aiming it would be a rectangle nobody can move.
+    func beginAimingZoom(_ id: ZoomCue.ID) {
+        guard let cue = edit.zooms.first(where: { $0.id == id }), !cue.anchor.followsPointer else { return }
+        selectedZoom = id
+        aimingZoom = id
+    }
+
+    func endAimingZoom() {
+        aimingZoom = nil
+    }
+
+    /// Aims the cue being placed at a point on the picture, 0…1 from its top-left corner.
+    ///
+    /// Aiming somewhere *is* choosing Fixed: a cue set to Centre, dragged to a corner, is
+    /// no longer centred, and leaving the focus control saying otherwise would make the
+    /// inspector disagree with the picture.
+    func aimZoom(_ id: ZoomCue.ID, atNormalized point: CGPoint) {
+        setZoomAnchor(id, toNormalized: point)
+    }
+
+    /// The pointer's recorded position while a cue is held, in pixels — the evidence the
+    /// default aim was chosen from, and nil when the recording has no pointer track.
+    func pointerPixel(forZoom id: ZoomCue.ID) -> CGPoint? {
+        guard let cue = edit.zooms.first(where: { $0.id == id }) else { return nil }
+        return pointerPosition(at: editedDisplayRange(of: cue).lowerBound)
     }
 
     /// Points the selected zoom at where the pointer was at the playhead.

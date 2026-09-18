@@ -16,10 +16,21 @@ struct StudioPreviewRequest: Sendable, Equatable {
     /// The picture's longest edge in pixels, already bucketed.
     var longestEdge: Int
 
-    init(edit: StudioEdit, transcript: Transcript?, longestEdge: Int, isCropping: Bool) {
+    init(
+        edit: StudioEdit,
+        transcript: Transcript?,
+        longestEdge: Int,
+        isCropping: Bool,
+        isAimingZoom: Bool = false
+    ) {
         var shown = edit
         if isCropping {
             shown.cropRect = nil
+        }
+        // Aiming shows the picture a zoom is aimed *at*, not the picture it produces —
+        // otherwise the target rectangle would be drawn over its own result.
+        if isAimingZoom {
+            shown.zooms = []
         }
         self.edit = shown
         self.transcript = transcript ?? Transcript()

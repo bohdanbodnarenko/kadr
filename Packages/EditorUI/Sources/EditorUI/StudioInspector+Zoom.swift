@@ -97,6 +97,8 @@ extension StudioInspector {
                 format: .percent
             )
         } else {
+            Button("Aim on Preview…") { model.beginAimingZoom(id) }
+                .help("Place this zoom's frame on the picture itself")
             StudioZoomFocusPad(
                 position: Binding(
                     get: { model.normalizedZoomAnchor(for: id) },

@@ -156,6 +156,8 @@ public struct StudioRootView: View {
             Group {
                 if model.isCropping {
                     cropBar
+                } else if model.isAimingZoom {
+                    aimBar
                 } else {
                     controlRows
                 }
@@ -171,6 +173,8 @@ public struct StudioRootView: View {
         .onExitCommand {
             if model.isCropping {
                 model.cancelCrop()
+            } else if model.isAimingZoom {
+                model.endAimingZoom()
             }
         }
     }
@@ -250,6 +254,33 @@ public struct StudioRootView: View {
                 .keyboardShortcut(.cancelAction)
             Button("Done") { model.applyCrop() }
                 .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    /// Replaces the transport while a zoom is being aimed on the picture.
+    ///
+    /// The same shape as the crop bar, because it is the same kind of moment: the preview
+    /// has become a place to put something, and the controls that belong to playback would
+    /// be answering a different question.
+    @ViewBuilder
+    private var aimBar: some View {
+        if let id = model.aimingZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
+            HStack(spacing: 8) {
+                Label("Aim Zoom", systemImage: "scope")
+                    .font(.headline)
+                Button("At the Pointer") { model.aimSelectedZoomAtPointer() }
+                    .disabled(!model.hasPointerAtPlayhead)
+                    .help("Point it where the pointer was when this zoom starts")
+                Button("Centre") { model.setZoomFocus(id, to: .centre) }
+                Spacer(minLength: 8)
+                Text(String(format: "%.1f×", cue.magnification))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Button("Play") { model.previewZoom(id) }
+                    .help("Watch it from just before it starts")
+                Button("Done") { model.endAimingZoom() }
+                    .keyboardShortcut(.defaultAction)
+            }
         }
     }
 

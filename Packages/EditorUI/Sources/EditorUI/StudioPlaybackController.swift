@@ -100,7 +100,8 @@ final class StudioPlaybackController {
             edit: model.edit,
             transcript: model.transcript,
             longestEdge: longestEdge,
-            isCropping: model.isCropping
+            isCropping: model.isCropping,
+            isAimingZoom: model.isAimingZoom
         )
         if builds.isIdle, request == installed {
             return
