@@ -280,6 +280,8 @@ public struct StudioRootView: View {
                     .help("Watch it from just before it starts")
                 Button("Done") { model.endAimingZoom() }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .help("Keep this aim and go back to the transport (↩)")
             }
         }
     }

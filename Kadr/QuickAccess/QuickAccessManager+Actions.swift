@@ -94,7 +94,7 @@ extension QuickAccessManager {
     /// belt to that braces, for a session swept between the card appearing and the click.
     func openStudio(_ item: QuickAccessItem) {
         guard let session = StudioSessionRecorder.session(forRecordingAt: item.fileURL) else { return }
-        openInEditor(session.directory)
+        openInEditor(session.directory, retiring: item)
     }
 
     func exportGIF(_ item: QuickAccessItem) {
@@ -205,7 +205,7 @@ extension QuickAccessManager {
     func annotate(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        openInEditor(url)
+        openInEditor(url, retiring: item)
     }
 
     /// Opens a capture in the editor, and retires its card (docs/03 §2).
@@ -224,15 +224,28 @@ extension QuickAccessManager {
     /// card where it is, or the capture would vanish from the overlay with nothing opened
     /// to show for it. A sibling `.kadr` keeps window backdrops and auto-beautify editable
     /// (docs/03 §1.2).
-    func openInEditor(_ url: URL) {
-        if let item = items.first(where: { $0.fileURL == url }) {
-            noteEngagement(with: item)
+    /// - Parameter card: the card this opening belongs to, when the URL is not the card's
+    ///   own file. A recording opens its *session directory* in the studio, which matches
+    ///   no card's `fileURL` — so the card was left sitting over the studio window.
+    func openInEditor(_ url: URL, retiring card: QuickAccessItem? = nil) {
+        let subject = card ?? items.first(where: { $0.fileURL == url })
+        if let subject {
+            noteEngagement(with: subject)
         }
         editor.open(CaptureProject.editorURL(for: url)) { [weak self] opened in
             guard let self, opened else { return }
-            guard let item = items.first(where: { $0.fileURL == url }) else { return }
-            dismiss(item)
+            retireCard(subject)
         }
+    }
+
+    /// Dismisses the card whose capture has just opened in a window of its own.
+    ///
+    /// Checked against the live list rather than trusting the captured value: an editor
+    /// takes a moment to appear, and the card may have been saved, deleted or swept in the
+    /// meantime.
+    func retireCard(_ card: QuickAccessItem?) {
+        guard let card, items.contains(where: { $0.id == card.id }) else { return }
+        dismiss(card)
     }
 
     /// Pins a file automation named, or a capture automation just took (docs/03 §8.4).
@@ -372,7 +385,7 @@ extension QuickAccessManager {
         guard item.isVideo else { return }
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        openInEditor(url)
+        openInEditor(url, retiring: item)
     }
 
     /// Re-encodes a capture smaller and copies it (docs/09 U2.4).

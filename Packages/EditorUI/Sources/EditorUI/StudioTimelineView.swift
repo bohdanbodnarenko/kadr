@@ -111,6 +111,13 @@ struct StudioTimelineView: View {
                 nudgePlayhead(press, frames: 1)
             }
             .onKeyPress(.return) {
+                // Aiming first: the timeline is what had focus when the zoom was added, so
+                // its Return was swallowing the one that finishes placing the target — the
+                // zoom played instead of the aim being accepted.
+                if model.isAimingZoom {
+                    model.endAimingZoom()
+                    return .handled
+                }
                 if let zoom = model.selectedZoom {
                     model.previewZoom(zoom)
                     return .handled

@@ -122,6 +122,21 @@ struct StudioZoomAimingTests {
         #expect(!model.edit.zooms.isEmpty)
     }
 
+    /// The timeline is what had focus when the zoom was added, and its own Return played
+    /// the zoom — so the key that finishes aiming never reached the bar's Done button.
+    @Test("Return finishes aiming rather than playing the zoom")
+    func returnFinishesAiming() throws {
+        let (model, folder) = try studio()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        model.addZoom(at: 2)
+        #expect(model.isAimingZoom)
+
+        model.endAimingZoom()
+
+        #expect(!model.isAimingZoom)
+        #expect(model.selectedZoom != nil, "finishing the aim keeps the zoom selected")
+    }
+
     @Test("With no pointer track there is nothing to mark, and the zoom centres")
     func noTelemetryFallsBackToTheCentre() throws {
         let (model, folder) = try studio()
