@@ -1,3 +1,4 @@
+import StudioRender
 import SwiftUI
 
 /// Quality, codec, resolution, format and audio, asked at the moment of export.
@@ -73,6 +74,23 @@ struct StudioExportOptionsView: View {
                 .controlSize(.small)
                 .disabled(model.exportSettings.container == .gif)
 
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Compress", isOn: $model.exportSettings.compresses)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .disabled(model.exportSettings.container == .gif)
+                Text(compressionHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let sizeHint {
+                Text(sizeHint)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
@@ -96,6 +114,41 @@ struct StudioExportOptionsView: View {
         case .gif:
             "An animated GIF of the edited recording. No audio. Caps at 800 px so the file stays shareable."
         }
+    }
+
+    private var compressionHint: String {
+        guard model.exportSettings.container != .gif else {
+            return "GIFs are sized by their own settings."
+        }
+        guard model.exportSettings.compresses else {
+            return "Smaller file, same look: the still parts of the recording stop costing space."
+        }
+        switch model.exportSettings.quality {
+        case .high: return "Looks identical. Usually about a quarter smaller, more when little moves."
+        case .medium: return "Looks the same. Usually 40% smaller or better."
+        case .low: return "About half the size. Fine text may soften slightly."
+        }
+    }
+
+    private var sizeHint: String? {
+        let settings = model.exportSettings
+        let size = StudioRenderPlan.outputSize(
+            edit: model.edit,
+            sourceSize: model.manifest.pixelSize,
+            maxLongestEdge: settings.maxLongestEdge
+        )
+        guard let bytes = settings.estimatedBytes(
+            outputSize: size,
+            duration: model.edit.duration,
+            manifestFrameRate: model.manifest.frameRate
+        ) else {
+            return nil
+        }
+        let formatted = ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        let dimensions = "\(Int(size.width))×\(Int(size.height))"
+        return settings.usesCompression
+            ? "\(dimensions) · smaller than about \(formatted)"
+            : "\(dimensions) · about \(formatted)"
     }
 
     private func labeled(_ title: String, @ViewBuilder control: () -> some View) -> some View {

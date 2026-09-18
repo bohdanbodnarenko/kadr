@@ -88,3 +88,23 @@ public extension StudioDocumentModel {
         presetStore.defaultID()
     }
 }
+
+/// Applying a look, and the one rule about footage that already has a pointer.
+extension StudioDocumentModel {
+    public func apply(_ preset: StudioPreset) {
+        change { $0 = resolvingBakedCursor(preset.applied(to: $0)) }
+    }
+
+    /// Footage that already has a pointer must not get a second, reconstructed one.
+    ///
+    /// The Presenter look (and any saved default) turns the reconstructed cursor on,
+    /// because that is the right answer for a studio capture. Applying it to a recording
+    /// that ScreenCaptureKit already burned the pointer into stacked a lagged spring
+    /// cursor on top of the real one — two arrows, the extra one trailing on a fast move.
+    func resolvingBakedCursor(_ edit: StudioEdit) -> StudioEdit {
+        guard manifest.hasBakedCursor else { return edit }
+        var resolved = edit
+        resolved.showsCursor = false
+        return resolved
+    }
+}

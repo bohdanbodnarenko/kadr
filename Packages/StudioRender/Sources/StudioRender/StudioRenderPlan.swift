@@ -115,6 +115,18 @@ public struct StudioRenderPlan: Sendable {
         )
     }
 
+    /// The output size alone, without integrating a camera over the whole recording.
+    ///
+    /// The same arithmetic the initialiser does first, for callers that only need the
+    /// frame size — an export dialog redrawn on every picker change should not pay for a
+    /// spring run across an hour of footage to print "1920×1080".
+    public static func outputSize(edit: StudioEdit, sourceSize: CGSize, maxLongestEdge: Int? = nil) -> CGSize {
+        let contentSize = evenSize(edit.outputSize(for: sourceSize))
+        let aspect = contentSize.width / max(contentSize.height, 1)
+        let laid = edit.canvas.layout(canvasSize: contentSize, contentAspect: aspect)
+        return scaled(evenSize(laid.canvasSize), maxLongestEdge: maxLongestEdge)
+    }
+
     // MARK: - Where a frame comes from
 
     /// The rect of the source frame that fills the output at `time`, in source pixels.

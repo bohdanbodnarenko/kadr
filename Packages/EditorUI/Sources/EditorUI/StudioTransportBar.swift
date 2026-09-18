@@ -8,113 +8,181 @@ import SwiftUI
 /// icons around a centred play control; this is that layout, plus frame-step which that
 /// bar does not have.
 ///
+/// Three columns, never a `ZStack`. The bar used to overlay the edit tools, the playback
+/// controls and the cut tools on top of each other and rely on spacers to keep them apart,
+/// so as soon as the preview column narrowed — the inspector open, a smaller window — they
+/// slid under one another. Now each column keeps its own width, and `StudioRootView`
+/// picks the `.compact` density when even that does not fit.
+///
+/// No keyboard shortcuts here: the root offers several layouts and only one is on screen,
+/// so the keys live once in `StudioTransportShortcuts` and keep working whichever it is.
+///
 /// The body reads no playhead (docs/11 S2): the clock and the play button's spoken value
 /// are leaves that watch the playhead clock, and the trim menu reads a flag the model only
 /// writes when it flips.
 struct StudioTransportBar: View {
+    enum Density {
+        /// Every tool as its own icon, playback centred between them.
+        case regular
+        /// The edit tools in one menu, playback without the five-second and end jumps.
+        case compact
+    }
+
     let model: StudioDocumentModel
+    var density: Density = .regular
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 2) {
-                trimMenu
-                speedMenu
-                icon("plus.magnifyingglass", label: "Add zoom", help: "Add a zoom at the playhead") {
-                    model.addZoom()
+        Group {
+            switch density {
+            case .regular:
+                HStack(spacing: 8) {
+                    editTools
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    playback(compact: false)
+                        .fixedSize()
+                    cutTools
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                icon("wand.and.stars", label: "Smart zooms", help: "Plan zooms from where the recording was clicked") {
-                    model.planSmartZooms()
+            case .compact:
+                HStack(spacing: 8) {
+                    editMenu
+                    undoRedo
+                    Spacer(minLength: 8)
+                    playback(compact: true)
+                        .fixedSize()
                 }
-                Menu {
-                    Button("Restore smart zooms") {
-                        model.planSmartZooms()
-                    }
-                    Button("Remove every zoom") {
-                        model.resetZooms()
-                    }
-                    .disabled(model.edit.zooms.isEmpty)
-                } label: {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 26, height: 24)
-                        .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                }
-                .menuStyle(.borderlessButton)
-                .buttonStyle(StudioTransportIconStyle())
-                .help("Restore click-planned zooms, or remove every zoom")
-                .disabled(model.edit.zooms.isEmpty && model.editedClickTimes.isEmpty)
-                Spacer(minLength: 0)
-            }
-
-            playback
-
-            HStack(spacing: 2) {
-                Spacer(minLength: 0)
-                icon("scissors", label: "Split clip", help: "Cut the clip at the playhead (⌘K)") {
-                    model.splitAtPlayhead()
-                }
-                .keyboardShortcut("k", modifiers: .command)
-                icon(
-                    "trash",
-                    label: "Delete selection",
-                    help: "Delete the selected zoom, or the clip under the playhead"
-                ) {
-                    model.deleteTimelineSelection()
-                }
-                .disabled(!model.canDeleteTimelineSelection)
-                Rectangle()
-                    .fill(Color.primary.opacity(0.18))
-                    .frame(width: 1, height: 14)
-                    .padding(.horizontal, 6)
-                icon("arrow.uturn.backward", label: "Undo", help: "Undo (⌘Z)") {
-                    model.undo()
-                }
-                // The shortcuts live here as well as on the menu. The menu's `undo:` reaches
-                // this model through `StudioWindowController`, which had to be put into the
-                // responder chain for it to arrive at all.
-                .keyboardShortcut("z", modifiers: .command)
-                .disabled(!model.canUndo)
-                icon("arrow.uturn.forward", label: "Redo", help: "Redo (⇧⌘Z)") {
-                    model.redo()
-                }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
-                .disabled(!model.canRedo)
-                icon("arrow.counterclockwise", label: "Reset clips", help: "Restore the recording to one uncut clip") {
-                    model.resetClips()
-                }
-                .disabled(!model.hasClipEdits)
             }
         }
         .frame(height: 32)
         .disabled(model.exportProgress != nil)
     }
 
-    private var playback: some View {
-        HStack(spacing: 10) {
+    // MARK: - Columns
+
+    private var editTools: some View {
+        HStack(spacing: 2) {
+            trimMenu
+            speedMenu
+            // Named, not just a magnifier: this is the one control whose purpose people
+            // could not guess, and the thing they most want to do by hand.
+            Button {
+                model.pausePlayback()
+                model.addOrSelectZoom(at: model.playhead)
+            } label: {
+                Label("Zoom", systemImage: "plus.magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .labelStyle(.titleAndIcon)
+                    .padding(.horizontal, 6)
+                    .frame(height: 24)
+                    .background(Capsule().fill(Color.orange.opacity(0.14)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(StudioTransportIconStyle())
+            .fixedSize()
+            .help("Add a zoom at the playhead (Z at the pointer, or click the zoom lane)")
+            .accessibilityLabel("Add zoom")
+            StudioSuggestedZoomsButton(model: model)
+            Menu {
+                zoomMenuItems
+            } label: {
+                iconLabel("ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .buttonStyle(StudioTransportIconStyle())
+            .fixedSize()
+            .help("More zoom actions")
+            .accessibilityLabel("More zoom actions")
+        }
+    }
+
+    private var cutTools: some View {
+        HStack(spacing: 2) {
+            icon("scissors", label: "Split clip", help: "Cut the clip at the playhead (⌘K)") {
+                model.splitAtPlayhead()
+            }
+            icon(
+                "trash",
+                label: "Delete selection",
+                help: "Delete the selected zoom, or the clip under the playhead"
+            ) {
+                model.deleteTimelineSelection()
+            }
+            .disabled(!model.canDeleteTimelineSelection)
+            separator
+            undoRedo
+            icon("arrow.counterclockwise", label: "Reset clips", help: "Restore the recording to one uncut clip") {
+                model.resetClips()
+            }
+            .disabled(!model.hasClipEdits)
+        }
+    }
+
+    private var undoRedo: some View {
+        HStack(spacing: 2) {
+            icon("arrow.uturn.backward", label: "Undo", help: "Undo (⌘Z)") {
+                model.undo()
+            }
+            .disabled(!model.canUndo)
+            icon("arrow.uturn.forward", label: "Redo", help: "Redo (⇧⌘Z)") {
+                model.redo()
+            }
+            .disabled(!model.canRedo)
+        }
+    }
+
+    /// Every edit tool in one place, for a bar with no room for a row of icons.
+    private var editMenu: some View {
+        Menu {
+            Button("Split Clip at Playhead") { model.splitAtPlayhead() }
+            Button("Delete Selection") { model.deleteTimelineSelection() }
+                .disabled(!model.canDeleteTimelineSelection)
+            Divider()
+            Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
+                .disabled(!model.playheadIsInsideEdit)
+            Button("Trim End to Playhead") { model.trimEndToPlayhead() }
+                .disabled(!model.playheadIsInsideEdit)
+            Menu("Clip Speed") { speedItems }
+            Button("Reset Clips") { model.resetClips() }
+                .disabled(!model.hasClipEdits)
+            Divider()
+            Button("Add Zoom at Playhead") { model.addOrSelectZoom(at: model.playhead) }
+            zoomMenuItems
+        } label: {
+            Label("Edit", systemImage: "slider.horizontal.3")
+                .font(.system(size: 12, weight: .medium))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Split, trim, speed and zoom")
+    }
+
+    private func playback(compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 10) {
             StudioPlayheadClockLabel(clock: model.playheadClock)
             HStack(spacing: 2) {
-                icon("backward.end.fill", label: "Go to start", help: "Go to start") {
-                    model.seekToStart()
+                if !compact {
+                    icon("backward.end.fill", label: "Go to start", help: "Go to start") {
+                        model.seekToStart()
+                    }
+                    icon("gobackward.5", label: "Back 5 seconds", help: "Back 5 seconds (⌥←)") {
+                        model.step(seconds: -5)
+                    }
                 }
-                icon("gobackward.5", label: "Back 5 seconds", help: "Back 5 seconds (⌥←)") {
-                    model.step(seconds: -5)
-                }
-                .keyboardShortcut(.leftArrow, modifiers: .option)
                 icon("backward.frame", label: "Back one frame", help: "Back one frame (←)") {
                     model.step(frames: -1)
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [])
                 StudioPlayPauseButton(model: model, clock: model.playheadClock)
                 icon("forward.frame", label: "Forward one frame", help: "Forward one frame (→)") {
                     model.step(frames: 1)
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-                icon("goforward.5", label: "Forward 5 seconds", help: "Forward 5 seconds (⌥→)") {
-                    model.step(seconds: 5)
-                }
-                .keyboardShortcut(.rightArrow, modifiers: .option)
-                icon("forward.end.fill", label: "Go to end", help: "Go to end") {
-                    model.seekToEnd()
+                if !compact {
+                    icon("goforward.5", label: "Forward 5 seconds", help: "Forward 5 seconds (⌥→)") {
+                        model.step(seconds: 5)
+                    }
+                    icon("forward.end.fill", label: "Go to end", help: "Go to end") {
+                        model.seekToEnd()
+                    }
                 }
             }
             Text(StudioClock.precise(model.edit.duration))
@@ -124,18 +192,48 @@ struct StudioTransportBar: View {
         .disabled(model.edit.duration <= 0)
     }
 
+    // MARK: - Pieces
+
+    private var separator: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.18))
+            .frame(width: 1, height: 14)
+            .padding(.horizontal, 6)
+    }
+
+    @ViewBuilder
+    private var zoomMenuItems: some View {
+        let suggested = model.zoomSuggestions.count
+        Button(suggested > 0 ? "Add \(suggested) Suggested Zooms" : "Add Suggested Zooms") {
+            model.addSuggestedZooms()
+        }
+        .disabled(suggested == 0)
+        Button("Previous Zoom  [") { model.selectAdjacentZoom(forward: false) }
+            .disabled(model.edit.zooms.isEmpty)
+        Button("Next Zoom  ]") { model.selectAdjacentZoom(forward: true) }
+            .disabled(model.edit.zooms.isEmpty)
+        Divider()
+        Toggle("Show Suggested Zooms", isOn: Binding(
+            get: { model.showsZoomSuggestions },
+            set: { model.showsZoomSuggestions = $0 }
+        ))
+        Button("Replace All with Smart Zooms") { model.planSmartZooms() }
+            .disabled(model.editedClickTimes.isEmpty)
+        Button("Remove Every Zoom", role: .destructive) { model.resetZooms() }
+            .disabled(model.edit.zooms.isEmpty)
+    }
+
     private var trimMenu: some View {
         Menu {
             Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
             Button("Trim End to Playhead") { model.trimEndToPlayhead() }
         } label: {
-            Image(systemName: "arrow.left.and.right")
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 24)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            iconLabel("arrow.left.and.right")
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .buttonStyle(StudioTransportIconStyle())
+        .fixedSize()
         .disabled(!model.playheadIsInsideEdit)
         .help("Drop everything before or after the playhead")
         .accessibilityLabel("Trim clip")
@@ -143,21 +241,31 @@ struct StudioTransportBar: View {
 
     private var speedMenu: some View {
         Menu {
-            ForEach([1.0, 1.5, 2.0, 4.0, 8.0], id: \.self) { speed in
-                Button(speed == 1 ? "Normal" : "\(speedLabel(speed))×") {
-                    model.setSpeedAtPlayhead(speed)
-                }
-            }
+            speedItems
         } label: {
-            Image(systemName: "gauge")
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 24)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            iconLabel("gauge")
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .buttonStyle(StudioTransportIconStyle())
+        .fixedSize()
         .help("Play this clip faster")
         .accessibilityLabel("Clip speed")
+    }
+
+    private var speedItems: some View {
+        ForEach([1.0, 1.5, 2.0, 4.0, 8.0], id: \.self) { speed in
+            Button(speed == 1 ? "Normal" : "\(speedLabel(speed))×") {
+                model.setSpeedAtPlayhead(speed)
+            }
+        }
+    }
+
+    private func iconLabel(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .medium))
+            .frame(width: 26, height: 24)
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private func icon(
@@ -167,10 +275,7 @@ struct StudioTransportBar: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 26, height: 24)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            iconLabel(systemName)
         }
         .buttonStyle(StudioTransportIconStyle())
         .help(help)
@@ -179,6 +284,41 @@ struct StudioTransportBar: View {
 
     private func speedLabel(_ speed: Double) -> String {
         speed == speed.rounded() ? "\(Int(speed))" : String(format: "%.1f", speed)
+    }
+}
+
+/// Adds every suggested zoom, with a count so the lane's outlines have a name.
+private struct StudioSuggestedZoomsButton: View {
+    let model: StudioDocumentModel
+
+    var body: some View {
+        let count = model.zoomSuggestions.count
+        Button {
+            model.addSuggestedZooms()
+        } label: {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 12, weight: .medium))
+                .frame(width: 26, height: 24)
+                .overlay(alignment: .topTrailing) {
+                    if count > 0 {
+                        Text("\(min(count, 99))")
+                            .font(.system(size: 8, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3)
+                            .frame(minWidth: 12, minHeight: 12)
+                            .background(Capsule().fill(Color.orange))
+                            .offset(x: 2, y: -2)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(StudioTransportIconStyle())
+        .disabled(count == 0)
+        .help(count > 0
+            ? "Add the \(count) suggested zooms from your clicks. Your own zooms stay."
+            : "No suggested zooms: every click cluster already has one")
+        .accessibilityLabel("Add suggested zooms")
+        .accessibilityValue("\(count)")
     }
 }
 
@@ -211,7 +351,6 @@ private struct StudioPlayPauseButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .keyboardShortcut(.space, modifiers: [])
         .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
         .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
         .accessibilityValue(StudioClock.precise(clock.time))

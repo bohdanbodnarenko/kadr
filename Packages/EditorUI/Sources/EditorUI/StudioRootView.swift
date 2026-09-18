@@ -11,8 +11,6 @@ import SwiftUI
 @MainActor
 public struct StudioRootView: View {
     @State private var model: StudioDocumentModel
-    @State private var isInspectorPresented = true
-    @State private var showsExportOptions = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
@@ -43,7 +41,7 @@ public struct StudioRootView: View {
         // which is the first thing anyone does to a panel this size. `NSSplitViewItem`'s
         // inspector behaviour brings the draggable divider, the material, and a collapse
         // animation that matches every other macOS inspector including Xcode's.
-        .inspector(isPresented: $isInspectorPresented) {
+        .inspector(isPresented: $model.isInspectorPresented) {
             sidebar
                 .inspectorColumnWidth(
                     min: Self.inspectorMinWidth,
@@ -153,31 +151,32 @@ public struct StudioRootView: View {
         reduceMotion ? nil : animation
     }
 
+    /// The timeline, then one row of controls — or two, or a compact pair, whichever fits.
+    ///
+    /// The row used to be a single `HStack` with a `ZStack` transport inside it, and the
+    /// crop bar was drawn *over* it on a `.bar` background. At the widths people actually
+    /// use with the inspector open, the transport's three groups slid under one another and
+    /// the Export group pushed into them; while cropping, the dimmed transport showed
+    /// through the edges of the crop bar. Now nothing overlaps: `ViewThatFits` takes the
+    /// first arrangement that fits, and crop mode replaces the row instead of covering it.
     private var controls: some View {
         VStack(spacing: 8) {
             StudioTimelineView(model: model)
-            ZStack(alignment: .leading) {
-                HStack(spacing: 12) {
-                    StudioTransportBar(model: model)
-                        .frame(maxWidth: .infinity)
-                        .opacity(model.isCropping ? 0.25 : 1)
-                        .allowsHitTesting(!model.isCropping)
-                    cropButton
-                    inspectorToggle
-                    copyButton
-                    shareControl
-                    exportControl
-                        .frame(minWidth: 168, alignment: .trailing)
-                }
+            Group {
                 if model.isCropping {
                     cropBar
-                        .background(.bar)
+                } else {
+                    controlRows
                 }
             }
             .frame(minHeight: 36)
         }
         .padding(12)
         .background(.bar)
+        // The transport's keys are not declared here. ⌘K, ⌘I and ⌘E are menu commands and
+        // Space and the arrows come through the window's responder chain
+        // (`StudioWindowController`), so they work in all three control arrangements and,
+        // unlike a bare key equivalent, keep their hands off a focused text field.
         .onExitCommand {
             if model.isCropping {
                 model.cancelCrop()
@@ -185,15 +184,60 @@ public struct StudioRootView: View {
         }
     }
 
-    private var cropButton: some View {
-        Button("Crop") { model.beginCrop() }
-            .help("Crop the recording by dragging on the preview")
-            .disabled(model.exportProgress != nil)
+    private var controlRows: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                StudioTransportBar(model: model)
+                Divider()
+                    .frame(height: 20)
+                actions(compact: false)
+            }
+            VStack(spacing: 8) {
+                StudioTransportBar(model: model)
+                HStack {
+                    Spacer(minLength: 0)
+                    actions(compact: false)
+                }
+            }
+            VStack(spacing: 8) {
+                StudioTransportBar(model: model, density: .compact)
+                HStack {
+                    Spacer(minLength: 0)
+                    actions(compact: true)
+                }
+            }
+        }
+    }
+
+    private func actions(compact: Bool) -> some View {
+        HStack(spacing: 8) {
+            cropButton(compact: compact)
+            inspectorToggle
+            copyButton(compact: compact)
+            shareControl(compact: compact)
+            exportControl(compact: compact)
+        }
+        .fixedSize()
+    }
+
+    private func cropButton(compact: Bool) -> some View {
+        Button {
+            model.beginCrop()
+        } label: {
+            if compact {
+                Image(systemName: "crop")
+            } else {
+                Text("Crop")
+            }
+        }
+        .help("Crop the recording by dragging on the preview")
+        .accessibilityLabel("Crop")
+        .disabled(model.exportProgress != nil)
     }
 
     private var cropBar: some View {
         HStack(spacing: 8) {
-            Text("Crop")
+            Label("Crop", systemImage: "crop")
                 .font(.headline)
             Picker("Aspect", selection: Binding(
                 get: { model.cropAspect },
@@ -203,9 +247,14 @@ public struct StudioRootView: View {
                     Text(preset.title).tag(preset)
                 }
             }
-            .frame(width: 110)
+            .fixedSize()
             Button("Reset") { model.resetWorkingCrop() }
-            Spacer()
+            Spacer(minLength: 8)
+            Text("Drag the handles on the preview")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .layoutPriority(-1)
             Button("Cancel") { model.cancelCrop() }
                 .keyboardShortcut(.cancelAction)
             Button("Done") { model.applyCrop() }
@@ -220,17 +269,16 @@ public struct StudioRootView: View {
     /// nobody is touching while they watch.
     private var inspectorToggle: some View {
         Button {
-            isInspectorPresented.toggle()
+            model.isInspectorPresented.toggle()
         } label: {
             Image(systemName: "sidebar.right")
         }
-        .keyboardShortcut("i", modifiers: .command)
-        .help(isInspectorPresented ? "Hide the inspector (⌘I)" : "Show the inspector (⌘I)")
+        .help(model.isInspectorPresented ? "Hide the inspector (⌘I)" : "Show the inspector (⌘I)")
         .accessibilityLabel("Inspector")
-        .accessibilityValue(isInspectorPresented ? "Shown" : "Hidden")
+        .accessibilityValue(model.isInspectorPresented ? "Shown" : "Hidden")
     }
 
-    private var copyButton: some View {
+    private func copyButton(compact: Bool) -> some View {
         Menu {
             Button("Copy") {
                 Task { await model.copyEditedToClipboard() }
@@ -239,13 +287,19 @@ public struct StudioRootView: View {
                 model.copyOriginalToClipboard()
             }
         } label: {
-            Text("Copy")
+            if compact {
+                Image(systemName: "doc.on.doc")
+            } else {
+                Text("Copy")
+            }
         }
+        .fixedSize()
         .help("Copy the edited recording shown in the preview")
+        .accessibilityLabel("Copy")
         .disabled(model.exportProgress != nil)
     }
 
-    private var shareControl: some View {
+    private func shareControl(compact: Bool) -> some View {
         Menu {
             Button("Share") {
                 Task { await model.shareEdited() }
@@ -254,36 +308,42 @@ public struct StudioRootView: View {
                 Text("Share Original")
             }
         } label: {
-            Label("Share", systemImage: "square.and.arrow.up")
+            if compact {
+                Image(systemName: "square.and.arrow.up")
+            } else {
+                Text("Share")
+            }
         }
-        .labelStyle(.titleOnly)
+        .fixedSize()
         .help("Share the edited recording shown in the preview")
+        .accessibilityLabel("Share")
         .disabled(model.exportProgress != nil)
     }
 
-    private var exportControl: some View {
+    private func exportControl(compact: Bool) -> some View {
         HStack(spacing: 8) {
             if let progress = model.exportProgress {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .frame(width: 120)
+                    .frame(width: compact ? 72 : 120)
                 Button("Cancel") {
                     Task { await model.cancelExport() }
                 }
                 .help("Stop the export and delete the partly-written file")
             }
-            Button("Export…") { showsExportOptions = true }
-                .keyboardShortcut("e")
+            Button("Export…") { model.showsExportOptions = true }
+                .buttonStyle(.borderedProminent)
+                .help("Export the edited recording (⌘E)")
                 .disabled(model.exportProgress != nil)
-                .popover(isPresented: $showsExportOptions, arrowEdge: .top) {
+                .popover(isPresented: $model.showsExportOptions, arrowEdge: .top) {
                     StudioExportOptionsView(
                         model: model,
                         onConfirm: {
-                            showsExportOptions = false
+                            model.showsExportOptions = false
                             StudioExportSettings.remembered = model.exportSettings
                             onExport(model)
                         },
-                        onCancel: { showsExportOptions = false }
+                        onCancel: { model.showsExportOptions = false }
                     )
                 }
         }
@@ -321,7 +381,7 @@ public struct StudioRootView: View {
             model.failure = nil
         case .chooseExportLocation:
             model.failure = nil
-            showsExportOptions = true
+            model.showsExportOptions = true
         }
     }
 

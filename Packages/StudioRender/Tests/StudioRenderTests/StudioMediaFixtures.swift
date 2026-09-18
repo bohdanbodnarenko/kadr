@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreGraphics
 import CoreImage
+import CoreText
 import Foundation
 import StudioSession
 import Testing
@@ -45,7 +46,8 @@ enum StudioMediaFixtures {
         named name: String = "screen.mov",
         size: CGSize = CGSize(width: 320, height: 180),
         colour: Colour? = nil,
-        stacked: Bool = false
+        stacked: Bool = false,
+        textPage: Bool = false
     ) async throws -> URL {
         let url = folder.appendingPathComponent(name)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
@@ -68,7 +70,8 @@ enum StudioMediaFixtures {
         writer.startSession(atSourceTime: .zero)
 
         let source = try CIImage(cgImage: #require(
-            stacked ? stackedPicture(size: size) : picture(size: size, colour: colour)
+            textPage ? textPicture(size: size)
+                : stacked ? stackedPicture(size: size) : picture(size: size, colour: colour)
         ))
         for frame in 0 ..< Int(seconds * 30) {
             while !input.isReadyForMoreMediaData {
@@ -84,6 +87,31 @@ enum StudioMediaFixtures {
         input.markAsFinished()
         await writer.finishWriting()
         return url
+    }
+
+    /// Lines of small dark text on white: what a screen recording mostly is, and the
+    /// content where an encoder's rate control actually shows.
+    private static func textPicture(size: CGSize) -> CGImage? {
+        BitmapCanvas.image(width: Int(size.width), height: Int(size.height)) { context in
+            context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+            context.fill(CGRect(origin: .zero, size: size))
+            let font = CTFontCreateWithName("Menlo" as CFString, 11, nil)
+            let attributes = [
+                NSAttributedString.Key(kCTFontAttributeName as String): font,
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String):
+                    CGColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
+            ] as [NSAttributedString.Key: Any]
+            var y = size.height - 16
+            var line = 0
+            while y > 0 {
+                let text = "let value\(line) = compute(\(line * 7)) // a line of code, long enough to span the frame"
+                let ctLine = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+                context.textPosition = CGPoint(x: 12, y: y)
+                CTLineDraw(ctLine, context)
+                y -= 14
+                line += 1
+            }
+        }
     }
 
     /// Red over blue, top-left terms — the picture that catches a render drawn upside down,

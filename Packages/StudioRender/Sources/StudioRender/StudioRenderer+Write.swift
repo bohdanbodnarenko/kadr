@@ -356,14 +356,7 @@ extension StudioRenderer {
             throw RenderError.couldNotCreateWriter(error.localizedDescription)
         }
 
-        var compression: [String: Any] = [
-            AVVideoExpectedSourceFrameRateKey: options.frameRate,
-            AVVideoMaxKeyFrameIntervalKey: options.frameRate * 2
-        ]
-        compression[AVVideoAverageBitRateKey] = Int(
-            Double(options.bitRate ?? Self.bitRate(for: size, frameRate: options.frameRate))
-                * max(options.bitRateMultiplier, 0.05)
-        )
+        let compression = Self.compressionProperties(for: options, size: size)
 
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: options.codec,
@@ -481,17 +474,5 @@ extension StudioRenderer {
             return nil
         }
         return (image, CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample)))
-    }
-
-    /// A bit rate for a size and a frame rate.
-    ///
-    /// Roughly 0.1 bits per pixel per frame, which is where HEVC stops showing blocking on
-    /// screen content — text and flat colour, which compress well but show artefacts
-    /// mercilessly. Screen recordings are not film and a film-derived table under-serves
-    /// them badly.
-    static func bitRate(for size: CGSize, frameRate: Int) -> Int {
-        let pixels = Double(size.width * size.height)
-        let estimate = pixels * Double(max(frameRate, 1)) * 0.1
-        return Int(min(max(estimate, 1_500_000), 60_000_000))
     }
 }

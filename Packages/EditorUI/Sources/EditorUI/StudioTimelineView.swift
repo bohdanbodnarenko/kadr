@@ -48,6 +48,8 @@ struct StudioTimelineView: View {
     @State var dragging: (id: ZoomCue.ID, start: TimeInterval)?
     /// A zoom being drawn on the lane, in edited time.
     @State var creating: (start: TimeInterval, end: TimeInterval)?
+    /// The clip edge being trimmed, and where it was when the drag began.
+    @State var trimOrigin: (id: Clip.ID, edge: TimeInterval)?
     /// Edited time under the pointer, for the split marker and hover-C.
     ///
     /// Read from the model's playhead clock rather than kept in `@State`: a state write on
@@ -62,60 +64,45 @@ struct StudioTimelineView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            GeometryReader { geometry in
-                let viewport = max(geometry.size.width, 1)
-                let width = viewport * zoom
-                let scale = width / max(model.edit.duration, 0.001)
-
-                ScrollViewReader { scroller in
-                    ScrollView(.horizontal, showsIndicators: zoom > 1) {
-                        bands(scale: scale, width: width)
-                            .overlay(alignment: .topLeading) {
-                                PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
-                                    .id(Self.playheadAnchor)
-                            }
-                            .overlay(alignment: .topLeading) {
-                                Color.clear
-                                    .frame(width: 1, height: 1)
-                                    .offset(x: zoomAnchorTime * scale)
-                                    .id(Self.zoomAnchor)
-                            }
-                    }
-                    .background {
-                        PlayheadFollower(clock: model.playheadClock, isFollowing: zoom > 1) {
-                            scroller.scrollTo(Self.playheadAnchor, anchor: .center)
-                        }
-                    }
-                    .onChange(of: zoom) {
-                        if zoom <= 1 {
-                            scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
-                        } else {
-                            scroller.scrollTo(
-                                Self.zoomAnchor,
-                                anchor: UnitPoint(x: zoomAnchorFraction, y: 0.5)
-                            )
-                        }
-                    }
-                }
-                .background {
-                    TimelineZoomCatcher { factor, pointerX in
-                        applyZoom(factor: factor, pointerX: pointerX, viewportWidth: viewport)
-                    }
-                }
-                .onAppear { viewportWidth = viewport }
-                .onChange(of: geometry.size.width) { viewportWidth = max(geometry.size.width, 1) }
+            HStack(alignment: .top, spacing: 0) {
+                StudioTimelineTrackHeaders(
+                    model: model,
+                    topInset: crownLane + rulerHeight + 6,
+                    cueHeight: cueHeight,
+                    laneSpacing: 6,
+                    clipHeight: clipHeight
+                )
+                timelineBands
             }
             .frame(height: bandsHeight)
             .focusable()
             .focused($isFocused)
             .onAppear { isFocused = true }
-            .onTapGesture { isFocused = true }
+            // Simultaneous, not `onTapGesture`: the lane now carries buttons of its own —
+            // add-zoom, remove-zoom, accept-suggestion — and a button swallows a plain tap
+            // gesture. Clicking one used to take focus away from the timeline and leave C,
+            // Z, [, ], the arrows and Delete dead until the user found bare lane to click.
+            .simultaneousGesture(TapGesture().onEnded { isFocused = true })
             .onKeyPress("c") {
                 if let hoverTime {
                     model.split(at: hoverTime)
                     return .handled
                 }
                 return .ignored
+            }
+            // Z adds a zoom where the pointer is (or selects the one already there);
+            // [ and ] step between zooms, the way they step between markers elsewhere.
+            .onKeyPress("z") {
+                model.addOrSelectZoom(at: hoverTime ?? model.playhead)
+                return .handled
+            }
+            .onKeyPress("[") {
+                model.selectAdjacentZoom(forward: false)
+                return .handled
+            }
+            .onKeyPress("]") {
+                model.selectAdjacentZoom(forward: true)
+                return .handled
             }
             .onKeyPress(.leftArrow, phases: .down) { press in
                 nudgePlayhead(press, frames: -1)
@@ -124,7 +111,8 @@ struct StudioTimelineView: View {
                 nudgePlayhead(press, frames: 1)
             }
             .onKeyPress(.return) {
-                if model.selectedZoom != nil {
+                if let zoom = model.selectedZoom {
+                    model.previewZoom(zoom)
                     return .handled
                 }
                 if model.selectedClip != nil {
@@ -140,6 +128,53 @@ struct StudioTimelineView: View {
                 }
             }
             zoomControls(viewportWidth: viewportWidth)
+        }
+    }
+
+    /// The ruler and the lanes, scrollable and zoomable, beside the fixed track headers.
+    private var timelineBands: some View {
+        GeometryReader { geometry in
+            let viewport = max(geometry.size.width, 1)
+            let width = viewport * zoom
+            let scale = width / max(model.edit.duration, 0.001)
+
+            ScrollViewReader { scroller in
+                ScrollView(.horizontal, showsIndicators: zoom > 1) {
+                    bands(scale: scale, width: width)
+                        .overlay(alignment: .topLeading) {
+                            PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
+                                .id(Self.playheadAnchor)
+                        }
+                        .overlay(alignment: .topLeading) {
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                                .offset(x: zoomAnchorTime * scale)
+                                .id(Self.zoomAnchor)
+                        }
+                }
+                .background {
+                    PlayheadFollower(clock: model.playheadClock, isFollowing: zoom > 1) {
+                        scroller.scrollTo(Self.playheadAnchor, anchor: .center)
+                    }
+                }
+                .onChange(of: zoom) {
+                    if zoom <= 1 {
+                        scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
+                    } else {
+                        scroller.scrollTo(
+                            Self.zoomAnchor,
+                            anchor: UnitPoint(x: zoomAnchorFraction, y: 0.5)
+                        )
+                    }
+                }
+            }
+            .background {
+                TimelineZoomCatcher { factor, pointerX in
+                    applyZoom(factor: factor, pointerX: pointerX, viewportWidth: viewport)
+                }
+            }
+            .onAppear { viewportWidth = viewport }
+            .onChange(of: geometry.size.width) { viewportWidth = max(geometry.size.width, 1) }
         }
     }
 

@@ -6,6 +6,7 @@ extension StudioInspector {
     var selectedZoomSection: some View {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
             StudioInspectorSection(title: "Zoom", key: "zoom") {
+                zoomNavigationRow(id: id)
                 Toggle("Use this zoom", isOn: Binding(
                     get: { cue.isEnabled },
                     set: { value in model.updateZoom(id) { $0.isEnabled = value } }
@@ -14,7 +15,9 @@ extension StudioInspector {
                 InspectorSlider(
                     title: "Starts at",
                     value: Binding(
-                        get: { cue.start },
+                        // Edited time both ways: `cue.start` is source time, and after a
+                        // cut the slider showed one clock and moved the cue on the other.
+                        get: { model.editedDisplayRange(of: cue).lowerBound },
                         set: { value in model.moveZoom(id, to: value) }
                     ),
                     range: 0 ... max(model.edit.duration, 1),
@@ -74,6 +77,42 @@ extension StudioInspector {
                 Button("Remove zoom", role: .destructive) { model.removeSelectedZoom() }
             }
         }
+    }
+
+    /// Which zoom this is, the way to the others, and a way to watch it.
+    private func zoomNavigationRow(id: ZoomCue.ID) -> some View {
+        let ordered = model.zoomsInOrder
+        let index = ordered.firstIndex { $0.id == id } ?? 0
+        return HStack(spacing: 6) {
+            Text("Zoom \(index + 1) of \(ordered.count)")
+                .font(.callout.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                model.selectAdjacentZoom(forward: false)
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(index == 0)
+            .help("Previous zoom ([)")
+            .accessibilityLabel("Previous zoom")
+            Button {
+                model.selectAdjacentZoom(forward: true)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(index >= ordered.count - 1)
+            .help("Next zoom (])")
+            .accessibilityLabel("Next zoom")
+            Button {
+                model.previewZoom(id)
+            } label: {
+                Label("Play", systemImage: "play.fill")
+            }
+            .help("Play this zoom from just before it starts (Return)")
+        }
+        .controlSize(.small)
+        .buttonStyle(.bordered)
     }
 
     private func zoomFocusRow(id: ZoomCue.ID, cue: ZoomCue) -> some View {

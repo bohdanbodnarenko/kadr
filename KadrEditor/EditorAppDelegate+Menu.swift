@@ -78,6 +78,14 @@ extension EditorAppDelegate {
         )
         saveProject.keyEquivalentModifierMask = [.command, .option]
         fileMenu.addItem(.separator())
+        // Studio only: an annotation window has no `exportMovie:`, so the item greys itself
+        // out there rather than needing to be built per window kind.
+        fileMenu.addItem(
+            withTitle: String(localized: "Export Video…"),
+            action: #selector(StudioWindowController.exportMovie(_:)),
+            keyEquivalent: "e"
+        )
+        fileMenu.addItem(.separator())
         fileMenu.addItem(
             withTitle: String(localized: "Print…"),
             action: #selector(printDocument(_:)),
@@ -138,6 +146,12 @@ extension EditorAppDelegate {
             withTitle: String(localized: "Duplicate"),
             action: #selector(EditorWindowController.duplicate(_:)),
             keyEquivalent: "d"
+        )
+        editMenu.addItem(.separator())
+        editMenu.addItem(
+            withTitle: String(localized: "Split Clip at Playhead"),
+            action: #selector(StudioWindowController.splitClipAtPlayhead(_:)),
+            keyEquivalent: "k"
         )
         editMenu.addItem(.separator())
         editMenu.addItem(

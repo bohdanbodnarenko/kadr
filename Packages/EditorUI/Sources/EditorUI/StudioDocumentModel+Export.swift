@@ -113,11 +113,11 @@ public extension StudioDocumentModel {
               let digest = RenderStamp.digest(of: edit),
               stamp.matches(
                   editDigest: digest,
-                  pixelSize: StudioRenderPlan(
+                  pixelSize: StudioRenderPlan.outputSize(
                       edit: edit,
                       sourceSize: manifest.pixelSize,
                       maxLongestEdge: exportSettings.maxLongestEdge
-                  ).outputSize,
+                  ),
                   settingsDigest: RenderStamp.digest(of: exportSettings)
               )
         else {

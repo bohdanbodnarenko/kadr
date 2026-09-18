@@ -42,9 +42,21 @@ public final class StudioDocumentModel {
             cachedClipEnds = nil
             cachedClickTimes = nil
             cachedEditedTelemetry = nil
+            cachedPlannedZooms = nil
         }
         refreshPlayheadDerivedState()
     }
+
+    /// Zooms planned from the clicks, for the suggestion layer (`+ZoomSuggestions`).
+    @ObservationIgnored var cachedPlannedZooms: [ZoomCue]?
+    /// Suggestions waved away this session, by source start in milliseconds.
+    var dismissedZoomSuggestions: Set<Int> = []
+    /// Whether the zoom lane draws suggestions. Remembered across recordings.
+    var showsZoomSuggestions = UserDefaults.standard.object(forKey: showsZoomSuggestionsKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showsZoomSuggestions, forKey: Self.showsZoomSuggestionsKey) }
+    }
+
+    nonisolated static let showsZoomSuggestionsKey = "studio.showsZoomSuggestions"
 
     /// Where the playhead is, in edited time.
     ///
@@ -135,6 +147,15 @@ public final class StudioDocumentModel {
 
     /// Whether an export is running, and how far along.
     public internal(set) var exportProgress: Double?
+
+    /// Whether the inspector column is open, and whether the export sheet is up.
+    ///
+    /// On the model rather than in the view's `@State` so the window's menu commands — ⌘I
+    /// and ⌘E, which arrive through the responder chain — can reach them. A menu item is
+    /// the one place a keyboard command works whatever the window's layout happens to be,
+    /// and the transport bar's controls move between three arrangements.
+    public var isInspectorPresented = true
+    public var showsExportOptions = false
 
     /// Set when something went wrong that the user should see.
     public var failure: StudioFailurePresentation?
@@ -405,25 +426,6 @@ public final class StudioDocumentModel {
     }
 
     @ObservationIgnored var cachedClickTimes: (all: [TimeInterval], ticks: [TimeInterval])?
-
-    // MARK: - Presets
-
-    public func apply(_ preset: StudioPreset) {
-        change { $0 = resolvingBakedCursor(preset.applied(to: $0)) }
-    }
-
-    /// Footage that already has a pointer must not get a second, reconstructed one.
-    ///
-    /// The Presenter look (and any saved default) turns the reconstructed cursor on,
-    /// because that is the right answer for a studio capture. Applying it to a recording
-    /// that ScreenCaptureKit already burned the pointer into stacked a lagged spring
-    /// cursor on top of the real one — two arrows, the extra one trailing on a fast move.
-    func resolvingBakedCursor(_ edit: StudioEdit) -> StudioEdit {
-        guard manifest.hasBakedCursor else { return edit }
-        var resolved = edit
-        resolved.showsCursor = false
-        return resolved
-    }
 
     // MARK: - Saving
 

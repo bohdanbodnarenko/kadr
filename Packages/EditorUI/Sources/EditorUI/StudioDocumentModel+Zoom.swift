@@ -31,13 +31,15 @@ public extension StudioDocumentModel {
     /// Anchored at the pointer rather than the centre because a zoom to the middle of the
     /// screen is almost never what somebody wants: they are zooming to whatever they were
     /// doing, and where the pointer was is the best evidence of that available.
-    func addZoom(duration: TimeInterval = 3, magnification: Double = 2) {
+    /// - Parameter time: where to put it, in edited time; the playhead when nil. The
+    ///   timeline passes the pointer's time for the Z key.
+    func addZoom(at time: TimeInterval? = nil, duration: TimeInterval = 3, magnification: Double = 2) {
         // A cue occupies its hold *and* both of its moves, so the span to fit inside the
         // recording is longer than the duration asked for. Fitting the hold alone puts the
         // move out past the end, where it never plays and the recording ends mid-zoom.
         let transition = Self.defaultTransition
         let footprint = duration + transition * 2
-        let start = max(0, min(playhead, edit.duration - footprint))
+        let start = max(0, min(time ?? playhead, edit.duration - footprint))
         let available = max(edit.duration - start - transition * 2, 0.1)
         let sourceStart = sourceTime(forEdited: start)
         let speed = edit.clips.clip(atEdited: start)?.speed ?? 1
@@ -223,7 +225,14 @@ public extension StudioDocumentModel {
     ///
     /// Transition time is kept when there is room, and shrunk when the drag is shorter
     /// than the original moves, so a handle can still make a brief zoom.
-    func setZoomRange(_ id: ZoomCue.ID, start: TimeInterval, end: TimeInterval) {
+    /// - Parameter preferredTransition: the move time to aim for, when the caller knows
+    ///   what it was before a drag started; the cue's current one otherwise.
+    func setZoomRange(
+        _ id: ZoomCue.ID,
+        start: TimeInterval,
+        end: TimeInterval,
+        preferredTransition: TimeInterval? = nil
+    ) {
         guard let cue = edit.zooms.first(where: { $0.id == id }) else { return }
         let others = edit.zooms.filter { $0.id != id }
         let lowerLimit = others
@@ -242,7 +251,7 @@ public extension StudioDocumentModel {
             low = max(high - minHold, lowerLimit)
         }
         let span = high - low
-        let transition = min(max(min(cue.transitionDuration, span / 4), 0.1), 2)
+        let transition = min(max(min(preferredTransition ?? cue.transitionDuration, span / 4), 0.1), 2)
         let speed = edit.clips.clip(atEdited: low)?.speed ?? 1
         updateZoom(id, coalescingAs: "zoom.range.\(id)") {
             $0.start = sourceTime(forEdited: low)

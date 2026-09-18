@@ -13,23 +13,46 @@ extension StudioTimelineView {
         .contentShape(Rectangle())
         .accessibilityLabel(isLeading ? "Trim clip start" : "Trim clip end")
         .accessibilityAddTraits(.isButton)
+        // Measured from where the edge was when the drag began, in the timeline's own
+        // space. Adding the whole translation to the edge's *current* position compounded
+        // every event — the edge ran ahead of the pointer — and the handle's local space
+        // moves with the clip it is trimming.
         .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    model.selectedClip = clip.id
-                    model.pausePlayback()
-                    let start = model.editedStart(ofClipAt: index)
-                    let raw = start + (isLeading ? 0 : clip.editedDuration) + value.translation.width / scale
-                    let time = snapEditedTime(raw, scale: scale)
+            DragGesture(
+                minimumDistance: 1,
+                coordinateSpace: .named(StudioTimelinePlayhead.coordinateSpace)
+            )
+            .onChanged { value in
+                let origin = trimOrigin?.id == clip.id
+                    ? trimOrigin?.edge ?? 0
+                    : model.editedStart(ofClipAt: index) + (isLeading ? 0 : clip.editedDuration)
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    if trimOrigin?.id != clip.id {
+                        trimOrigin = (clip.id, origin)
+                        model.selectedClip = clip.id
+                        model.pausePlayback()
+                    }
+                    let raw = origin + value.translation.width / scale
+                    // The edge being dragged is not a snap target: snapping it to itself
+                    // made it stick wherever it was.
+                    let live = model.edit.clips.clips.indices.contains(index)
+                        ? model.editedStart(ofClipAt: index)
+                        + (isLeading ? 0 : model.edit.clips.clips[index].editedDuration)
+                        : origin
+                    let time = snapEditedTime(raw, scale: scale, ignoring: [origin, live])
                     if isLeading {
                         model.trimClipStart(clip.id, toEdited: time)
                     } else {
                         model.trimClipEnd(clip.id, toEdited: time)
                     }
                 }
-                .onEnded { _ in
-                    AlignmentHaptic.released()
-                }
+            }
+            .onEnded { _ in
+                trimOrigin = nil
+                AlignmentHaptic.released()
+            }
         )
         .onHover { hovering in
             if hovering {
@@ -65,7 +88,14 @@ extension StudioTimelineView {
         return .handled
     }
 
-    func snapEditedTime(_ time: TimeInterval, scale: CGFloat, excludingPlayhead: Bool = false) -> TimeInterval {
+    /// - Parameter ignored: the edge being dragged — where it started and where it is —
+    ///   which must not snap to itself.
+    func snapEditedTime(
+        _ time: TimeInterval,
+        scale: CGFloat,
+        excludingPlayhead: Bool = false,
+        ignoring ignored: [TimeInterval] = []
+    ) -> TimeInterval {
         var candidates: [TimeInterval] = [0, model.edit.duration]
         if !excludingPlayhead {
             candidates.append(model.playhead)
@@ -73,9 +103,15 @@ extension StudioTimelineView {
         // Every clip boundary, from the model's cached ends: once for the start of the
         // edit and once per clip end. The loop it replaced summed a prefix per clip.
         candidates.append(contentsOf: model.clipEnds)
+        // Zooms in edited time, like everything else here: `start` and `end` are source
+        // time, and after a cut they point at the wrong place on this ruler.
         for cue in model.edit.zooms {
-            candidates.append(cue.start)
-            candidates.append(cue.end)
+            let range = model.editedDisplayRange(of: cue)
+            candidates.append(range.lowerBound)
+            candidates.append(range.upperBound)
+        }
+        candidates.removeAll { candidate in
+            ignored.contains { abs($0 - candidate) < 0.0005 }
         }
         let snapped = TimelineSnap.snap(time, candidates: candidates, scale: scale)
         if snapped != time {

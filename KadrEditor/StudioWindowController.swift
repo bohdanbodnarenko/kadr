@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import EditorUI
 import os
 import Shared
@@ -115,6 +116,50 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         Task { await model.copyEditedToClipboard() }
     }
 
+    @objc func splitClipAtPlayhead(_ sender: Any?) {
+        model.splitAtPlayhead()
+    }
+
+    @objc func toggleInspector(_ sender: Any?) {
+        model.isInspectorPresented.toggle()
+    }
+
+    @objc func exportMovie(_ sender: Any?) {
+        guard model.exportProgress == nil else { return }
+        model.showsExportOptions = true
+    }
+
+    // MARK: - Playback keys
+
+    /// Space and the arrows, from the responder chain rather than from the menu.
+    ///
+    /// They are bare keys, and a bare key equivalent in a menu fires *before* the first
+    /// responder sees the event — so Space would start playback while the user was typing
+    /// in the transcript, and ← would scrub instead of moving the insertion point. Arriving
+    /// through `keyDown` they reach this controller only once nothing closer to the
+    /// keyboard — a text field, or the focused timeline — has taken them.
+    override func keyDown(with event: NSEvent) {
+        guard !performPlaybackKey(event) else { return }
+        super.keyDown(with: event)
+    }
+
+    private func performPlaybackKey(_ event: NSEvent) -> Bool {
+        // Cropping owns the whole preview, and an export is not interruptible from here.
+        guard !model.isCropping, model.exportProgress == nil else { return false }
+        guard let key = StudioPlaybackKey.match(
+            keyCode: Int(event.keyCode),
+            modifiers: event.modifierFlags
+        ) else {
+            return false
+        }
+        switch key {
+        case .togglePlayback: model.togglePlayback()
+        case let .step(frames): model.step(frames: frames)
+        case let .skip(seconds): model.step(seconds: seconds)
+        }
+        return true
+    }
+
     /// Greys the menu items out when there is nothing to undo, rather than letting them
     /// look available and do nothing.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
@@ -123,6 +168,8 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case #selector(redo(_:)): model.canRedo
         case #selector(copy(_:)):
             FileManager.default.fileExists(atPath: model.session.screenURL.path)
+        case #selector(splitClipAtPlayhead(_:)): !model.isCropping
+        case #selector(exportMovie(_:)): model.exportProgress == nil
         default: true
         }
     }
