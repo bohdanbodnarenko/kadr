@@ -3,7 +3,7 @@ import AppKit
 import QuartzCore
 
 /// Modal crop chrome: dimmed exterior, rule-of-thirds, white border, eight handles
-/// (Screendrop's `AnnotationCropOverlay`, drawn with CALayer so the mouse path stays AppKit).
+/// Drawn with CALayer, so the mouse path stays AppKit (CLAUDE.md rule 4).
 extension AnnotationCanvasView {
     func updateCropOverlay() {
         CATransaction.begin()

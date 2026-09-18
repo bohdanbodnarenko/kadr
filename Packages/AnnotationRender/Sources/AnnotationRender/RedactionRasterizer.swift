@@ -14,7 +14,7 @@ import Shared
 ///
 /// Two rules the whole file follows:
 ///
-/// * **Strength is in the capture's pixels**, the way Screendrop measures it. Multiplying by
+/// * **Strength is in the capture's pixels**, never in points. Multiplying by
 ///   the backing scale doubled every blur and mosaic on a Retina capture, which is what
 ///   turned a readable-but-hidden blur into a flat grey slab.
 /// * **Preview and export are the same algorithm.** The canvas used to preview pixelate with
@@ -60,7 +60,7 @@ public struct RedactionRasterizer: Sendable {
         ).integral
     }
 
-    /// Blurs the box's own pixels, its edges extended outward, the way Screendrop does.
+    /// Blurs the box's own pixels, its edges extended outward.
     ///
     /// The crop happens on the `CGImage`, before CoreImage sees anything: `CIImage(cgImage:)`
     /// of the full capture pushes the entire bitmap to the GPU on every call, and this one

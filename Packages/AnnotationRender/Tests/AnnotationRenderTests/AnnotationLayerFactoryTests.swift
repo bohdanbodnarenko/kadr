@@ -146,7 +146,7 @@ struct AnnotationLayerFactoryTests {
         #expect(preview.height == 48)
     }
 
-    /// Nothing outside the box bleeds into its edge (Screendrop's behaviour).
+    /// Nothing outside the box bleeds into its edge.
     ///
     /// Padding the blur with the surrounding image smeared a band of whatever sat next to
     /// the box along each edge. The box here is the black half, right up against the white

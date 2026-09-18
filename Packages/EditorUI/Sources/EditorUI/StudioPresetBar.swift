@@ -1,8 +1,8 @@
 import StudioSession
 import SwiftUI
 
-/// Saved looks at the top of the inspector, the way Screendrop keeps them — apply, save,
-/// delete, pick a default for the next recording (docs/09 U3.5).
+/// Saved looks at the top of the inspector — apply, save, delete, pick a default for the
+/// next recording (docs/09 U3.5).
 struct StudioPresetBar: View {
     let model: StudioDocumentModel
 

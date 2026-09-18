@@ -113,7 +113,7 @@ struct AnnotationCommandTests {
         #expect(StrokeStyle.widthPresets.allSatisfy { StrokeStyle.widthRange.contains($0) })
     }
 
-    @Test("Redaction strength uses Screendrop's density mapping")
+    @Test("Redaction strength maps density to pixels")
     func redactionDensity() {
         let blur = RedactionStyle.blur(density: 0.55)
         let pixelate = RedactionStyle.pixelate(density: 0.55)

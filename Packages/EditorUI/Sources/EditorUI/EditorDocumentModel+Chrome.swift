@@ -76,7 +76,7 @@ public extension EditorDocumentModel {
     }
 
     /// Removes the current look. Clicking an already-selected preset also lands here, so
-    /// a look is not a one-way door (Screendrop's "None").
+    /// a look is not a one-way door.
     func clearStylePreset() {
         document.applyStylePreset(StylePreset(name: "None"))
     }

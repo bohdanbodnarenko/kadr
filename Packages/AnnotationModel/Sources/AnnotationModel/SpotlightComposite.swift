@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Stacking per-spotlight dims made two holes darker than one, and a spotlight later in
 /// z-order dimmed arrows drawn earlier. One even-odd fill after redactions and before the
-/// other shapes matches Screendrop and keeps both holes equally bright.
+/// other shapes keeps both holes equally bright.
 public struct SpotlightComposite: Equatable, Sendable {
     public struct Hole: Equatable, Sendable {
         public var rect: CGRect

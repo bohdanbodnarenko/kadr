@@ -125,7 +125,7 @@ public final class StudioDocumentModel {
     public var exportSettings = StudioExportSettings.remembered
 
     /// Whether the preview is in crop mode: the full recording is shown with a handle
-    /// overlay, the way Screendrop crops, rather than four sliders in the inspector.
+    /// overlay, rather than four sliders in the inspector.
     public var isCropping = false
     /// The crop being dragged, in normalised source space. Committed on Done.
     public var workingCrop = CGRect(x: 0, y: 0, width: 1, height: 1)

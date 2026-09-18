@@ -203,7 +203,7 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
     /// Fill with the colour sampled from the region's edge, so UI chrome disappears.
     case erase
 
-    /// Screendrop's default strength (0.55): enough to hide text, not a wall of fog.
+    /// 0.55: enough to hide text, not a wall of fog.
     public static let defaultBlur = RedactionStyle.blur(density: 0.55)
     public static let defaultPixelate = RedactionStyle.pixelate(density: 0.55)
     public static let defaultErase = RedactionStyle.erase
@@ -216,7 +216,7 @@ public enum RedactionStyle: Codable, Hashable, Sendable {
         }
     }
 
-    /// Strength on Screendrop's 0...1 slider. Blur radius is `2 + density × 28`;
+    /// Strength on the inspector's 0...1 slider. Blur radius is `2 + density × 28`;
     /// pixel block size is `4 + density × 36` — both in the capture's pixels, not points,
     /// so a Retina capture is not redacted twice as heavily. Erase has no strength.
     public var density: CGFloat {

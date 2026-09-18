@@ -45,8 +45,7 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
     /// Shortest a clip may be after an edge-drag, in edited time.
     ///
     /// Below this a clip collapses into a handle nobody can grab, and the next drag
-    /// deletes it by accident. Matching the floor Screendrop uses, so a trim that felt
-    /// precise there feels the same here.
+    /// deletes it by accident.
     public static let minimumEditedDuration: TimeInterval = 0.12
 
     /// How long this clip lasts in the finished video.

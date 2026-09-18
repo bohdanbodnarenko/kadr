@@ -2,10 +2,10 @@ import SwiftUI
 
 /// The playhead as a pin you can grab, not a 1.5-point line you have to aim at.
 ///
-/// Screendrop's timeline puts a crown above the ruler whose only job is to be hit; the
-/// needle itself ignores clicks so trims and zooms underneath still work. Kadr's playhead
-/// used to be `allowsHitTesting(false)` on the line alone, so the only way to scrub was to
-/// drag the ruler or a clip — which is how a timeline feels raw.
+/// A crown above the ruler does the catching; the needle itself ignores clicks, so trims
+/// and zooms underneath still work. The playhead used to be `allowsHitTesting(false)` on
+/// the line alone, so the only way to scrub was to drag the ruler or a clip — which is how
+/// a timeline feels raw.
 ///
 /// Takes the playhead clock rather than a time, so it is the view that re-renders while
 /// playback moves the playhead — not the timeline that contains it (docs/11 S2).

@@ -7,7 +7,7 @@ import QuartzCore
 /// (docs/03 §3, docs/10 R1).
 extension AnnotationLayerFactory {
     /// Samples the capture under the box so the editor shows a real blur, not a grey
-    /// stand-in (Screendrop's live redaction). Export still burns the effect in.
+    /// stand-in. Export still burns the effect in.
     /// One rasterizer, not one per frame.
     ///
     /// This is built on every mouse-move while a redaction box is dragged, and building one

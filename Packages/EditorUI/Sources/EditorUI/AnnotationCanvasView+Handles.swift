@@ -6,7 +6,7 @@ import QuartzCore
 /// Counters keep the frame but no anchors — they are sized from the inspector.
 extension AnnotationCanvasView {
     /// Screen-constant size, derived from the window transform so it stays honest when
-    /// the scroll view's `magnification` is stale or missing (Screendrop's `pageToScreen`).
+    /// the scroll view's `magnification` is stale or missing.
     var handleViewScale: CGFloat {
         let origin = convert(CGPoint.zero, to: nil)
         let unit = convert(CGPoint(x: 1, y: 0), to: nil)
@@ -90,7 +90,7 @@ extension AnnotationCanvasView {
     }
 
     /// Which handle is under the event, tested in window space so the target stays ~12pt
-    /// at every zoom — the same contract as Screendrop's `handle(at: screenPoint)`.
+    /// at every zoom, whatever the canvas is scaled to.
     func screenSpaceHandle(at event: NSEvent) -> SelectionHandle? {
         let selected = model.selectedCommands
         let click = event.locationInWindow

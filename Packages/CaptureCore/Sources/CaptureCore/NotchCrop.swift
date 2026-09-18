@@ -16,7 +16,7 @@ import Shared
 /// from every fullscreen shot of an app that covers the display (docs/03 §1.3,
 /// docs/16 CAP-1).
 public enum NotchCrop {
-    /// Channels at or below this count as black (Screendrop's empty-strip probe).
+    /// Channels at or below this count as black.
     public static let channelThreshold: UInt8 = 14
     /// Fraction of non-black pixels that still counts as empty (0.2 %).
     public static let maxNonBlackFraction = 0.002

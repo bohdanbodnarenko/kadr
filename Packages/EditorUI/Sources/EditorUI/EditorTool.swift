@@ -89,8 +89,8 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
     /// Whether finishing a stroke should put the pointer back on Select.
     ///
     /// One-shot geometry — arrow, rectangle, line, text, blur — is almost always
-    /// adjusted after placing, so the tool hands off to the cursor the way Screendrop
-    /// does. Repeatable tools stay armed: a numbered badge is one of a sequence, a
+    /// adjusted after placing, so the tool hands off to the cursor. Repeatable tools stay
+    /// armed: a numbered badge is one of a sequence, a
     /// pencil stroke is rarely the last, and Crop is a mode rather than a stroke.
     public var returnsToSelectAfterUse: Bool {
         switch self {

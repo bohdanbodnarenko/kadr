@@ -57,8 +57,8 @@ struct PermissionRecovery {
         }
     }
 
-    /// Screendrop's capture gate: TCC preflight, a one-shot system prompt if needed,
-    /// and never a ScreenCaptureKit call until that succeeds.
+    /// The capture gate: TCC preflight, a one-shot system prompt if needed, and never a
+    /// ScreenCaptureKit call until that succeeds.
     ///
     /// Returns whether the caller may proceed into ScreenCaptureKit. On denial the
     /// recovery alert is shown here so every capture path handles the missing grant

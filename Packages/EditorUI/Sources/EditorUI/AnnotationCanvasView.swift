@@ -288,7 +288,7 @@ public final class AnnotationCanvasView: NSView {
         }
 
         // A click with the text tool on existing text edits it, rather than stacking
-        // another box on top — the same as Screendrop.
+        // another box on top.
         if model.tool == .text, beginEditingText(at: imagePoint(from: event)) {
             return
         }

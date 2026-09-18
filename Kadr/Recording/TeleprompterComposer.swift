@@ -9,8 +9,8 @@ import SwiftUI
 ///
 /// Clicking that icon used to flip a setting with no script in reach, so "teleprompter on"
 /// meant an empty panel at record time unless somebody had already visited Settings.
-/// Screendrop opens a composer on the bar; this is that, wired to Kadr's own script, pace
-/// and follow-speech settings. Destroyed when hidden (PRD §8).
+/// The composer opens on the bar itself, wired to Kadr's own script, pace and
+/// follow-speech settings. Destroyed when hidden (PRD §8).
 @MainActor
 final class TeleprompterComposer {
     private var panel: NonActivatingPanel?

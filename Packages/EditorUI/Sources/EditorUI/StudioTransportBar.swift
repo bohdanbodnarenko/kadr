@@ -4,9 +4,8 @@ import SwiftUI
 /// Play, cut and undo, as icons on one bar (docs/09 U3.3).
 ///
 /// The studio used to pack labelled buttons — Trim, Split, Delete clip, Speed, Reset clips,
-/// Add zoom, Smart zooms, Undo, Redo — into one overflowing row. Screendrop's transport is
-/// icons around a centred play control; this is that layout, plus frame-step which that
-/// bar does not have.
+/// Add zoom, Smart zooms, Undo, Redo — into one overflowing row. This is icons around a
+/// centred play control, plus frame-step.
 ///
 /// Three columns, never a `ZStack`. The bar used to overlay the edit tools, the playback
 /// controls and the cut tools on top of each other and rely on spacers to keep them apart,

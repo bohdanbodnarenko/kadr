@@ -17,9 +17,8 @@ public enum ZoomAnchor: Sendable, Hashable, Codable {
     /// Follow the recorded pointer for the life of the cue.
     ///
     /// Explicit, not the default: chasing the pointer is how automatic zooms look cheap
-    /// (the camera dithers as the user moves). Offered as a mode because Screendrop's
-    /// "Pointer" focus is a real edit, and some recordings want the camera to stay on
-    /// whatever is being pointed at.
+    /// (the camera dithers as the user moves). Offered as a mode because some recordings
+    /// do want the camera to stay on whatever is being pointed at.
     case pointer
 
     /// Where this anchor is, given the recorded area.
@@ -65,8 +64,7 @@ public struct ZoomCue: Sendable, Hashable, Codable, Identifiable {
     /// How far a pointer-follow zoom keeps the subject from the centre of the frame.
     ///
     /// 0 is "always centre the pointer". 1 keeps it where it sat on the unzoomed screen, so
-    /// the camera does not yank a corner click into the middle. Screendrop calls this
-    /// "Edge in Frame".
+    /// the camera does not yank a corner click into the middle.
     public var boundsBias: Double {
         didSet {
             let next = Self.clampedBoundsBias(boundsBias)

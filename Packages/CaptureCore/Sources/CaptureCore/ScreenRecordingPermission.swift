@@ -124,7 +124,7 @@ public final class PermissionCoordinator {
         return granted
     }
 
-    /// Whether ScreenCaptureKit may be called, using Screendrop's TCC sequence.
+    /// Whether ScreenCaptureKit may be called: preflight, prompt once, never before.
     ///
     /// `SCShareableContent` on macOS 15+ presents the "record this computer's screen
     /// and audio" sheet even when the Settings toggle is already on (docs/04 §4.1).

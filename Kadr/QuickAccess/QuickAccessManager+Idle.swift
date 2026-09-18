@@ -30,8 +30,8 @@ extension QuickAccessManager {
     /// Dismisses a card whose timer has fired, or waits if the user is still on it.
     ///
     /// Hover and drag wait for the pointer to leave or the drag to end — `resumeAutoDismiss`
-    /// re-arms the timer then, with a couple of seconds' grace, matching Screendrop:
-    /// glancing at a card must not cancel auto-close forever, or a timeout setting does
+    /// re-arms the timer then, with a couple of seconds' grace: glancing at a card must
+    /// not cancel auto-close forever, or a timeout setting does
     /// nothing the moment the pointer crosses the thumbnail. Nothing runs while the pointer
     /// rests on a card; this used to wake every two seconds to ask whether it still did.
     ///

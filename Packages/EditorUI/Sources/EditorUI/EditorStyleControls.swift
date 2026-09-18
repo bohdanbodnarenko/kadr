@@ -2,7 +2,7 @@ import AnnotationModel
 import AppKit
 import SwiftUI
 
-/// One-click colour, the way CleanShot and Screendrop lay out style.
+/// One-click colour, the way CleanShot lays out style.
 ///
 /// A wrapping grid rather than a fixed row: at the inspector's narrowest width the old row
 /// ran the colour well off the trailing edge.

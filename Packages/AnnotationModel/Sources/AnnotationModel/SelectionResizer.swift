@@ -49,17 +49,17 @@ public enum SelectionHandle: Equatable, Sendable, Hashable {
 /// drawing and the pointer; this is the arithmetic.
 public enum SelectionResizer {
     /// How big a corner square is, in view points. Divided by magnification when drawn
-    /// so handles stay the same size at every zoom, the way Screendrop's do.
+    /// so handles stay the same size at every zoom.
     public static let cornerSize: CGFloat = 8
     /// Edge anchors are slightly smaller so corners stay the primary target.
     public static let edgeSize: CGFloat = 6
     /// How close the pointer has to be, in **screen** points, to grab a handle.
     ///
-    /// Screendrop uses 9. Twelve is the same idea with a slightly fatter target, because
-    /// a corner click that starts a move instead of a resize is the failure mode.
+    /// Twelve, wider than the handle it grabs, because a corner click that starts a move
+    /// instead of a resize is the failure mode.
     public static let hitRadius: CGFloat = 12
     /// Padding around the union bounds for the dashed outline. Handles sit on the
-    /// bounds themselves — the corners the user actually aims at — the way Screendrop's do.
+    /// bounds themselves — the corners the user actually aims at.
     public static let framePadding: CGFloat = 4
     /// How far a rotate handle sits outside a corner, in image points at 1×.
     public static let rotateOffset: CGFloat = 14
@@ -117,7 +117,7 @@ public enum SelectionResizer {
             return orientedAnchors(oriented)
         }
         // On the geometry, not the padded outline: a click on a shape's visible corner
-        // has to grab a handle, not start a move (Screendrop's `selectionBounds.box`).
+        // has to grab a handle, not start a move.
         let box = unionBounds(of: commands)
         guard box.width > 0, box.height > 0 else { return [] }
         let corners: [CropHandle] = [.topLeading, .topTrailing, .bottomTrailing, .bottomLeading]
@@ -364,7 +364,7 @@ public enum SelectionResizer {
     ) -> TextSpec {
         var spec = spec
         if widthOnly {
-            // A side handle sets the wrap width, not the type size — the same as Screendrop.
+            // A side handle sets the wrap width, not the type size.
             spec.autoWidth = false
             spec.rect.origin.x = new.minX + (spec.rect.minX - old.minX)
                 * (old.width > 0 ? new.width / old.width : 1)

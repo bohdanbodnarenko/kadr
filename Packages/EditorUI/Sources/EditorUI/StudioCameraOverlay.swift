@@ -2,10 +2,10 @@ import AppKit
 import StudioSession
 import SwiftUI
 
-/// A hit target over the composed webcam so it can be dragged, the way a talking-head
-/// bubble is placed in Screendrop — by moving it, not by picking a named corner.
+/// A hit target over the composed webcam so it can be dragged — a talking-head bubble is
+/// placed by moving it, not by picking a named corner.
 ///
-/// The corner handle is extra: Screendrop sizes the bubble from a slider. Dragging the
+/// The corner handle is extra, in place of a size slider in the inspector. Dragging the
 /// corner here resizes it on the picture, pinning the opposite edge so the handle follows
 /// the pointer.
 struct StudioCameraOverlay: View {

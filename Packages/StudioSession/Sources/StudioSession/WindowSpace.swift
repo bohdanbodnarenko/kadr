@@ -15,8 +15,8 @@ import Foundation
 ///    surface*. ScreenCaptureKit chooses the surface size when the stream starts and never
 ///    refits it. A shrink is scaled down and pinned to the surface's top-left; a grow is
 ///    scaled to fit. Stretching the fraction across the whole surface after a shrink puts
-///    every later click too far from the origin — the bug Screendrop shipped a fix for
-///    as "click positions in window recordings".
+///    every later click too far from the origin, which is how click positions in a window
+///    recording drift.
 ///
 /// Normalised here, at capture time, so the sidecar stores already-correct pixels and no
 /// consumer has to know windows move (docs/10 R3.1).

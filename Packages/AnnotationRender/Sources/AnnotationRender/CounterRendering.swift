@@ -9,7 +9,7 @@ import QuartzCore
 /// One path because the live badge used to be a `CATextLayer` in a box shorter than its
 /// font: the disc resized during a drag and the digits caught up on mouse-up, and the
 /// bottoms of 3, 5, 8 were clipped. Both surfaces now fill the circle and optically centre
-/// the glyphs, the way Screendrop's numbered callout does.
+/// the glyphs.
 enum CounterRendering {
     /// Helvetica Bold matches the original badges; a document should not change typeface
     /// because the renderer was rewritten.

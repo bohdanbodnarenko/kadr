@@ -7,14 +7,14 @@ import SwiftUI
 ///
 /// Fit-to-window is not a working scale: a ten-minute recording across 800 points is 1.3
 /// points per second, so a cut is a guess. Stretching has to keep the moment under the
-/// pointer where it was — the same contract as Screendrop's ⌘-scroll / pinch — otherwise
+/// pointer where it was — ⌘-scroll and pinch both hold that anchor — otherwise
 /// zooming in on a cut shoves that cut off the screen and the user has to hunt for it.
 enum StudioTimelineZoom {
     static let minimum: CGFloat = 1
     static let maximum: CGFloat = 60
-    /// ⌘= / ⌘- step. Matches Screendrop so muscle memory lands on a similar scale.
+    /// ⌘= / ⌘- step: five presses cover an order of magnitude.
     static let step: CGFloat = 1.6
-    /// Trackpad points of ⌘-scroll that double the scale. Matches Screendrop.
+    /// Trackpad points of ⌘-scroll that double the scale.
     static let scrollPointsPerDoubling: CGFloat = 220
 
     static func clamp(_ zoom: CGFloat) -> CGFloat {

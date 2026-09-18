@@ -221,7 +221,7 @@ extension RecordingCoordinator {
         automationCompletion(outcome)
     }
 
-    /// Finishes the take before AppKit lets the process exit (Screendrop's quit-while-recording).
+    /// Finishes the take before AppKit lets the process exit.
     ///
     /// ⌘Q and a Sparkle relaunch used to kill the writer. A countdown has no footage yet
     /// and is cancelled; a live recording is stopped and saved; a stop already in flight

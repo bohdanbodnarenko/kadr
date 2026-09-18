@@ -7,8 +7,8 @@ import Shared
 ///
 /// `SCShareableContent.excludingDesktopWindows` is what presents the macOS 15+
 /// "record this computer's screen and audio" sheet — and it can re-present on every
-/// call even when Screen Recording is already on in Settings. Screendrop's screenshots
-/// never hit that API (they use `/usr/sbin/screencapture`). Kadr still has to produce
+/// call even when Screen Recording is already on in Settings. A tool that shells out to
+/// `/usr/sbin/screencapture` never touches it. Kadr still has to produce
 /// an in-process `CGImage` for the freeze overlay, so the equivalent is
 /// `SCScreenshotManager.captureImage(in:)`, which captures a display-space rect
 /// without enumerating windows.

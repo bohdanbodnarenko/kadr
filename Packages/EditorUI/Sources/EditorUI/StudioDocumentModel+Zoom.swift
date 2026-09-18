@@ -58,7 +58,7 @@ public extension StudioDocumentModel {
     ///
     /// The range is the whole cue — move in, hold, move out — because that is what the
     /// lane draws. A drag that is too short to hold a zoom is ignored, so a click still
-    /// only scrubs. Existing cues stop the span, the way they do in Screendrop.
+    /// only scrubs. Existing cues stop the span.
     func addZoom(from start: TimeInterval, to end: TimeInterval) {
         let span = proposedZoomSpan(origin: start, current: end)
         let length = span.high - span.low

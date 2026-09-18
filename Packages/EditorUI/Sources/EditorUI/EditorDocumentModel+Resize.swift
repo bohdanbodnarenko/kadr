@@ -22,7 +22,7 @@ extension EditorDocumentModel {
         let selected = selectedCommands
         guard !selected.isEmpty else { return false }
         // Screen-space hits from the canvas win: they stay a constant size at every zoom,
-        // which is how Screendrop keeps corners grabable on a fitted 5K capture.
+        // which is what keeps corners grabable on a fitted 5K capture.
         let handle = explicit ?? SelectionResizer.handle(at: point, in: selected, tolerance: tolerance)
         guard let handle else { return false }
 

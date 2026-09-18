@@ -35,9 +35,9 @@ public extension StudioDocumentModel {
     ///
     /// A full-screen recording on a notched MacBook includes the menu-bar strip with the
     /// notch cut out of it, and no amount of framing hides that the video has a bite taken
-    /// out of the top. Screendrop removes it; this is the same idea, using the height the
-    /// display itself reported when the recording was made rather than a guessed menu-bar
-    /// height — which is wrong on exactly the Macs that have a notch.
+    /// out of the top. The strip is cut using the height the display itself reported when
+    /// the recording was made, rather than a guessed menu-bar height — which is wrong on
+    /// exactly the Macs that have a notch.
     func trimNotchStrip() {
         let height = manifest.pixelSize.height
         guard manifest.topInset > 0, height > 0 else { return }

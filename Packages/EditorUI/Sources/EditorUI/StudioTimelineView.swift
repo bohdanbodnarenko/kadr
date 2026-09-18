@@ -16,10 +16,10 @@ import SwiftUI
 /// work needs and scrolls. Pinch and ⌘-scroll pin the time under the pointer; the playhead
 /// stays in view while it is moving.
 ///
-/// Clips are edged-trimmed by dragging their ends, the way a trim actually happens in
-/// Screendrop: hovering shows a split marker, and **C** splits there without moving the
-/// playhead. The preview stays on the playhead until the time bar is dragged. Drag across
-/// the zoom lane to place a cue; a click still only scrubs.
+/// Clips are edge-trimmed by dragging their ends; hovering shows a split marker, and **C**
+/// splits there without moving the playhead. The preview stays on the playhead until the
+/// time bar is dragged. Drag across the zoom lane to place a cue; a click still only
+/// scrubs.
 ///
 /// Nothing in this body reads the playhead or the hover time (docs/11 S2). Both move many
 /// times a second, and a read here re-evaluated the geometry, the ruler, every clip lane
@@ -31,7 +31,7 @@ struct StudioTimelineView: View {
     let model: StudioDocumentModel
 
     /// The height of the clip band. Taller than a label strip so a filmstrip of frames
-    /// can sit in it the way a trim actually happens in Screendrop.
+    /// can sit in it.
     let clipHeight: CGFloat = 44
     let cueHeight: CGFloat = 22
     let rulerHeight: CGFloat = 13

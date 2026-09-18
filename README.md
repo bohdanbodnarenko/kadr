@@ -41,4 +41,6 @@ the [architecture](docs/04-swift-architecture.md), the
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE). The three libraries Kadr ships — Sparkle, KeyboardShortcuts and GRDB.swift
+— are MIT too; their notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and in
+the app's About panel.

@@ -2,8 +2,8 @@ import AnnotationModel
 import CoreGraphics
 import Foundation
 
-/// Modal crop: the full capture stays on screen with an overlay, the way Screendrop
-/// crops, rather than shrinking the canvas as the rect is dragged (docs/09 U1.8).
+/// Modal crop: the full capture stays on screen with an overlay, rather than shrinking
+/// the canvas as the rect is dragged (docs/09 U1.8).
 public extension EditorDocumentModel {
     /// The rect the overlay draws and the handles grab. Before the first drag this is
     /// the whole capture, so entering Crop is immediately interactive.

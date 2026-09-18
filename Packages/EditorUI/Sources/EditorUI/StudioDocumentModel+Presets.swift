@@ -36,7 +36,7 @@ public extension StudioDocumentModel {
     }
 
     /// A brand-new recording picks up a studio look and, when the clicks support it,
-    /// the same automatic zooms Screendrop opens with.
+    /// automatic zooms to open with — never a raw ScreenCaptureKit movie.
     ///
     /// A draft or a committed edit is already a decision, so it is left alone. The
     /// Presenter card is the fallback when nobody has chosen a default — opening onto a
