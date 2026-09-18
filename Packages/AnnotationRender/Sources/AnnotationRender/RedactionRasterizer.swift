@@ -115,13 +115,16 @@ public struct RedactionRasterizer: Sendable {
         var generator = SeededGenerator(seed: randomSeed ?? UInt64.random(in: .min ... .max))
 
         for redaction in redactions {
+            // A rotated redaction covers its rotated area: the effect is computed over the
+            // box that contains it and then clipped to the turned rect (docs/16 ED-10).
+            let area = AnnotationRotation.aabb(redaction.rect, radians: redaction.rotation)
             // Redaction rects are in points with a top-left origin; CoreImage works in
             // pixels with a bottom-left origin.
             let pixels = CGRect(
-                x: redaction.rect.minX * scale,
-                y: extent.height - redaction.rect.maxY * scale,
-                width: redaction.rect.width * scale,
-                height: redaction.rect.height * scale
+                x: area.minX * scale,
+                y: extent.height - area.maxY * scale,
+                width: area.width * scale,
+                height: area.height * scale
             ).integral.intersection(extent)
             guard !pixels.isNull, pixels.width >= 1, pixels.height >= 1 else { continue }
 
@@ -133,7 +136,18 @@ public struct RedactionRasterizer: Sendable {
             case .erase:
                 erased(output, in: pixels, context: context)
             }
-            output = obscured.cropped(to: pixels).composited(over: output)
+            var piece = obscured.cropped(to: pixels)
+            if redaction.rotation != 0 {
+                guard let mask = Self.rotatedMask(for: redaction, in: pixels, scale: scale, height: extent.height)
+                else { continue }
+                // `CIBlendWithMask` reads the mask's brightness; the mask is greyscale with
+                // no alpha, which `CIBlendWithAlphaMask` would read as opaque everywhere.
+                piece = piece.applyingFilter("CIBlendWithMask", parameters: [
+                    kCIInputMaskImageKey: mask,
+                    kCIInputBackgroundImageKey: CIImage.empty()
+                ])
+            }
+            output = piece.composited(over: output)
         }
 
         guard let result = context.createCGImage(output, from: extent) else {
@@ -141,6 +155,41 @@ public struct RedactionRasterizer: Sendable {
             return image
         }
         return result
+    }
+
+    /// White inside the turned redaction, clear outside, covering `pixels`.
+    ///
+    /// Drawn in CoreImage's space — pixels, bottom-left origin — by carrying the rect's
+    /// points through the same flip the region itself went through, so the mask turns the
+    /// same way the canvas does.
+    static func rotatedMask(
+        for redaction: RedactionSpec,
+        in pixels: CGRect,
+        scale: CGFloat,
+        height: CGFloat
+    ) -> CIImage? {
+        let width = Int(pixels.width)
+        let rows = Int(pixels.height)
+        guard width > 0, rows > 0,
+              let context = CGContext(
+                  data: nil,
+                  width: width,
+                  height: rows,
+                  bitsPerComponent: 8,
+                  bytesPerRow: 0,
+                  space: CGColorSpaceCreateDeviceGray(),
+                  bitmapInfo: CGImageAlphaInfo.none.rawValue
+              )
+        else { return nil }
+        var toPixels = CGAffineTransform(a: scale, b: 0, c: 0, d: -scale, tx: -pixels.minX, ty: height - pixels.minY)
+        let shape = AnnotationRotation.path(of: redaction.rect.standardized, radians: redaction.rotation)
+        guard let mapped = shape.copy(using: &toPixels) else { return nil }
+        context.setFillColor(gray: 1, alpha: 1)
+        context.addPath(mapped)
+        context.fillPath()
+        guard let image = context.makeImage() else { return nil }
+        return CIImage(cgImage: image)
+            .transformed(by: CGAffineTransform(translationX: pixels.minX, y: pixels.minY))
     }
 
     // MARK: - Pixelate

@@ -64,6 +64,15 @@ public enum SelectionResizer {
     /// How far a rotate handle sits outside a corner, in image points at 1×.
     public static let rotateOffset: CGFloat = 14
 
+    /// The dashed outline as drawn: turned with a lone rotated annotation, axis-aligned
+    /// otherwise.
+    public static func outline(for commands: [AnnotationCommand]) -> CGPath {
+        if let oriented = OrientedSelection(commands) {
+            return oriented.outline(padding: framePadding)
+        }
+        return CGPath(rect: frame(for: commands), transform: nil)
+    }
+
     /// The dashed frame the handles sit on.
     public static func frame(for commands: [AnnotationCommand]) -> CGRect {
         unionBounds(of: commands).insetBy(dx: -framePadding, dy: -framePadding)
@@ -104,6 +113,9 @@ public enum SelectionResizer {
         if isMoveOnly(commands) {
             return []
         }
+        if let oriented = OrientedSelection(commands) {
+            return orientedAnchors(oriented)
+        }
         // On the geometry, not the padded outline: a click on a shape's visible corner
         // has to grab a handle, not start a move (Screendrop's `selectionBounds.box`).
         let box = unionBounds(of: commands)
@@ -113,6 +125,19 @@ public enum SelectionResizer {
         let boxHandles = (corners + edges).map { (SelectionHandle.box($0), $0.point(in: box)) }
         guard commands.contains(where: \.canRotate) else { return boxHandles }
         return boxHandles + rotateAnchors(for: box)
+    }
+
+    /// The same handles, on the rotated shape's own corners and sides.
+    static func orientedAnchors(_ oriented: OrientedSelection) -> [(SelectionHandle, CGPoint)] {
+        let corners: [CropHandle] = [.topLeading, .topTrailing, .bottomTrailing, .bottomLeading]
+        let edges: [CropHandle] = [.top, .trailing, .bottom, .leading]
+        let box = (corners + edges).map { handle in
+            (SelectionHandle.box(handle), oriented.world(handle.point(in: oriented.box)))
+        }
+        let rotate = rotateAnchors(for: oriented.box).map { handle, point in
+            (handle, oriented.world(point))
+        }
+        return box + rotate
     }
 
     static func rotateAnchors(for box: CGRect) -> [(SelectionHandle, CGPoint)] {

@@ -22,6 +22,48 @@ extension AnnotationLayerFactory {
 
     static func applyRedactionPreview(to layer: CALayer, spec: RedactionSpec, context: AnnotationLayerContext) {
         layer.frame = spec.rect.standardized
+        guard spec.rotation != 0 else {
+            alignedContainer(of: layer, creating: false)?.removeFromSuperlayer()
+            presentRedaction(on: layer, spec: spec, context: context)
+            return
+        }
+        // Rotated: the effect is what the export burns in — the capture's own pixels over
+        // the box around the turned rect, clipped by it — so the preview shows that box in
+        // a sublayer turned back the other way. The layer's rotation and the sublayer's
+        // cancel, the pixels stay where they are in the image, and the rotated layer's
+        // bounds do the clipping (docs/16 ED-10).
+        layer.contents = nil
+        layer.backgroundColor = nil
+        layer.masksToBounds = true
+        RedactionLayerPresenter.gestureSublayer(of: layer, creating: false)?.isHidden = true
+        let area = AnnotationRotation.aabb(spec.rect, radians: spec.rotation)
+        guard let container = alignedContainer(of: layer, creating: true) else { return }
+        container.bounds = CGRect(origin: .zero, size: area.size)
+        container.position = CGPoint(x: layer.bounds.midX, y: layer.bounds.midY)
+        container.transform = CATransform3DMakeRotation(-spec.rotation, 0, 0, 1)
+        var aligned = spec
+        aligned.rect = area
+        aligned.rotation = 0
+        presentRedaction(on: container, spec: aligned, context: context)
+    }
+
+    private static let alignedContainerName = "kadr.redaction.aligned"
+
+    private static func alignedContainer(of layer: CALayer, creating: Bool) -> CALayer? {
+        if let existing = layer.sublayers?.first(where: { $0.name == alignedContainerName }) {
+            return existing
+        }
+        guard creating else { return nil }
+        let container = CALayer()
+        container.name = alignedContainerName
+        container.actions = [
+            "contents": NSNull(), "position": NSNull(), "bounds": NSNull(), "transform": NSNull()
+        ]
+        layer.addSublayer(container)
+        return container
+    }
+
+    private static func presentRedaction(on layer: CALayer, spec: RedactionSpec, context: AnnotationLayerContext) {
         layer.masksToBounds = true
         layer.contentsGravity = .resize
         // Linear, not nearest: a nearest-neighbour upsample of a Gaussian looks like a

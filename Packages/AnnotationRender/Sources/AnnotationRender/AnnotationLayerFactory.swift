@@ -44,17 +44,32 @@ public enum AnnotationLayerFactory {
         layer?.contentsScale = contentsScale
         layer?.name = command.id.rawValue.uuidString
         if let layer {
-            applyRotation(command.rotation, to: layer)
+            applyRotation(of: command, to: layer)
         }
         return layer
     }
 
-    private static func applyRotation(_ radians: CGFloat, to layer: CALayer) {
-        if radians == 0 {
+    /// Turns the layer about the annotation's own pivot (docs/16 ED-10).
+    ///
+    /// A layer's `transform` turns it about its `position`. That is the right point only
+    /// for layers framed to their own rect; a stroked shape is a zero-sized layer at the
+    /// canvas origin with its path in canvas coordinates, so a plain rotation swung a
+    /// rectangle around the corner of the image while its selection frame — which turns
+    /// about the shape's centre — stayed put. The transform is therefore built around
+    /// `AnnotationHitTesting.rotationPivot`, the same point hit-testing, the outline and
+    /// the export use, whatever the layer's frame.
+    static func applyRotation(of command: AnnotationCommand, to layer: CALayer) {
+        let radians = command.rotation
+        guard radians != 0 else {
             layer.transform = CATransform3DIdentity
             return
         }
-        layer.transform = CATransform3DMakeRotation(radians, 0, 0, 1)
+        let pivot = AnnotationHitTesting.rotationPivot(of: command)
+        let offset = CGPoint(x: pivot.x - layer.position.x, y: pivot.y - layer.position.y)
+        var transform = CATransform3DMakeTranslation(-offset.x, -offset.y, 0)
+        transform = CATransform3DConcat(transform, CATransform3DMakeRotation(radians, 0, 0, 1))
+        transform = CATransform3DConcat(transform, CATransform3DMakeTranslation(offset.x, offset.y, 0))
+        layer.transform = transform
     }
 
     /// The annotations that are one stroked path.
@@ -114,6 +129,11 @@ public enum AnnotationLayerFactory {
 
     /// Updates an existing layer in place, with the canvas's full context.
     public static func update(_ layer: CALayer, for command: AnnotationCommand, context: AnnotationLayerContext) {
+        // Geometry first, on an unturned layer: setting `frame` while a rotation is applied
+        // is undefined in Core Animation, and moved a rotated text box or image sideways.
+        if !CATransform3DIsIdentity(layer.transform) {
+            layer.transform = CATransform3DIdentity
+        }
         switch command {
         case let .arrow(spec):
             applyArrow(spec, to: layer)
@@ -132,7 +152,7 @@ public enum AnnotationLayerFactory {
         default:
             updateContentLayer(layer, for: command, context: context)
         }
-        applyRotation(command.rotation, to: layer)
+        applyRotation(of: command, to: layer)
     }
 
     /// The layers that carry text, an effect or an image rather than one stroked path.

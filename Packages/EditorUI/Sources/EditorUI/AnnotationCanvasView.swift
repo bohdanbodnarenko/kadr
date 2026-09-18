@@ -207,6 +207,17 @@ public final class AnnotationCanvasView: NSView {
         true
     }
 
+    /// Takes the keyboard as soon as the canvas is in a window.
+    ///
+    /// Without this the canvas only became first responder on `mouseDown`, so a freshly
+    /// opened editor answered none of its keys — V, R, T, the arrows, Delete and Esc all
+    /// did nothing until the user happened to click the image (docs/09 U1).
+    override public func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window, window.firstResponder === window else { return }
+        window.makeFirstResponder(self)
+    }
+
     // MARK: - Layer tree
 
     /// Rebuilds every annotation layer. Used after undo, deletion or reordering — not

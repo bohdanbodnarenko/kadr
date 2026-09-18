@@ -19,6 +19,8 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     private var spec: TextSpec?
     private var textView: NSTextView?
     private var scrollHost: NSView?
+    /// Who had the keyboard before the field took it — the canvas, in practice.
+    private weak var responderBeforeEditing: NSResponder?
 
     /// Called on every keystroke with the current string, so the document can follow.
     var onChange: ((AnnotationID, String) -> Void)?
@@ -60,6 +62,7 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
             : TextLayout.pillRadius(for: spec.style)
 
         container.addSubview(view)
+        responderBeforeEditing = container.window?.firstResponder
         container.window?.makeFirstResponder(view)
         view.setSelectedRange(NSRange(location: (spec.string as NSString).length, length: 0))
 
@@ -72,15 +75,34 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     /// Ends editing and removes the field. Safe to call when nothing is being edited.
     func finish() {
         guard let editingID else { return }
-        if abandoned, let spec {
-            onChange?(editingID, originalString)
-            _ = spec
-        }
-        textView?.removeFromSuperview()
-        textView = nil
-        scrollHost = nil
+        let view = textView
+        let host = scrollHost
+        let restore = responderBeforeEditing
+        let wasAbandoned = abandoned
+        let hadSpec = spec != nil
+
+        // State goes first, because tearing the field down ends editing, and ending editing
+        // calls straight back in here through `textDidEndEditing`.
         self.editingID = nil
         spec = nil
+        textView = nil
+        scrollHost = nil
+        responderBeforeEditing = nil
+
+        if wasAbandoned, hadSpec {
+            onChange?(editingID, originalString)
+        }
+
+        let window = view?.window ?? host?.window
+        view?.removeFromSuperview()
+        // Hand the keyboard back. Removing the first responder from its superview leaves the
+        // *window* holding focus, and a window answers none of the canvas's keys — so every
+        // tool letter, arrow nudge and Delete stopped working the moment a caption had been
+        // typed, until the canvas was clicked again (docs/09 U1.8).
+        if let window {
+            let next = restore.flatMap { $0 === window ? nil : $0 } ?? host
+            window.makeFirstResponder(next)
+        }
         onFinish?(editingID)
     }
 

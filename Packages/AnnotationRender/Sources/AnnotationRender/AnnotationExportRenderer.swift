@@ -188,6 +188,23 @@ public struct AnnotationExportRenderer: Sendable {
 
     /// Internal, not private: the canvas assembly draws commands too.
     func draw(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
+        // Turned about the same pivot as the canvas layer and the hit test (docs/16 ED-10).
+        // The export used to ignore rotation entirely, so a rotated shape was saved level.
+        let radians = command.rotation
+        guard radians == 0 else {
+            context.saveGState()
+            context.concatenate(AnnotationRotation.transform(
+                radians: radians,
+                around: AnnotationHitTesting.rotationPivot(of: command)
+            ))
+            drawUnrotated(command, in: context, imageScale: imageScale)
+            context.restoreGState()
+            return
+        }
+        drawUnrotated(command, in: context, imageScale: imageScale)
+    }
+
+    private func drawUnrotated(_ command: AnnotationCommand, in context: CGContext, imageScale: CGFloat) {
         switch command {
         case let .arrow(spec): drawArrow(spec, in: context)
         case let .shape(spec): drawShape(spec, in: context)

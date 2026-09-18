@@ -10,10 +10,24 @@ public struct SpotlightComposite: Equatable, Sendable {
     public struct Hole: Equatable, Sendable {
         public var rect: CGRect
         public var cornerRadius: CGFloat
+        /// Turned about the hole's centre, like the spotlight it comes from (docs/16 ED-10).
+        public var rotation: CGFloat
 
-        public init(rect: CGRect, cornerRadius: CGFloat) {
+        public init(rect: CGRect, cornerRadius: CGFloat, rotation: CGFloat = 0) {
             self.rect = rect.standardized
             self.cornerRadius = max(cornerRadius, 0)
+            self.rotation = rotation
+        }
+
+        /// The hole's outline, in the same space as `rect` shifted by `offset`.
+        public func path(offsetBy offset: CGSize = .zero) -> CGPath {
+            let local = rect.offsetBy(dx: offset.width, dy: offset.height)
+            let radius = min(cornerRadius, min(local.width, local.height) / 2)
+            var turn = AnnotationRotation.transform(
+                radians: rotation,
+                around: CGPoint(x: local.midX, y: local.midY)
+            )
+            return CGPath(roundedRect: local, cornerWidth: radius, cornerHeight: radius, transform: &turn)
         }
     }
 
@@ -32,7 +46,7 @@ public struct SpotlightComposite: Equatable, Sendable {
         var opacity: CGFloat = 0
         for command in commands {
             guard case let .spotlight(spec) = command else { continue }
-            holes.append(Hole(rect: spec.rect, cornerRadius: spec.fittedCornerRadius))
+            holes.append(Hole(rect: spec.rect, cornerRadius: spec.fittedCornerRadius, rotation: spec.rotation))
             opacity = max(opacity, spec.dimOpacity)
         }
         guard !holes.isEmpty else { return nil }
@@ -44,8 +58,7 @@ public struct SpotlightComposite: Equatable, Sendable {
         let path = CGMutablePath()
         path.addRect(canvas)
         for hole in holes {
-            let radius = min(hole.cornerRadius, min(hole.rect.width, hole.rect.height) / 2)
-            path.addRoundedRect(in: hole.rect, cornerWidth: radius, cornerHeight: radius)
+            path.addPath(hole.path())
         }
         return path
     }

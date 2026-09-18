@@ -82,6 +82,12 @@ extension EditorDocumentModel {
         modifiers: EditorModifiers
     ) {
         guard case let .box(cropHandle) = handle, let startBounds = resizeStartBounds else { return }
+        if let start = dragStartCommands.values.first, dragStartCommands.count == 1,
+           let oriented = OrientedSelection([start]) {
+            let drag = OrientedSelection.Drag(handle: cropHandle, from: origin, to: point)
+            dragOrientedHandle(drag, of: start, oriented: oriented, modifiers: modifiers)
+            return
+        }
         let translation = CGSize(width: point.x - origin.x, height: point.y - origin.y)
         let aspect: CGFloat? = if shouldLockAspect(handle: cropHandle, modifiers: modifiers) {
             startBounds.height > 0 ? startBounds.width / startBounds.height : nil
@@ -106,6 +112,26 @@ extension EditorDocumentModel {
                     widthOnly: widthOnly
                 )
             }
+        }
+    }
+
+    /// A lone rotated annotation resizes in its own axes, its opposite side held still.
+    private func dragOrientedHandle(
+        _ drag: OrientedSelection.Drag,
+        of start: AnnotationCommand,
+        oriented: OrientedSelection,
+        modifiers: EditorModifiers
+    ) {
+        var drag = drag
+        let box = oriented.box
+        if shouldLockAspect(handle: drag.handle, modifiers: modifiers), box.height > 0 {
+            drag.aspect = box.width / box.height
+        }
+        let resized = oriented.resized(start, by: drag)
+        let id = start.id
+        document.updateGesture { commands in
+            guard let index = commands.firstIndex(where: { $0.id == id }) else { return }
+            commands[index] = resized
         }
     }
 

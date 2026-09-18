@@ -133,8 +133,9 @@ extension AnnotationCanvasView {
     }
 
     private func addBoxHandles(for commands: [AnnotationCommand], used: inout Int) {
-        let box = SelectionResizer.frame(for: commands)
-        selectionOutlineLayer.path = CGPath(rect: box, transform: nil)
+        // Turned with a lone rotated annotation, so the frame and its handles sit on the
+        // shape's own corners rather than on the box around it (docs/16 ED-10).
+        selectionOutlineLayer.path = SelectionResizer.outline(for: commands)
         selectionOutlineLayer.strokeColor = NSColor.controlAccentColor.cgColor
         selectionOutlineLayer.lineWidth = 1 / handleViewScale
         selectionOutlineLayer.isHidden = false

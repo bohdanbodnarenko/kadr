@@ -51,9 +51,7 @@ extension AnnotationLayerFactory {
         let path = CGMutablePath()
         path.addRect(CGRect(origin: .zero, size: canvas.size))
         for hole in composite.holes {
-            let local = hole.rect.offsetBy(dx: -canvas.minX, dy: -canvas.minY)
-            let radius = min(hole.cornerRadius, min(local.width, local.height) / 2)
-            path.addRoundedRect(in: local, cornerWidth: radius, cornerHeight: radius)
+            path.addPath(hole.path(offsetBy: CGSize(width: -canvas.minX, height: -canvas.minY)))
         }
         mask.path = path
         layer.mask = mask

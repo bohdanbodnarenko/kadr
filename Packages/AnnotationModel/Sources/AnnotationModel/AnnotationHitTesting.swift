@@ -51,19 +51,28 @@ public enum AnnotationHitTesting {
 
     /// The bounding box of an annotation, including its stroke.
     public static func boundingBox(of command: AnnotationCommand) -> CGRect {
-        let unrotated = strokedBounds(of: command) ?? rectBounds(of: command)
-        return AnnotationRotation.aabb(unrotated, radians: command.rotation)
+        AnnotationRotation.aabb(unrotatedBounds(of: command), radians: command.rotation)
+    }
+
+    /// The annotation's extent before its rotation, stroke included.
+    public static func unrotatedBounds(of command: AnnotationCommand) -> CGRect {
+        strokedBounds(of: command) ?? rectBounds(of: command)
+    }
+
+    /// The one point an annotation rotates about (docs/16 ED-10).
+    ///
+    /// The centre of its unrotated extent. Hit-testing, the selection outline, the canvas
+    /// layer and the export all turn about this point; any of them choosing its own is
+    /// how a rotated rectangle drifted away from its selection frame.
+    public static func rotationPivot(of command: AnnotationCommand) -> CGPoint {
+        let box = unrotatedBounds(of: command)
+        return CGPoint(x: box.midX, y: box.midY)
     }
 
     private static func localPoint(_ point: CGPoint, for command: AnnotationCommand) -> CGPoint {
         let radians = command.rotation
         guard radians != 0 else { return point }
-        let box = strokedBounds(of: command) ?? rectBounds(of: command)
-        return AnnotationRotation.inverse(
-            point,
-            around: CGPoint(x: box.midX, y: box.midY),
-            radians: radians
-        )
+        return AnnotationRotation.inverse(point, around: rotationPivot(of: command), radians: radians)
     }
 
     /// The annotations whose extent comes from a path plus its stroke width.
