@@ -1,73 +1,59 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "" : {
-
-    },
-    "%@" : {
-
-    },
-    "%@ (%@)" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ (%2$@)"
+  "sourceLanguage": "en",
+  "strings": {
+    "": {},
+    "%@": {},
+    "%@ (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ (%2$@)"
           }
         }
       }
     },
-    "%@ access allowed" : {
-
-    },
-    "%@ of %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ of %2$@"
+    "%@ access allowed": {},
+    "%@ of %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ of %2$@"
           }
         }
       }
     },
-    "%@ permission is required" : {
-
-    },
-    "%@ value" : {
-
-    },
-    "%@, %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@, %2$@"
+    "%@ permission is required": {},
+    "%@ value": {},
+    "%@, %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@, %2$@"
           }
         }
       }
     },
-    "%@. Show recent captures" : {
-
-    },
-    "%lld" : {
-
-    },
-    "%lld captures" : {
-      "comment" : "Count of stills and recordings.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld capture"
+    "%@. Show recent captures": {},
+    "%lld": {},
+    "%lld captures": {
+      "comment": "Count of stills and recordings.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld capture"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld captures"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld captures"
                 }
               }
             }
@@ -75,22 +61,22 @@
         }
       }
     },
-    "%lld cards" : {
-      "comment" : "Quick Access overlay cards.",
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld card"
+    "%lld cards": {
+      "comment": "Quick Access overlay cards.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld card"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld cards"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld cards"
                 }
               }
             }
@@ -98,24 +84,22 @@
         }
       }
     },
-    "%lld codes" : {
-
-    },
-    "%lld files" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld file"
+    "%lld codes": {},
+    "%lld files": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld files"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files"
                 }
               }
             }
@@ -123,37 +107,22 @@
         }
       }
     },
-    "%lld of %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld of %2$lld"
-          }
-        }
-      }
-    },
-    "%lld older captures" : {
-
-    },
-    "%lld percent" : {
-
-    },
-    "%lld seconds" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld second"
+    "%lld lines": {
+      "comment": "Count of text lines copied by Capture Text.",
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld seconds"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines"
                 }
               }
             }
@@ -161,21 +130,33 @@
         }
       }
     },
-    "%lld words" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld word"
+    "%lld of %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "%lld older captures": {},
+    "%lld percent": {},
+    "%lld seconds": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld second"
                 }
               },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld words"
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld seconds"
                 }
               }
             }
@@ -183,1330 +164,532 @@
         }
       }
     },
-    "%lld×%lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld×%2$lld"
+    "%lld words": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld word"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld words"
+                }
+              }
+            }
           }
         }
       }
     },
-    "1 older capture" : {
-
-    },
-    "1 second" : {
-
-    },
-    "3 seconds" : {
-
-    },
-    "5 seconds" : {
-
-    },
-    "10 seconds" : {
-
-    },
-    "A custom value of 0 uses the preset above." : {
-
-    },
-    "About" : {
-
-    },
-    "About Kadr" : {
-
-    },
-    "Access updates when you return here." : {
-
-    },
-    "Action" : {
-
-    },
-    "Actions" : {
-
-    },
-    "Actions in %@" : {
-
-    },
-    "Active display" : {
-
-    },
-    "Add" : {
-
-    },
-    "Add an arrow, change the background, then export. No screen access needed." : {
-
-    },
-    "Advanced" : {
-
-    },
-    "After capturing" : {
-
-    },
-    "Aim for" : {
-
-    },
-    "All displays" : {
-
-    },
-    "All displays, stitched" : {
-
-    },
-    "All types" : {
-
-    },
-    "All-in-One" : {
-
-    },
-    "All-in-One capture" : {
-
-    },
-    "Allow" : {
-
-    },
-    "Allow %@ access" : {
-
-    },
-    "Allowed" : {
-
-    },
-    "Already as small as it gets" : {
-
-    },
-    "Always on the main display" : {
-
-    },
-    "Always show actions" : {
-
-    },
-    "Annotate" : {
-
-    },
-    "Area" : {
-
-    },
-    "Ask where to save" : {
-
-    },
-    "Ask where to save from the overlay" : {
-
-    },
-    "Aspect lock" : {
-
-    },
-    "Audio" : {
-
-    },
-    "Audio level" : {
-
-    },
-    "AUTO" : {
-
-    },
-    "Back" : {
-
-    },
-    "Background" : {
-
-    },
-    "Beautify" : {
-
-    },
-    "Beautify new screenshots" : {
-
-    },
-    "Before recording" : {
-
-    },
-    "Bring All to Front" : {
-
-    },
-    "Camera" : {
-
-    },
-    "Cancel" : {
-
-    },
-    "Cancel countdown" : {
-
-    },
-    "Cancelled" : {
-
-    },
-    "Cancelled." : {
-
-    },
-    "Capture" : {
-
-    },
-    "Capture %@, %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Capture %1$@, %2$@"
+    "%lld×%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld×%2$lld"
           }
         }
       }
     },
-    "Capture %lld frames a second" : {
-
-    },
-    "Capture a scrolling region (S)" : {
-
-    },
-    "Capture a scrolling region and stitch it." : {
-
-    },
-    "Capture Area" : {
-
-    },
-    "Capture Area and Copy" : {
-
-    },
-    "Capture Area and Save" : {
-
-    },
-    "Capture options" : {
-
-    },
-    "Capture Previous Area" : {
-
-    },
-    "Capture Screen" : {
-
-    },
-    "Capture Scrolling Area" : {
-
-    },
-    "Capture Text" : {
-
-    },
-    "Capture Text (OCR)" : {
-
-    },
-    "Capture the whole display (F)" : {
-
-    },
-    "Capture the whole screen." : {
-
-    },
-    "Capture Window" : {
-
-    },
-    "Card buttons" : {
-
-    },
-    "Card size" : {
-
-    },
-    "Check Again" : {
-
-    },
-    "Check for updates automatically" : {
-
-    },
-    "Check Now" : {
-
-    },
-    "Choose image…" : {
-
-    },
-    "Choose…" : {
-
-    },
-    "Circular webcam" : {
-
-    },
-    "Click a window to capture it (W)" : {
-
-    },
-    "Click and key overlays" : {
-
-    },
-    "Click colour" : {
-
-    },
-    "Click highlights" : {
-
-    },
-    "Click style" : {
-
-    },
-    "click-through off" : {
-
-    },
-    "Click-through off." : {
-
-    },
-    "click-through on" : {
-
-    },
-    "Click-through on. Press Command Option L to interact." : {
-
-    },
-    "Close" : {
-
-    },
-    "Close (Esc)" : {
-
-    },
-    "Close All Overlays" : {
-
-    },
-    "Closes setup. You can finish it later from the menu bar." : {
-
-    },
-    "Colour" : {
-
-    },
-    "Command Line Tool" : {
-
-    },
-    "Compress" : {
-
-    },
-    "Compressing…" : {
-
-    },
-    "Compression failed" : {
-
-    },
-    "Confirm selection before capture" : {
-
-    },
-    "Convert to sRGB when saving" : {
-
-    },
-    "Copy" : {
-
-    },
-    "Copy as Markdown" : {
-
-    },
-    "Copy as Table" : {
-
-    },
-    "Copy link" : {
-
-    },
-    "Copy Link" : {
-
-    },
-    "Copy Text" : {
-
-    },
-    "Could not read text" : {
-      "comment" : "OCR failed to find text in the capture."
-    },
-    "Countdown" : {
-
-    },
-    "Custom: %lld s" : {
-
-    },
-    "Cut" : {
-
-    },
-    "Default folder" : {
-
-    },
-    "Delete" : {
-
-    },
-    "Delete %lld recording%@?" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Delete %1$lld recording%2$@?"
+    "1 older capture": {},
+    "1 second": {},
+    "10 seconds": {},
+    "3 seconds": {},
+    "5 seconds": {},
+    "A custom value of 0 uses the preset above.": {},
+    "AUTO": {},
+    "About": {},
+    "About Kadr": {},
+    "Access updates when you return here.": {},
+    "Action": {},
+    "Actions": {},
+    "Actions in %@": {},
+    "Active display": {},
+    "Add": {},
+    "Add an arrow, change the background, then export. No screen access needed.": {},
+    "Advanced": {},
+    "After capturing": {},
+    "Aim for": {},
+    "All displays": {},
+    "All displays, stitched": {},
+    "All types": {},
+    "All-in-One": {},
+    "All-in-One capture": {},
+    "Allow": {},
+    "Allow %@ access": {},
+    "Allowed": {},
+    "Already as small as it gets": {},
+    "Always on the main display": {},
+    "Always show actions": {},
+    "Annotate": {},
+    "Area": {},
+    "Ask where to save": {},
+    "Ask where to save from the overlay": {},
+    "Aspect lock": {},
+    "Audio": {},
+    "Audio level": {},
+    "Back": {},
+    "Background": {},
+    "Beautify": {},
+    "Beautify new screenshots": {},
+    "Before recording": {},
+    "Bring All to Front": {},
+    "Camera": {},
+    "Cancel": {},
+    "Cancel countdown": {},
+    "Cancelled": {},
+    "Cancelled.": {},
+    "Capture": {},
+    "Capture %@, %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Capture %1$@, %2$@"
           }
         }
       }
     },
-    "Desktop Icons" : {
-
+    "Capture %lld frames a second": {},
+    "Capture Area": {},
+    "Capture Area and Copy": {},
+    "Capture Area and Save": {},
+    "Capture Previous Area": {},
+    "Capture Screen": {},
+    "Capture Scrolling Area": {},
+    "Capture Text": {},
+    "Capture Text (OCR)": {},
+    "Capture Window": {},
+    "Capture a scrolling region (S)": {},
+    "Capture a scrolling region and stitch it.": {},
+    "Capture options": {},
+    "Capture the whole display (F)": {},
+    "Capture the whole screen.": {},
+    "Card buttons": {},
+    "Card size": {},
+    "Check Again": {},
+    "Check Now": {},
+    "Check for updates automatically": {},
+    "Choose image…": {},
+    "Choose…": {},
+    "Circular webcam": {},
+    "Click a window to capture it (W)": {},
+    "Click and key overlays": {},
+    "Click colour": {},
+    "Click highlights": {},
+    "Click style": {},
+    "Click-through off.": {},
+    "Click-through on. Press Command Option L to interact.": {},
+    "Close": {},
+    "Close (Esc)": {},
+    "Close All Overlays": {},
+    "Closes setup. You can finish it later from the menu bar.": {},
+    "Colour": {},
+    "Command Line Tool": {},
+    "Compress": {},
+    "Compressing…": {},
+    "Compression failed": {},
+    "Confirm selection before capture": {},
+    "Convert to sRGB when saving": {},
+    "Copy": {},
+    "Copy Link": {},
+    "Copy Text": {},
+    "Copy as Markdown": {},
+    "Copy as Table": {},
+    "Copy link": {},
+    "Could not read text": {
+      "comment": "OCR failed to find text in the capture."
     },
-    "Desktop while capturing" : {
-
-    },
-    "Direction" : {
-
-    },
-    "Discard" : {
-
-    },
-    "Discard — delete this recording without saving" : {
-
-    },
-    "Discard this recording?" : {
-
-    },
-    "Dismiss" : {
-
-    },
-    "Dismiss a card when it is dragged out" : {
-
-    },
-    "Dismiss cards" : {
-
-    },
-    "Display" : {
-
-    },
-    "Dock under the camera" : {
-
-    },
-    "Done" : {
-
-    },
-    "Drag onto the card" : {
-
-    },
-    "Drag to capture a region (A)" : {
-
-    },
-    "Dynamic range" : {
-
-    },
-    "Edit" : {
-
-    },
-    "Editor is not installed" : {
-      "comment" : "The embedded Kadr Editor app is missing from the bundle."
-    },
-    "Every action is already on the card." : {
-
-    },
-    "Every shortcut can be changed later in Settings." : {
-
-    },
-    "Export…" : {
-
-    },
-    "File" : {
-
-    },
-    "Filename" : {
-
-    },
-    "Fill the frame" : {
-
-    },
-    "Filled" : {
-
-    },
-    "Finish Later" : {
-
-    },
-    "Finish Setup and Try the Editor" : {
-
-    },
-    "Flatten" : {
-      "comment" : "Burn annotations into the image so they can no longer be edited. Not a layer-flatten command in a generic graphics app.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flatten"
+    "Countdown": {},
+    "Custom: %lld s": {},
+    "Cut": {},
+    "Default folder": {},
+    "Delete": {},
+    "Delete %lld recording%@?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete %1$lld recording%2$@?"
           }
         }
       }
     },
-    "Flip Horizontal" : {
-
-    },
-    "Flip Vertical" : {
-
-    },
-    "Follow my voice" : {
-
-    },
-    "Format" : {
-
-    },
-    "Forward" : {
-
-    },
-    "Frame rate" : {
-
-    },
-    "Frames per Second" : {
-
-    },
-    "Freeze Screen" : {
-
-    },
-    "Fullscreen captures" : {
-
-    },
-    "General" : {
-
-    },
-    "GIF" : {
-
-    },
-    "GIF export failed" : {
-
-    },
-    "Got it" : {
-
-    },
-    "HDR keeps the display's full range; SDR is safer for interface shots." : {
-
-    },
-    "Help" : {
-
-    },
-    "HEVC keeps files smaller; HDR requires it." : {
-
-    },
-    "Hide" : {
-
-    },
-    "Hide all — files stay" : {
-
-    },
-    "Hide all cards" : {
-
-    },
-    "Hide Desktop Icons" : {
-
-    },
-    "Hide desktop icons while recording" : {
-
-    },
-    "Hide icons while capturing" : {
-
-    },
-    "Hide icons while recording" : {
-
-    },
-    "Hide Kadr" : {
-
-    },
-    "Hide or show the icons on the desktop." : {
-
-    },
-    "Hide Others" : {
-
-    },
-    "Hide Overlays" : {
-
-    },
-    "Hide Pins" : {
-
-    },
-    "Hide Sidebar" : {
-
-    },
-    "Highlight clicks" : {
-
-    },
-    "History" : {
-
-    },
-    "History…" : {
-
-    },
-    "Hold ⌥ when picking a window to invert the shadow setting for one capture." : {
-
-    },
-    "Hold Shift when you press the capture hotkey to skip beautify for that shot." : {
-
-    },
-    "Image" : {
-
-    },
-    "Include Kadr overlays in captures" : {
-
-    },
-    "Include the pointer" : {
-
-    },
-    "Include the window's shadow" : {
-
-    },
-    "Indexing…" : {
-
-    },
-    "Install" : {
-
-    },
-    "Install speech model…" : {
-
-    },
-    "It tidies itself away on its own. Swipe it toward the edge to hide it sooner." : {
-
-    },
-    "kadr" : {
-
-    },
-    "Kadr Help" : {
-
-    },
-    "Keep captures" : {
-
-    },
-    "Keep line breaks" : {
-
-    },
-    "Keep Recording" : {
-
-    },
-    "Keep recordings editable in the studio" : {
-
-    },
-    "Keep Setting Up" : {
-
-    },
-    "Keep the original file when saving annotations" : {
-
-    },
-    "Keep the window's transparency" : {
-
-    },
-    "Keyboard arrangement" : {
-
-    },
-    "Keyboard shortcuts" : {
-
-    },
-    "Keyboard Shortcuts" : {
-
-    },
-    "Keystroke overlay" : {
-
-    },
-    "Keystroke position" : {
-
-    },
-    "Keystroke theme" : {
-
-    },
-    "L" : {
-
-    },
-    "Last checked" : {
-
-    },
-    "Launch Kadr at login" : {
-
-    },
-    "Layout" : {
-
-    },
-    "Learn more" : {
-
-    },
-    "Learn more about %@" : {
-
-    },
-    "Let Kadr do the scrolling" : {
-
-    },
-    "Library size limit" : {
-
-    },
-    "Licence" : {
-
-    },
-    "Loading history…" : {
-
-    },
-    "Loading more…" : {
-
-    },
-    "Lock objects when the editor opens" : {
-
-    },
-    "macOS 15 asks you to confirm screen recording about once a month." : {
-
-    },
-    "macOS only applies a new permission to a freshly launched app, so Kadr needs to restart once." : {
-
-    },
-    "Mic silent" : {
-
-    },
-    "Microphone" : {
-
-    },
-    "Microphone is silent" : {
-
-    },
-    "Minimize" : {
-
-    },
-    "Mirror the text" : {
-
-    },
-    "MIT" : {
-
-    },
-    "More actions" : {
-
-    },
-    "More capture modes" : {
-
-    },
-    "Move Earlier" : {
-
-    },
-    "Move Later" : {
-
-    },
-    "Move to Slot" : {
-
-    },
-    "Move to Trash?" : {
-
-    },
-    "Name" : {
-
-    },
-    "Newest capture" : {
-
-    },
-    "No text found in that region." : {
-
-    },
-    "None" : {
-
-    },
-    "Not enough disk space" : {
-
-    },
-    "Object shadows on inserted images" : {
-
-    },
-    "Off" : {
-
-    },
-    "Off keeps cards, the recording bar and the HUD out of screenshots and recordings." : {
-
-    },
-    "On" : {
-
-    },
-    "On disk" : {
-
-    },
-    "Only show keys pressed with ⌘, ⌥ or ⌃" : {
-
-    },
-    "Open %@ settings" : {
-
-    },
-    "Open a review window" : {
-
-    },
-    "Open Capture Folder" : {
-
-    },
-    "Open History" : {
-
-    },
-    "Open in Overlay" : {
-
-    },
-    "Open in Studio" : {
-
-    },
-    "Open Kadr's All-in-One capture HUD." : {
-
-    },
-    "Open Kadr's capture library." : {
-
-    },
-    "Open Link" : {
-
-    },
-    "Open link %@" : {
-
-    },
-    "Open Settings" : {
-
-    },
-    "Open the recorder (R)" : {
-
-    },
-    "Opens a separate copy in the image editor. Setup stays open." : {
-
-    },
-    "Otherwise cards appear on the display the capture came from." : {
-
-    },
-    "Outline" : {
-
-    },
-    "Overlay" : {
-      "comment" : "The floating Quick Access cards after a capture, not a video overlay filter.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Overlay"
+    "Desktop Icons": {},
+    "Desktop while capturing": {},
+    "Direction": {},
+    "Discard": {},
+    "Discard this recording?": {},
+    "Discard — delete this recording without saving": {},
+    "Dismiss": {},
+    "Dismiss a card when it is dragged out": {},
+    "Dismiss cards": {},
+    "Display": {},
+    "Dock under the camera": {},
+    "Done": {},
+    "Drag onto the card": {},
+    "Drag to capture a region (A)": {},
+    "Dynamic range": {},
+    "Edit": {},
+    "Editor is not installed": {
+      "comment": "The embedded Kadr Editor app is missing from the bundle."
+    },
+    "Every action is already on the card.": {},
+    "Every shortcut can be changed later in Settings.": {},
+    "Export…": {},
+    "File": {},
+    "Filename": {},
+    "Fill the frame": {},
+    "Filled": {},
+    "Finish Later": {},
+    "Finish Setup and Try the Editor": {},
+    "Flatten": {
+      "comment": "Burn annotations into the image so they can no longer be edited. Not a layer-flatten command in a generic graphics app.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flatten"
           }
         }
       }
     },
-    "Overlays" : {
-
-    },
-    "Overlays are burned into the recording, not drawn on screen." : {
-
-    },
-    "Pace" : {
-
-    },
-    "Padding: %lld pt" : {
-
-    },
-    "Paste" : {
-
-    },
-    "Paused" : {
-
-    },
-    "Permissions" : {
-
-    },
-    "Pick a capture mode, or press Return for the last one." : {
-
-    },
-    "Pick a colour from the screen (P)" : {
-
-    },
-    "Pick a window and capture it." : {
-
-    },
-    "Pick Colour…" : {
-
-    },
-    "Pin" : {
-      "comment" : "Keep a screenshot floating on screen as a reference. Not a map pin.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pin"
+    "Flip Horizontal": {},
+    "Flip Vertical": {},
+    "Follow my voice": {},
+    "Format": {},
+    "Forward": {},
+    "Frame rate": {},
+    "Frames per Second": {},
+    "Freeze Screen": {},
+    "Fullscreen captures": {},
+    "GIF": {},
+    "GIF export failed": {},
+    "General": {},
+    "Got it": {},
+    "HDR keeps the display's full range; SDR is safer for interface shots.": {},
+    "HEVC keeps files smaller; HDR requires it.": {},
+    "Help": {},
+    "Hide": {},
+    "Hide Desktop Icons": {},
+    "Hide Kadr": {},
+    "Hide Others": {},
+    "Hide Overlays": {},
+    "Hide Pins": {},
+    "Hide Sidebar": {},
+    "Hide all cards": {},
+    "Hide all — files stay": {},
+    "Hide desktop icons while recording": {},
+    "Hide icons while capturing": {},
+    "Hide icons while recording": {},
+    "Hide or show the icons on the desktop.": {},
+    "Highlight clicks": {},
+    "History": {},
+    "History…": {},
+    "Hold Shift when you press the capture hotkey to skip beautify for that shot.": {},
+    "Hold ⌥ when picking a window to invert the shadow setting for one capture.": {},
+    "Image": {},
+    "Include Kadr overlays in captures": {},
+    "Include the pointer": {},
+    "Include the window's shadow": {},
+    "Indexing…": {},
+    "Install": {},
+    "Install speech model…": {},
+    "It tidies itself away on its own. Swipe it toward the edge to hide it sooner.": {},
+    "Kadr Help": {},
+    "Keep Recording": {},
+    "Keep Setting Up": {},
+    "Keep captures": {},
+    "Keep line breaks": {},
+    "Keep recordings editable in the studio": {},
+    "Keep the original file when saving annotations": {},
+    "Keep the window's transparency": {},
+    "Keyboard Shortcuts": {},
+    "Keyboard arrangement": {},
+    "Keyboard shortcuts": {},
+    "Keystroke overlay": {},
+    "Keystroke position": {},
+    "Keystroke theme": {},
+    "L": {},
+    "Last checked": {},
+    "Launch Kadr at login": {},
+    "Layout": {},
+    "Learn more": {},
+    "Learn more about %@": {},
+    "Let Kadr do the scrolling": {},
+    "Library size limit": {},
+    "Licence": {},
+    "Loading history…": {},
+    "Loading more…": {},
+    "Lock objects when the editor opens": {},
+    "MIT": {},
+    "Mic silent": {},
+    "Microphone": {},
+    "Microphone is silent": {},
+    "Minimize": {},
+    "Mirror the text": {},
+    "More actions": {},
+    "More capture modes": {},
+    "Move Earlier": {},
+    "Move Later": {},
+    "Move to Slot": {},
+    "Move to Trash?": {},
+    "Name": {},
+    "Newest capture": {},
+    "No text found in that region.": {},
+    "None": {},
+    "Not enough disk space": {},
+    "Object shadows on inserted images": {},
+    "Off": {},
+    "Off keeps cards, the recording bar and the HUD out of screenshots and recordings.": {},
+    "On": {},
+    "On disk": {},
+    "Only show keys pressed with ⌘, ⌥ or ⌃": {},
+    "Open %@ settings": {},
+    "Open Capture Folder": {},
+    "Open History": {},
+    "Open Kadr's All-in-One capture HUD.": {},
+    "Open Kadr's capture library.": {},
+    "Open Link": {},
+    "Open Settings": {},
+    "Open a review window": {},
+    "Open in Overlay": {},
+    "Open in Studio": {},
+    "Open link %@": {},
+    "Open the recorder (R)": {},
+    "Opens a separate copy in the image editor. Setup stays open.": {},
+    "Otherwise cards appear on the display the capture came from.": {},
+    "Outline": {},
+    "Overlay": {
+      "comment": "The floating Quick Access cards after a capture, not a video overlay filter.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlay"
           }
         }
       }
     },
-    "Pin Clipboard" : {
-
-    },
-    "Pin Image" : {
-
-    },
-    "Placeholders: {app}, {date}, {time}" : {
-
-    },
-    "Play a sound when capturing" : {
-
-    },
-    "Precision crosshair (press C on the overlay)" : {
-
-    },
-    "Press Command Option L to toggle click-through." : {
-
-    },
-    "Press the recording shortcut again to cancel the countdown." : {
-
-    },
-    "Preview" : {
-
-    },
-    "Previous step" : {
-
-    },
-    "Quality" : {
-
-    },
-    "Quit Kadr" : {
-
-    },
-    "Re-capture the last selected area." : {
-
-    },
-    "Reading time" : {
-
-    },
-    "Record" : {
-
-    },
-    "Record a region, then export GIF (G)" : {
-
-    },
-    "Record in mono" : {
-
-    },
-    "Record microphone" : {
-
-    },
-    "Record Region" : {
-
-    },
-    "Record Region…" : {
-
-    },
-    "Record Screen" : {
-
-    },
-    "Record system audio" : {
-
-    },
-    "Record without the pointer and draw it back" : {
-
-    },
-    "Record…" : {
-
-    },
-    "Recording" : {
-
-    },
-    "Recording — microphone is silent" : {
-
-    },
-    "Recording audio" : {
-
-    },
-    "Recording controls" : {
-
-    },
-    "Recording format" : {
-
-    },
-    "Recording paused at %@" : {
-
-    },
-    "Recording Sessions" : {
-
-    },
-    "Recording the microphone needs macOS 15 or later." : {
-
-    },
-    "Recording your camera needs permission. You can start without it." : {
-
-    },
-    "Recording your microphone needs permission. You can start without it." : {
-
-    },
-    "Recording, %@ elapsed" : {
-
-    },
-    "Redo" : {
-
-    },
-    "Reduce interruptions while recording" : {
-
-    },
-    "Reinstall" : {
-
-    },
-    "Remove" : {
-
-    },
-    "Remove %lld Session%@…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Remove %1$lld Session%2$@…"
+    "Overlays": {},
+    "Overlays are burned into the recording, not drawn on screen.": {},
+    "Pace": {},
+    "Padding: %lld pt": {},
+    "Paste": {},
+    "Paused": {},
+    "Permissions": {},
+    "Pick Colour…": {},
+    "Pick a capture mode, or press Return for the last one.": {},
+    "Pick a colour from the screen (P)": {},
+    "Pick a window and capture it.": {},
+    "Pin": {
+      "comment": "Keep a screenshot floating on screen as a reference. Not a map pin.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin"
           }
         }
       }
     },
-    "Rename" : {
-
-    },
-    "Reset" : {
-
-    },
-    "Reset all settings to their defaults?" : {
-
-    },
-    "Reset All Settings…" : {
-
-    },
-    "Reset to the standard layout" : {
-
-    },
-    "Restart — discard what's recorded and record again" : {
-
-    },
-    "Restart Kadr" : {
-
-    },
-    "Restore All Shortcuts" : {
-
-    },
-    "Restore Default" : {
-
-    },
-    "Restricted" : {
-
-    },
-    "Retry" : {
-
-    },
-    "Return saves the hovered card" : {
-
-    },
-    "Reveal in Finder" : {
-
-    },
-    "Rotate 90°" : {
-
-    },
-    "S" : {
-
-    },
-    "Save" : {
-
-    },
-    "Save All Overlays" : {
-
-    },
-    "Save Retina captures at 1×" : {
-
-    },
-    "Save target" : {
-
-    },
-    "Save to" : {
-
-    },
-    "Scale Retina to 1×" : {
-
-    },
-    "Scheme" : {
-
-    },
-    "Screen" : {
-
-    },
-    "Screen access is off. Practice works without it, and the menu bar icon is always there." : {
-
-    },
-    "Scroll step: %lld pt" : {
-
-    },
-    "Scrolling" : {
-
-    },
-    "Scrolling capture" : {
-
-    },
-    "Scrolling Capture" : {
-
-    },
-    "Scrolling Capture…" : {
-
-    },
-    "Search captures" : {
-
-    },
-    "Search the text in captures" : {
-
-    },
-    "Select a region and start recording it." : {
-
-    },
-    "Select All" : {
-
-    },
-    "Select an area and read the text in it." : {
-
-    },
-    "Select an area of the screen and capture it." : {
-
-    },
-    "Select text and copy it (T)" : {
-
-    },
-    "Selected" : {
-
-    },
-    "Selection" : {
-
-    },
-    "Self-timer" : {
-
-    },
-    "Self-Timer" : {
-
-    },
-    "Set Desktop Icons" : {
-
-    },
-    "Settings" : {
-
-    },
-    "Settings…" : {
-
-    },
-    "Share" : {
-
-    },
-    "Share %@" : {
-
-    },
-    "Share…" : {
-
-    },
-    "Shortcuts" : {
-
-    },
-    "Shortcuts work in every app. Option alone is refused — macOS 15 drops those." : {
-
-    },
-    "Show" : {
-
-    },
-    "Show a script while recording" : {
-
-    },
-    "Show All" : {
-
-    },
-    "Show an image on top of every window." : {
-
-    },
-    "Show cards in the" : {
-
-    },
-    "Show in Finder" : {
-
-    },
-    "Show me joins Kadr is unsure about" : {
-
-    },
-    "Show menu bar icon" : {
-
-    },
-    "Show pressed keys" : {
-
-    },
-    "Show recent captures" : {
-
-    },
-    "Show Sidebar" : {
-
-    },
-    "Show the floating controls" : {
-
-    },
-    "Show the pointer" : {
-
-    },
-    "Show the webcam" : {
-
-    },
-    "Show what the keys do" : {
-
-    },
-    "Show while recording" : {
-
-    },
-    "Skip for Now" : {
-
-    },
-    "Slot" : {
-
-    },
-    "Snap the selection to edges Kadr finds" : {
-
-    },
-    "Space used by the History library" : {
-
-    },
-    "Stack up to %lld cards" : {
-
-    },
-    "Start now" : {
-
-    },
-    "Start or stop a screen recording." : {
-
-    },
-    "Start recording" : {
-
-    },
-    "Start Recording" : {
-
-    },
-    "Start recording the screen." : {
-
-    },
-    "Starting in %lld seconds" : {
-
-    },
-    "Stitching…" : {
-
-    },
-    "Stop" : {
-
-    },
-    "Stop and save the recording" : {
-
-    },
-    "Stop Click-Through" : {
-
-    },
-    "Stop Recording" : {
-
-    },
-    "Stop the recording and return the file." : {
-
-    },
-    "Studio" : {
-      "comment" : "The video editor for screen recordings. Not a physical studio.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Studio"
+    "Pin Clipboard": {},
+    "Pin Image": {},
+    "Placeholders: {app}, {date}, {time}": {},
+    "Play a sound when capturing": {},
+    "Precision crosshair (press C on the overlay)": {},
+    "Press Command Option L to toggle click-through.": {},
+    "Press the recording shortcut again to cancel the countdown.": {},
+    "Preview": {},
+    "Previous step": {},
+    "Quality": {},
+    "Quit Kadr": {},
+    "Re-capture the last selected area.": {},
+    "Reading time": {},
+    "Record": {},
+    "Record Region": {},
+    "Record Region…": {},
+    "Record Screen": {},
+    "Record a region, then export GIF (G)": {},
+    "Record in mono": {},
+    "Record microphone": {},
+    "Record system audio": {},
+    "Record without the pointer and draw it back": {},
+    "Recording": {},
+    "Recording Sessions": {},
+    "Recording audio": {},
+    "Recording controls": {},
+    "Recording format": {},
+    "Recording paused at %@": {},
+    "Recording the microphone needs macOS 15 or later.": {},
+    "Recording your camera needs permission. You can start without it.": {},
+    "Recording your microphone needs permission. You can start without it.": {},
+    "Recording — microphone is silent": {},
+    "Recording, %@ elapsed": {},
+    "Record…": {},
+    "Redo": {},
+    "Reduce interruptions while recording": {},
+    "Reinstall": {},
+    "Remove": {},
+    "Remove %lld Session%@…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Remove %1$lld Session%2$@…"
           }
         }
       }
     },
-    "Studio capture" : {
-
+    "Rename": {},
+    "Reset": {},
+    "Reset All Settings…": {},
+    "Reset all settings to their defaults?": {},
+    "Reset to the standard layout": {},
+    "Restart Kadr": {},
+    "Restart — discard what's recorded and record again": {},
+    "Restore All Shortcuts": {},
+    "Restore Default": {},
+    "Restricted": {},
+    "Retry": {},
+    "Return saves the hovered card": {},
+    "Reveal in Finder": {},
+    "Rotate 90°": {},
+    "S": {},
+    "Save": {},
+    "Save All Overlays": {},
+    "Save Retina captures at 1×": {},
+    "Save target": {},
+    "Save to": {},
+    "Scale Retina to 1×": {},
+    "Scheme": {},
+    "Screen": {},
+    "Screen access is off. Practice works without it, and the menu bar icon is always there.": {},
+    "Scroll step: %lld pt": {},
+    "Scrolling": {},
+    "Scrolling Capture": {},
+    "Scrolling Capture…": {},
+    "Scrolling capture": {},
+    "Search captures": {},
+    "Search the text in captures": {},
+    "Select All": {},
+    "Select a region and start recording it.": {},
+    "Select an area and read the text in it.": {},
+    "Select an area of the screen and capture it.": {},
+    "Select text and copy it (T)": {},
+    "Selected": {},
+    "Selection": {},
+    "Self-Timer": {},
+    "Self-timer": {},
+    "Set Desktop Icons": {},
+    "Settings": {},
+    "Settings…": {},
+    "Share": {},
+    "Share %@": {},
+    "Share…": {},
+    "Shortcuts": {},
+    "Shortcuts work in every app. Option alone is refused — macOS 15 drops those.": {},
+    "Show": {},
+    "Show All": {},
+    "Show Sidebar": {},
+    "Show a script while recording": {},
+    "Show an image on top of every window.": {},
+    "Show cards in the": {},
+    "Show in Finder": {},
+    "Show me joins Kadr is unsure about": {},
+    "Show menu bar icon": {},
+    "Show pressed keys": {},
+    "Show recent captures": {},
+    "Show the floating controls": {},
+    "Show the pointer": {},
+    "Show the webcam": {},
+    "Show what the keys do": {},
+    "Show while recording": {},
+    "Skip for Now": {},
+    "Slot": {},
+    "Snap the selection to edges Kadr finds": {},
+    "Space used by the History library": {},
+    "Stack up to %lld cards": {},
+    "Start Recording": {},
+    "Start now": {},
+    "Start or stop a screen recording.": {},
+    "Start recording": {},
+    "Start recording the screen.": {},
+    "Starting in %lld seconds": {},
+    "Stitching…": {},
+    "Stop": {},
+    "Stop Click-Through": {},
+    "Stop Recording": {},
+    "Stop and save the recording": {},
+    "Stop the recording and return the file.": {},
+    "Studio": {
+      "comment": "The video editor for screen recordings. Not a physical studio.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Studio"
+          }
+        }
+      }
     },
-    "System sound" : {
-
-    },
-    "Tab-separated, ready to paste into a spreadsheet" : {
-
-    },
-    "Teleprompter" : {
-
-    },
-    "Text" : {
-
-    },
-    "Text copied, %lld characters" : {
-
-    },
-    "Text is copied immediately; the review window is for editing and QR codes." : {
-
-    },
-    "That is your first capture." : {
-
-    },
-    "The file is no longer on disk" : {
-
-    },
-    "The microphone is on but nothing is reaching it. Check mute and the input." : {
-
-    },
-    "The microphone is saved as its own track so you can drop it later." : {
-
-    },
-    "The notch layout needs a camera cutout; the island can go anywhere." : {
-
-    },
-    "The script will appear while you record" : {
-
-    },
-    "This Mac has no camera notch, so only the floating island is available." : {
-
-    },
-    "Thumbnail" : {
-
-    },
-    "Timer" : {
-
-    },
-    "Toggle" : {
-
-    },
-    "Toggle Click-Through" : {
-
-    },
-    "Toggle Recording" : {
-
-    },
-    "Trim the empty notch strip from fullscreen screenshots" : {
-
-    },
-    "Try a practice image" : {
-
-    },
-    "Turn on to show the script while you record" : {
-
-    },
-    "Type or paste what you plan to say." : {
-
-    },
-    "Undo" : {
-
-    },
-    "Updates" : {
-
-    },
-    "URL Scheme" : {
-
-    },
-    "Use Default" : {
-
-    },
-    "Use Without" : {
-
-    },
-    "Version" : {
-
-    },
-    "View" : {
-
-    },
-    "Wait before capturing" : {
-
-    },
-    "Waiting for %@ permission" : {
-
-    },
-    "Wallpaper while capturing" : {
-
-    },
-    "Webcam position" : {
-
-    },
-    "What you have recorded so far will be deleted." : {
-
-    },
-    "Where captures are saved" : {
-
-    },
-    "While recording" : {
-
-    },
-    "Window" : {
-
-    },
-    "Window capture" : {
-
-    },
-    "You can finish setup later from the menu bar" : {
-
-    },
-    "Your most recent capture" : {
-
-    },
-    "Your shortcuts" : {
-
-    },
-    "Zoom" : {
-
-    }
+    "Studio capture": {},
+    "System sound": {},
+    "Tab-separated, ready to paste into a spreadsheet": {},
+    "Teleprompter": {},
+    "Text": {},
+    "Text copied, %lld characters": {},
+    "Text is copied immediately; the review window is for editing and QR codes.": {},
+    "That is your first capture.": {},
+    "The file is no longer on disk": {},
+    "The microphone is on but nothing is reaching it. Check mute and the input.": {},
+    "The microphone is saved as its own track so you can drop it later.": {},
+    "The notch layout needs a camera cutout; the island can go anywhere.": {},
+    "The script will appear while you record": {},
+    "This Mac has no camera notch, so only the floating island is available.": {},
+    "Thumbnail": {},
+    "Timer": {},
+    "Toggle": {},
+    "Toggle Click-Through": {},
+    "Toggle Recording": {},
+    "Trim the empty notch strip from fullscreen screenshots": {},
+    "Try a practice image": {},
+    "Turn on to show the script while you record": {},
+    "Type or paste what you plan to say.": {},
+    "URL Scheme": {},
+    "Undo": {},
+    "Updates": {},
+    "Use Default": {},
+    "Use Without": {},
+    "Version": {},
+    "View": {},
+    "Wait before capturing": {},
+    "Waiting for %@ permission": {},
+    "Wallpaper while capturing": {},
+    "Webcam position": {},
+    "What you have recorded so far will be deleted.": {},
+    "Where captures are saved": {},
+    "While recording": {},
+    "Window": {},
+    "Window capture": {},
+    "You can finish setup later from the menu bar": {},
+    "Your most recent capture": {},
+    "Your shortcuts": {},
+    "Zoom": {},
+    "click-through off": {},
+    "click-through on": {},
+    "kadr": {},
+    "macOS 15 asks you to confirm screen recording about once a month.": {},
+    "macOS only applies a new permission to a freshly launched app, so Kadr needs to restart once.": {}
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

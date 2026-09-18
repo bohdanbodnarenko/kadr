@@ -130,7 +130,7 @@ struct AppSettingsTests {
         settings.resumeOnboardingAtPermissions = true
         settings.overlayAlwaysShowActions = true
         settings.captureShowsOverlayHints = false
-        settings.ocrShowsReview = false
+        settings.ocrShowsReview = true
         settings.resetToDefaults()
 
         #expect(settings.defaultAction == .copyToClipboard)
@@ -146,7 +146,8 @@ struct AppSettingsTests {
         #expect(!settings.overlayAlwaysShowActions)
         #expect(settings.captureShowsOverlayHints)
         #expect(!settings.captureConfirmsSelection)
-        #expect(settings.ocrShowsReview)
+        // Capture Text copies and says so; the review window is opt-in (docs/03 §1.7).
+        #expect(!settings.ocrShowsReview)
         #expect(AppSettings(store: store).defaultAction == .copyToClipboard)
     }
 

@@ -22,6 +22,12 @@ final class TextRecognizer {
         var text: String
         var codes: [DetectedCode]
         var table: RecognizedTable?
+        /// Lines as the recogniser saw them on screen.
+        ///
+        /// Counted here rather than from `text`, which has already been folded into one
+        /// line when "Keep line breaks" is off — the toast would then report one row for a
+        /// paragraph of twenty.
+        var lineCount: Int = 0
 
         var isEmpty: Bool {
             text.isEmpty && codes.isEmpty
@@ -41,7 +47,8 @@ final class TextRecognizer {
         return Recognition(
             text: analysis.text(preservingLineBreaks: preservingLineBreaks),
             codes: analysis.codes,
-            table: analysis.primaryTable
+            table: analysis.primaryTable,
+            lineCount: analysis.lines.count
         )
     }
 

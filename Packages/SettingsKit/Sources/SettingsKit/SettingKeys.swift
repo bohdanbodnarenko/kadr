@@ -69,7 +69,10 @@ public enum SettingKeys {
     /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
     /// Open an editable review window after Capture Text (docs/03 §1.7).
-    public static let ocrShowsReview = SettingKey("capture.ocrShowsReview", default: true)
+    /// Off: Capture Text copies and says so. A window that has to be dismissed for text
+    /// already on the clipboard is a step in the way of the next paste, and the toast
+    /// offers Edit for the times the text does need a look (docs/03 §1.7).
+    public static let ocrShowsReview = SettingKey("capture.ocrShowsReview", default: false)
     /// Teaching copy on the idle freeze overlay (docs/03 §1.1).
     public static let captureShowsOverlayHints = SettingKey("capture.showsOverlayHints", default: true)
     /// Keep the selection on screen after mouse-up until Enter commits it (docs/03 §1.1).

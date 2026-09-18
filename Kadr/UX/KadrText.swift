@@ -72,4 +72,8 @@ enum KadrPlural {
     nonisolated static func codes(_ count: Int) -> String {
         KadrText.string("\(count) codes")
     }
+
+    nonisolated static func lines(_ count: Int) -> String {
+        KadrText.string("\(count) lines")
+    }
 }

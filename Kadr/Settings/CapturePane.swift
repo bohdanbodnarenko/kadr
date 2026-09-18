@@ -100,11 +100,13 @@ struct CapturePane: View {
 
             Section {
                 Toggle("Keep line breaks", isOn: $settings.ocrPreservesLineBreaks)
-                Toggle("Open a review window", isOn: $settings.ocrShowsReview)
+                Toggle("Always open a review window", isOn: $settings.ocrShowsReview)
             } header: {
                 Text("Capture Text")
             } footer: {
-                Text("Text is copied immediately; the review window is for editing and QR codes.")
+                Text("Text is copied straight away and a toast says how many lines went to the "
+                    + "clipboard, with Edit on it when a capture needs correcting. Turn this on to "
+                    + "open the review window every time instead.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
