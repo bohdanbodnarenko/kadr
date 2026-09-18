@@ -14,11 +14,15 @@ struct RecordingNotchIsland: View {
     @Bindable var model: RecordingControlBarModel
     @State private var tooltip = RecordingBarTooltipModel()
     @State private var collapseTask: Task<Void, Never>?
+    /// True for the instant after recording begins, which is what the shell stretches on.
+    @State private var isActivating = false
+    @State private var activationTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Slight overshoot, like the Dynamic Island; dropped entirely under Reduce Motion.
-    private static let spring = Animation.spring(response: 0.36, dampingFraction: 0.8)
     /// Leaving the shell for a moment — overshooting a control — must not snap it shut.
     private static let collapseDelay = Duration.milliseconds(350)
+    /// How long the activation stretch is held before it settles back.
+    private static let activationHold = Duration.milliseconds(90)
 
     var body: some View {
         let layout = model.notchLayout
@@ -44,10 +48,27 @@ struct RecordingNotchIsland: View {
             .coordinateSpace(.named(RecordingBarCoordinateSpace.panel))
             .environment(tooltip)
             .environment(\.colorScheme, .dark)
-            .kadrAnimation(Self.spring, value: layout.showsRow)
-            .kadrAnimation(Self.spring, value: layout.isVisible)
+            // The shell is the mass and the content is what lands in it: two springs, the
+            // second a beat behind (`RecordingNotchMorph`).
+            .animation(RecordingNotchMorph.shell(reduceMotion: reduceMotion), value: layout.showsRow)
+            .animation(RecordingNotchMorph.shell(reduceMotion: reduceMotion), value: layout.isVisible)
+            // Sideways only, anchored on the housing: the top edge is the display's edge,
+            // and lifting it off shows a line of wallpaper where the camera should be.
+            .scaleEffect(
+                x: RecordingNotchMorph.stretch(isStretching: isActivating, reduceMotion: reduceMotion),
+                y: 1,
+                anchor: .top
+            )
+            .animation(RecordingNotchMorph.activation(reduceMotion: reduceMotion), value: isActivating)
             .ignoresSafeArea()
-            .onDisappear { collapseTask?.cancel() }
+            .onChange(of: model.preRoll == nil) { _, recording in
+                guard recording, layout.isVisible else { return }
+                stretchOnce()
+            }
+            .onDisappear {
+                collapseTask?.cancel()
+                activationTask?.cancel()
+            }
     }
 
     // MARK: - Shell
@@ -73,6 +94,7 @@ struct RecordingNotchIsland: View {
                             removal: .identity
                         )
                     )
+                    .animation(RecordingNotchMorph.content(reduceMotion: reduceMotion), value: layout.showsRow)
             }
         }
         .fixedSize()
@@ -101,6 +123,7 @@ struct RecordingNotchIsland: View {
         .frame(height: layout.hardware.height)
         .foregroundStyle(.white)
         .opacity(layout.isVisible ? 1 : 0)
+        .animation(RecordingNotchMorph.content(reduceMotion: reduceMotion), value: layout.isVisible)
         .allowsHitTesting(false)
     }
 
@@ -115,6 +138,14 @@ struct RecordingNotchIsland: View {
                 Image(systemName: "pause.fill")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.white.opacity(0.75))
+            } else if model.preRoll == nil {
+                // The one thing about a recording in progress worth a glance: whether
+                // anything is reaching the microphone.
+                RecordingNotchWaveform(
+                    meter: model.meter,
+                    isResting: model.microphoneIsSilent,
+                    tint: model.microphoneIsSilent ? .orange : .white
+                )
             }
 
             if model.microphoneIsSilent, model.preRoll == nil {
@@ -156,6 +187,17 @@ struct RecordingNotchIsland: View {
     private var clockLabel: String {
         guard let preRoll = model.preRoll else { return "\(model.elapsedText) elapsed" }
         return "Starting in \(max(preRoll.remaining, 1)) seconds"
+    }
+
+    /// One stretch when a recording begins, then let it settle.
+    private func stretchOnce() {
+        activationTask?.cancel()
+        isActivating = true
+        activationTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.activationHold)
+            guard !Task.isCancelled else { return }
+            isActivating = false
+        }
     }
 
     // MARK: - Hover
