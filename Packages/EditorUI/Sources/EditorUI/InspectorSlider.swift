@@ -140,6 +140,11 @@ struct InspectorSlider: View {
 
     private var valueField: some View {
         TextField(title, text: $draftText)
+            // The title is the field's accessibility name, not something to draw: the track
+            // beside it already says "Speed", and inside a `Form` — which draws a text
+            // field's label — the row came out as the name stacked over the number, twice
+            // over. VoiceOver still gets it from `accessibilityLabel` below.
+            .labelsHidden()
             .textFieldStyle(.plain)
             .font(.inspectorNumeric)
             .foregroundStyle(.primary.opacity(0.82))
