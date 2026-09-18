@@ -48,13 +48,39 @@ struct RecordingNotchMotionTests {
 
     /// The shell is the mass and the content is what lands in it: the shell moves for
     /// longer, the content settles harder, and it starts a beat later.
-    @Test("The shell leads and the content follows")
+    @Test("Opening: the shell leads and the content follows")
     func choreographyHasTwoWeights() {
         #expect(RecordingNotchMorph.shellResponse > RecordingNotchMorph.contentResponse)
         #expect(RecordingNotchMorph.contentDamping > RecordingNotchMorph.shellDamping)
         #expect(RecordingNotchMorph.contentDelay > 0)
         // Perceptible as a sequence, not as a pause.
         #expect(RecordingNotchMorph.contentDelay < 0.12)
+    }
+
+    /// Opening is an offer; closing is an answer. The user has left, and the shell's job is
+    /// to be out of the way.
+    @Test("Closing is quicker than opening, and does not bounce")
+    func closingIsQuickerAndSettles() {
+        #expect(RecordingNotchMorph.collapseResponse < RecordingNotchMorph.shellResponse)
+        // Damped hard enough not to spring back a hair's width, which reads as the shell
+        // changing its mind.
+        #expect(RecordingNotchMorph.collapseDamping > RecordingNotchMorph.shellDamping)
+        #expect(RecordingNotchMorph.collapseDamping >= 0.9)
+    }
+
+    /// Closing reverses the order: the content leaves first, so the shell is never a black
+    /// box with nothing in it.
+    @Test("Closing: the content leads and the shell follows it down")
+    func closingReversesTheOrder() {
+        #expect(RecordingNotchMorph.collapseContentResponse < RecordingNotchMorph.collapseResponse)
+        #expect(RecordingNotchMorph.collapseContentResponse > 0.05, "quicker than this is a blink")
+    }
+
+    /// A third of a second was a panel hanging over somebody's work after they moved on.
+    @Test("The grace covers a slip, not a departure")
+    func collapseDelayIsForgivingNotSlow() {
+        #expect(RecordingNotchMorph.collapseDelayMilliseconds >= 120, "crossing to the tooltip is a moment")
+        #expect(RecordingNotchMorph.collapseDelayMilliseconds <= 220)
     }
 
     @Test("The activation stretch is sideways and slight")
@@ -68,9 +94,12 @@ struct RecordingNotchMotionTests {
     func reduceMotionStopsEverything() {
         #expect(RecordingNotchMorph.shell(reduceMotion: true) == nil)
         #expect(RecordingNotchMorph.content(reduceMotion: true) == nil)
+        #expect(RecordingNotchMorph.shell(isExpanding: false, reduceMotion: true) == nil)
+        #expect(RecordingNotchMorph.content(isExpanding: false, reduceMotion: true) == nil)
         #expect(RecordingNotchMorph.activation(reduceMotion: true) == nil)
         #expect(RecordingNotchMorph.stretch(isStretching: true, reduceMotion: true) == 1)
-        // And leaves them on otherwise.
+        // And leaves them on otherwise, in both directions.
         #expect(RecordingNotchMorph.shell(reduceMotion: false) != nil)
+        #expect(RecordingNotchMorph.shell(isExpanding: false, reduceMotion: false) != nil)
     }
 }

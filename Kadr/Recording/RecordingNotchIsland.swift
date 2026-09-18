@@ -19,8 +19,9 @@ struct RecordingNotchIsland: View {
     @State private var activationTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Leaving the shell for a moment — overshooting a control — must not snap it shut.
-    private static let collapseDelay = Duration.milliseconds(350)
+    /// Leaving the shell for a moment — crossing the seam to its tooltip — must not snap it
+    /// shut (`RecordingNotchMorph.collapseDelayMilliseconds`).
+    private static let collapseDelay = Duration.milliseconds(RecordingNotchMorph.collapseDelayMilliseconds)
     /// How long the activation stretch is held before it settles back.
     private static let activationHold = Duration.milliseconds(90)
 
@@ -49,9 +50,16 @@ struct RecordingNotchIsland: View {
             .environment(tooltip)
             .environment(\.colorScheme, .dark)
             // The shell is the mass and the content is what lands in it: two springs, the
-            // second a beat behind (`RecordingNotchMorph`).
-            .animation(RecordingNotchMorph.shell(reduceMotion: reduceMotion), value: layout.showsRow)
-            .animation(RecordingNotchMorph.shell(reduceMotion: reduceMotion), value: layout.isVisible)
+            // second a beat behind. Closing reverses the order and takes its own, quicker
+            // spring (`RecordingNotchMorph`).
+            .animation(
+                RecordingNotchMorph.shell(isExpanding: layout.showsRow, reduceMotion: reduceMotion),
+                value: layout.showsRow
+            )
+            .animation(
+                RecordingNotchMorph.shell(isExpanding: layout.isVisible, reduceMotion: reduceMotion),
+                value: layout.isVisible
+            )
             // Sideways only, anchored on the housing: the top edge is the display's edge,
             // and lifting it off shows a line of wallpaper where the camera should be.
             .scaleEffect(
@@ -86,15 +94,21 @@ struct RecordingNotchIsland: View {
                     .padding(.top, RecordingNotchLayout.rowTopGap)
                     .padding(.bottom, RecordingNotchLayout.rowBottomPadding)
                     .padding(.horizontal, layout.shape.topCornerRadius + RecordingNotchLayout.rowSidePadding)
-                    // In with the shape, out at once: a fading row would hold the height
-                    // open while the shell is trying to close.
+                    // In with the shape; out ahead of it. The row used to vanish on the
+                    // frame the pointer left, so the shell spent its whole collapse as an
+                    // empty black box — the part that read as sluggish was nothing moving
+                    // inside it. Fading over a tenth of a second is quicker than the shell
+                    // and still something the eye can follow.
                     .transition(
                         .asymmetric(
                             insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .top)),
-                            removal: .identity
+                            removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
                         )
                     )
-                    .animation(RecordingNotchMorph.content(reduceMotion: reduceMotion), value: layout.showsRow)
+                    .animation(
+                        RecordingNotchMorph.content(isExpanding: layout.showsRow, reduceMotion: reduceMotion),
+                        value: layout.showsRow
+                    )
             }
         }
         .fixedSize()
@@ -123,7 +137,10 @@ struct RecordingNotchIsland: View {
         .frame(height: layout.hardware.height)
         .foregroundStyle(.white)
         .opacity(layout.isVisible ? 1 : 0)
-        .animation(RecordingNotchMorph.content(reduceMotion: reduceMotion), value: layout.isVisible)
+        .animation(
+            RecordingNotchMorph.content(isExpanding: layout.isVisible, reduceMotion: reduceMotion),
+            value: layout.isVisible
+        )
         .allowsHitTesting(false)
     }
 
