@@ -37,7 +37,7 @@ final class CaptureRegionStage {
         var hint: String {
             switch self {
             case .recording: KadrText.string("Return to record · Esc to choose again")
-            case .scrolling: KadrText.string("Drag the edges to fit, scroll to the start · Return")
+            case .scrolling: KadrText.string("Bar moves it · edges resize · scroll the page to the start")
             }
         }
 

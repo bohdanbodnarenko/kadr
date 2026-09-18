@@ -10,7 +10,7 @@ import SwiftUI
 /// is the wrong tool: the page has to be scrolled into place before anything starts, and a
 /// frozen screen cannot scroll. Now a frame appears over the live screen — around the
 /// window under the pointer — with the rest dimmed. Its corners and edges resize it, the
-/// grip on its top edge moves it, and everything else passes straight through, so the
+/// bar above it moves it, and everything else passes straight through, so the
 /// page inside can be scrolled and clicked while the frame is being set.
 ///
 /// AppKit and Core Animation only in the pointer path (CLAUDE.md rule 4). The pass-through
@@ -27,9 +27,6 @@ final class ScrollRegionEditor {
     var onStartAuto: (DisplayRect) -> Void = { _ in }
     var onCancel: () -> Void = {}
 
-    /// The last frame on each display this session, so a second capture starts there.
-    private static var remembered: [CGDirectDisplayID: CGRect] = [:]
-
     init(screen: NSScreen) {
         self.screen = screen
     }
@@ -44,7 +41,7 @@ final class ScrollRegionEditor {
         let bounds = CGRect(origin: .zero, size: screen.frame.size)
         let visible = screen.visibleFrame.offsetBy(dx: -screen.frame.minX, dy: -screen.frame.minY)
         let local = window.map { $0.cgRect.offsetBy(dx: -screen.frame.minX, dy: -screen.frame.minY) }
-        let start = displayID.flatMap { Self.remembered[$0] }
+        let start = displayID.flatMap { ScrollRegionMemory.rect(forDisplay: $0, visible: visible) }
             ?? ScrollRegionGeometry.initialRect(window: local, visible: visible)
 
         let view = ScrollRegionView(frame: bounds, rect: start, limits: visible)
@@ -90,7 +87,7 @@ final class ScrollRegionEditor {
 
     private func frameChanged(_ rect: CGRect) {
         if let displayID {
-            Self.remembered[displayID] = rect
+            ScrollRegionMemory.remember(rect, forDisplay: displayID)
         }
         placeControls(for: rect)
         updateControls(for: rect)
@@ -208,9 +205,8 @@ final class ScrollRegionPanel: NonActivatingPanel, InteractivelyMasked {
             return InteractiveRegions(rects: [frame])
         }
         let origin = frame.origin
-        return InteractiveRegions(rects: ScrollRegionGeometry.interactiveRects(for: view.rect).map {
-            $0.offsetBy(dx: origin.x, dy: origin.y)
-        })
+        let rects = ScrollRegionGeometry.interactiveRects(for: view.rect, in: view.bounds)
+        return InteractiveRegions(rects: rects.map { $0.offsetBy(dx: origin.x, dy: origin.y) })
     }
 
     var passesMouseThrough: Bool {
@@ -222,7 +218,7 @@ final class ScrollRegionPanel: NonActivatingPanel, InteractivelyMasked {
     }
 }
 
-/// Draws the dim, the frame, its handles and the grip, and turns drags into a new frame.
+/// Draws the dim, the frame, its handles and the move bar, and turns drags into a frame.
 final class ScrollRegionView: NSView {
     private(set) var rect: CGRect
     private let limits: CGRect
@@ -236,7 +232,8 @@ final class ScrollRegionView: NSView {
 
     private let dim = CAShapeLayer()
     private let border = CAShapeLayer()
-    private let grip = CAShapeLayer()
+    private let moveBar = CAShapeLayer()
+    private let grabber = CAShapeLayer()
     private var handles: [CALayer] = []
     /// The press being dragged: what it grabbed, the frame then, and where it started.
     private struct Drag {
@@ -287,20 +284,22 @@ final class ScrollRegionView: NSView {
         border.shadowOpacity = 0.4
         border.shadowRadius = 2
         border.shadowOffset = .zero
-        grip.fillColor = NSColor.white.cgColor
-        grip.shadowColor = NSColor.black.cgColor
-        grip.shadowOpacity = 0.35
-        grip.shadowRadius = 2
-        grip.shadowOffset = .zero
-        for layer in [dim, border, grip] {
+        moveBar.fillColor = NSColor.white.withAlphaComponent(0.92).cgColor
+        moveBar.shadowColor = NSColor.black.cgColor
+        moveBar.shadowOpacity = 0.35
+        moveBar.shadowRadius = 3
+        moveBar.shadowOffset = .zero
+        // Three lines, the way every drag handle on the Mac is drawn.
+        grabber.fillColor = NSColor.black.withAlphaComponent(0.45).cgColor
+        for layer in [dim, border, moveBar, grabber] {
             layer.contentsScale = scale
             root.addSublayer(layer)
         }
+        // White dots, as the editor's crop handles are: the same gesture should not be
+        // drawn two different ways in one app.
         handles = (0 ..< 8).map { _ in
             let handle = CALayer()
             handle.backgroundColor = NSColor.white.cgColor
-            handle.borderColor = NSColor.controlAccentColor.cgColor
-            handle.borderWidth = 1.5
             handle.cornerRadius = ScrollRegionGeometry.handleDiameter / 2
             handle.shadowColor = NSColor.black.cgColor
             handle.shadowOpacity = 0.35
@@ -324,14 +323,16 @@ final class ScrollRegionView: NSView {
         dim.path = path
         border.frame = bounds
         border.path = CGPath(rect: rect, transform: nil)
-        let gripRect = ScrollRegionGeometry.grip(for: rect)
-        grip.frame = bounds
-        grip.path = CGPath(
-            roundedRect: gripRect.insetBy(dx: 12, dy: 5),
-            cornerWidth: 3,
-            cornerHeight: 3,
+        let bar = ScrollRegionGeometry.moveBar(for: rect, in: bounds)
+        moveBar.frame = bounds
+        moveBar.path = CGPath(
+            roundedRect: bar,
+            cornerWidth: bar.height / 2,
+            cornerHeight: bar.height / 2,
             transform: nil
         )
+        grabber.frame = bounds
+        grabber.path = Self.grabberPath(in: bar)
         let diameter = ScrollRegionGeometry.handleDiameter
         for (handle, centre) in zip(handles, ScrollRegionGeometry.handleCentres(for: rect)) {
             handle.frame = CGRect(
@@ -342,8 +343,27 @@ final class ScrollRegionView: NSView {
             )
             handle.isHidden = isLocked
         }
-        grip.isHidden = isLocked
+        moveBar.isHidden = isLocked
+        grabber.isHidden = isLocked
         CATransaction.commit()
+    }
+
+    /// The three short lines in the middle of the move bar.
+    private static func grabberPath(in bar: CGRect) -> CGPath {
+        let path = CGMutablePath()
+        let width: CGFloat = 22
+        let thickness: CGFloat = 1.5
+        let gap: CGFloat = 4
+        let top = bar.midY + thickness / 2 + gap
+        for index in 0 ..< 3 {
+            let y = top - CGFloat(index) * (thickness + gap / 2)
+            path.addRoundedRect(
+                in: CGRect(x: bar.midX - width / 2, y: y, width: width, height: thickness),
+                cornerWidth: thickness / 2,
+                cornerHeight: thickness / 2
+            )
+        }
+        return path
     }
 
     // MARK: - Pointer
@@ -355,7 +375,9 @@ final class ScrollRegionView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        guard !isLocked, let target = ScrollRegionGeometry.target(at: point, in: rect) else { return }
+        guard !isLocked, let target = ScrollRegionGeometry.target(at: point, in: rect, bounds: bounds) else {
+            return
+        }
         drag = Drag(target: target, start: rect, origin: point)
         isDragging = true
         if target == .move {
@@ -380,7 +402,7 @@ final class ScrollRegionView: NSView {
     }
 
     private func updateCursor(at point: CGPoint) {
-        guard !isLocked, let target = ScrollRegionGeometry.target(at: point, in: rect) else {
+        guard !isLocked, let target = ScrollRegionGeometry.target(at: point, in: rect, bounds: bounds) else {
             NSCursor.arrow.set()
             return
         }

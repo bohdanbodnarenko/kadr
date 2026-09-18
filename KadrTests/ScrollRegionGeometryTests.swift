@@ -16,17 +16,19 @@ struct ScrollRegionGeometryTests {
         (CGPoint(x: 502, y: 250), .resize(.right, nil)),
         (CGPoint(x: 250, y: 102), .resize(nil, .bottom)),
         (CGPoint(x: 200, y: 399), .resize(nil, .top)),
-        (CGPoint(x: 300, y: 400), .move),
+        // The move bar sits just above the frame's top edge, across its whole width.
+        (CGPoint(x: 300, y: 412), .move),
+        (CGPoint(x: 140, y: 412), .move),
         (CGPoint(x: 300, y: 250), nil),
         (CGPoint(x: 700, y: 700), nil)
     ])
     func hitTesting(point: CGPoint, expected: Geometry.Target?) {
-        #expect(Geometry.target(at: point, in: rect) == expected)
+        #expect(Geometry.target(at: point, in: rect, bounds: bounds) == expected)
     }
 
     @Test("Every handle is inside an interactive rect, and the middle is not")
     func interactiveRects() {
-        let rects = Geometry.interactiveRects(for: rect)
+        let rects = Geometry.interactiveRects(for: rect, in: bounds)
         for centre in Geometry.handleCentres(for: rect) {
             #expect(rects.contains { $0.contains(centre) })
         }
@@ -71,11 +73,13 @@ struct ScrollRegionGeometryTests {
     func initialRect() {
         let visible = CGRect(x: 0, y: 0, width: 1440, height: 875)
         let window = CGRect(x: 200, y: 100, width: 800, height: 600)
+        // Small enough to grab already, so it is used as it is, centred where it was.
         #expect(Geometry.initialRect(window: window, visible: visible) == window)
 
         let hanging = CGRect(x: 1200, y: 700, width: 800, height: 600)
-        let clipped = CGRect(x: 1200, y: 700, width: 240, height: 175)
-        #expect(Geometry.initialRect(window: hanging, visible: visible) == clipped)
+        let clipped = Geometry.initialRect(window: hanging, visible: visible)
+        #expect(visible.contains(clipped))
+        #expect(clipped.width >= Geometry.minimumSize.width)
 
         let fallback = Geometry.initialRect(window: nil, visible: visible)
         #expect(visible.contains(fallback))
@@ -83,5 +87,46 @@ struct ScrollRegionGeometryTests {
 
         let tiny = CGRect(x: 10, y: 10, width: 20, height: 20)
         #expect(Geometry.initialRect(window: tiny, visible: visible) == fallback)
+    }
+
+    /// A frame with its edges against the screen's has nothing to grab: the corner handle
+    /// is under the Dock, and moving it means resizing it smaller first.
+    @Test("A maximised window does not open a frame the size of the screen")
+    func maximisedWindowIsCappedAndGrabbable() {
+        let visible = CGRect(x: 0, y: 25, width: 1440, height: 850)
+        let maximised = visible
+
+        let frame = Geometry.initialRect(window: maximised, visible: visible)
+
+        #expect(frame.width < visible.width)
+        #expect(frame.height < visible.height)
+        #expect(visible.contains(frame))
+        // Room on every side for the bands that resize it.
+        #expect(frame.minX - visible.minX >= Geometry.cornerReach)
+        #expect(visible.maxY - frame.maxY >= Geometry.cornerReach)
+        #expect(abs(frame.midX - visible.midX) <= 1)
+    }
+
+    @Test("The move bar sits above the frame, and inside it at the top of the screen")
+    func moveBarFlipsInside() {
+        let bar = Geometry.moveBar(for: rect, in: bounds)
+        #expect(bar.minY >= rect.maxY)
+        #expect(bar.width == rect.width)
+        #expect(bar.height == Geometry.moveBarHeight)
+
+        let atTheTop = CGRect(x: 100, y: bounds.maxY - 300, width: 400, height: 300)
+        let flipped = Geometry.moveBar(for: atTheTop, in: bounds)
+        #expect(bounds.contains(flipped))
+        #expect(flipped.maxY <= atTheTop.maxY)
+    }
+
+    @Test("A remembered frame is only restored while it still fits")
+    func remembersOnlyWhatFits() {
+        let visible = CGRect(x: 0, y: 25, width: 1440, height: 850)
+        #expect(Geometry.fits(CGRect(x: 40, y: 60, width: 600, height: 400), in: visible))
+        // From a monitor that is no longer there.
+        #expect(!Geometry.fits(CGRect(x: 2000, y: 60, width: 600, height: 400), in: visible))
+        // Smaller than the frame is allowed to be.
+        #expect(!Geometry.fits(CGRect(x: 40, y: 60, width: 20, height: 20), in: visible))
     }
 }

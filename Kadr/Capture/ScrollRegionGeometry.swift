@@ -24,27 +24,39 @@ nonisolated enum ScrollRegionGeometry {
     }
 
     /// How far from a corner still counts as the corner.
-    static let cornerReach: CGFloat = 10
+    static let cornerReach: CGFloat = 14
     /// How thick the grabbable band along each edge is.
-    static let edgeReach: CGFloat = 5
-    static let gripSize = CGSize(width: 56, height: 16)
+    ///
+    /// Eight points, not five: this band is the only thing between the page underneath and
+    /// a resize, and a five-point target on a frame the size of a window is a target people
+    /// miss, scroll the page with, and have to line up again.
+    static let edgeReach: CGFloat = 8
+    /// The bar that moves the frame, across its whole width.
+    static let moveBarHeight: CGFloat = 26
     static let minimumSize = CGSize(width: 80, height: 60)
     /// The handles drawn on the frame: four corners and four edge midpoints.
-    static let handleDiameter: CGFloat = 9
+    static let handleDiameter: CGFloat = 10
 
-    /// The move grip, centred on the top edge.
-    static func grip(for rect: CGRect) -> CGRect {
-        CGRect(
-            x: rect.midX - gripSize.width / 2,
-            y: rect.maxY - gripSize.height / 2,
-            width: gripSize.width,
-            height: gripSize.height
+    /// The bar that moves the frame: full width, above it, like a window's title bar.
+    ///
+    /// It used to be a 56×16 grip centred on the top edge — a target smaller than a
+    /// scrollbar, sitting *on* the line people were trying to grab to resize. Above the
+    /// frame rather than on it, so it covers none of the content being lined up, and it
+    /// flips inside the top edge when the frame is against the top of the screen.
+    static func moveBar(for rect: CGRect, in bounds: CGRect) -> CGRect {
+        let above = rect.maxY + 2
+        let fitsAbove = above + moveBarHeight <= bounds.maxY
+        return CGRect(
+            x: rect.minX,
+            y: fitsAbove ? above : max(rect.maxY - moveBarHeight, rect.minY),
+            width: rect.width,
+            height: moveBarHeight
         )
     }
 
     /// Where a press lands on the frame, or nil for anywhere that should pass through.
-    static func target(at point: CGPoint, in rect: CGRect) -> Target? {
-        if grip(for: rect).contains(point) {
+    static func target(at point: CGPoint, in rect: CGRect, bounds: CGRect) -> Target? {
+        if moveBar(for: rect, in: bounds).contains(point) {
             return .move
         }
         let nearLeft = abs(point.x - rect.minX) <= cornerReach
@@ -74,16 +86,17 @@ nonisolated enum ScrollRegionGeometry {
         return nil
     }
 
-    /// Everything that takes clicks: the edge bands, the corners and the grip. The inside
-    /// and the outside pass through to the apps underneath.
-    static func interactiveRects(for rect: CGRect) -> [CGRect] {
+    /// Everything that takes clicks: the edge bands, the corners and the move bar. The
+    /// inside and the outside pass through to the apps underneath, which is what lets the
+    /// page be scrolled into place while the frame is being set.
+    static func interactiveRects(for rect: CGRect, in bounds: CGRect) -> [CGRect] {
         let reach = max(cornerReach, edgeReach)
         return [
             CGRect(x: rect.minX - reach, y: rect.minY - reach, width: reach * 2, height: rect.height + reach * 2),
             CGRect(x: rect.maxX - reach, y: rect.minY - reach, width: reach * 2, height: rect.height + reach * 2),
             CGRect(x: rect.minX - reach, y: rect.minY - reach, width: rect.width + reach * 2, height: reach * 2),
             CGRect(x: rect.minX - reach, y: rect.maxY - reach, width: rect.width + reach * 2, height: reach * 2),
-            grip(for: rect)
+            moveBar(for: rect, in: bounds)
         ]
     }
 
@@ -127,23 +140,47 @@ nonisolated enum ScrollRegionGeometry {
         }
     }
 
-    /// The frame to start from: the window under the pointer when there is one, else a
-    /// generous centred area — always inside the visible part of the screen.
+    /// The most of the screen a frame nobody has sized yet may take.
+    ///
+    /// A maximised window used to hand back a frame the size of the screen, whose edges are
+    /// against the screen's edges — nowhere to grab, nothing to drag it by, and a resize
+    /// that has to start by making it smaller from a corner three pixels from the Dock.
+    static let initialFraction: CGFloat = 0.72
+
+    /// The frame to start from: the window under the pointer, kept to a size that can be
+    /// grabbed, else a generous centred area — always inside the visible part of the screen.
     static func initialRect(window: CGRect?, visible: CGRect) -> CGRect {
+        let ceiling = CGSize(
+            width: (visible.width * initialFraction).rounded(),
+            height: (visible.height * initialFraction).rounded()
+        )
         if let window {
             let clipped = window.intersection(visible)
             if !clipped.isNull, clipped.width >= minimumSize.width, clipped.height >= minimumSize.height {
-                return clipped.integral
+                return centred(
+                    CGSize(width: min(clipped.width, ceiling.width), height: min(clipped.height, ceiling.height)),
+                    on: CGPoint(x: clipped.midX, y: clipped.midY),
+                    in: visible
+                )
             }
         }
-        let width = (visible.width * 0.6).rounded()
-        let height = (visible.height * 0.7).rounded()
-        return CGRect(
-            x: (visible.midX - width / 2).rounded(),
-            y: (visible.midY - height / 2).rounded(),
-            width: width,
-            height: height
-        )
+        return centred(ceiling, on: CGPoint(x: visible.midX, y: visible.midY), in: visible)
+    }
+
+    /// A size placed around a point, nudged back inside `visible` if it would hang off.
+    static func centred(_ size: CGSize, on point: CGPoint, in visible: CGRect) -> CGRect {
+        let width = min(max(size.width, minimumSize.width), visible.width)
+        let height = min(max(size.height, minimumSize.height), visible.height)
+        let x = min(max(point.x - width / 2, visible.minX), visible.maxX - width)
+        let y = min(max(point.y - height / 2, visible.minY), visible.maxY - height)
+        return CGRect(x: x.rounded(), y: y.rounded(), width: width.rounded(), height: height.rounded())
+    }
+
+    /// Whether a remembered frame still makes sense on this screen.
+    static func fits(_ rect: CGRect, in visible: CGRect) -> Bool {
+        rect.width >= minimumSize.width
+            && rect.height >= minimumSize.height
+            && visible.insetBy(dx: -1, dy: -1).contains(rect)
     }
 
     /// The eight handle centres, corners first.
