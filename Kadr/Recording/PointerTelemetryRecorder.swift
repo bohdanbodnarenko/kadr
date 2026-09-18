@@ -66,6 +66,12 @@ final class PointerTelemetryRecorder {
     /// Typed, because the two global point spaces on macOS are vertical mirrors of each
     /// other and both are spelled `CGPoint`.
     private var pointConverter: @Sendable (ScreenPoint) -> PixelPoint? = { PixelPoint(x: $0.x, y: $0.y) }
+    /// Kadr's own recording controls on screen, asked for at the moment of a click.
+    ///
+    /// A closure rather than a stored rect: the notch shell grows and shrinks under the
+    /// pointer and the floating bar can be dragged, so anything cached is the shape the
+    /// control had a moment ago — which is exactly the moment somebody is reaching for it.
+    var chromeOnScreen: @MainActor () -> [CGRect] = { [] }
     /// The flip axis between the two global spaces, read when the recording starts.
     var space = GlobalCoordinateSpace.current
 
@@ -244,6 +250,12 @@ final class PointerTelemetryRecorder {
 
     func recordClick(at screenPoint: ScreenPoint, button: ClickEvent.Button, isDown: Bool) {
         guard isRecording, !isPaused, let position = pointConverter(screenPoint)?.cgPoint else { return }
+        // Pressing Stop is not part of what was being recorded. Dropped here rather than
+        // filtered later: the ripple drawn into the picture, the zoom planner and the
+        // keystroke overlay would each have to know, and the zoom planner reading it as an
+        // activity is what pointed the finished recording at the notch as it ended.
+        let onScreen = CGPoint(x: screenPoint.x, y: screenPoint.y)
+        guard TelemetryPolicy.shouldRecordClick(at: onScreen, chrome: chromeOnScreen()) else { return }
         // One event per physical click (docs/11 S0.2). Both rungs of the ladder used to
         // run at once and only the *label* said which had won, so every press appended
         // two events at the same instant — and after the mirror above, one of them was in

@@ -335,4 +335,15 @@ extension AppDelegate {
         default: break
         }
     }
+
+    /// The menu-bar item on screen, which is the other way a recording is stopped.
+    ///
+    /// Read while a recording runs, so a press on it is kept out of the telemetry along
+    /// with the bar's own (docs/09 U3.2).
+    var menuBarItemFrame: CGRect? {
+        guard let button = statusItemController?.statusItem.button, let window = button.window else {
+            return nil
+        }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
 }

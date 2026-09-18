@@ -160,17 +160,27 @@ public struct ZoomCuePlanner: Sendable {
     /// How long a proposed zoom holds after its last click, so the viewer sees the result
     /// of what was clicked rather than cutting away at the moment of impact.
     public var tail: TimeInterval
+    /// Clicks this close to the end are the act of stopping, not part of the recording.
+    ///
+    /// The press on Kadr's own controls is kept out of the telemetry entirely, so this is
+    /// for the ways that miss: a keyboard shortcut pressed with the pointer resting over a
+    /// menu bar, a stop from another display, the last click before someone reached for the
+    /// notch. Zooming to any of them frames the end of the recording rather than its
+    /// subject, and a zoom that begins as the picture ends never finishes playing.
+    public var stopWindow: TimeInterval
 
     public init(
         maximumGap: TimeInterval = 2.5,
         maximumSpreadFraction: Double = 0.25,
         minimumClicks: Int = 1,
-        tail: TimeInterval = 1.2
+        tail: TimeInterval = 1.2,
+        stopWindow: TimeInterval = 0.8
     ) {
         self.maximumGap = max(maximumGap, 0.1)
         self.maximumSpreadFraction = max(maximumSpreadFraction, 0.01)
         self.minimumClicks = max(minimumClicks, 1)
         self.tail = max(tail, 0)
+        self.stopWindow = max(stopWindow, 0)
     }
 
     /// Zooms for a recording.
@@ -180,7 +190,10 @@ public struct ZoomCuePlanner: Sendable {
     ///   - size: the recorded area, for judging what "close together" means on screen.
     ///   - duration: the recording's length, so nothing is proposed past the end.
     public func cues(for clicks: [ClickEvent], in size: CGSize, duration: TimeInterval) -> [ZoomCue] {
-        let presses = clicks.filter(\.isDown).sorted { $0.time < $1.time }
+        let presses = clicks
+            .filter(\.isDown)
+            .filter { $0.time <= duration - stopWindow }
+            .sorted { $0.time < $1.time }
         guard !presses.isEmpty, duration > 0 else { return [] }
 
         let spread = max(min(size.width, size.height), 1) * maximumSpreadFraction

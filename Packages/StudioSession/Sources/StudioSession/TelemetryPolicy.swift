@@ -166,6 +166,36 @@ public enum TelemetryPolicy {
         return moved >= minimumDistance
     }
 
+    // MARK: - Kadr's own chrome
+
+    /// How far outside the recorder's own controls still counts as aiming at them.
+    ///
+    /// A press lands a few points from where the pointer was when it arrived, and the
+    /// notch's shell grows under the pointer as it approaches; both put the recorded
+    /// position just outside the rect the control occupied a moment ago.
+    public static let chromeSlop: CGFloat = 8
+
+    /// Whether a click belongs in the recording at all.
+    ///
+    /// Clicks on Kadr's own recording controls are not part of what was being recorded —
+    /// they are the act of ending it. Kept out of the telemetry entirely rather than
+    /// filtered later, because every consumer would otherwise have to know: the click
+    /// ripple drawn into the picture, the zoom planner that reads a cluster of clicks as an
+    /// activity worth zooming to, and the keystroke overlay all treated "stop" as content
+    /// and pointed the viewer at the corner of the screen as the recording ended.
+    ///
+    /// - Parameters:
+    ///   - point: the click, in the same space as `chrome`.
+    ///   - chrome: the recorder's own controls on screen — the floating bar or the notch
+    ///     island, and the menu-bar item. Empty when none is showing.
+    public static func shouldRecordClick(
+        at point: CGPoint,
+        chrome: [CGRect],
+        slop: CGFloat = chromeSlop
+    ) -> Bool {
+        !chrome.contains { $0.insetBy(dx: -slop, dy: -slop).contains(point) }
+    }
+
     // MARK: - The fallback ladder
 
     /// What each capture method can do, as the recorder discovers it.

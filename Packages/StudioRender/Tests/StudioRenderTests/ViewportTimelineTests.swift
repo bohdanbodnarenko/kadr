@@ -330,4 +330,31 @@ struct ZoomCuePlannerTests {
         #expect(cue.isEnabled)
         #expect(cue.boundsBias == 0)
     }
+
+    /// The press that stops a recording is not an activity to zoom to, and a zoom that
+    /// begins as the picture ends never finishes playing.
+    @Test("A click at the very end proposes no zoom")
+    func stopClickProposesNothing() {
+        let planner = ZoomCuePlanner()
+        let size = CGSize(width: 1920, height: 1080)
+
+        let stopOnly = planner.cues(
+            for: [ClickEvent(time: 9.9, position: CGPoint(x: 1700, y: 20))],
+            in: size,
+            duration: 10
+        )
+        #expect(stopOnly.isEmpty)
+
+        // Work done earlier is still planned.
+        let withWork = planner.cues(
+            for: [
+                ClickEvent(time: 4, position: CGPoint(x: 600, y: 500)),
+                ClickEvent(time: 9.9, position: CGPoint(x: 1700, y: 20))
+            ],
+            in: size,
+            duration: 10
+        )
+        #expect(withWork.count == 1)
+        #expect(withWork[0].start < 9)
+    }
 }

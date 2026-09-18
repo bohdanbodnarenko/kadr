@@ -149,4 +149,35 @@ struct TelemetryPolicyTests {
         #expect(TelemetryPolicy.tapSilenceTimeout > 0)
         #expect(TelemetryPolicy.tapSilenceTimeout <= 5, "a long timeout loses the start of the recording")
     }
+
+    // MARK: - Kadr's own controls
+
+    /// Pressing Stop is the act of ending the recording, not something done inside it.
+    @Test("A click on the recorder's own controls is not recorded")
+    func chromeClicksAreDropped() {
+        let notch = CGRect(x: 600, y: 900, width: 340, height: 32)
+        let menuBar = CGRect(x: 1300, y: 950, width: 24, height: 22)
+
+        #expect(!TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 700, y: 915), chrome: [notch, menuBar]))
+        #expect(!TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 1310, y: 960), chrome: [notch, menuBar]))
+        // Work done in the app underneath is still the recording's content.
+        #expect(TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 700, y: 400), chrome: [notch, menuBar]))
+    }
+
+    /// A press lands a few points from where the pointer was when it arrived, and the notch
+    /// grows under the pointer as it approaches.
+    @Test("Just outside the control still counts as aiming at it")
+    func chromeHasSlop() {
+        let bar = CGRect(x: 100, y: 100, width: 200, height: 40)
+
+        #expect(!TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 96, y: 138), chrome: [bar]))
+        #expect(TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 60, y: 138), chrome: [bar]))
+        // With no slop, only the rect itself.
+        #expect(TelemetryPolicy.shouldRecordClick(at: CGPoint(x: 96, y: 138), chrome: [bar], slop: 0))
+    }
+
+    @Test("With no controls showing, every click is content")
+    func noChromeMeansNoFilter() {
+        #expect(TelemetryPolicy.shouldRecordClick(at: .zero, chrome: []))
+    }
 }

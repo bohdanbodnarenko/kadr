@@ -204,6 +204,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         created.onAudioLevel = { [weak self] level in
             self?.recordingControlBar.setAudioLevel(level)
         }
+        // Where Kadr's own controls are while a recording runs, so pressing Stop is not
+        // written into the recording as something the user did (docs/09 U3.2). Asked for at
+        // the moment of a click: the notch shell grows under the pointer and the floating
+        // bar can be dragged, so a cached rect is the shape it had a moment ago.
+        created.studio.chromeOnScreen = { [weak self] in
+            guard let self else { return [] }
+            return [recordingControlBar.screenFrame, menuBarItemFrame].compactMap(\.self)
+        }
         recordingStorage = created
         return created
     }

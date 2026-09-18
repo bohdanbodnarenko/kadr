@@ -21,6 +21,14 @@ import UniformTypeIdentifiers
 final class StudioSessionRecorder {
     private let logger = KadrLog.logger(.recording)
     private let telemetry = PointerTelemetryRecorder()
+
+    /// Where Kadr's own recording controls are, so pressing Stop is not recorded as
+    /// something the user did *in* the recording (docs/09 U3.2).
+    var chromeOnScreen: @MainActor () -> [CGRect] {
+        get { telemetry.chromeOnScreen }
+        set { telemetry.chromeOnScreen = newValue }
+    }
+
     private let camera: CameraFileRecorder
     private var session: RecordingSession?
     /// When the session began, on the same clock the camera reports its first frame on.
