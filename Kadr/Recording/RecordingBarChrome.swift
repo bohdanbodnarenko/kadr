@@ -143,12 +143,15 @@ struct RecordingBarIcon: View {
 struct RecordingBarFilledCircleButton: View {
     let symbol: String
     var help: String = ""
+    /// Shown under the control on hover, the way every other bar button shows its key.
+    var key: String?
     let action: () -> Void
 
     var body: some View {
         RecordingBarCircleButton(
             symbol: symbol,
             help: help,
+            key: key,
             tint: RecordingBarMetrics.recordTint,
             action: action
         )

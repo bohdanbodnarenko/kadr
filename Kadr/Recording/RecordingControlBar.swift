@@ -314,12 +314,24 @@ final class RecordingControlBar {
 
     // MARK: - Window
 
+    /// Brings the bar forward and hands the keyboard to the view inside it.
+    ///
+    /// The `makeFirstResponder` is the half that is easy to miss: a key window whose
+    /// content view is not the first responder answers no keys at all, which is why the
+    /// recorder's Esc and its letters did nothing while its buttons worked.
+    private func takeKeyboard(_ panel: NSPanel) {
+        panel.makeKeyAndOrderFront(nil)
+        if let content = panel.contentView {
+            panel.makeFirstResponder(content)
+        }
+    }
+
     private func present(key: Bool) {
         if let panel {
             panel.alphaValue = 1
             panel.becomesKeyOnlyIfNeeded = !key
             if key {
-                panel.makeKeyAndOrderFront(nil)
+                takeKeyboard(panel)
             } else {
                 panel.orderFrontRegardless()
             }
@@ -362,7 +374,7 @@ final class RecordingControlBar {
         panel.becomesKeyOnlyIfNeeded = !key
         CaptureExclusionRegistry.shared.register(panel)
         if key {
-            panel.makeKeyAndOrderFront(nil)
+            takeKeyboard(panel)
         } else {
             panel.orderFrontRegardless()
         }

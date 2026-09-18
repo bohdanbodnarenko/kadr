@@ -9,6 +9,9 @@ import SwiftUI
 /// `RecordingControlBar` owns so Record can morph this into the countdown.
 struct RecordSetupView: View {
     @Bindable var model: RecordSetupModel
+    /// Focus has to be *given*, not merely allowed: `onKeyPress` and `onExitCommand` only
+    /// fire for a view that holds it, which is why Esc did nothing here.
+    @FocusState private var isFocused: Bool
 
     private static let timerOptions = [0, 1, 3, 5, 10]
 
@@ -26,6 +29,16 @@ struct RecordSetupView: View {
             recordButton
             closeButton
         }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .onAppear { isFocused = true }
+        // A click on the bar's own glass — anywhere that is not a control — puts the keys
+        // back, the way clicking a document window's canvas does.
+        .onTapGesture { isFocused = true }
+        .onKeyPress { press in
+            perform(press)
+        }
         .onExitCommand { model.escape() }
         .onAppear { model.refreshDevices() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -42,10 +55,58 @@ struct RecordSetupView: View {
         .kadrLayoutDirection()
     }
 
+    /// One key, one control — the same controls the mouse reaches (docs/03 §1.4).
+    private func perform(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.isEmpty else { return .ignored }
+        guard let key = RecordSetupKey.match(
+            press.characters,
+            isReturn: press.key == .return,
+            isEscape: press.key == .escape
+        ) else {
+            return .ignored
+        }
+        run(key)
+        return .handled
+    }
+
+    private func run(_ key: RecordSetupKey) {
+        switch key {
+        case .area, .window, .screen: arm(key)
+        case .microphone, .systemAudio, .camera: toggleInput(key)
+        case .clicks: model.settings.recordingShowsClicks.toggle()
+        case .keystrokes: model.settings.recordingShowsKeystrokes.toggle()
+        case .teleprompter: model.onTeleprompterComposer()
+        case .record:
+            // Nothing armed is not a failure to understand Return; it is a recorder with
+            // nothing to record, and starting one would be a surprise.
+            if model.armedTarget != nil {
+                model.record()
+            }
+        case .back: model.escape()
+        }
+    }
+
+    private func arm(_ key: RecordSetupKey) {
+        switch key {
+        case .area: model.requestAreaPick()
+        case .window: model.requestWindowPick()
+        default: model.armScreen(model.displays.first?.displayID ?? CGMainDisplayID())
+        }
+    }
+
+    private func toggleInput(_ key: RecordSetupKey) {
+        switch key {
+        case .microphone: model.requestMicrophoneEnabled(!model.settings.recordsMicrophone)
+        case .camera: model.requestCameraToggle()
+        default: model.settings.recordsSystemAudio.toggle()
+        }
+    }
+
     private var recordButton: some View {
         RecordingBarFilledCircleButton(
             symbol: "record.circle.fill",
-            help: "Start recording"
+            help: "Start recording",
+            key: RecordSetupKey.record.caption
         ) {
             model.record()
         }
@@ -99,6 +160,7 @@ struct RecordSetupView: View {
             RecordingBarCircleButton(
                 symbol: RecordTargetKind.screen.symbol,
                 help: "Select the whole screen",
+                key: RecordSetupKey.screen.caption,
                 isOn: model.isArmed(.screen)
             ) {
                 model.armScreen(model.displays.first?.displayID ?? CGMainDisplayID())
@@ -110,6 +172,7 @@ struct RecordSetupView: View {
         RecordingBarCircleButton(
             symbol: RecordTargetKind.window.symbol,
             help: windowHelp,
+            key: RecordSetupKey.window.caption,
             isOn: model.isArmed(.window)
         ) {
             model.requestWindowPick()
@@ -120,6 +183,7 @@ struct RecordSetupView: View {
         RecordingBarCircleButton(
             symbol: RecordTargetKind.area.symbol,
             help: model.isArmed(.area) ? "Area selected — click to choose another" : "Drag to select a region",
+            key: RecordSetupKey.area.caption,
             isOn: model.isArmed(.area)
         ) {
             model.requestAreaPick()
@@ -149,6 +213,7 @@ struct RecordSetupView: View {
             RecordingBarCircleButton(
                 symbol: model.settings.recordsSystemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill",
                 help: model.settings.recordsSystemAudio ? "System audio on" : "System audio off",
+                key: RecordSetupKey.systemAudio.caption,
                 isOn: model.settings.recordsSystemAudio
             ) {
                 model.settings.recordsSystemAudio.toggle()
@@ -161,6 +226,7 @@ struct RecordSetupView: View {
                 help: model.settings.recordingShowsClicks
                     ? "Click highlights on"
                     : "Click highlights off — a halo where you click",
+                key: RecordSetupKey.clicks.caption,
                 isOn: model.settings.recordingShowsClicks
             ) {
                 model.settings.recordingShowsClicks.toggle()
@@ -173,6 +239,7 @@ struct RecordSetupView: View {
                 help: model.settings.recordingShowsKeystrokes
                     ? "Keystroke overlay on — shortcuts appear on the recording"
                     : "Keystroke overlay off — turn on to show shortcuts on the video",
+                key: RecordSetupKey.keystrokes.caption,
                 isOn: model.settings.recordingShowsKeystrokes
             ) {
                 model.settings.recordingShowsKeystrokes.toggle()
@@ -185,6 +252,7 @@ struct RecordSetupView: View {
                 help: model.settings.teleprompterEnabled
                     ? "Teleprompter on — click to edit the script"
                     : "Teleprompter off — click to write a script",
+                key: RecordSetupKey.teleprompter.caption,
                 isOn: model.settings.teleprompterEnabled
             ) {
                 model.onTeleprompterComposer()
@@ -198,6 +266,7 @@ struct RecordSetupView: View {
         RecordingBarCircleButton(
             symbol: model.settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
             help: cameraHelp,
+            key: RecordSetupKey.camera.caption,
             isOn: model.settings.recordingShowsWebcam
         ) {
             model.requestCameraToggle()

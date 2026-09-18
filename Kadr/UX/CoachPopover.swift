@@ -56,14 +56,31 @@ final class CoachPopover: NSObject, NSPopoverDelegate {
         // never does, so finish the teardown here too.
         if popover?.isShown != true {
             finish()
+            return
+        }
+        // And if the animation's callback never comes, go anyway. `performClose` on a
+        // popover belonging to an inactive app — which Kadr is for most of a tip's life —
+        // can animate nowhere and report nothing, and a tip that will not leave is worse
+        // than one that leaves abruptly.
+        closeFallback?.cancel()
+        closeFallback = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, !Task.isCancelled, popover != nil else { return }
+            popover?.close()
+            finish()
         }
     }
+
+    /// Makes sure a closing tip is gone even if AppKit never says so.
+    private var closeFallback: Task<Void, Never>?
 
     func popoverDidClose(_ notification: Notification) {
         finish()
     }
 
     private func finish() {
+        closeFallback?.cancel()
+        closeFallback = nil
         guard popover != nil else { return }
         popover?.contentViewController = nil
         popover?.delegate = nil
