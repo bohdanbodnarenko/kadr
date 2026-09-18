@@ -13,13 +13,10 @@ extension ScrollCaptureCoordinator {
     func presentEditor(on screen: NSScreen, aroundWindow window: ScreenRect?) {
         let editor = ScrollRegionEditor(screen: screen)
         editor.onStart = { [weak self] rect in
-            guard let self else { return }
-            guard let display = Self.geometry(for: rect) else {
-                dismissStage()
-                finish(nil)
-                return
-            }
-            start(region: rect, display: display)
+            self?.startStaged(rect, auto: false)
+        }
+        editor.onStartAuto = { [weak self] rect in
+            self?.startStaged(rect, auto: true)
         }
         editor.onCancel = { [weak self] in
             self?.stage = nil
@@ -27,6 +24,16 @@ extension ScrollCaptureCoordinator {
         }
         stage = editor
         editor.present(aroundWindow: window)
+    }
+
+    /// Begins the capture the frame was set for, either tier.
+    private func startStaged(_ rect: DisplayRect, auto: Bool) {
+        guard let display = Self.geometry(for: rect) else {
+            dismissStage()
+            finish(nil)
+            return
+        }
+        start(region: rect, display: display, auto: auto)
     }
 
     func dismissStage() {

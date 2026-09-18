@@ -62,6 +62,32 @@ public struct AutoScroller: Sendable {
         postScroll(at: point, wheel1: 0, wheel2: Int32(-configuration.pointsPerStep))
     }
 
+    /// Sends one step as a glide: several small pulses, a display frame apart.
+    ///
+    /// The single large wheel event that `step` posts is what many apps read as a flick —
+    /// they add momentum, carry on past it, and the frame grabbed next shows a page still
+    /// moving. Pulses of at most `AutoScrollPlan.maximumPulsePoints` move the same distance
+    /// with the page under control, which is what keeps a seam from landing mid-slide.
+    public func glide(
+        at point: CGPoint,
+        step: Int,
+        axis: ScrollAxis,
+        gapMilliseconds: Int = AutoScrollPlan.pulseGapMilliseconds
+    ) async {
+        for pulse in AutoScrollPlan.pulses(forStep: step) {
+            if Task.isCancelled {
+                return
+            }
+            switch axis {
+            case .vertical:
+                postScroll(at: point, wheel1: Int32(-pulse), wheel2: 0)
+            case .horizontal:
+                postScroll(at: point, wheel1: 0, wheel2: Int32(-pulse))
+            }
+            try? await Task.sleep(for: .milliseconds(gapMilliseconds))
+        }
+    }
+
     private func postScroll(at point: CGPoint, wheel1: Int32, wheel2: Int32) {
         guard let event = CGEvent(
             scrollWheelEvent2Source: nil,

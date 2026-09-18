@@ -23,6 +23,8 @@ final class ScrollRegionEditor {
     private var keyMonitor: Any?
 
     var onStart: (DisplayRect) -> Void = { _ in }
+    /// Start, and let Kadr do the scrolling.
+    var onStartAuto: (DisplayRect) -> Void = { _ in }
     var onCancel: () -> Void = {}
 
     /// The last frame on each display this session, so a second capture starts there.
@@ -99,10 +101,21 @@ final class ScrollRegionEditor {
     }
 
     private func start() {
-        guard let rect = currentRect else { return }
+        guard let rect = staged() else { return }
+        onStart(rect)
+    }
+
+    private func startAuto() {
+        guard let rect = staged() else { return }
+        onStartAuto(rect)
+    }
+
+    /// Locks the frame and hands back the region it covers, in display space.
+    private func staged() -> DisplayRect? {
+        guard let rect = currentRect else { return nil }
         let global = ScreenRect(cgRect: rect.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY))
         lock()
-        onStart(global.inDisplaySpace(.current))
+        return global.inDisplaySpace(.current)
     }
 
     private func cancel() {
@@ -118,7 +131,8 @@ final class ScrollRegionEditor {
             purpose: .scrolling,
             pixelSize: CGSize(width: rect.width * scale, height: rect.height * scale),
             start: { [weak self] in self?.start() },
-            cancel: { [weak self] in self?.cancel() }
+            cancel: { [weak self] in self?.cancel() },
+            startAuto: { [weak self] in self?.startAuto() }
         )
     }
 
@@ -168,7 +182,11 @@ final class ScrollRegionEditor {
             guard let self, controls != nil else { return event }
             switch event.keyCode {
             case 36, 76:
-                start()
+                if event.modifierFlags.contains(.option) {
+                    startAuto()
+                } else {
+                    start()
+                }
                 return nil
             case 53:
                 cancel()

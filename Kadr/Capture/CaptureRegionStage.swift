@@ -166,6 +166,8 @@ struct CaptureRegionStageView: View {
     let pixelSize: CGSize
     let start: () -> Void
     let cancel: () -> Void
+    /// Start, with Kadr doing the scrolling. Only scrolling capture offers one.
+    var startAuto: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -179,6 +181,17 @@ struct CaptureRegionStageView: View {
             .tint(purpose == .recording ? Color(nsColor: .systemRed) : .accentColor)
             .controlSize(.large)
             .keyboardShortcut(.defaultAction)
+
+            if let startAuto {
+                Button(action: startAuto) {
+                    Label("Auto Scroll to the End", systemImage: "play.circle")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .keyboardShortcut(.return, modifiers: .option)
+                .help("Kadr scrolls the page itself and stops when it runs out (⌥↩)")
+            }
 
             Text("\(Int(pixelSize.width.rounded())) × \(Int(pixelSize.height.rounded())) px")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())

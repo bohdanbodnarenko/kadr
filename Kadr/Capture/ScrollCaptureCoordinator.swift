@@ -16,7 +16,7 @@ import Shared
 /// helper, so the agent never holds a long page.
 @MainActor
 @Observable
-final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_length
+final class ScrollCaptureCoordinator {
     enum State: Equatable {
         case idle
         /// Frames are being grabbed while the page scrolls.
@@ -28,11 +28,11 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
     /// Internal so the frame editor (`+Stage`) can find the window under the pointer.
     @ObservationIgnored let captureEngine: CaptureEngine
     @ObservationIgnored private let permissions: PermissionCoordinator
-    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let output: CaptureOutput
     @ObservationIgnored private let vision = VisionClient()
     @ObservationIgnored private let session = ScrollCaptureSession()
-    @ObservationIgnored private let scroller = AutoScroller()
+    @ObservationIgnored let scroller = AutoScroller()
     /// Internal, not private: the seam-review half lives in
     /// `ScrollCaptureCoordinator+Seams.swift`, and `private` is file-scoped.
     @ObservationIgnored let logger = KadrLog.logger(.capture)
@@ -42,19 +42,23 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
     private(set) var frameCount = 0
     /// The running sketch of the page so far.
     private(set) var preview: CGImage?
-    /// Set while Kadr is doing the scrolling itself.
-    private(set) var isAutoScrolling = false
+    /// Set while Kadr is doing the scrolling itself. Written only by the auto tier
+    /// (`ScrollCaptureCoordinator+Auto.swift`), which is another file, so not `private(set)`.
+    var isAutoScrolling = false
 
     @ObservationIgnored private let strip = ScrollPreviewStrip()
     @ObservationIgnored private var hud: ScrollCaptureHUD?
     /// The picked area, dimmed around, waiting for Start (`ScrollCaptureCoordinator+Stage`).
     @ObservationIgnored var stage: ScrollRegionEditor?
-    @ObservationIgnored private var autoScrollTask: Task<Void, Never>?
-    @ObservationIgnored private var lastRowProfile: RowProfile?
-    @ObservationIgnored private var lastColumnProfile: ColumnProfile?
+    @ObservationIgnored var autoScrollTask: Task<Void, Never>?
+    /// Bumped by every frame that lands, so the auto tier can tell a fresh frame from the
+    /// one it already judged.
+    @ObservationIgnored var frameSequence = 0
+    @ObservationIgnored var lastRowProfile: RowProfile?
+    @ObservationIgnored var lastColumnProfile: ColumnProfile?
     @ObservationIgnored private var sticky = StickyBands.none
     @ObservationIgnored private var stickyResolved = false
-    @ObservationIgnored private var region: (rect: DisplayRect, display: DisplayGeometry)?
+    @ObservationIgnored var region: (rect: DisplayRect, display: DisplayGeometry)?
 
     /// Where the finished page lands: the same Quick Access path as any other capture.
     var onFinished: ((URL, PixelSize) -> Void)?
@@ -143,7 +147,9 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         start(region: global, display: geometry)
     }
 
-    func start(region rect: DisplayRect, display: DisplayGeometry) {
+    /// - Parameter auto: true when the user asked for the auto tier on the way in. The
+    ///   setting is the standing preference; this is the button they just pressed.
+    func start(region rect: DisplayRect, display: DisplayGeometry, auto: Bool = false) {
         sessionToken += 1
         region = (rect, display)
         lastRowProfile = nil
@@ -170,7 +176,7 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
                 await strip.begin(frameSize: session.pixelSize, axis: settings.scrollAxis)
                 state = .capturing
                 showHUD(over: rect, on: display)
-                if usesAutoScroll {
+                if auto || usesAutoScroll {
                     startAutoScroll(in: rect, on: display)
                 }
                 logger.info("Scrolling capture started")
@@ -200,6 +206,7 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
     /// page has run out.
     private func received(_ note: ScrollCaptureSession.ScrollFrameNote) {
         frameCount = note.index + 1
+        frameSequence += 1
 
         switch settings.scrollAxis {
         case .vertical:
@@ -277,61 +284,6 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
             frameExtent: note.columnProfile.width
         )
         preview = strip.image
-    }
-
-    // MARK: - The auto tier
-
-    /// Scrolls the target itself, stopping when the page stops changing (docs/04 §4.4).
-    private func startAutoScroll( // swiftlint:disable:this cyclomatic_complexity
-        in rect: DisplayRect,
-        on display: DisplayGeometry
-    ) {
-        guard AutoScroller.isTrusted else {
-            // Asking now rather than at launch is the whole policy (docs/04 §3.2). The
-            // grant only takes effect next time, so this run stays assisted.
-            AutoScroller.requestTrust()
-            explainAccessibility()
-            return
-        }
-
-        isAutoScrolling = true
-        let centre = centrePoint(of: rect, on: display)
-        let configuration = AutoScroller.Configuration(pointsPerStep: settings.scrollStepPoints)
-
-        autoScrollTask = Task { [weak self] in
-            guard let self else { return }
-            var detector = ScrollSettleDetector(axis: settings.scrollAxis)
-            for _ in 0 ..< configuration.maximumSteps {
-                if Task.isCancelled {
-                    return
-                }
-                switch settings.scrollAxis {
-                case .vertical:
-                    scroller.step(at: centre, configuration: configuration)
-                case .horizontal:
-                    scroller.stepHorizontally(at: centre, configuration: configuration)
-                }
-                try? await Task.sleep(for: .milliseconds(configuration.settleMilliseconds))
-                if Task.isCancelled {
-                    return
-                }
-                let settled: Bool
-                switch settings.scrollAxis {
-                case .vertical:
-                    guard let profile = lastRowProfile else { continue }
-                    settled = detector.settled(with: profile)
-                case .horizontal:
-                    guard let profile = lastColumnProfile else { continue }
-                    settled = detector.settled(with: profile)
-                }
-                if settled {
-                    logger.info("Auto-scroll settled; the page has run out")
-                    break
-                }
-            }
-            isAutoScrolling = false
-            stop()
-        }
     }
 
     // MARK: - Stopping

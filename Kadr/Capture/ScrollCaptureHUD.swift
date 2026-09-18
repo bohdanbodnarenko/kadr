@@ -30,7 +30,15 @@ final class ScrollCaptureHUD {
             coordinator: coordinator,
             settings: settings,
             stop: { [weak self] in self?.coordinator.stop() },
-            cancel: { [weak self] in self?.coordinator.cancel() }
+            cancel: { [weak self] in self?.coordinator.cancel() },
+            toggleAuto: { [weak self] in
+                guard let self else { return }
+                if coordinator.isAutoScrolling {
+                    coordinator.stopAutoScroll()
+                } else {
+                    coordinator.beginAutoScroll()
+                }
+            }
         )
         let hosting = NSHostingView(rootView: view)
         hosting.frame = NSRect(x: 0, y: 0, width: Self.width, height: 360)
@@ -86,6 +94,7 @@ struct ScrollCaptureHUDView: View {
     @Bindable var settings: AppSettings
     let stop: () -> Void
     let cancel: () -> Void
+    let toggleAuto: () -> Void
     var isStitching = false
 
     var body: some View {
@@ -117,6 +126,8 @@ struct ScrollCaptureHUDView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            autoButton
+
             HStack {
                 Button("Cancel", action: cancel)
                     .disabled(isStitching)
@@ -129,6 +140,28 @@ struct ScrollCaptureHUDView: View {
         .padding(12)
         .frame(width: 240)
         .kadrLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous), interactive: true)
+    }
+
+    /// Hands the scrolling to Kadr, and back again.
+    ///
+    /// Full width and above the Cancel / Stop row: it is the thing most people came for,
+    /// and it used to be reachable only by finding a checkbox in Settings ▸ Capture before
+    /// starting the capture.
+    private var autoButton: some View {
+        Button(action: toggleAuto) {
+            Label(
+                coordinator.isAutoScrolling ? "Scrolling — Take Over" : "Auto Scroll",
+                systemImage: coordinator.isAutoScrolling ? "hand.raised" : "play.circle"
+            )
+            .frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .buttonStyle(.borderedProminent)
+        .disabled(isStitching || (!coordinator.isAutoScrolling && !coordinator.canAutoScroll))
+        .help(coordinator.isAutoScrolling
+            ? "Stop scrolling for me — I'll carry on by hand"
+            : "Kadr scrolls to the end of the page on its own")
+        .accessibilityHint("Kadr scrolls the page itself, and stops when the page runs out")
     }
 
     private var header: some View {
