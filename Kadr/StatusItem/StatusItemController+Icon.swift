@@ -11,7 +11,7 @@ extension StatusItemController {
             isTemplate: true,
             title: "",
             length: NSStatusItem.squareLength,
-            toolTip: "Kadr"
+            toolTip: "Kadr — click to capture, right-click for the menu"
         ))
         attachIdleMenu()
     }
@@ -98,7 +98,8 @@ extension StatusItemController {
         return image
     }
 
-    /// Idle: Option-click opens All-in-One; otherwise the menu opens (docs/03 §8.1).
+    /// Idle: a click opens the capture island; right-click, ⌃-click or ⌥-click opens the
+    /// short menu (docs/03 §8.1).
     func attachIdleMenu() {
         attachClick(#selector(didClickIdleStatusItem))
     }
@@ -120,18 +121,41 @@ extension StatusItemController {
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
+    /// The island is the primary surface; the menu is for library, settings and quitting.
+    ///
+    /// The menu used to be the click target and carried every capture mode, utility and
+    /// overlay command — twenty-odd rows before anything useful. Every one of those modes
+    /// is a single key inside the island, so the island is what a click opens.
     @objc
     func didClickIdleStatusItem() {
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
+        onIconClicked?()
+        if Self.clickOpensMenu(NSApp.currentEvent) {
             popIdleMenu()
-            return
-        }
-        if event?.modifierFlags.contains(.option) == true {
+        } else {
             perform(.allInOne)
-            return
         }
-        popIdleMenu()
+    }
+
+    /// Right-click, ⌃-click and ⌥-click all mean "the menu" — the three gestures macOS
+    /// users try when a status item does something other than open one.
+    static func clickOpensMenu(_ event: NSEvent?) -> Bool {
+        guard let event else { return false }
+        if event.type == .rightMouseUp {
+            return true
+        }
+        return !event.modifierFlags.isDisjoint(with: [.control, .option])
+    }
+
+    /// VoiceOver and Full Keyboard Access press the button, which opens the island; the
+    /// menu needs its own way in, or it is reachable only with a mouse.
+    func installMenuAccessibilityAction() {
+        guard let button = statusItem.button else { return }
+        let action = NSAccessibilityCustomAction(name: "Show Kadr Menu") { [weak self] in
+            self?.popIdleMenu()
+            return true
+        }
+        button.setAccessibilityCustomActions([action])
+        button.setAccessibilityHelp("Opens the capture island. Use the actions rotor for the menu.")
     }
 
     func popIdleMenu() {

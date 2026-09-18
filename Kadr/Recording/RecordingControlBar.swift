@@ -43,6 +43,9 @@ final class RecordingControlBar {
     /// been unplugged has to come back somewhere visible rather than off the desk.
     static var savedOrigin: CGPoint?
 
+    /// Set only while a hand-off from the All-in-One island creates the panel.
+    private var entranceOrigin: CGPoint?
+
     /// Distance from the bottom of the visible frame to the bar (not the panel).
     private static let bottomInset: CGFloat = 48
     private static let edgeMargin: CGFloat = 12
@@ -85,7 +88,9 @@ final class RecordingControlBar {
         chrome == .notch && screenHasNotch && isLiveSession
     }
 
-    func showPicker(model picker: RecordSetupModel) {
+    /// - Parameter source: the All-in-One island's glass in screen space, when Record was
+    ///   picked there. The bar opens on top of it at its size and morphs into itself.
+    func showPicker(model picker: RecordSetupModel, morphingFrom source: NSRect? = nil) {
         hideTask?.cancel()
         hideTask = nil
         if panel != nil, panelDocksToNotch {
@@ -95,14 +100,72 @@ final class RecordingControlBar {
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
+        let morphs = panel == nil && source != nil && !AccessibilityChrome.reduceMotion
+        if morphs, let source {
+            model.entranceSize = source.size
+            entranceOrigin = Self.panelOrigin(barBottomCentre: CGPoint(x: source.midX, y: source.minY))
+        }
         setContents(picker: picker, session: nil, preRoll: nil, settings: nil)
         present(key: true)
+        entranceOrigin = nil
+        if morphs {
+            finishEntrance()
+        }
     }
 
-    func dismissPicker() {
-        guard isShowingPicker else { return }
-        dismiss()
+    /// Where a panel goes so its bar's bottom edge is centred on `point`.
+    static func panelOrigin(barBottomCentre point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: point.x - panelSize.width / 2,
+            y: point.y - RecordingBarMetrics.shadowSlack
+        )
     }
+
+    /// The second half of the hand-off: the glass springs to the picker's width, and the
+    /// window glides to where the recording bar lives if that is somewhere else.
+    private func finishEntrance() {
+        // A turn later, so the first frame is drawn at the island's size to spring from.
+        Task { @MainActor [weak self] in
+            guard let self, let panel else { return }
+            withAnimation(RecordingBarMetrics.modeChange) {
+                model.entranceSize = nil
+            }
+            let destination = floatingFrame()
+            guard !panel.frame.equalTo(destination) else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.34
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
+                context.allowsImplicitAnimation = true
+                panel.animator().setFrame(destination, display: true)
+            }
+        }
+    }
+
+    /// - Parameter fading: fade the bar out first, for a hand-back to the capture island
+    ///   that fades in on the same spot.
+    func dismissPicker(fading: Bool = false) {
+        guard isShowingPicker else { return }
+        guard fading, !AccessibilityChrome.reduceMotion, let panel else {
+            dismiss()
+            return
+        }
+        hideTask?.cancel()
+        RecordingBarHoverView.endActiveHover()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.handBackFade
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }
+        // Torn down once the fade is over; `showPicker` cancels this if the recorder is
+        // asked for again first, and `present` restores the alpha.
+        hideTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(Self.handBackFade + 0.03))
+            guard !Task.isCancelled else { return }
+            self?.teardownPanel()
+        }
+    }
+
+    private static let handBackFade: TimeInterval = 0.16
 
     func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         hideTask?.cancel()
@@ -253,6 +316,7 @@ final class RecordingControlBar {
 
     private func present(key: Bool) {
         if let panel {
+            panel.alphaValue = 1
             panel.becomesKeyOnlyIfNeeded = !key
             if key {
                 panel.makeKeyAndOrderFront(nil)
@@ -266,9 +330,13 @@ final class RecordingControlBar {
             return
         }
 
-        let frame = model.docksToNotch
-            ? notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
-            : floatingFrame()
+        let frame = if model.docksToNotch {
+            notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+        } else if let entranceOrigin {
+            NSRect(origin: entranceOrigin, size: Self.panelSize)
+        } else {
+            floatingFrame()
+        }
         let hosting = RecordingBarHostingView(rootView: RecordingControlBarView(model: model))
         configureHosting(hosting)
         hosting.frame = NSRect(origin: .zero, size: frame.size)
@@ -338,6 +406,7 @@ final class RecordingControlBar {
         model.session = nil
         model.preRoll = nil
         model.barFrameInPanel = .zero
+        model.entranceSize = nil
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false

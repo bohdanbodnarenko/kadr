@@ -5,9 +5,13 @@ import Shared
 ///
 /// Properties write through on mutation, so a crash never loses a preference and
 /// `defaults` on the command line always reflects the UI.
+///
+/// Long by nature: one stored, observed property per preference, and Swift does not allow
+/// stored properties in extensions, so the list cannot be split without splitting the
+/// observation too.
 @MainActor
 @Observable
-public final class AppSettings {
+public final class AppSettings { // swiftlint:disable:this type_body_length
     @ObservationIgnored let store: UserDefaults
 
     public var hasCompletedOnboarding: Bool {
@@ -167,6 +171,14 @@ public final class AppSettings {
     /// Whether the first-capture tip has been shown (docs/03 §2).
     public var hasSeenQuickAccessTip: Bool {
         didSet { store[SettingKeys.hasSeenQuickAccessTip] = hasSeenQuickAccessTip }
+    }
+
+    public var hasSeenMenuBarHint: Bool {
+        didSet { store[SettingKeys.hasSeenMenuBarHint] = hasSeenMenuBarHint }
+    }
+
+    public var hasSeenIslandTour: Bool {
+        didSet { store[SettingKeys.hasSeenIslandTour] = hasSeenIslandTour }
     }
 
     public var recordingShowsControlBar: Bool {
@@ -423,6 +435,8 @@ public final class AppSettings {
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
         recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
         hasSeenQuickAccessTip = store[SettingKeys.hasSeenQuickAccessTip]
+        hasSeenMenuBarHint = store[SettingKeys.hasSeenMenuBarHint]
+        hasSeenIslandTour = store[SettingKeys.hasSeenIslandTour]
         recordingShowsControlBar = store[SettingKeys.recordingShowsControlBar]
         recordingControlChrome = store[SettingKeys.recordingControlChrome]
         recordingCountdownSeconds = store[SettingKeys.recordingCountdownSeconds]

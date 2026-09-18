@@ -53,7 +53,14 @@ private struct RecordingFloatingBar: View {
         // a fading-out set would hold its width and the bar would bulge to fit both.
         .transition(.asymmetric(insertion: .opacity, removal: .identity))
         .padding(.horizontal, RecordingBarMetrics.horizontalPadding)
-        .frame(height: RecordingBarMetrics.barHeight)
+        // Arriving from the All-in-One island: the glass starts at that island's size with
+        // the controls hidden, then springs to its own while they fade in — one capsule
+        // changing shape rather than one window swapped for another.
+        .opacity(model.entranceSize == nil ? 1 : 0)
+        .frame(
+            width: model.entranceSize?.width,
+            height: model.entranceSize?.height ?? RecordingBarMetrics.barHeight
+        )
         .recordingBarGlass()
         .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
         .overlay { RecordingBarTooltipLayer(tooltip: tooltip) }

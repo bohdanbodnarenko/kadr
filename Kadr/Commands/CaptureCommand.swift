@@ -109,32 +109,25 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         }
     }
 
-    /// Commands the menu offers directly. Repeat-the-last-region and the capture-and-action
-    /// family are hotkey-only, so they stay off the menu (docs/03 §8.1).
-    static var menuCommands: [CaptureCommand] {
+    /// How Settings ▸ Shortcuts groups every command (docs/03 §8.3).
+    ///
+    /// The one list of them. The menu-bar menu no longer lists capture commands — the
+    /// island does — so these groups exist for the recorder pane, and a test holds them to
+    /// covering every case exactly once: a command missing here is a command whose
+    /// shortcut nobody can set, now that most of them ship without one.
+    static var shortcutSections: [(title: String, commands: [CaptureCommand])] {
         [
-            .allInOne,
-            .captureArea,
-            .captureWindow,
-            .captureFullscreen,
-            .captureScrolling,
-            .captureText,
-            .pickColor
+            ("Capture", [
+                .allInOne, .captureArea, .captureWindow, .captureFullscreen,
+                .captureScrolling, .captureText, .pickColor, .capturePreviousArea,
+                .captureAreaAndCopy, .captureAreaAndSave
+            ]),
+            ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording]),
+            ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
+            ("Overlays and Pins", [
+                .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins
+            ]),
+            ("Library", [.openHistory, .openSaveFolder])
         ]
-    }
-
-    /// Freeze and desktop hygiene, grouped under the capture actions (docs/03 §7).
-    static var utilityCommands: [CaptureCommand] {
-        [.selfTimer, .freezeScreen, .toggleDesktopIcons]
-    }
-
-    /// Overlay stack commands, grouped under History in the menu (CleanShot §6.3).
-    static var overlayCommands: [CaptureCommand] {
-        [.saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard]
-    }
-
-    /// The recording commands, which the menu groups separately (docs/03 §1.8).
-    static var recordingCommands: [CaptureCommand] {
-        [.recordRegion, .recordDisplay]
     }
 }

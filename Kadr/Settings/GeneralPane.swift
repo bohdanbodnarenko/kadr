@@ -12,6 +12,7 @@ struct GeneralPane: View {
     let loginItem: LoginItemController
 
     @State private var loginItemStatus: FeedbackStatus?
+    @State private var tipsStatus: FeedbackStatus?
 
     private let logger = KadrLog.logger(.settings)
 
@@ -34,6 +35,22 @@ struct GeneralPane: View {
                 }
                 ControlInlineStatus(status: loginItemStatus) {
                     loginItemStatus = nil
+                }
+            }
+
+            Section {
+                LabeledContent("First-run tips") {
+                    Button("Show Tips Again") {
+                        settings.hasSeenMenuBarHint = false
+                        settings.hasSeenIslandTour = false
+                        settings.hasSeenQuickAccessTip = false
+                        tipsStatus = .done("They'll appear next launch, and on the next island and capture.")
+                    }
+                    .disabled(!settings.hasSeenMenuBarHint && !settings.hasSeenIslandTour
+                        && !settings.hasSeenQuickAccessTip)
+                }
+                ControlInlineStatus(status: tipsStatus) {
+                    tipsStatus = nil
                 }
             }
 

@@ -79,7 +79,13 @@ extension AppDelegate {
         case .selfTimer:
             areaCapture.beginSelfTimedAreaCapture()
         case .allInOne:
-            allInOne.toggle()
+            // One key for "show me the capture modes": opens or closes the island, and
+            // from the recorder steps back to it rather than stacking a second bar.
+            if recordingControlBar.isShowingPicker {
+                recordSetup.goBack()
+            } else {
+                allInOne.toggle()
+            }
         default:
             return false
         }
@@ -120,6 +126,21 @@ extension AppDelegate {
         return true
     }
 
+    /// The island's tools menu (docs/03 §1.4, §7). Each is the command the menu-bar menu
+    /// used to list, so a hotkey, the URL scheme and the island all run the same code.
+    func performAllInOneTool(_ tool: AllInOneTool) {
+        switch tool {
+        case .previousArea: perform(.capturePreviousArea)
+        case .selfTimer: perform(.selfTimer)
+        case .freezeScreen: perform(.freezeScreen)
+        case .desktopIcons: perform(.toggleDesktopIcons)
+        case .pinClipboard: perform(.pinClipboard)
+        case .systemPicker: areaCapture.captureWithSystemPicker()
+        case .captureFolder: perform(.openSaveFolder)
+        case .history: perform(.openHistory)
+        }
+    }
+
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
         let frontmost = allInOne.frontmostBeforePresent
@@ -128,7 +149,13 @@ extension AppDelegate {
         case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
         case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
         case .screen: areaCapture.captureAllDisplays()
-        case .record: recordSetup.toggle()
+        case .record:
+            let source = allInOne.takeHandOffFrame()
+            if recordSetup.isShowing {
+                recordSetup.toggle()
+            } else {
+                recordSetup.present(morphingFrom: source)
+            }
         case .gif: recording.beginGIFRecording()
         case .scrolling: scrollCapture.begin()
         case .ocr: areaCapture.beginOverlayCapture(mode: .area, purpose: .recognizeText, frontmost: frontmost)
@@ -229,10 +256,11 @@ extension AppDelegate {
 
     /// Reopens onboarding, which is also how the user recovers a revoked grant.
     func showOnboarding() {
-        // Replaying the welcome re-arms the card tip too. Somebody asking to be shown the
-        // introduction again is asking about the whole app, and the one explanation that
-        // only appears over a real capture is the part they are most likely to have missed.
-        settings.hasSeenQuickAccessTip = false
+        // Replaying the welcome re-arms every tip too. Somebody asking to be shown the
+        // introduction again is asking about the whole app, and the explanations that only
+        // appear over the real thing are the parts they are most likely to have missed.
+        coachMarks.resetAll()
+        onboarding.onClosed = { [weak self] in self?.scheduleMenuBarHint() }
         onboarding.show()
     }
 

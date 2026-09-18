@@ -24,6 +24,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window != nil
     }
 
+    /// Fired when the welcome closes and is not waiting on a relaunch.
+    var onClosed: (() -> Void)?
+
     init(model: OnboardingModel, settings: AppSettings, juggler: ActivationJuggler = .shared) {
         self.model = model
         self.settings = settings
@@ -92,6 +95,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             if !settings.hasCompletedOnboarding {
                 settings.hasCompletedOnboarding = true
             }
+            onClosed?()
         }
         window?.delegate = nil
         window?.contentView = nil

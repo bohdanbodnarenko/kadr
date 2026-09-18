@@ -18,10 +18,10 @@ import UniformTypeIdentifiers
 @MainActor
 @Suite("Scrolling capture")
 struct ScrollCaptureTests {
-    @Test("Scrolling capture is a first-class command with a shortcut of its own")
+    @Test("Scrolling capture is a first-class command Settings can bind")
     func commandExists() {
         #expect(CaptureCommand.allCases.contains(.captureScrolling))
-        #expect(CaptureCommand.menuCommands.contains(.captureScrolling))
+        #expect(CaptureCommand.shortcutSections.flatMap(\.commands).contains(.captureScrolling))
         #expect(CaptureCommand.captureScrolling.shortcutName.rawValue == "captureScrolling")
     }
 

@@ -54,8 +54,9 @@ public struct PickableWindow: Sendable, Hashable, Identifiable {
 /// order, Tab cycling and the "same app" rule are behaviour worth testing, and none of
 /// it needs a screen.
 public struct WindowPickInteraction: Equatable, Sendable {
-    /// Windows in front-to-back order, which is the order `SCShareableContent` returns
-    /// them in and the order hit-testing must respect.
+    /// Windows in front-to-back order, which hit-testing relies on. `CaptureEngine`
+    /// sorts them by the window server's stack (`WindowStackOrder`); ScreenCaptureKit's
+    /// own list is not in that order.
     public private(set) var windows: [PickableWindow]
     public private(set) var hoveredID: CGWindowID?
     /// When false, auxiliary windows (layer 1…8) are hidden until ⌘ is held.
@@ -135,8 +136,8 @@ public struct WindowPickInteraction: Equatable, Sendable {
 
 /// A window offered for picking, in global display space.
 ///
-/// This is what callers hand over — straight out of `SCShareableContent` — and the
-/// overlay maps it onto whichever displays show it.
+/// This is what callers hand over — from `CaptureEngine.shareableContent()`, already front
+/// to back — and the overlay maps it onto whichever displays show it.
 public struct PickableWindowDescriptor: Sendable, Hashable {
     public let id: CGWindowID
     public let title: String?

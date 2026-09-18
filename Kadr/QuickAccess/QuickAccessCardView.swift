@@ -282,7 +282,12 @@ struct QuickAccessCardView: View {
                     suggestedName: item.filename,
                     contentType: item.contentType,
                     resolve: actions.resolveForDrag,
-                    completed: actions.dragCompleted
+                    completed: actions.dragCompleted,
+                    // Where the capture is right now — the staging folder for a card that
+                    // has not been acted on yet. Promise-aware receivers never look at it,
+                    // but the many that only read `public.file-url` (browsers, Electron
+                    // apps) got nothing at all without it (docs/16 OUT-6).
+                    stableFileURL: item.fileURL
                 )
             },
             dragImage: {

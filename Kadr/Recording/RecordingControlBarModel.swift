@@ -40,6 +40,9 @@ final class RecordingControlBarModel {
     /// The transport has turned into "Discard this recording?". Shared by both chromes so
     /// the notch stays expanded while it is asking.
     var isConfirmingDiscard = false
+    /// The size the bar opens at when it takes over from the All-in-One island, before it
+    /// springs to its own width. Nil the rest of the time.
+    var entranceSize: CGSize?
     /// The bar's frame inside the panel, reported by SwiftUI. Not observed: nothing
     /// renders from it, and it changes every frame of a morph.
     @ObservationIgnored var barFrameInPanel: CGRect = .zero

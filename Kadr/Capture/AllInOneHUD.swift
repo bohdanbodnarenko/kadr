@@ -9,7 +9,7 @@ import SwiftUI
 /// The All-in-One capture strip (docs/03 §1.4, CleanShot §5).
 ///
 /// One shortcut, one compact HUD, then a mode. Hotkeys stay the fast path; this is the
-/// discoverable one — and the thing Option-click on the menu bar extra opens.
+/// discoverable one — and what a click on the menu-bar icon opens (docs/03 §8.1).
 ///
 /// Its own panel, not the recording bar: mixing the two meant starting a recording from
 /// here tore down a stills HUD, and the other way around left the recorder looking like
@@ -23,9 +23,13 @@ final class AllInOneHUD {
     init(
         settings: AppSettings,
         perform: @escaping (AllInOneMode) -> Void,
-        pickDisplay: @escaping (CGDirectDisplayID) -> Void = { _ in }
+        pickDisplay: @escaping (CGDirectDisplayID) -> Void = { _ in },
+        performTool: @escaping (AllInOneTool) -> Void = { _ in },
+        desktopIconsHidden: @escaping () -> Bool = { false }
     ) {
         model = AllInOneModel(settings: settings, perform: perform, pickDisplay: pickDisplay)
+        model.onTool = performTool
+        model.desktopIconsHidden = desktopIconsHidden
     }
 
     var isShowing: Bool {
@@ -34,6 +38,11 @@ final class AllInOneHUD {
 
     /// Fired when the HUD appears or goes away, so the menu bar can show the armed state.
     var onShowingChanged: (() -> Void)?
+    /// A new island is on screen: its hosting view and the glass inside it, for the
+    /// first-open tour to point at.
+    var onPresented: ((NSView, NSRect) -> Void)?
+    /// The island is going away, however it was closed.
+    var onClosed: (() -> Void)?
 
     func toggle() {
         if isShowing {
@@ -45,17 +54,20 @@ final class AllInOneHUD {
 
     var frontmostBeforePresent: AppIdentity?
 
-    func present() {
+    /// - Parameter source: the recorder's bar in screen space, when the island is coming
+    ///   back from it. The island fades in on that spot rather than jumping to its own.
+    func present(morphingFrom source: NSRect? = nil) {
         model.onCancel = { [weak self] in self?.dismiss() }
         model.onPicked = { [weak self] in self?.dismiss() }
+        model.onHandOff = { [weak self] in self?.handOff() }
 
         if frontmostBeforePresent == nil {
             frontmostBeforePresent = AreaCaptureCoordinator.currentFrontmostApp()
         }
 
         if let panel {
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            panel.alphaValue = 1
+            takeKeyboard(panel)
             return
         }
 
@@ -66,26 +78,138 @@ final class AllInOneHUD {
 
         let panel = NonActivatingPanel(contentRect: hosting.frame, level: .floating)
         panel.contentView = hosting
-        panel.setFrame(Self.centeredFrame(for: size), display: false)
+        let fadesIn = source != nil && !AccessibilityChrome.reduceMotion
+        panel.setFrame(source.map { Self.frame(for: size, onBar: $0) } ?? Self.centeredFrame(for: size), display: false)
+        if fadesIn {
+            panel.alphaValue = 0
+        }
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovable = true
         panel.isMovableByWindowBackground = true
         CaptureExclusionRegistry.shared.register(panel)
-        panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        takeKeyboard(panel)
+        if fadesIn {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
+        }
         self.panel = panel
         self.hosting = hosting
         onShowingChanged?()
+        if let onPresented {
+            // A turn later, once the panel is on screen and laid out: a popover shown
+            // against a view that is not yet in a visible window does not appear.
+            let bar = Self.barFrame(inHostingBounds: hosting.bounds, flipped: hosting.isFlipped)
+            Task { @MainActor [weak self, weak hosting] in
+                guard let hosting, self?.hosting === hosting else { return }
+                onPresented(hosting, bar)
+            }
+        }
+    }
+
+    /// Brings the island forward and gives it the keyboard.
+    ///
+    /// Activate first, then take key: Kadr is an accessory app, and a borderless
+    /// non-activating panel asked to become key while the app is still inactive can be
+    /// refused — after which `NSApp.activate` hands key status back to whatever window was
+    /// last key, not to the island. The explicit `makeFirstResponder` is the other half:
+    /// the island is re-shown without SwiftUI's `onAppear` running again, so the hosting
+    /// view has to be put back in the responder chain by hand or the letters stay dead.
+    private func takeKeyboard(_ panel: NSPanel) {
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        if let content = panel.contentView {
+            panel.makeFirstResponder(content)
+        }
+    }
+
+    /// The glass inside the hosting view, in its own coordinates.
+    static func barFrame(inHostingBounds bounds: NSRect, flipped: Bool) -> NSRect {
+        let slack = RecordingBarMetrics.shadowSlack
+        let reserve = RecordingBarMetrics.tooltipReserve
+        return NSRect(
+            x: bounds.minX + slack,
+            y: flipped ? bounds.minY + slack + reserve : bounds.minY + slack,
+            width: max(bounds.width - slack * 2, 0),
+            height: max(bounds.height - slack * 2 - reserve, 0)
+        )
+    }
+
+    /// A panel whose glass sits with its bottom edge centred on `bar`'s.
+    static func frame(for size: CGSize, onBar bar: NSRect) -> NSRect {
+        NSRect(
+            x: bar.midX - size.width / 2,
+            y: bar.minY - RecordingBarMetrics.shadowSlack,
+            width: size.width,
+            height: size.height
+        )
     }
 
     func dismiss() {
         guard let panel else { return }
+        onClosed?()
         CaptureExclusionRegistry.shared.unregister(panel)
         panel.orderOut(nil)
         panel.contentView = nil
         self.panel = nil
         hosting = nil
         onShowingChanged?()
+    }
+
+    /// The glass capsule in screen space: the panel less the slack `RecordingIslandSurface`
+    /// pads around it for the tooltip and the shadow.
+    static func barFrame(inPanel frame: NSRect) -> NSRect {
+        let slack = RecordingBarMetrics.shadowSlack
+        return NSRect(
+            x: frame.minX + slack,
+            y: frame.minY + slack,
+            width: max(frame.width - slack * 2, 0),
+            height: max(frame.height - slack * 2 - RecordingBarMetrics.tooltipReserve, 0)
+        )
+    }
+
+    /// Where the island's glass was when Record was picked, for the recording bar to open
+    /// on. Read once.
+    func takeHandOffFrame() -> NSRect? {
+        defer { handOffFrame = nil }
+        return handOffFrame
+    }
+
+    private var handOffFrame: NSRect?
+    private static let handOffFade: TimeInterval = 0.18
+
+    /// Leaves for the recorder: remembers where the glass was and fades rather than
+    /// vanishing, so the recording bar can grow out of the same spot.
+    ///
+    /// Only for Record. Every other mode freezes the screen next, and a panel still fading
+    /// while the freeze is taken would be in the picture.
+    private func handOff() {
+        guard let panel else { return }
+        onClosed?()
+        handOffFrame = Self.barFrame(inPanel: panel.frame)
+        guard !AccessibilityChrome.reduceMotion else {
+            dismiss()
+            return
+        }
+        RecordingBarHoverView.endActiveHover()
+        CaptureExclusionRegistry.shared.unregister(panel)
+        self.panel = nil
+        hosting = nil
+        onShowingChanged?()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.handOffFade
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 0
+        }
+        // One-shot, on the main actor: the animation's own completion handler is
+        // `@Sendable` and may not touch the window.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.handOffFade + 0.05))
+            panel.orderOut(nil)
+            panel.contentView = nil
+        }
     }
 
     /// Bottom-centre of the pointer's screen, clear of the menu bar and most window chrome.
@@ -100,76 +224,6 @@ final class AllInOneHUD {
     }
 }
 
-/// What the All-in-One strip can start (docs/03 §1.4).
-nonisolated enum AllInOneMode: String, CaseIterable, Sendable {
-    case area
-    case window
-    case screen
-    case record
-    case gif
-    case scrolling
-    case ocr
-    case color
-
-    var title: String {
-        switch self {
-        case .area: KadrText.string("Area")
-        case .window: KadrText.string("Window")
-        case .screen: KadrText.string("Screen")
-        case .record: KadrText.string("Record")
-        case .gif: KadrText.string("GIF")
-        case .scrolling: KadrText.string("Scrolling")
-        case .ocr: KadrText.string("Text")
-        case .color: KadrText.string("Colour")
-        }
-    }
-
-    var symbol: String {
-        switch self {
-        case .area: "rectangle.dashed"
-        case .window: "macwindow"
-        case .screen: "menubar.rectangle"
-        case .record: "record.circle"
-        case .gif: "square.stack"
-        case .scrolling: "arrow.up.and.down"
-        case .ocr: "text.viewfinder"
-        case .color: "eyedropper"
-        }
-    }
-
-    var help: String {
-        switch self {
-        case .area: KadrText.string("Drag to capture a region (A)")
-        case .window: KadrText.string("Click a window to capture it (W)")
-        case .screen: KadrText.string("Capture the whole display (F)")
-        case .record: KadrText.string("Open the recorder (R)")
-        case .gif: KadrText.string("Record a region, then export GIF (G)")
-        case .scrolling: KadrText.string("Capture a scrolling region (S)")
-        case .ocr: KadrText.string("Select text and copy it (T)")
-        case .color: KadrText.string("Pick a colour from the screen (P)")
-        }
-    }
-
-    /// Single-key shortcut while the HUD is key (CleanShot 4.8).
-    var shortcut: Character {
-        switch self {
-        case .area: "a"
-        case .window: "w"
-        case .screen: "f"
-        case .record: "r"
-        case .gif: "g"
-        case .scrolling: "s"
-        case .ocr: "t"
-        case .color: "p"
-        }
-    }
-
-    static func matching(shortcut raw: String) -> AllInOneMode? {
-        guard let character = raw.lowercased().first else { return nil }
-        return allCases.first { $0.shortcut == character }
-    }
-}
-
 @MainActor
 @Observable
 final class AllInOneModel {
@@ -177,7 +231,11 @@ final class AllInOneModel {
     @ObservationIgnored private let perform: (AllInOneMode) -> Void
     @ObservationIgnored var onPicked: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
+    /// Record is not a capture: the island hands over to the recorder instead of closing.
+    @ObservationIgnored var onHandOff: () -> Void = {}
     @ObservationIgnored var onPickDisplay: (CGDirectDisplayID) -> Void = { _ in }
+    @ObservationIgnored var onTool: (AllInOneTool) -> Void = { _ in }
+    @ObservationIgnored var desktopIconsHidden: () -> Bool = { false }
 
     init(
         settings: AppSettings,
@@ -195,8 +253,18 @@ final class AllInOneModel {
 
     func pick(_ mode: AllInOneMode) {
         settings.lastAllInOneMode = mode.rawValue
-        onPicked()
+        if mode == .record {
+            onHandOff()
+        } else {
+            onPicked()
+        }
         perform(mode)
+    }
+
+    /// Closes the island first, so a tool that captures does not capture the island.
+    func use(_ tool: AllInOneTool) {
+        onPicked()
+        onTool(tool)
     }
 
     func pickLast() {
@@ -205,232 +273,5 @@ final class AllInOneModel {
 
     func cancel() {
         onCancel()
-    }
-}
-
-struct AllInOneView: View {
-    @Bindable var model: AllInOneModel
-
-    private static let presetTimerOptions = [0, 3, 5, 10]
-    private static let primaryModes: [AllInOneMode] = [.area, .window, .screen, .record]
-    private static let overflowModes: [AllInOneMode] = [.gif, .scrolling, .ocr, .color]
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            fullStrip
-            twoRowStrip
-            compactStrip
-        }
-        .recordingIslandSurface()
-        .focusable()
-        .onExitCommand { model.cancel() }
-        .onKeyPress { press in
-            handleKey(press)
-        }
-        .accessibilityLabel("All-in-One capture")
-        .accessibilityHint("Pick a capture mode, or press Return for the last one.")
-        .kadrLayoutDirection()
-    }
-
-    private var fullStrip: some View {
-        HStack(spacing: RecordingBarMetrics.controlSpacing) {
-            modeButtons(for: AllInOneMode.allCases)
-            RecordingBarDivider()
-            timerMenu
-            aspectMenu
-            saveTargetMenu
-            recordingAudioMenu
-            closeButton
-        }
-    }
-
-    private var twoRowStrip: some View {
-        VStack(spacing: RecordingBarMetrics.controlSpacing) {
-            HStack(spacing: RecordingBarMetrics.controlSpacing) {
-                modeButtons(for: Self.primaryModes)
-                overflowMenu
-                Spacer(minLength: 0)
-                closeButton
-            }
-            HStack(spacing: RecordingBarMetrics.controlSpacing) {
-                timerMenu
-                aspectMenu
-                saveTargetMenu
-                recordingAudioMenu
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    private var compactStrip: some View {
-        HStack(spacing: RecordingBarMetrics.controlSpacing) {
-            modeButtons(for: Self.primaryModes)
-            overflowMenu
-            RecordingBarDivider()
-            optionsMenu
-            closeButton
-        }
-    }
-
-    private func modeButtons(for modes: [AllInOneMode]) -> some View {
-        ForEach(modes, id: \.self) { mode in
-            if mode == .screen, NSScreen.screens.count > 1 {
-                screenMenu
-            } else {
-                modeButton(mode)
-            }
-        }
-    }
-
-    private var screenMenu: some View {
-        Menu {
-            Button("Active display") { model.pick(.screen) }
-            ForEach(RecordingDeviceCatalog.displays(), id: \.displayID) { display in
-                Button(display.name) {
-                    model.onPicked()
-                    model.onPickDisplay(display.displayID)
-                }
-            }
-            Divider()
-            Button("All displays") {
-                model.settings.fullscreenTarget = .allDisplays
-                model.pick(.screen)
-            }
-            Button("All displays, stitched") {
-                model.settings.fullscreenTarget = .allDisplaysStitched
-                model.pick(.screen)
-            }
-        } label: {
-            RecordingBarIcon(symbol: AllInOneMode.screen.symbol)
-        }
-        .recordingBarMenu(tooltip: AllInOneMode.screen.help)
-        .accessibilityLabel(AllInOneMode.screen.title)
-    }
-
-    private var overflowMenu: some View {
-        Menu {
-            ForEach(Self.overflowModes, id: \.self) { mode in
-                Button(mode.title) { model.pick(mode) }
-            }
-        } label: {
-            RecordingBarIcon(symbol: "ellipsis.circle")
-        }
-        .recordingBarMenu(tooltip: "More capture modes")
-        .accessibilityLabel("More capture modes")
-    }
-
-    private func modeButton(_ mode: AllInOneMode) -> some View {
-        RecordingBarCircleButton(
-            symbol: mode.symbol,
-            help: mode.help,
-            isOn: true,
-            tint: mode == model.lastMode ? Color.accentColor : nil
-        ) {
-            model.pick(mode)
-        }
-        .accessibilityLabel(mode.title)
-        .accessibilityAddTraits(mode == model.lastMode ? .isSelected : [])
-    }
-
-    private var closeButton: some View {
-        RecordingBarCircleButton(symbol: "xmark", help: "Close (Esc)") {
-            model.cancel()
-        }
-        .accessibilityLabel("Close")
-    }
-
-    var timerOptions: [Int] {
-        var options = Self.presetTimerOptions
-        let custom = model.settings.customTimerSeconds
-        if custom > 0, !options.contains(custom) {
-            options.append(custom)
-            options.sort()
-        }
-        return options
-    }
-
-    private var timerMenu: some View {
-        Menu {
-            ForEach(timerOptions, id: \.self) { seconds in
-                Button(timerLabel(seconds)) {
-                    if seconds == model.settings.customTimerSeconds, seconds > 0 {
-                        model.settings.selfTimer = .off
-                    } else {
-                        model.settings.customTimerSeconds = 0
-                        model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
-                    }
-                }
-            }
-        } label: {
-            RecordingBarIcon(
-                symbol: "timer",
-                isOn: model.settings.timerSeconds > 0
-            )
-        }
-        .recordingBarMenu(tooltip: timerHelp)
-        .accessibilityLabel("Self-timer")
-        .accessibilityValue(
-            model.settings.timerSeconds > 0
-                ? "\(model.settings.timerSeconds) seconds"
-                : "Off"
-        )
-    }
-
-    private var aspectMenu: some View {
-        Menu {
-            ForEach(CaptureSelectionAspect.allCases, id: \.self) { aspect in
-                Button(aspect.title) {
-                    model.settings.captureSelectionAspect = aspect
-                }
-            }
-        } label: {
-            RecordingBarIcon(
-                symbol: model.settings.captureSelectionAspect == .free
-                    ? "aspectratio"
-                    : "lock.rectangle",
-                isOn: model.settings.captureSelectionAspect != .free
-            )
-        }
-        .recordingBarMenu(tooltip: aspectHelp)
-        .accessibilityLabel("Aspect lock")
-        .accessibilityValue(model.settings.captureSelectionAspect.title)
-    }
-
-    private var aspectHelp: String {
-        let aspect = model.settings.captureSelectionAspect
-        if aspect == .free {
-            return "Aspect unlocked — ⇧-drag still squares the selection"
-        }
-        return "Aspect \(aspect.title) — click to change"
-    }
-
-    private var timerHelp: String {
-        let seconds = model.settings.timerSeconds
-        if seconds == 0 {
-            return "Self-timer off — wait before capturing hover states"
-        }
-        return "Self-timer \(seconds)s — click to change"
-    }
-
-    func timerLabel(_ seconds: Int) -> String {
-        if seconds == 0 {
-            return "No delay"
-        }
-        if seconds == model.settings.customTimerSeconds, seconds > 0 {
-            return "Custom: \(seconds)s"
-        }
-        return "\(seconds) seconds"
-    }
-
-    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
-        if press.key == .return || press.key == .space {
-            model.pickLast()
-            return .handled
-        }
-        if let mode = AllInOneMode.matching(shortcut: press.characters) {
-            model.pick(mode)
-            return .handled
-        }
-        return .ignored
     }
 }

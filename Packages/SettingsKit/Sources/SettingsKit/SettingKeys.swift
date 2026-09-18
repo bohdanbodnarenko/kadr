@@ -22,6 +22,10 @@ public enum SettingKeys {
     /// captured anything, which is the wrong moment to explain a card they have never seen.
     /// This one fires the first time there is something on screen to point at.
     public static let hasSeenQuickAccessTip = SettingKey("overlay.hasSeenQuickAccessTip", default: false)
+    /// Whether the first-run hint under the menu-bar icon has been seen (docs/03 §8.2).
+    public static let hasSeenMenuBarHint = SettingKey("tips.hasSeenMenuBarHint", default: false)
+    /// Whether the capture island's first-open tour has been seen (docs/03 §1.4).
+    public static let hasSeenIslandTour = SettingKey("tips.hasSeenIslandTour", default: false)
     /// Retired by schema 3 in favour of `afterCapture`, and kept only so the migration
     /// has something to read (docs/09 U2.2).
     public static let defaultAction = SettingKey("general.defaultAction", default: DefaultCaptureAction.copyToClipboard)

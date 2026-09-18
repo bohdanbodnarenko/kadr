@@ -3,48 +3,48 @@ import KeyboardShortcuts
 import os
 import Shared
 
+/// Five global shortcuts by default, not twenty-four (docs/03 §8.1).
+///
+/// A global hotkey is taken from every other app on the Mac for as long as Kadr runs. The
+/// old set claimed ⌃⇧ plus most of the alphabet — keys IDEs and terminals bind — and ⇧⌘O,
+/// which is Open Quickly in Xcode. The capture island already reaches every mode with a
+/// single key once it is open, so only the commands people fire blind keep a default.
+///
+/// The capture island is ⇧⌘2: one key beside the system's own ⇧⌘3/4/5, so "the screenshot
+/// keys" are one family and the island is the one to reach for when unsure. It is the
+/// only default on ⇧⌘ — the system has nothing on 2 — and it toggles, and brings the
+/// island back from the recorder (`AppDelegate.perform`). The direct captures mirror the
+/// system's numbers with ⌃ in place of ⌘, which other apps rarely bind with a digit.
+/// Everything else stays one click away in Settings ▸ Shortcuts.
+/// `ShortcutDefaultsMigration` moves existing installs over.
 extension KeyboardShortcuts.Name {
-    // Defaults deliberately avoid ⇧⌘3/4/5, which belong to the system screenshot UI —
-    // Kadr should sit alongside it, not silently fail to register over the top of it.
-    static let allInOne = Self("allInOne", initial: .init(.one, modifiers: [.control, .shift]))
-    static let captureArea = Self("captureArea", initial: .init(.a, modifiers: [.control, .shift]))
-    static let captureWindow = Self("captureWindow", initial: .init(.w, modifiers: [.control, .shift]))
-    static let captureFullscreen = Self("captureFullscreen", initial: .init(.f, modifiers: [.control, .shift]))
-    static let captureText = Self("captureText", initial: .init(.t, modifiers: [.control, .shift]))
-    static let capturePreviousArea = Self("capturePreviousArea", initial: .init(.r, modifiers: [.control, .shift]))
-    static let captureScrolling = Self("captureScrolling", initial: .init(.s, modifiers: [.control, .shift]))
-    static let pickColor = Self("pickColor", initial: .init(.p, modifiers: [.control, .shift]))
-    static let captureAreaAndCopy = Self(
-        "captureAreaAndCopy",
-        initial: .init(.c, modifiers: [.control, .option, .shift])
-    )
-    static let captureAreaAndSave = Self(
-        "captureAreaAndSave",
-        initial: .init(.four, modifiers: [.control, .option, .shift])
-    )
-    static let selfTimer = Self("selfTimer", initial: .init(.eight, modifiers: [.control, .shift]))
-    static let recordRegion = Self("recordRegion", initial: .init(.five, modifiers: [.control, .shift]))
-    static let recordDisplay = Self("recordDisplay", initial: .init(.six, modifiers: [.control, .shift]))
-    // Period, because it is the "stop" key everywhere else on the Mac — ⌘. has cancelled
-    // things since before the App Store.
+    static let allInOne = Self("allInOne", initial: .init(.two, modifiers: [.command, .shift]))
+    static let captureArea = Self("captureArea", initial: .init(.four, modifiers: [.control, .shift]))
+    static let captureWindow = Self("captureWindow")
+    static let captureFullscreen = Self("captureFullscreen", initial: .init(.three, modifiers: [.control, .shift]))
+    static let captureText = Self("captureText")
+    static let capturePreviousArea = Self("capturePreviousArea")
+    static let captureScrolling = Self("captureScrolling")
+    static let pickColor = Self("pickColor")
+    static let captureAreaAndCopy = Self("captureAreaAndCopy")
+    static let captureAreaAndSave = Self("captureAreaAndSave")
+    static let selfTimer = Self("selfTimer")
+    static let recordRegion = Self("recordRegion")
+    static let recordDisplay = Self("recordDisplay")
+    /// Period, because it is the "stop" key everywhere else on the Mac — ⌘. has cancelled
+    /// things since before the App Store.
     static let stopRecording = Self("stopRecording", initial: .init(.period, modifiers: [.control, .shift]))
-    // The discoverable path: one key for "I want to record something", which then asks what.
-    static let recordSetup = Self("recordSetup", initial: .init(.r, modifiers: [.control, .shift, .option]))
-    static let freezeScreen = Self("freezeScreen", initial: .init(.z, modifiers: [.control, .shift]))
-    static let toggleDesktopIcons = Self("toggleDesktopIcons", initial: .init(.h, modifiers: [.control, .shift]))
-    static let closeAllOverlays = Self(
-        "closeAllOverlays",
-        initial: .init(.w, modifiers: [.control, .option, .shift])
-    )
-    static let saveAllOverlays = Self(
-        "saveAllOverlays",
-        initial: .init(.a, modifiers: [.control, .option, .shift])
-    )
-    static let hideOverlays = Self("hideOverlays", initial: .init(.o, modifiers: [.control, .shift]))
-    static let hidePins = Self("hidePins", initial: .init(.u, modifiers: [.control, .shift]))
-    static let pinClipboard = Self("pinClipboard", initial: .init(.y, modifiers: [.control, .shift]))
-    static let openHistory = Self("openHistory", initial: .init(.l, modifiers: [.command, .shift]))
-    static let openSaveFolder = Self("openSaveFolder", initial: .init(.o, modifiers: [.command, .shift]))
+    /// The discoverable path: one key for "I want to record something", which then asks what.
+    static let recordSetup = Self("recordSetup", initial: .init(.six, modifiers: [.control, .shift]))
+    static let freezeScreen = Self("freezeScreen")
+    static let toggleDesktopIcons = Self("toggleDesktopIcons")
+    static let closeAllOverlays = Self("closeAllOverlays")
+    static let saveAllOverlays = Self("saveAllOverlays")
+    static let hideOverlays = Self("hideOverlays")
+    static let hidePins = Self("hidePins")
+    static let pinClipboard = Self("pinClipboard")
+    static let openHistory = Self("openHistory")
+    static let openSaveFolder = Self("openSaveFolder")
 }
 
 extension CaptureCommand {
@@ -97,6 +97,7 @@ final class HotkeyCenter {
     /// Registers a handler for every command. Handlers fire on key *up* so a held
     /// shortcut cannot enqueue a burst of captures.
     func start() {
+        ShortcutDefaultsMigration.runIfNeeded()
         health.probeAll()
         for command in CaptureCommand.allCases {
             KeyboardShortcuts.onKeyUp(for: command.shortcutName) { [weak self] in

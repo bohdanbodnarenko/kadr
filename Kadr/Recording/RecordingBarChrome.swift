@@ -92,111 +92,12 @@ extension View {
     }
 }
 
-/// Positioned off the hovered control's measured frame, so it tracks a mode swap.
-struct RecordingBarTooltipLayer: View {
-    let tooltip: RecordingBarTooltipModel
-    /// Above the floating bar; below the notch island, where above is off the display.
-    var edge: VerticalEdge = .top
-
-    var body: some View {
-        GeometryReader { proxy in
-            if let target = tooltip.visible {
-                RecordingBarTooltipPill(text: target.text)
-                    .position(x: target.frame.midX, y: pillCentre(in: proxy.size))
-            }
-        }
-        .allowsHitTesting(false)
-        // Keyed on the id as well as the text so sliding along the bar glides the pill
-        // from control to control rather than cross-fading it in place.
-        .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.id)
-        .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.text)
-    }
-
-    private func pillCentre(in size: CGSize) -> CGFloat {
-        let offset = RecordingBarMetrics.tooltipGap + RecordingBarMetrics.tooltipPillHeight / 2
-        return edge == .top ? -offset : size.height + offset
-    }
-}
-
-struct RecordingBarTooltipTarget: Equatable {
-    var id: String
-    var text: String
-    var frame: CGRect
-}
-
-@Observable
-@MainActor
-final class RecordingBarTooltipModel {
-    private(set) var visible: RecordingBarTooltipTarget?
-    private var hovered: String?
-    private var isWarm = false
-    private var showTask: Task<Void, Never>?
-    private var coolTask: Task<Void, Never>?
-
-    func hover(id: String, text: String, frame: CGRect) {
-        hovered = id
-        showTask?.cancel()
-        coolTask?.cancel()
-        guard !isWarm else {
-            visible = RecordingBarTooltipTarget(id: id, text: text, frame: frame)
-            return
-        }
-        showTask = Task {
-            try? await Task.sleep(for: .milliseconds(160))
-            guard !Task.isCancelled, hovered == id else { return }
-            visible = RecordingBarTooltipTarget(id: id, text: text, frame: frame)
-            isWarm = true
-        }
-    }
-
-    func endHover(id: String) {
-        guard hovered == id else { return }
-        hovered = nil
-        showTask?.cancel()
-        visible = nil
-        coolTask = Task {
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled, hovered == nil else { return }
-            isWarm = false
-        }
-    }
-
-    func dismiss() {
-        hovered = nil
-        showTask?.cancel()
-        withTransaction(Transaction(animation: nil)) {
-            visible = nil
-        }
-    }
-}
-
-struct RecordingBarTooltipPill: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(RecordingBarMetrics.activeTint)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 9)
-            .frame(height: RecordingBarMetrics.tooltipPillHeight)
-            .kadrLiquidGlass(
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous),
-                interactive: false
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(RecordingBarMetrics.edge, lineWidth: 0.5)
-            }
-            .transition(.opacity)
-    }
-}
-
 /// A quiet control. The island's glass is the only glass — icons stay ink.
 struct RecordingBarCircleButton: View {
     let symbol: String
     var help: String = ""
+    /// Shown as a keycap in the hover pill when the control has a single-key shortcut.
+    var key: String?
     var isOn: Bool = true
     var tint: Color?
     let action: () -> Void
@@ -209,7 +110,7 @@ struct RecordingBarCircleButton: View {
             action()
         } label: {
             RecordingBarIcon(symbol: symbol, isOn: isOn, tint: tint)
-                .recordingBarHoverTooltip(help)
+                .recordingBarHoverTooltip(help, key: key)
         }
         .buttonStyle(RecordingBarPressStyle())
         .accessibilityLabel(help)
@@ -322,6 +223,7 @@ struct RecordingBarPressStyle: ButtonStyle {
 
 private struct RecordingBarHoverTooltipModifier: ViewModifier {
     let text: String
+    let key: String?
     @Environment(RecordingBarTooltipModel.self) private var tooltip: RecordingBarTooltipModel?
     @Environment(\.isEnabled) private var isEnabled
     @State private var hovering = false
@@ -348,22 +250,39 @@ private struct RecordingBarHoverTooltipModifier: ViewModifier {
             }
             .onChange(of: text) { _, new in
                 guard hovering else { return }
-                tooltip?.hover(id: new, text: new, frame: frame)
+                tooltip?.hover(id: new, text: new, key: key, frame: frame)
             }
             .onDisappear {
                 // A mode morph swaps controls out under a pointer that never left the bar.
                 tooltip?.endHover(id: text)
             }
-            .accessibilityHint(text)
+            // Custom content, not `accessibilityHint`: on macOS SwiftUI keeps a hint in the
+            // same slot as `.help`, and shows it as a system tooltip — a second, plainer
+            // bubble that turned up a moment after this pill. VoiceOver still reads both.
+            .accessibilityCustomContent(Text("Description"), Text(text))
+            .modifier(ShortcutAccessibilityContent(key: key))
     }
 
     private func setHovering(_ value: Bool) {
         guard value != hovering else { return }
         hovering = value
         if value {
-            tooltip?.hover(id: text, text: text, frame: frame)
+            tooltip?.hover(id: text, text: text, key: key, frame: frame)
         } else {
             tooltip?.endHover(id: text)
+        }
+    }
+}
+
+/// The shortcut for VoiceOver, only on controls that have one.
+private struct ShortcutAccessibilityContent: ViewModifier {
+    let key: String?
+
+    func body(content: Content) -> some View {
+        if let key {
+            content.accessibilityCustomContent(Text("Shortcut"), Text(key), importance: .high)
+        } else {
+            content
         }
     }
 }
@@ -486,14 +405,14 @@ final class RecordingBarHoverView: NSView {
 }
 
 extension View {
-    func recordingBarHoverTooltip(_ text: String) -> some View {
-        modifier(RecordingBarHoverTooltipModifier(text: text))
+    func recordingBarHoverTooltip(_ text: String, key: String? = nil) -> some View {
+        modifier(RecordingBarHoverTooltipModifier(text: text, key: key))
     }
 
-    func recordingBarMenu(tooltip: String) -> some View {
+    func recordingBarMenu(tooltip: String, key: String? = nil) -> some View {
         menuStyle(.button)
             .menuIndicator(.hidden)
             .buttonStyle(RecordingBarPressStyle())
-            .recordingBarHoverTooltip(tooltip)
+            .recordingBarHoverTooltip(tooltip, key: key)
     }
 }

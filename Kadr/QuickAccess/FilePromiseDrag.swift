@@ -61,77 +61,36 @@ struct FilePromisePayload: Sendable {
 /// a finalise-then-drag ordering bug becomes an empty drop (docs/07 C1).
 ///
 /// A class rather than a protocol extension because AppKit needs a stable object to be the
-/// dragging source and the promise delegate for the session's lifetime — and because both
-/// the SwiftUI cards and the AppKit pin windows need the same behaviour.
+/// dragging source for the session's lifetime — and because both the SwiftUI cards and the
+/// AppKit pin windows need the same behaviour.
+///
+/// It is deliberately *not* the promise delegate. The receiver asks for the bytes after the
+/// drop, which is after the session has ended and — with dismiss-on-drag — after the card
+/// that owned this controller has been torn down. `NSFilePromiseProvider.delegate` is a weak
+/// reference, so a delegate that lives on the card is nil exactly when it matters and the
+/// drop delivers nothing (docs/07 C1). The delegate lives on the provider instead, which the
+/// pasteboard keeps alive for as long as the promise can still be claimed.
 @MainActor
-final class FilePromiseDragController: NSObject, NSFilePromiseProviderDelegate, NSDraggingSource {
-    private let logger = KadrLog.logger(.overlay)
+final class FilePromiseDragController: NSObject, NSDraggingSource {
+    /// The sources of the sessions in flight. `beginDraggingSession` does not retain its
+    /// source, and the card can go away mid-drag, which would lose `completed` — the call
+    /// that dismisses a dropped card. Always emptied by `endedAt`, which AppKit guarantees.
+    private static var activeSources: [FilePromiseDragController] = []
 
-    /// The payload for the drag in flight. Held for the session's lifetime because the
-    /// promise is fulfilled long after `beginDraggingSession` returns.
+    /// The payload for the drag in flight, kept only to report the outcome.
     private var inFlight: FilePromisePayload?
-
-    /// `NSFilePromiseProvider` writes on a queue we supply and blocks it until the
-    /// completion handler fires. It cannot be the main queue — a large recording would
-    /// freeze the UI for the length of the copy — so this is one of the API-required
-    /// queues CLAUDE.md rule 5 allows, and it does nothing else.
-    private let writeQueue: OperationQueue = {
-        let queue = OperationQueue()
-        queue.name = "app.kadr.filePromise"
-        queue.maxConcurrentOperationCount = 1
-        return queue
-    }()
 
     /// Starts a promise drag from `view`, using `event` as the drag's origin.
     func beginDrag(from view: NSView, event: NSEvent, payload: FilePromisePayload, image: NSImage?) {
         inFlight = payload
+        Self.activeSources.append(self)
 
-        let provider = KadrFilePromiseProvider(fileType: payload.contentType.identifier, delegate: self)
-        provider.resolvedFileURL = payload.stableFileURL
+        let provider = KadrFilePromiseProvider(payload: payload)
         let item = NSDraggingItem(pasteboardWriter: provider)
         let size = image?.size ?? CGSize(width: 64, height: 64)
         item.setDraggingFrame(view.bounds.centred(size), contents: image)
 
         view.beginDraggingSession(with: [item], event: event, source: self)
-    }
-
-    // MARK: - NSFilePromiseProviderDelegate
-
-    func filePromiseProvider(_ provider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
-        inFlight?.suggestedName ?? "Capture"
-    }
-
-    func operationQueue(for provider: NSFilePromiseProvider) -> OperationQueue {
-        writeQueue
-    }
-
-    /// The receiver has chosen a destination and wants the bytes.
-    ///
-    /// This is the only place a staged capture is finalised: a drag the user abandons
-    /// never gets here, so the card and the staging area are left exactly as they were.
-    func filePromiseProvider(
-        _ provider: NSFilePromiseProvider,
-        writePromiseTo destination: URL,
-        completionHandler: @escaping ((any Error)?) -> Void
-    ) {
-        Task { [inFlight, logger] in
-            guard let source = await MainActor.run(body: { inFlight?.resolve() }) else {
-                logger.error("A promised drag had no file to hand over")
-                completionHandler(CocoaError(.fileNoSuchFile))
-                return
-            }
-            do {
-                // Off the main actor: a recording can be hundreds of megabytes, and the
-                // receiving app is waiting on this copy.
-                try await Task.detached(priority: .userInitiated) {
-                    try FileManager.default.copyItem(at: source, to: destination)
-                }.value
-                completionHandler(nil)
-            } catch {
-                logger.error("Promised drag failed: \(error.localizedDescription, privacy: .public)")
-                completionHandler(error)
-            }
-        }
     }
 
     // MARK: - NSDraggingSource
@@ -150,9 +109,75 @@ final class FilePromiseDragController: NSObject, NSFilePromiseProviderDelegate, 
     ) {
         let payload = inFlight
         inFlight = nil
+        Self.activeSources.removeAll { $0 === self }
         // `.none` is the user letting go over nothing, or pressing Escape. Anything else
         // means a receiver took it — the only moment a card may be dismissed (U0.1).
         payload?.completed(!operation.isEmpty)
+    }
+}
+
+/// Fulfils one promise, on whatever thread AppKit asks from.
+///
+/// `nonisolated` on purpose: `writePromiseTo` is called on the queue `operationQueue(for:)`
+/// hands back, not on the main thread, so a main-actor delegate would be a concurrency
+/// violation on the app's hottest sharing path.
+final nonisolated class FilePromiseFulfiller: NSObject, NSFilePromiseProviderDelegate {
+    private let logger = KadrLog.logger(.overlay)
+    private let payload: FilePromisePayload
+
+    /// `NSFilePromiseProvider` writes on a queue we supply and blocks it until the
+    /// completion handler fires. It cannot be the main queue — a large recording would
+    /// freeze the UI for the length of the copy — so this is one of the API-required
+    /// queues CLAUDE.md rule 5 allows, and it does nothing else.
+    private let writeQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "app.kadr.filePromise"
+        queue.maxConcurrentOperationCount = 1
+        return queue
+    }()
+
+    init(payload: FilePromisePayload) {
+        self.payload = payload
+    }
+
+    func filePromiseProvider(_ provider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        payload.suggestedName
+    }
+
+    func operationQueue(for provider: NSFilePromiseProvider) -> OperationQueue {
+        writeQueue
+    }
+
+    /// The receiver has chosen a destination and wants the bytes.
+    ///
+    /// This is the only place a staged capture is finalised: a drag the user abandons
+    /// never gets here, so the card and the staging area are left exactly as they were.
+    func filePromiseProvider(
+        _ provider: NSFilePromiseProvider,
+        writePromiseTo destination: URL,
+        completionHandler: @escaping ((any Error)?) -> Void
+    ) {
+        // AppKit's completion handler predates `Sendable` and is called exactly once, from
+        // wherever the copy finishes.
+        nonisolated(unsafe) let finish = completionHandler
+        Task { [payload, logger] in
+            guard let source = await MainActor.run(body: { payload.resolve() }) else {
+                logger.error("A promised drag had no file to hand over")
+                finish(CocoaError(.fileNoSuchFile))
+                return
+            }
+            do {
+                // Off the main actor: a recording can be hundreds of megabytes, and the
+                // receiving app is waiting on this copy.
+                try await Task.detached(priority: .userInitiated) {
+                    try FileManager.default.copyItem(at: source, to: destination)
+                }.value
+                finish(nil)
+            } catch {
+                logger.error("Promised drag failed: \(error.localizedDescription, privacy: .public)")
+                finish(error)
+            }
+        }
     }
 }
 
@@ -291,8 +316,26 @@ extension CGRect {
 ///
 /// `nonisolated` so the `NSFilePromiseProvider` overrides stay off the module's default
 /// main actor; pasteboard asks for types on AppKit's own thread.
+///
+/// It owns its delegate. `NSFilePromiseProvider.delegate` is weak and the provider is what
+/// the pasteboard retains, so anchoring the delegate here is what makes the promise still
+/// claimable once the drag — and the card that started it — is gone.
 final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
-    var resolvedFileURL: URL?
+    private var fulfiller: FilePromiseFulfiller?
+    /// Already-final path, for the `.fileURL` flavour; nil for a staged capture, which has
+    /// no path to promise until the receiver asks.
+    private(set) var resolvedFileURL: URL?
+
+    /// Built on top of `init()` rather than `init(fileType:delegate:)`, which reaches back
+    /// through `init()` — a designated initializer here would trap on the way up.
+    convenience init(payload: FilePromisePayload) {
+        self.init()
+        let fulfiller = FilePromiseFulfiller(payload: payload)
+        self.fulfiller = fulfiller
+        resolvedFileURL = payload.stableFileURL
+        fileType = payload.contentType.identifier
+        delegate = fulfiller
+    }
 
     override func writableTypes(for pasteboard: NSPasteboard) -> [NSPasteboard.PasteboardType] {
         var types = super.writableTypes(for: pasteboard)
@@ -304,7 +347,9 @@ final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
 
     override func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -> Any? {
         if type == .fileURL, let resolvedFileURL {
-            return resolvedFileURL.absoluteString
+            // NSURL's own representation, not `absoluteString`: a receiver that reads the
+            // flavour as data gets what `NSURL(pasteboardPropertyList:ofType:)` expects.
+            return (resolvedFileURL as NSURL).pasteboardPropertyList(forType: type)
         }
         return super.pasteboardPropertyList(forType: type)
     }

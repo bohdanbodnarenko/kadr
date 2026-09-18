@@ -102,44 +102,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///
     /// Built on first use like everything else here — an agent that never records never
     /// constructs it.
-    lazy var recordSetup = RecordSetupHUD(
-        bar: recordingControlBar,
-        settings: settings,
-        record: { [weak self] target in
-            self?.recording.startAfterCountdown(target: target)
-        },
-        pickWindow: { [weak self] completion in
-            self?.recording.pickWindow { selection in
-                if let selection {
-                    self?.recording.beginWindowHighlight(from: selection)
+    lazy var recordSetup: RecordSetupHUD = {
+        let hud = RecordSetupHUD(
+            bar: recordingControlBar,
+            settings: settings,
+            record: { [weak self] target in
+                self?.recording.startAfterCountdown(target: target)
+            },
+            pickWindow: { [weak self] completion in
+                self?.recording.pickWindow { selection in
+                    if let selection {
+                        self?.recording.beginWindowHighlight(from: selection)
+                    }
+                    completion(selection)
                 }
-                completion(selection)
+            },
+            pickArea: { [weak self] completion in
+                self?.recording.pickRegion(completion: completion)
+            },
+            cameraPreview: { [weak self] enabled in
+                guard let self else { return }
+                cameraRecorder.setPreview(
+                    enabled: enabled,
+                    deviceID: settings.recordingCameraDeviceID
+                )
             }
-        },
-        pickArea: { [weak self] completion in
-            self?.recording.pickRegion(completion: completion)
-        },
-        cameraPreview: { [weak self] enabled in
-            guard let self else { return }
-            cameraRecorder.setPreview(
-                enabled: enabled,
-                deviceID: settings.recordingCameraDeviceID
-            )
+        )
+        hud.onBackToIsland = { [weak self] frame in
+            self?.allInOne.present(morphingFrom: frame)
         }
-    )
+        return hud
+    }()
 
     /// All-in-One capture HUD (docs/03 §1.4). Built on first use.
     lazy var allInOne: AllInOneHUD = {
         let hud = AllInOneHUD(
             settings: settings,
             perform: { [weak self] mode in self?.performAllInOne(mode) },
-            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) }
+            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
+            performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
+            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
         )
         hud.onShowingChanged = { [weak self] in
             self?.refreshStatusItemIcon()
         }
+        hud.onPresented = { [weak self] view, bar in
+            guard let self, coachMarks.isTourNeeded else { return }
+            coachMarks.startIslandTour(pointingAt: bar, in: view)
+        }
+        hud.onClosed = { [weak self] in
+            self?.coachMarks.islandDidClose()
+        }
         return hud
     }()
+
+    /// First-run tips: under the menu-bar icon, and over the island's first opening.
+    lazy var coachMarks: CoachMarks = {
+        let coach = CoachMarks(settings: settings)
+        coach.openIsland = { [weak self] in
+            guard let self, !allInOne.isShowing else { return }
+            allInOne.present()
+        }
+        coach.openShortcutSettings = { [weak self] in
+            self?.settingsWindowController.show(tab: .shortcuts)
+        }
+        return coach
+    }()
+
+    /// Shows the menu-bar hint once the icon is up and nothing else is asking for attention.
+    func scheduleMenuBarHint() {
+        guard !settings.hasSeenMenuBarHint else { return }
+        coachMarks.scheduleMenuBarHint { [weak self] in
+            self?.statusItemController?.statusItem.button
+        }
+    }
 
     var recordingStorage: RecordingCoordinator?
     var recording: RecordingCoordinator {
@@ -268,24 +304,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
             closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
-            captureWithPicker: { [weak self] in self?.areaCapture.captureWithSystemPicker() },
             showOnboarding: { [weak self] in self?.showOnboarding() },
-            checkForUpdates: { [weak self] in self?.updater.checkForUpdates() },
-            canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates ?? false },
+            // A preflight, not a probe: it reads the grant without prompting or capturing.
+            needsSetup: { [weak self] in self?.permissions.refresh().needsUserAction ?? false },
             recordingControls: { [weak self] in self?.currentRecordingControls() },
             additionalItems: { [weak self] in self?.debugMenuItems() ?? [] },
             history: history,
             reopenFromHistory: { [weak self] record in self?.areaCapture.openFromHistory(record) },
-            canRestore: { [weak self] in
-                (self?.areaCapture.canRestoreRecentlyClosed ?? false) || (self?.history.hasItems ?? false)
-            },
+            canRestore: { [weak self] in self?.areaCaptureStorage?.canRestoreRecentlyClosed ?? false },
             openHistory: { [weak self] in self?.openHistory() },
             unfinishedRecordings: { [weak self] in self?.unfinishedRecordings.latest ?? 0 },
             refreshUnfinishedRecordings: { [weak self] completion in
                 self?.unfinishedRecordings.refresh(completion: completion)
             },
             recoverRecordings: { [weak self] in self?.recoverUnfinishedRecordings() },
-            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
             overlayCardCount: { [weak self] in self?.areaCaptureStorage?.overlayCardCount ?? 0 },
             overlaysAreHidden: { [weak self] in self?.areaCaptureStorage?.overlaysAreHidden ?? false },
             pinCount: { [weak self] in self?.areaCaptureStorage?.pinCount ?? 0 },
@@ -295,6 +327,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController?.applyMenuBarVisibility(settings.showsMenuBarIcon)
         statusItemController?.onMenuBarVisibilityChange = { [weak self] visible in
             self?.settings.showsMenuBarIcon = visible
+        }
+        statusItemController?.onIconClicked = { [weak self] in
+            guard let self, !settings.hasSeenMenuBarHint else { return }
+            coachMarks.dismissMenuBarHint()
         }
         endStatusItemInterval()
     }
@@ -368,7 +404,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // whether the grant is still there (docs/03 §8.2, docs/04 §4.1).
         permissions.refresh()
         if settings.resumeOnboardingAtPermissions || !settings.hasCompletedOnboarding {
+            // The hint waits for the welcome to close: two things asking for attention at
+            // once is one too many.
+            onboarding.onClosed = { [weak self] in self?.scheduleMenuBarHint() }
             onboarding.show()
+        } else {
+            scheduleMenuBarHint()
         }
         // Bound to a local: a log message is an autoclosure, so referring to a property
         // inside it would need an explicit `self.` that SwiftFormat then strips again.

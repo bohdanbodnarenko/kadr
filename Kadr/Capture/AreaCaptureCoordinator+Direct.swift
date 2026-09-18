@@ -255,7 +255,7 @@ extension AreaCaptureCoordinator {
             image: image,
             metadata: CaptureMetadata(
                 source: .display(captures[0].metadata.displayID ?? 0),
-                displayID: ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID
+                displayID: ActiveScreen.resolve().flatMap { ScreenDescriptor($0) }?.displayID
                     ?? captures[0].metadata.displayID,
                 scale: DisplayScale(canvas.scale),
                 pointRect: DisplayRect(cgRect: CGRect(origin: canvas.origin, size: CGSize(

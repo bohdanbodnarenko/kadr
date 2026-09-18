@@ -1,5 +1,6 @@
 import AppKit
 import HistoryKit
+import KeyboardShortcuts
 
 /// The status menu's recent-work group and its thumbnails (docs/03 §5, §8.1, docs/10 R2.4).
 ///
@@ -9,18 +10,21 @@ import HistoryKit
 extension StatusItemController {
     /// Group 4 — the last few captures, and the window that holds the rest
     /// (docs/03 §5, §8.1).
+    /// Recent work: the thumbnail strip, History, and anything a crash left unfinished.
+    ///
+    /// The strip is the list. A "Recent" submenu used to repeat the same eight captures by
+    /// file name underneath it; the strip's buttons carry the same names for VoiceOver, so
+    /// the second copy was only length.
     func addHistoryItems(to menu: NSMenu) {
         let recent = Array(history?.recent.prefix(HistoryController.menuStripCount) ?? [])
-        menu.addItem(.separator())
+        Self.addGroupSeparator(to: menu)
 
         if !recent.isEmpty {
             let strip = HistoryStripView(frame: .zero)
             // Only what is already decoded goes in now; the rest arrives from
-            // `fillThumbnails` a moment later. Decoding eight thumbnails here — and eight
-            // more for the submenu — was up to sixteen ImageIO decodes on the main thread
-            // between the click and the menu appearing.
+            // `fillThumbnails` a moment later, so opening the menu never waits on ImageIO.
             strip.update(records: recent) { [weak self] record in
-                self?.cachedStripImage(for: record, size: HistoryStripView.thumbnailSize)
+                self?.cachedStripImage(for: record)
             }
             strip.onSelect = { [weak self] id in
                 guard let record = self?.history?.record(id: id) else { return }
@@ -29,70 +33,26 @@ extension StatusItemController {
             let item = NSMenuItem()
             item.view = strip
             menu.addItem(item)
-
-            let recentMenu = NSMenu()
-            var rows: [UUID: NSMenuItem] = [:]
-            for record in recent {
-                let row = NSMenuItem(
-                    title: record.originalFilename,
-                    action: #selector(didSelectRecent(_:)),
-                    keyEquivalent: ""
-                )
-                row.target = self
-                row.representedObject = record.id
-                row.image = cachedStripImage(for: record, size: Self.recentRowImageSize)
-                    ?? Self.recentRowPlaceholder
-                recentMenu.addItem(row)
-                rows[record.id] = row
-            }
-            let recentItem = NSMenuItem(title: "Recent", action: nil, keyEquivalent: "")
-            recentItem.submenu = recentMenu
-            menu.addItem(recentItem)
-            fillThumbnails(for: recent, strip: strip, rows: rows)
+            fillThumbnails(for: recent, strip: strip)
         }
 
-        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "l")
-        historyItem.keyEquivalentModifierMask = [.command, .shift]
+        // The global shortcut, if the user gave History one — not a hard-coded ⇧⌘L that
+        // only worked while this menu happened to be open.
+        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "")
         historyItem.target = self
+        historyItem.setShortcut(for: CaptureCommand.openHistory.shortcutName)
         historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(historyItem)
-
-        let folderItem = NSMenuItem(
-            title: "Open Capture Folder",
-            action: #selector(didSelectOpenSaveFolder),
-            keyEquivalent: ""
-        )
-        folderItem.target = self
-        folderItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
-        menu.addItem(folderItem)
-
-        if canRestore() {
-            let restoreItem = NSMenuItem(
-                title: "Restore Recently Closed",
-                action: #selector(didSelectRestore),
-                keyEquivalent: "t"
-            )
-            restoreItem.keyEquivalentModifierMask = [.command, .shift]
-            restoreItem.target = self
-            menu.addItem(restoreItem)
-        }
 
         addRecoveryItem(to: menu)
     }
 
     // MARK: - Thumbnails
 
-    /// The one size the menu decodes. The 16 pt submenu rows reuse it, scaled by AppKit,
-    /// rather than decoding a second, smaller copy of each capture.
+    /// The one size the menu decodes.
     static let stripPixelSize = 112
-    static let recentRowImageSize = NSSize(width: 16, height: 16)
-    static let recentRowPlaceholder: NSImage? = {
-        let image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
-        image?.size = recentRowImageSize
-        return image
-    }()
 
-    private func cachedStripImage(for record: HistoryRecord, size: NSSize) -> NSImage? {
+    private func cachedStripImage(for record: HistoryRecord) -> NSImage? {
         guard let cgImage = history?.cachedThumbnail(
             for: record,
             maxPixelSize: Self.stripPixelSize,
@@ -100,12 +60,12 @@ extension StatusItemController {
         ) else {
             return nil
         }
-        return NSImage(cgImage: cgImage, size: size)
+        return NSImage(cgImage: cgImage, size: HistoryStripView.thumbnailSize)
     }
 
     /// Decodes whatever the cache did not have, off the main thread, and drops each image
     /// into the open menu as it lands.
-    private func fillThumbnails(for records: [HistoryRecord], strip: HistoryStripView, rows: [UUID: NSMenuItem]) {
+    private func fillThumbnails(for records: [HistoryRecord], strip: HistoryStripView) {
         thumbnailFillTask?.cancel()
         guard let history else { return }
         let missing = records.filter {
@@ -127,7 +87,6 @@ extension StatusItemController {
                     NSImage(cgImage: cgImage, size: HistoryStripView.thumbnailSize),
                     for: record.id
                 )
-                rows[record.id]?.image = NSImage(cgImage: cgImage, size: Self.recentRowImageSize)
             }
         }
     }
@@ -142,20 +101,5 @@ extension StatusItemController {
     @objc
     func didSelectHistory() {
         openHistory()
-    }
-
-    @objc
-    func didSelectOpenSaveFolder() {
-        perform(.openSaveFolder)
-    }
-
-    @objc
-    func didSelectRecent(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? UUID,
-              let record = history?.record(id: id)
-        else {
-            return
-        }
-        reopenFromHistory(record)
     }
 }

@@ -11,8 +11,10 @@ struct OnboardingView: View {
     @Bindable var settings: AppSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The defaults that ship (docs/03 §8.1). Window capture has no shortcut any more, so
+    /// listing it here would show "Not set" on the first screen anybody sees.
     private static let welcomeCommands: [CaptureCommand] = [
-        .captureArea, .captureWindow, .captureFullscreen, .recordDisplay
+        .allInOne, .captureArea, .captureFullscreen, .recordSetup
     ]
 
     var body: some View {
@@ -102,7 +104,8 @@ struct OnboardingView: View {
                 .padding(4)
             }
 
-            Text("Every shortcut can be changed later in Settings.")
+            Text("Or click the Kadr icon in the menu bar for every capture mode. "
+                + "Shortcuts can be changed or added in Settings.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

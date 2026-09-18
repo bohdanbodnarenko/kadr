@@ -17,6 +17,8 @@ final class RecordSetupHUD {
     private let bar: RecordingControlBar
     private let model: RecordSetupModel
     private let composer = TeleprompterComposer()
+    /// The picked area, lit with the rest dimmed and a Record button inside it.
+    private let stage = CaptureRegionStage()
 
     init(
         bar: RecordingControlBar,
@@ -41,6 +43,20 @@ final class RecordSetupHUD {
     /// capture-armed state (docs/14 UX-08A).
     var onShowingChanged: (() -> Void)?
 
+    /// Brings the capture island back, on the spot the recorder's bar was.
+    var onBackToIsland: ((NSRect?) -> Void)?
+
+    /// Leaves the recorder for the capture island rather than closing everything.
+    func goBack() {
+        let frame = bar.screenFrame
+        stage.dismiss()
+        composer.hide()
+        model.onCameraPreview(false)
+        bar.dismissPicker(fading: true)
+        onShowingChanged?()
+        onBackToIsland?(frame)
+    }
+
     func toggle() {
         if isShowing {
             model.cancel()
@@ -49,8 +65,12 @@ final class RecordSetupHUD {
         }
     }
 
-    func present(picking: RecordTargetKind? = nil) {
+    /// - Parameter source: the All-in-One island's glass, when Record was picked there;
+    ///   the bar grows out of it rather than appearing on its own.
+    func present(picking: RecordTargetKind? = nil, morphingFrom source: NSRect? = nil) {
         wireSession()
+        // Opened from the capture island: offer the way back there instead of only Close.
+        model.canGoBack = source != nil
         model.refreshDevices()
         model.armedTarget = nil
         model.armDefaultScreenIfNeeded()
@@ -60,12 +80,13 @@ final class RecordSetupHUD {
         case .area:
             model.requestAreaPick()
         case .screen, .none:
-            revealIsland()
+            revealIsland(morphingFrom: source)
         }
         onShowingChanged?()
     }
 
     func dismiss() {
+        stage.dismiss()
         composer.hide()
         model.onCameraPreview(false)
         bar.dismissPicker()
@@ -74,17 +95,34 @@ final class RecordSetupHUD {
 
     private func wireSession() {
         model.onHideForPick = { [weak self] in
+            self?.stage.dismiss()
             self?.composer.hide()
             self?.bar.dismissPicker()
             self?.onShowingChanged?()
         }
         model.onRevealAfterPick = { [weak self] in
             self?.revealIsland()
+            self?.stageArmedArea()
             self?.onShowingChanged?()
+        }
+        model.onArmedTargetChanged = { [weak self] target in
+            if case .area = target {
+                return
+            }
+            self?.stage.dismiss()
+        }
+        stage.onStart = { [weak self] in self?.model.record() }
+        // Backing out of the stage drops the area, not the whole recorder: the island is
+        // still there, armed on the screen again, for another choice.
+        stage.onCancel = { [weak self] in
+            self?.model.armedTarget = nil
+            self?.model.armDefaultScreenIfNeeded()
         }
         // Record keeps the bar up: the countdown claims it synchronously and morphs the
         // picker in place. Tearing it down first made a second window pop up elsewhere.
         model.onCommit = { [weak self] in
+            // The recording's own highlight takes the dim over from here.
+            self?.stage.dismiss()
             self?.composer.hide()
             self?.model.onCameraPreview(false)
         }
@@ -94,14 +132,20 @@ final class RecordSetupHUD {
             self?.onShowingChanged?()
         }
         model.onCancel = { [weak self] in self?.dismiss() }
+        model.onBack = { [weak self] in self?.goBack() }
         model.onTeleprompterComposer = { [weak self] in
             guard let self else { return }
             composer.toggle(settings: model.settings, above: bar.screenFrame)
         }
     }
 
-    private func revealIsland() {
-        bar.showPicker(model: model)
+    private func stageArmedArea() {
+        guard case let .area(rect, display) = model.armedTarget else { return }
+        stage.present(region: rect, displayID: display, purpose: .recording)
+    }
+
+    private func revealIsland(morphingFrom source: NSRect? = nil) {
+        bar.showPicker(model: model, morphingFrom: source)
         if model.settings.recordingShowsWebcam,
            CaptureMediaAccess.status(for: .camera) == .allowed {
             model.onCameraPreview(true)
@@ -150,7 +194,12 @@ final class RecordSetupModel {
     var displays: [RecordingDeviceCatalog.Display] = []
     var cameras: [RecordingDeviceCatalog.Device] = []
     var microphones: [RecordingDeviceCatalog.Device] = []
-    var armedTarget: RecordArmedTarget?
+    var armedTarget: RecordArmedTarget? {
+        didSet { onArmedTargetChanged(armedTarget) }
+    }
+
+    /// Lets the HUD drop the staged area as soon as something else is armed.
+    @ObservationIgnored var onArmedTargetChanged: (RecordArmedTarget?) -> Void = { _ in }
 
     @ObservationIgnored let recordAction: (RecordingTarget) -> Void
     /// Hides the island so the selection overlay can own the screen.
@@ -162,6 +211,10 @@ final class RecordSetupModel {
     /// After the record action ran — the recording has had its chance to claim the bar.
     @ObservationIgnored var onCommitted: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
+    /// Back to the capture island, when the recorder was opened from it.
+    @ObservationIgnored var onBack: () -> Void = {}
+    /// Whether the recorder came from the capture island and so shows a back button.
+    var canGoBack = false
     /// Turns the live camera bubble on or off. Kept independent of the bar so Area and
     /// Window selection can hide the picker without tearing the session down.
     @ObservationIgnored var onCameraPreview: (Bool) -> Void = { _ in }
@@ -249,5 +302,18 @@ final class RecordSetupModel {
     func cancel() {
         onCameraPreview(false)
         onCancel()
+    }
+
+    func goBack() {
+        onBack()
+    }
+
+    /// Escape steps back one level: to the island if the recorder came from there.
+    func escape() {
+        if canGoBack {
+            goBack()
+        } else {
+            cancel()
+        }
     }
 }

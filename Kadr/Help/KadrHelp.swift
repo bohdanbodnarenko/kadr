@@ -74,9 +74,13 @@ enum KadrHelpTopic: String, CaseIterable, Identifiable {
             """
         case .shortcuts:
             """
-            Capture shortcuts live in Settings → Shortcuts. While a HUD is open, letter keys \
-            pick a mode (A area, W window, F screen, R record). Escape cancels. Return starts \
-            the last All-in-One mode.
+            Click the Kadr icon in the menu bar (or press ⇧⌘2) to open the capture island; \
+            right-click the icon for History, Settings and Quit. While the island is open, \
+            hover a button to see its letter, which starts it (A area, W window, F screen, R record), \
+            and the Tools menu shows a letter for each tool. Escape cancels. Return starts the \
+            last mode. Out of the box ⌃⇧3 captures the screen, ⌃⇧4 an area, \
+            ⌃⇧6 starts a recording and ⌃⇧. stops it; every other command can be given a \
+            shortcut in Settings → Shortcuts.
             """
         }
     }

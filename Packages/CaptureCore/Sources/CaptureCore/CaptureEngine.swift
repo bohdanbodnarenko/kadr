@@ -449,28 +449,4 @@ public actor CaptureEngine {
         guard !ids.isEmpty else { return [] }
         return content.windows.filter { ids.contains($0.windowID) }
     }
-
-    private func snapshot(of content: SCShareableContent) -> ShareableContentSnapshot {
-        let displays = content.displays.map { display in
-            let filter = SCContentFilter(display: display, excludingWindows: [])
-            return DisplayGeometry(
-                displayID: display.displayID,
-                frame: DisplayRect(cgRect: display.frame),
-                scale: DisplayScale(CGFloat(filter.pointPixelScale))
-            )
-        }
-        let windows = content.windows.map { window in
-            WindowInfo(
-                id: window.windowID,
-                title: window.title,
-                applicationName: window.owningApplication?.applicationName,
-                bundleIdentifier: window.owningApplication?.bundleIdentifier,
-                processID: window.owningApplication?.processID ?? 0,
-                frame: DisplayRect(cgRect: window.frame),
-                isOnScreen: window.isOnScreen,
-                layer: window.windowLayer
-            )
-        }
-        return ShareableContentSnapshot(displays: displays, windows: windows)
-    }
 }

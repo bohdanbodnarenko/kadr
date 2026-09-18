@@ -9,7 +9,7 @@ import Shared
 
 /// Drives a scrolling capture end to end (docs/03 §1.6, docs/04 §4.4).
 ///
-/// Two tiers, one flow. The user picks a region with the overlay they already know, then
+/// Two tiers, one flow. The user sets a live frame over the page (`ScrollRegionEditor`), then
 /// either scrolls the content themselves — which needs no permission at all and is the
 /// default — or lets Kadr synthesize the scrolling, which needs Accessibility and asks for
 /// it at that moment. Either way the frames go to disk and the stitch happens in the
@@ -25,10 +25,10 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         case stitching
     }
 
-    @ObservationIgnored private let captureEngine: CaptureEngine
+    /// Internal so the frame editor (`+Stage`) can find the window under the pointer.
+    @ObservationIgnored let captureEngine: CaptureEngine
     @ObservationIgnored private let permissions: PermissionCoordinator
     @ObservationIgnored private let settings: AppSettings
-    @ObservationIgnored private let overlay: SelectionOverlayController
     @ObservationIgnored private let output: CaptureOutput
     @ObservationIgnored private let vision = VisionClient()
     @ObservationIgnored private let session = ScrollCaptureSession()
@@ -47,6 +47,8 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
 
     @ObservationIgnored private let strip = ScrollPreviewStrip()
     @ObservationIgnored private var hud: ScrollCaptureHUD?
+    /// The picked area, dimmed around, waiting for Start (`ScrollCaptureCoordinator+Stage`).
+    @ObservationIgnored var stage: ScrollRegionEditor?
     @ObservationIgnored private var autoScrollTask: Task<Void, Never>?
     @ObservationIgnored private var lastRowProfile: RowProfile?
     @ObservationIgnored private var lastColumnProfile: ColumnProfile?
@@ -74,14 +76,12 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         captureEngine: CaptureEngine,
         permissions: PermissionCoordinator,
         settings: AppSettings,
-        output: CaptureOutput,
-        overlay: SelectionOverlayController = SelectionOverlayController()
+        output: CaptureOutput
     ) {
         self.captureEngine = captureEngine
         self.permissions = permissions
         self.settings = settings
         self.output = output
-        self.overlay = overlay
     }
 
     var isRunning: Bool {
@@ -108,33 +108,20 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         overrides.autoScroll ?? settings.scrollAutoScroll
     }
 
-    /// Picks the region to scroll through, then starts grabbing frames.
+    /// Shows the adjustable frame over the live screen; Start begins grabbing frames.
+    ///
+    /// No freeze and no drawing: the frame opens around the window under the pointer, and
+    /// the page stays live underneath so it can be scrolled into place first
+    /// (`ScrollRegionEditor`).
     func begin() {
-        guard state == .idle else { return }
+        guard state == .idle, stage == nil else { return }
         guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+        guard let screen = ActiveScreen.resolve() ?? NSScreen.main else { return }
         Task { [weak self] in
             guard let self else { return }
-            do {
-                await CaptureExclusionPush.into(captureEngine)
-                let freezes = try await captureEngine.freezeAllDisplays()
-                permissions.noteCaptureSuccess()
-                overlay.present(
-                    freezes: freezes.map { FrozenDisplay(geometry: $0.geometry, image: $0.image) },
-                    purpose: .scrollingCapture
-                ) { [weak self] outcome in
-                    guard case let .region(result) = outcome else {
-                        self?.report(.cancelled)
-                        return
-                    }
-                    self?.start(region: result.rect, display: result.display)
-                }
-            } catch {
-                permissions.noteCaptureFailure(error)
-                logger
-                    .error("Could not freeze for a scrolling capture: \(error.localizedDescription, privacy: .public)")
-                presentPermissionRecoveryIfNeeded(error)
-                report(.failed(error.localizedDescription))
-            }
+            let window = await windowUnderPointer(on: screen)
+            guard stage == nil, state == .idle else { return }
+            presentEditor(on: screen, aroundWindow: window)
         }
     }
 
@@ -156,7 +143,7 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         start(region: global, display: geometry)
     }
 
-    private func start(region rect: DisplayRect, display: DisplayGeometry) {
+    func start(region rect: DisplayRect, display: DisplayGeometry) {
         sessionToken += 1
         region = (rect, display)
         lastRowProfile = nil
@@ -190,6 +177,7 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Scrolling capture failed to start: \(error.localizedDescription, privacy: .public)")
+                dismissStage()
                 presentPermissionRecoveryIfNeeded(error)
                 report(.failed(error.localizedDescription))
             }
@@ -448,8 +436,9 @@ final class ScrollCaptureCoordinator { // swiftlint:disable:this type_body_lengt
         }
     }
 
-    private func finish(_ url: URL?, size: PixelSize = PixelSize(width: 0, height: 0)) {
+    func finish(_ url: URL?, size: PixelSize = PixelSize(width: 0, height: 0)) {
         sessionToken += 1
+        dismissStage()
         hud?.dismiss()
         hud = nil
         strip.reset()

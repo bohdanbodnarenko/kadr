@@ -14,6 +14,10 @@ struct RecordSetupView: View {
 
     var body: some View {
         HStack(spacing: RecordingBarMetrics.controlSpacing) {
+            if model.canGoBack {
+                backButton
+                RecordingBarDivider()
+            }
             sources
             RecordingBarDivider()
             inputs
@@ -22,7 +26,7 @@ struct RecordSetupView: View {
             recordButton
             closeButton
         }
-        .onExitCommand { model.cancel() }
+        .onExitCommand { model.escape() }
         .onAppear { model.refreshDevices() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshAfterPermissionChange()
@@ -49,8 +53,19 @@ struct RecordSetupView: View {
         .accessibilityLabel("Start recording")
     }
 
+    private var backButton: some View {
+        RecordingBarCircleButton(symbol: "chevron.left", help: "Back to capture modes", key: "esc") {
+            model.goBack()
+        }
+        .accessibilityLabel("Back to capture modes")
+    }
+
     private var closeButton: some View {
-        RecordingBarCircleButton(symbol: "xmark", help: "Close the recorder (Esc)") {
+        RecordingBarCircleButton(
+            symbol: "xmark",
+            help: "Close the recorder",
+            key: model.canGoBack ? nil : "esc"
+        ) {
             model.cancel()
         }
         .accessibilityLabel("Close")

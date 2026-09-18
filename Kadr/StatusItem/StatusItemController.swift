@@ -7,7 +7,7 @@ import Shared
 /// The menu bar item and its menu (docs/03 §8.1, docs/04 §3.1).
 ///
 /// `NSStatusItem` + a plain `NSMenu`, not `MenuBarExtra`: the recording-state icon,
-/// drag-onto-icon and ⌥-click behaviours coming in later milestones are painful or
+/// drag-onto-icon and click-for-island / right-click-for-menu behaviours are painful or
 /// impossible with the SwiftUI scene, and a plain menu is the cheapest idle path
 /// there is — nothing is built until the user actually opens it.
 @MainActor
@@ -20,10 +20,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let openSettings: () -> Void
     let restoreRecentlyClosed: () -> Void
     private let closeAllPins: () -> Void
-    private let captureWithPicker: () -> Void
     private let showOnboarding: () -> Void
-    private let checkForUpdates: () -> Void
-    let canCheckForUpdates: () -> Bool
+    /// Whether a required permission is missing, so the menu offers the setup assistant.
+    private let needsSetup: () -> Bool
     /// Nil when nothing is recording; otherwise the live recording's controls.
     private let recordingControls: () -> RecordingControls?
     /// Extra menu items contributed by debug builds; empty in release.
@@ -41,7 +40,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var appliedIconKey: String?
     /// The recovery row in the open menu, so a count that arrives late can update it.
     weak var recoveryItem: NSMenuItem?
-    /// Fills the strip and the Recent submenu with thumbnails after the menu is up.
+    /// Fills the strip with thumbnails after the menu is up.
     var thumbnailFillTask: Task<Void, Never>?
     let history: HistoryController?
     let reopenFromHistory: (HistoryRecord) -> Void
@@ -54,7 +53,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Recounts off the main thread and reports the new count on it.
     let refreshUnfinishedRecordings: (@escaping (Int) -> Void) -> Void
     let recoverRecordings: () -> Void
-    private let desktopIconsHidden: () -> Bool
     let overlayCardCount: () -> Int
     let overlaysAreHidden: () -> Bool
     let pinCount: () -> Int
@@ -63,16 +61,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var openDroppedFile: ((URL) -> Void)?
     /// Writes the menu-bar visibility setting when the user removes the icon (docs/16 APP-2).
     var onMenuBarVisibilityChange: ((Bool) -> Void)?
+    /// Any click on the idle icon, so the first-run hint under it can go.
+    var onIconClicked: (() -> Void)?
 
     init(
         perform: @escaping (CaptureCommand) -> Void,
         openSettings: @escaping () -> Void,
         restoreRecentlyClosed: @escaping () -> Void = {},
         closeAllPins: @escaping () -> Void = {},
-        captureWithPicker: @escaping () -> Void = {},
         showOnboarding: @escaping () -> Void = {},
-        checkForUpdates: @escaping () -> Void = {},
-        canCheckForUpdates: @escaping () -> Bool = { false },
+        needsSetup: @escaping () -> Bool = { false },
         recordingControls: @escaping () -> RecordingControls? = { nil },
         additionalItems: @escaping () -> [NSMenuItem] = { [] },
         history: HistoryController? = nil,
@@ -82,7 +80,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         unfinishedRecordings: @escaping () -> Int = { 0 },
         refreshUnfinishedRecordings: @escaping (@escaping (Int) -> Void) -> Void = { _ in },
         recoverRecordings: @escaping () -> Void = {},
-        desktopIconsHidden: @escaping () -> Bool = { false },
         overlayCardCount: @escaping () -> Int = { 0 },
         overlaysAreHidden: @escaping () -> Bool = { false },
         pinCount: @escaping () -> Int = { 0 },
@@ -92,10 +89,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.openSettings = openSettings
         self.restoreRecentlyClosed = restoreRecentlyClosed
         self.closeAllPins = closeAllPins
-        self.captureWithPicker = captureWithPicker
         self.showOnboarding = showOnboarding
-        self.checkForUpdates = checkForUpdates
-        self.canCheckForUpdates = canCheckForUpdates
+        self.needsSetup = needsSetup
         self.recordingControls = recordingControls
         self.additionalItems = additionalItems
         self.history = history
@@ -105,7 +100,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.unfinishedRecordings = unfinishedRecordings
         self.refreshUnfinishedRecordings = refreshUnfinishedRecordings
         self.recoverRecordings = recoverRecordings
-        self.desktopIconsHidden = desktopIconsHidden
         self.overlayCardCount = overlayCardCount
         self.overlaysAreHidden = overlaysAreHidden
         self.pinCount = pinCount
@@ -118,6 +112,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.isVisible = true
         showIdleIcon()
         attachDropTarget()
+        installMenuAccessibilityAction()
 
         // Items are built in menuNeedsUpdate, so launch pays for an empty menu only.
         menu.autoenablesItems = false
@@ -154,16 +149,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: - NSMenuDelegate
 
-    /// Groups the menu by task, with one separator between groups (docs/14 UX-08).
+    /// A short menu: the live recording, recent work, what needs attention, and the app
+    /// (docs/03 §8.1, docs/14 UX-08).
     ///
-    /// Capture modes, utilities, the live recording, recent work, the surfaces a capture
-    /// produced, setup, updates, quit. A group whose commands cannot do anything right now
-    /// is absent rather than present and greyed: a disabled row with no explanation is a
-    /// puzzle, and the menu is rebuilt on every open anyway, so absence costs nothing.
+    /// Capturing is the island's job — a click on the icon opens it — so no capture mode,
+    /// utility or overlay command is listed here. The menu used to carry all of them and ran
+    /// past twenty rows before History. What is left is what the island cannot do, and a
+    /// group whose rows could not do anything right now is absent rather than greyed.
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        addCaptureItems(to: menu)
-        addUtilityItems(to: menu)
         if let controls = recordingControls() {
             addRecordingItems(controls, to: menu)
         }
@@ -181,6 +175,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) {
         thumbnailFillTask?.cancel()
         thumbnailFillTask = nil
+    }
+
+    /// One separator between groups, and never one at the top or two in a row.
+    static func addGroupSeparator(to menu: NSMenu) {
+        guard let last = menu.items.last, !last.isSeparatorItem else { return }
+        menu.addItem(.separator())
     }
 
     /// Builds one command row: title, glyph, target, right-aligned shortcut.
@@ -203,51 +203,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// Group 1 — how to take a capture (docs/03 §8.1).
-    ///
-    /// The two record commands belong here: starting a recording is a capture mode, not a
-    /// recording control. While one is running they are gone, replaced by the group that
-    /// can actually stop it.
-    private func addCaptureItems(to menu: NSMenu) {
-        for command in CaptureCommand.menuCommands {
-            menu.addItem(makeCommandItem(command))
-        }
-
-        guard recordingControls() == nil else { return }
-        for command in CaptureCommand.recordingCommands {
-            menu.addItem(makeCommandItem(command))
-        }
-    }
-
-    /// Group 2 — things done to the screen before or instead of a capture (docs/03 §7).
-    private func addUtilityItems(to menu: NSMenu) {
-        menu.addItem(.separator())
-
-        for command in CaptureCommand.utilityCommands {
-            let hidden = desktopIconsHidden()
-            let item = command == .toggleDesktopIcons
-                ? makeCommandItem(command, title: hidden ? "Show Desktop Icons" : "Hide Desktop Icons")
-                : makeCommandItem(command)
-            if command == .toggleDesktopIcons {
-                item.state = hidden ? .on : .off
-            }
-            menu.addItem(item)
-        }
-
-        // Always available, grant or not (docs/04 §4.1).
-        let pickerItem = NSMenuItem(
-            title: "Capture with the macOS Picker…",
-            action: #selector(didSelectPickerCapture),
-            keyEquivalent: ""
-        )
-        pickerItem.target = self
-        menu.addItem(pickerItem)
-    }
-
-    /// Group 3 — only while something is recording (docs/03 §1.8, docs/14 UX-08).
+    /// The live recording, first, because while one runs it is the only thing that matters
+    /// (docs/03 §1.8, docs/14 UX-08).
     private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
-        menu.addItem(.separator())
-
         let status = NSMenuItem(
             title: controls.isPaused
                 ? "Recording paused — \(controls.elapsedText)"
@@ -329,18 +287,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc
-    private func didSelectPickerCapture() {
-        captureWithPicker()
-    }
-
-    @objc
     func didSelectOnboarding() {
         showOnboarding()
     }
 
-    @objc
-    func didSelectCheckForUpdates() {
-        checkForUpdates()
+    var isSetupNeeded: Bool {
+        needsSetup()
     }
 
     @objc

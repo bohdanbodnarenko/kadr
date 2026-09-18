@@ -77,43 +77,35 @@ struct CaptureCommandTests {
         #expect(names == CaptureCommand.allCases.map(\.rawValue))
     }
 
-    @Test("Every command ships a default shortcut, and none collide")
-    func initialShortcutsAreDistinct() {
-        let defaults = CaptureCommand.allCases.compactMap(\.shortcutName.initialShortcut)
-        #expect(defaults.count == CaptureCommand.allCases.count)
+    @Test("Only the five everyday commands ship a default, and none collide")
+    func initialShortcutsAreFewAndDistinct() {
+        let shipped = CaptureCommand.allCases.filter { $0.shortcutName.initialShortcut != nil }
+        #expect(Set(shipped) == [.allInOne, .captureArea, .captureFullscreen, .recordSetup, .stopRecording])
+        let defaults = shipped.compactMap(\.shortcutName.initialShortcut)
         #expect(Set(defaults).count == defaults.count)
     }
 
-    @Test("The menu lists the capture actions from docs/03 §8.1")
-    func menuCommands() {
-        #expect(CaptureCommand.menuCommands == [
-            .allInOne,
-            .captureArea,
-            .captureWindow,
-            .captureFullscreen,
-            .captureScrolling,
-            .captureText,
-            .pickColor
-        ])
-        #expect(CaptureCommand.menuCommands.allSatisfy { !$0.title.isEmpty })
-        // Repeating the last region is a hotkey, not a menu item (docs/03 §8.1).
-        #expect(!CaptureCommand.menuCommands.contains(.capturePreviousArea))
-        #expect(!CaptureCommand.menuCommands.contains(.captureAreaAndCopy))
+    @Test("Direct captures mirror the system's numbers with Control-Shift", arguments: [
+        (CaptureCommand.captureFullscreen, KeyboardShortcuts.Key.three),
+        (.captureArea, .four),
+        (.recordSetup, .six),
+        (.stopRecording, .period)
+    ])
+    func defaultsUseControlShift(command: CaptureCommand, key: KeyboardShortcuts.Key) {
+        #expect(command.shortcutName.initialShortcut == .init(key, modifiers: [.control, .shift]))
     }
 
-    @Test("Utility commands include the self-timer")
-    func utilityCommandsIncludeSelfTimer() {
-        #expect(CaptureCommand.utilityCommands.contains(.selfTimer))
-        #expect(CaptureCommand.utilityCommands.contains(.freezeScreen))
+    @Test("The capture island sits beside the system's screenshot keys, on Shift-Command-2")
+    func islandShortcut() {
+        #expect(CaptureCommand.allInOne.shortcutName.initialShortcut == .init(.two, modifiers: [.command, .shift]))
     }
 
-    @Test("Overlay commands cover close, save, hide and pin clipboard")
-    func overlayCommands() {
-        #expect(CaptureCommand.overlayCommands == [
-            .saveAllOverlays,
-            .closeAllOverlays,
-            .hideOverlays,
-            .pinClipboard
-        ])
+    @Test("Settings lists every command exactly once")
+    func shortcutSectionsCoverEveryCommand() {
+        let listed = CaptureCommand.shortcutSections.flatMap(\.commands)
+        #expect(listed.count == CaptureCommand.allCases.count)
+        #expect(Set(listed) == Set(CaptureCommand.allCases))
+        #expect(CaptureCommand.shortcutSections.allSatisfy { !$0.title.isEmpty && !$0.commands.isEmpty })
+        #expect(listed.allSatisfy { !$0.title.isEmpty })
     }
 }

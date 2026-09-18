@@ -374,8 +374,7 @@ struct HistoryView: View {
         await controller.reload(filter: currentFilter)
     }
 
-    @ViewBuilder
-    private func historyLifecycleModifiers<Content: View>(_ content: Content) -> some View {
+    private func historyLifecycleModifiers(_ content: some View) -> some View {
         content
             .onDeleteCommand { Task { await deleteSelected() } }
             .onCopyCommand {
