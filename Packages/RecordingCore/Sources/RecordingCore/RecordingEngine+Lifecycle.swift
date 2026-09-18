@@ -93,7 +93,13 @@ extension RecordingEngine {
     }
 
     /// Stops and returns the finished file.
-    public func stop(savingTo destination: URL, interruption: String? = nil) async throws -> RecordingResult {
+    /// - Parameter trimmingTail: seconds to drop from the end, for a stop the user walked
+    ///   to (docs/03 §1.8). Zero for a hotkey, automation, or a recording that ended itself.
+    public func stop(
+        savingTo destination: URL,
+        interruption: String? = nil,
+        trimmingTail: TimeInterval = 0
+    ) async throws -> RecordingResult {
         guard state == .recording || state == .paused else { throw RecordingError.notRecording }
         state = .finishing
         if let interruption {
@@ -108,7 +114,7 @@ extension RecordingEngine {
             state = .idle
         }
 
-        await closeSegment()
+        await closeSegment(trimmingTail: trimmingTail)
         await stopStream()
 
         guard !segments.isEmpty else {
@@ -180,11 +186,13 @@ extension RecordingEngine {
         }
     }
 
-    func closeSegment() async {
+    /// - Parameter trimmingTail: only a stop passes one. A pause closes a segment too, and
+    ///   the seconds before a pause are recording, not travel.
+    func closeSegment(trimmingTail: TimeInterval = 0) async {
         await awaitPendingClose()
         guard let writer else { return }
         self.writer = nil
-        let close = Task { await self.drain(writer) }
+        let close = Task { await self.drain(writer, trimmingTail: trimmingTail) }
         segmentClose = close
         await close.value
         segmentClose = nil
@@ -197,12 +205,15 @@ extension RecordingEngine {
         segmentClose = nil
     }
 
-    func drain(_ writer: any SegmentWriting) async {
-        accumulatedDuration += await writer.duration
+    func drain(_ writer: any SegmentWriting, trimmingTail: TimeInterval = 0) async {
         if interruptionReason == nil, let reason = await writer.failureReason {
             interruptionReason = reason
         }
-        if let url = await writer.finish() {
+        let url = await writer.finish(trimmingTail: trimmingTail)
+        // Asked *after* finishing, because the trim is decided there: the duration that
+        // goes into the manifest has to be the length of the file, not of what was captured.
+        accumulatedDuration += await writer.duration
+        if let url {
             segments.append(url)
         }
     }

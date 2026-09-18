@@ -72,6 +72,19 @@ final class PointerTelemetryRecorder {
     /// pointer and the floating bar can be dragged, so anything cached is the shape the
     /// control had a moment ago — which is exactly the moment somebody is reaching for it.
     var chromeOnScreen: @MainActor () -> [CGRect] = { [] }
+    /// When the pointer arrived at those controls, on the recording's clock.
+    ///
+    /// Cleared whenever it leaves again, so this is the *current* approach rather than the
+    /// first one of the take: what the stop trim wants to know is how long this trip to the
+    /// button has taken, not that the pointer passed the notch once ten minutes ago.
+    private var chromeEnteredAt: TimeInterval?
+
+    /// How long the pointer has been on Kadr's own controls, or nil if it is not on them.
+    var travelToControls: TimeInterval? {
+        guard let chromeEnteredAt else { return nil }
+        return max(recordingTime - chromeEnteredAt, 0)
+    }
+
     /// The flip axis between the two global spaces, read when the recording starts.
     var space = GlobalCoordinateSpace.current
 
@@ -237,6 +250,7 @@ final class PointerTelemetryRecorder {
 
     func recordPointer(at screenPoint: ScreenPoint, isDragging: Bool = false) {
         guard isRecording, !isPaused, let position = pointConverter(screenPoint)?.cgPoint else { return }
+        noteApproachToControls(screenPoint)
         guard TelemetryPolicy.shouldRecord(position, at: recordingTime, lastSample: pointer.last) else {
             return
         }
@@ -246,6 +260,19 @@ final class PointerTelemetryRecorder {
             cursorIndex: captureCurrentCursor(),
             isDragging: isDragging
         ))
+    }
+
+    /// Tracks the trip to the Stop button, which is the part of the end worth trimming.
+    private func noteApproachToControls(_ screenPoint: ScreenPoint) {
+        let onScreen = CGPoint(x: screenPoint.x, y: screenPoint.y)
+        let onControls = !TelemetryPolicy.shouldRecordClick(at: onScreen, chrome: chromeOnScreen())
+        if onControls {
+            if chromeEnteredAt == nil {
+                chromeEnteredAt = recordingTime
+            }
+        } else {
+            chromeEnteredAt = nil
+        }
     }
 
     func recordClick(at screenPoint: ScreenPoint, button: ClickEvent.Button, isDown: Bool) {

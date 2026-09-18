@@ -273,7 +273,7 @@ private actor FailedSegmentWriter: SegmentWriting {
         false
     }
 
-    func finish() async -> URL? {
+    func finish(trimmingTail _: TimeInterval) async -> URL? {
         url
     }
 

@@ -29,6 +29,11 @@ final class StudioSessionRecorder {
         set { telemetry.chromeOnScreen = newValue }
     }
 
+    /// How long the pointer has been on those controls, for the stop trim (docs/03 §1.8).
+    var travelToControls: TimeInterval? {
+        telemetry.travelToControls
+    }
+
     private let camera: CameraFileRecorder
     private var session: RecordingSession?
     /// When the session began, on the same clock the camera reports its first frame on.

@@ -55,7 +55,8 @@ protocol SegmentWriting: Actor {
     var failureReason: String? { get }
     @discardableResult
     func append(_ box: SampleBufferBox) -> Bool
-    func finish() async -> URL?
+    /// Finishes the file, dropping `tail` seconds from its end (docs/03 §1.8).
+    func finish(trimmingTail tail: TimeInterval) async -> URL?
     func cancel() async
 }
 
@@ -181,10 +182,15 @@ actor SegmentWriter: SegmentWriting {
         return true
     }
 
-    /// The wall-clock length written so far.
+    /// The wall-clock length written so far, less anything trimmed from its end.
+    ///
+    /// Read after `finish`, so what the engine accumulates is the length of the file that
+    /// exists rather than the length of what was captured — the two differ by the trim, and
+    /// a manifest that disagrees with its movie puts every zoom in the studio out by it.
     var duration: TimeInterval {
         guard let first = firstPresentationTime, let last = lastPresentationTime else { return 0 }
-        return CMTimeGetSeconds(CMTimeSubtract(last, first))
+        let written = CMTimeGetSeconds(CMTimeSubtract(last, first))
+        return max(written - trimmedTail, 0)
     }
 
     /// Finishes the file.
@@ -194,16 +200,20 @@ actor SegmentWriter: SegmentWriting {
     /// that window was handed `fileURL` for a file still being written and went off to
     /// stitch it (docs/11 S0.3). A second caller now waits for the first and gets the same
     /// answer, which is what "safe to call twice" was always supposed to mean.
-    func finish() async -> URL? {
+    func finish(trimmingTail tail: TimeInterval = 0) async -> URL? {
         if let finishing {
             return await finishing.value
         }
         guard !isFinished else { return nil }
         isFinished = true
+        trimmedTail = max(tail, 0)
         let finishing = Task { await self.finishWriting() }
         self.finishing = finishing
         return await finishing.value
     }
+
+    /// Seconds cut from the end of this segment, decided at `finish`.
+    private var trimmedTail: TimeInterval = 0
 
     private var finishing: Task<URL?, Never>?
 
@@ -219,6 +229,7 @@ actor SegmentWriter: SegmentWriting {
             return nil
         }
 
+        endSessionForTrim()
         await writer.finishWriting()
         if writer.status == .failed {
             noteFailure()
@@ -231,6 +242,24 @@ actor SegmentWriter: SegmentWriting {
             return nil
         }
         return fileURL
+    }
+
+    /// Ends the writing session early, which is what drops the tail.
+    ///
+    /// `AVAssetWriter` writes up to the session's end time: samples already appended past
+    /// it are not in the finished file. Doing it here, once, rather than refusing appends
+    /// as they arrive, is what keeps the trim off the sample path — the decision is only
+    /// known at stop, and the encoder must not grow a branch for it.
+    ///
+    /// Both tracks end at the same source time, so audio and video stay in step: trimming
+    /// them separately is how a cut ends with a quarter second of sound over a still frame.
+    private func endSessionForTrim() {
+        guard trimmedTail > 0, let first = firstPresentationTime, let last = lastPresentationTime else {
+            return
+        }
+        let cut = CMTimeSubtract(last, CMTime(seconds: trimmedTail, preferredTimescale: 600))
+        guard CMTimeCompare(cut, first) > 0 else { return }
+        writer.endSession(atSourceTime: cut)
     }
 
     private func noteFailure() {

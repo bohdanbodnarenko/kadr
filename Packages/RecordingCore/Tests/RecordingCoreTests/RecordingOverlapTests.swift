@@ -13,6 +13,8 @@ import Testing
 private actor GatedWriter: SegmentWriting {
     let url: URL
     private let length: TimeInterval
+    /// What `finish` was asked to trim, so a test can see the stop's tail arrive.
+    private(set) var trimmed: TimeInterval = 0
     private var release: CheckedContinuation<Void, Never>?
     private var isReleased = false
     private(set) var finishCount = 0
@@ -25,7 +27,7 @@ private actor GatedWriter: SegmentWriting {
 
     var duration: TimeInterval {
         durationReads += 1
-        return length
+        return max(length - trimmed, 0)
     }
 
     var failureReason: String? {
@@ -36,8 +38,9 @@ private actor GatedWriter: SegmentWriting {
         true
     }
 
-    func finish() async -> URL? {
+    func finish(trimmingTail tail: TimeInterval) async -> URL? {
         finishCount += 1
+        trimmed = tail
         if !isReleased {
             await withCheckedContinuation { continuation in
                 if isReleased {
@@ -147,9 +150,9 @@ struct RecordingOverlapTests {
         let directory = scratch()
         let writer = GatedWriter(url: directory.appendingPathComponent("segment-0.mp4"))
 
-        async let first = writer.finish()
+        async let first = writer.finish(trimmingTail: 0)
         await writer.waitUntilFinishing()
-        async let second = writer.finish()
+        async let second = writer.finish(trimmingTail: 0)
         await writer.releaseFinish()
 
         let one = try #require(await first)
@@ -224,6 +227,52 @@ struct RecordingOverlapTests {
         let segments = await engine.segmentsForTesting
         #expect(segments.count == 1, "the pause's segment was lost or duplicated")
         #expect(segments.first?.lastPathComponent == "segment-0.mp4")
+    }
+
+    // MARK: - The stop trim
+
+    /// The trim reaches the writer, and the duration the manifest is built from is the
+    /// length of the file rather than of what was captured (docs/03 §1.8).
+    @Test("A stop that trims travel shortens the file and what is reported")
+    func stopTrimsTheTail() async throws {
+        let directory = scratch()
+        let writer = GatedWriter(url: directory.appendingPathComponent("segment-0.mp4"), length: 12)
+        await writer.releaseFinish()
+        let engine = await primed(writer, in: directory)
+
+        let result = try await engine.stop(
+            savingTo: directory.appendingPathComponent("out.mp4"),
+            trimmingTail: 1.5
+        )
+
+        #expect(await writer.trimmed == 1.5)
+        #expect(abs(result.duration - 10.5) < 0.0001)
+    }
+
+    /// A pause closes a segment too, and the seconds before a pause are recording.
+    @Test("Pausing trims nothing")
+    func pauseTrimsNothing() async throws {
+        let directory = scratch()
+        let writer = GatedWriter(url: directory.appendingPathComponent("segment-0.mp4"), length: 12)
+        await writer.releaseFinish()
+        let engine = await primed(writer, in: directory)
+
+        try await engine.pause()
+
+        #expect(await writer.trimmed == 0)
+    }
+
+    @Test("A stop with no travel writes everything that was captured")
+    func hotkeyStopKeepsEverything() async throws {
+        let directory = scratch()
+        let writer = GatedWriter(url: directory.appendingPathComponent("segment-0.mp4"), length: 8)
+        await writer.releaseFinish()
+        let engine = await primed(writer, in: directory)
+
+        let result = try await engine.stop(savingTo: directory.appendingPathComponent("out.mp4"))
+
+        #expect(await writer.trimmed == 0)
+        #expect(abs(result.duration - 8) < 0.0001)
     }
 }
 

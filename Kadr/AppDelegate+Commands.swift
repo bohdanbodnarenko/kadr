@@ -237,7 +237,10 @@ extension AppDelegate {
         return RecordingControls(
             elapsedText: recording.elapsedText,
             isPaused: recording.state == .paused,
-            stop: { [weak self] in self?.recording.stop() },
+            // The bar's own Stop, and the menu's: both are reached by taking the pointer
+            // there, and that trip comes off the end of the file (docs/03 §1.8). The
+            // shortcut below does not, because nothing was navigated to.
+            stop: { [weak self] in self?.recording.stop(trimmingTravel: true) },
             togglePause: {
                 if recording.state == .paused {
                     recording.resume()

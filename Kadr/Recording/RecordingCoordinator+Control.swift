@@ -68,8 +68,25 @@ extension RecordingCoordinator {
         }
     }
 
+    /// The seconds of "walking to the Stop button" to drop from the end (docs/03 §1.8).
+    ///
+    /// Read before the stop tears anything down: the travel is a fact about the recording
+    /// that has just ended, and the telemetry recorder stops with it.
+    private func travelTail() -> TimeInterval {
+        let tail = StopTailPolicy.tail(travel: studio.travelToControls, duration: elapsed)
+        if tail > 0 {
+            logger.info("Trimming \(tail, format: .fixed(precision: 2), privacy: .public)s of travel to Stop")
+        }
+        return tail
+    }
+
     /// Stops and finalises. `completion` is how `kadr stop-recording` learns the path.
-    func stop(reportingTo completion: ((CaptureOutcome) -> Void)? = nil) {
+    ///
+    /// - Parameter trimmingTravel: whether the last seconds — the pointer's trip to the
+    ///   Stop button — come off the end (docs/03 §1.8). True for the controls' own stop
+    ///   button; false for a hotkey, automation, or a recording that ended itself, where
+    ///   the pointer went nowhere and the last second is as much the recording as any other.
+    func stop(trimmingTravel: Bool = false, reportingTo completion: ((CaptureOutcome) -> Void)? = nil) {
         guard isRecording else {
             completion?(.failed("Nothing is recording."))
             return
@@ -95,6 +112,7 @@ extension RecordingCoordinator {
         let destination = destinationURL()
         let interruption = pendingInterruption
         pendingInterruption = nil
+        let tail = trimmingTravel ? travelTail() : 0
         Task { [weak self] in
             guard let self else { return }
             defer {
@@ -102,43 +120,55 @@ extension RecordingCoordinator {
                 liveNotice = nil
             }
             do {
-                let result = try await engine.stop(savingTo: destination, interruption: interruption)
-                let exportGIF = wantsGIFExport
-                state = .idle
-                elapsed = 0
-                overrides = .none
-                startedByAutomation = false
-                wantsGIFExport = false
-                logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
-
-                // The card goes up before the session is assembled. Linking the footage and
-                // writing the sidecar takes a moment, and making the user wait for it would
-                // put a delay between stopping and seeing the recording that the recording
-                // itself does not have.
-                report(.file(result.fileURL))
-                onFinished?(result, exportGIF)
-                if let session = await studio.finish(with: result) {
-                    onStudioSessionReady?(session, result)
-                }
-                if result.interruption != nil {
-                    RecordingFailureNotice.presentInterruption(
-                        result.interruption ?? "The recording ended unexpectedly."
-                    )
-                }
-                finishTerminationIfNeeded()
+                let result = try await engine.stop(
+                    savingTo: destination,
+                    interruption: interruption,
+                    trimmingTail: tail
+                )
+                await finished(with: result)
             } catch {
-                state = .idle
-                elapsed = 0
-                overrides = .none
-                startedByAutomation = false
-                wantsGIFExport = false
-                studio.cancel()
-                logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
-                report(.failed(error.localizedDescription))
-                RecordingFailureNotice.presentStopFailure(error)
-                finishTerminationIfNeeded()
+                failedToFinish(error)
             }
         }
+    }
+
+    /// The take is on disk: hand it on, then assemble the studio session behind it.
+    private func finished(with result: RecordingResult) async {
+        let exportGIF = wantsGIFExport
+        resetAfterStopping()
+        logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
+
+        // The card goes up before the session is assembled. Linking the footage and writing
+        // the sidecar takes a moment, and making the user wait for it would put a delay
+        // between stopping and seeing the recording that the recording itself does not have.
+        report(.file(result.fileURL))
+        onFinished?(result, exportGIF)
+        if let session = await studio.finish(with: result) {
+            onStudioSessionReady?(session, result)
+        }
+        if result.interruption != nil {
+            RecordingFailureNotice.presentInterruption(
+                result.interruption ?? "The recording ended unexpectedly."
+            )
+        }
+        finishTerminationIfNeeded()
+    }
+
+    private func failedToFinish(_ error: any Error) {
+        resetAfterStopping()
+        studio.cancel()
+        logger.error("Recording failed to finish: \(error.localizedDescription, privacy: .public)")
+        report(.failed(error.localizedDescription))
+        RecordingFailureNotice.presentStopFailure(error)
+        finishTerminationIfNeeded()
+    }
+
+    private func resetAfterStopping() {
+        state = .idle
+        elapsed = 0
+        overrides = .none
+        startedByAutomation = false
+        wantsGIFExport = false
     }
 
     func cancel() {
