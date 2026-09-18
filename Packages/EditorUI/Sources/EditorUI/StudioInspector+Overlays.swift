@@ -2,145 +2,170 @@ import Shared
 import StudioSession
 import SwiftUI
 
+/// What the studio draws on top of the recording (docs/09 U3.4).
+///
+/// One section per thing that can be switched on, rather than one "On top" group holding
+/// four unrelated switches and nine controls belonging to whichever of them is enabled.
+/// Each section's controls are the ones its switch turns on, so the group empties and fills
+/// as a unit and nothing is ever enabled-looking but inert.
+@MainActor
 extension StudioInspector {
-    // MARK: - Overlays
+    // MARK: - Pointer
 
-    var overlaySection: some View {
-        StudioInspectorSection(title: "On top", key: "overlays") {
-            pointerControls
-            clickControls
-            Toggle("Enable zooms", isOn: Binding(
+    var pointerSection: some View {
+        Section {
+            Toggle("Draw pointer", isOn: Binding(
+                get: { model.edit.showsCursor },
+                set: { value in model.change { $0.showsCursor = value } }
+            ))
+            .disabled(model.manifest.hasBakedCursor)
+            if !model.manifest.hasBakedCursor, model.edit.showsCursor {
+                InspectorSlider(
+                    title: "Size",
+                    value: Binding(
+                        get: { model.edit.cursorScale },
+                        set: { value in
+                            model.change(coalescingAs: "cursor.scale") { $0.cursorScale = value }
+                        }
+                    ),
+                    range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
+                    format: .multiplier
+                )
+                Picker("Motion", selection: Binding(
+                    get: { model.edit.cursorSmoothing },
+                    set: { value in model.change { $0.cursorSmoothing = value } }
+                )) {
+                    ForEach(CursorSmoothing.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+            }
+        } header: {
+            Text("Pointer")
+        } footer: {
+            if model.manifest.hasBakedCursor {
+                Text("This recording already has the pointer in it. Record without it to have the "
+                    + "studio draw a smooth one instead.")
+            }
+        }
+    }
+
+    // MARK: - Clicks
+
+    var clickSection: some View {
+        Section {
+            Toggle("Ripple on clicks", isOn: Binding(
+                get: { model.edit.showsClicks },
+                set: { value in model.change { $0.showsClicks = value } }
+            ))
+            if model.edit.showsClicks {
+                Picker("Style", selection: Binding(
+                    get: { model.edit.clickStyle },
+                    set: { value in model.change { $0.clickStyle = value } }
+                )) {
+                    ForEach(ClickRippleStyle.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Toggle("Press into the screen", isOn: Binding(
+                    get: { model.edit.showsClickPress },
+                    set: { value in model.change { $0.showsClickPress = value } }
+                ))
+                InspectorSlider(
+                    title: "Size",
+                    value: Binding(
+                        get: { model.edit.clickScale },
+                        set: { value in
+                            model.change(coalescingAs: "click.scale") { $0.clickScale = value }
+                        }
+                    ),
+                    range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
+                    format: .multiplier
+                )
+                ColorPicker(
+                    "Colour",
+                    selection: Binding(
+                        get: { Color(model.edit.clickColor) },
+                        set: { color in
+                            model.change(coalescingAs: "click.color") { $0.clickColor = StudioColor(color) }
+                        }
+                    ),
+                    supportsOpacity: false
+                )
+            }
+        } header: {
+            Text("Clicks")
+        }
+    }
+
+    // MARK: - Zoom motion
+
+    /// How zooms move, as opposed to where they are — that is the timeline's job and the
+    /// Clip pane's.
+    var zoomMotionSection: some View {
+        Section {
+            Toggle("Use zooms", isOn: Binding(
                 get: { model.edit.showsZooms },
                 set: { value in model.change { $0.showsZooms = value } }
             ))
             if model.edit.showsZooms {
-                Picker("Zoom motion", selection: Binding(
+                Picker("Motion", selection: Binding(
                     get: { model.edit.zoomStyle },
                     set: { value in model.change { $0.zoomStyle = value } }
                 )) {
                     ForEach(ZoomAnimationStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                InspectorSlider(
+                    title: "Motion blur",
+                    value: Binding(
+                        get: { model.edit.motionBlur },
+                        set: { value in
+                            model.change(coalescingAs: "motion.blur") { $0.motionBlur = value }
+                        }
+                    ),
+                    range: 0 ... 1,
+                    format: .percent
+                )
             }
-            InspectorSlider(
-                title: "Motion blur",
-                value: Binding(
-                    get: { model.edit.motionBlur },
-                    set: { value in
-                        model.change(coalescingAs: "motion.blur") { $0.motionBlur = value }
-                    }
-                ),
-                range: 0 ... 1,
-                format: .percent
-            )
-            keystrokeControls
+        } header: {
+            Text("Zoom")
+        } footer: {
+            Text("Zooms are placed on the timeline. This is how they travel.")
         }
     }
 
-    @ViewBuilder
-    private var pointerControls: some View {
-        Toggle("Draw the pointer", isOn: Binding(
-            get: { model.edit.showsCursor },
-            set: { value in model.change { $0.showsCursor = value } }
-        ))
-        .disabled(model.manifest.hasBakedCursor)
-        if !model.manifest.hasBakedCursor {
-            InspectorSlider(
-                title: "Pointer size",
-                value: Binding(
-                    get: { model.edit.cursorScale },
-                    set: { value in
-                        model.change(coalescingAs: "cursor.scale") { $0.cursorScale = value }
-                    }
-                ),
-                range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
-                format: .multiplier
-            )
-            Picker("Pointer motion", selection: Binding(
-                get: { model.edit.cursorSmoothing },
-                set: { value in model.change { $0.cursorSmoothing = value } }
-            )) {
-                ForEach(CursorSmoothing.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-        }
-        if model.manifest.hasBakedCursor {
-            Text("This recording already has the pointer in it. Record without it to have "
-                + "the studio draw a smooth one instead.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
+    // MARK: - Shortcuts
 
-    @ViewBuilder
-    private var clickControls: some View {
-        Toggle("Ripple on clicks", isOn: Binding(
-            get: { model.edit.showsClicks },
-            set: { value in model.change { $0.showsClicks = value } }
-        ))
-        if model.edit.showsClicks {
-            Picker("Ripple", selection: Binding(
-                get: { model.edit.clickStyle },
-                set: { value in model.change { $0.clickStyle = value } }
-            )) {
-                ForEach(ClickRippleStyle.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            Toggle("Press into the screen", isOn: Binding(
-                get: { model.edit.showsClickPress },
-                set: { value in model.change { $0.showsClickPress = value } }
+    var keystrokeSection: some View {
+        Section {
+            Toggle("Caption shortcuts", isOn: Binding(
+                get: { model.edit.showsKeystrokes },
+                set: { value in model.change { $0.showsKeystrokes = value } }
             ))
-            InspectorSlider(
-                title: "Ripple size",
-                value: Binding(
-                    get: { model.edit.clickScale },
-                    set: { value in
-                        model.change(coalescingAs: "click.scale") { $0.clickScale = value }
-                    }
-                ),
-                range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
-                format: .multiplier
-            )
-            ColorPicker(
-                "Ripple colour",
-                selection: Binding(
-                    get: { Color(model.edit.clickColor) },
-                    set: { color in
-                        model.change(coalescingAs: "click.color") { $0.clickColor = StudioColor(color) }
-                    }
-                ),
-                supportsOpacity: false
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var keystrokeControls: some View {
-        Toggle("Caption shortcuts", isOn: Binding(
-            get: { model.edit.showsKeystrokes },
-            set: { value in model.change { $0.showsKeystrokes = value } }
-        ))
-        if model.edit.showsKeystrokes {
-            Text("Position")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            overlayPlacementGrid(selection: Binding(
-                get: { model.edit.keystrokePlacement },
-                set: { value in model.change { $0.keystrokePlacement = value } }
-            ))
-            InspectorSlider(
-                title: "Size",
-                value: Binding(
-                    get: { model.edit.keystrokeScale },
-                    set: { value in
-                        model.change(coalescingAs: "keystroke.scale") { $0.keystrokeScale = value }
-                    }
-                ),
-                range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
-                format: .multiplier
-            )
-            Picker("Theme", selection: Binding(
-                get: { model.edit.keystrokeAppearance },
-                set: { value in model.change { $0.keystrokeAppearance = value } }
-            )) {
-                ForEach(OverlayChromeAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+            if model.edit.showsKeystrokes {
+                OverlayPlacementPicker(selection: Binding(
+                    get: { model.edit.keystrokePlacement },
+                    set: { value in model.change { $0.keystrokePlacement = value } }
+                ))
+                InspectorSlider(
+                    title: "Size",
+                    value: Binding(
+                        get: { model.edit.keystrokeScale },
+                        set: { value in
+                            model.change(coalescingAs: "keystroke.scale") { $0.keystrokeScale = value }
+                        }
+                    ),
+                    range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
+                    format: .multiplier
+                )
+                Picker("Theme", selection: Binding(
+                    get: { model.edit.keystrokeAppearance },
+                    set: { value in model.change { $0.keystrokeAppearance = value } }
+                )) {
+                    ForEach(OverlayChromeAppearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+            }
+        } header: {
+            Text("Shortcuts")
+        } footer: {
+            if model.edit.showsKeystrokes {
+                Text("Keys pressed during the recording appear as they are typed.")
             }
         }
     }

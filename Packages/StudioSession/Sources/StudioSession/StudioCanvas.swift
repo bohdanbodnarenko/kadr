@@ -13,6 +13,16 @@ public struct StudioColor: Sendable, Hashable, Codable {
         self.blue = min(max(blue, 0), 1)
     }
 
+    /// Halfway to another colour, per channel.
+    public func blended(with other: StudioColor, amount: Double = 0.5) -> StudioColor {
+        let ratio = min(max(amount, 0), 1)
+        return StudioColor(
+            red: red + (other.red - red) * ratio,
+            green: green + (other.green - green) * ratio,
+            blue: blue + (other.blue - blue) * ratio
+        )
+    }
+
     /// Default solid fill when somebody first turns a background on.
     public static let graphite = StudioColor(red: 0.22, green: 0.23, blue: 0.25)
     /// Default click ripple — a white ring on the scene, the way a live overlay draws one.
@@ -49,6 +59,21 @@ public struct StudioGradient: Sendable, Hashable, Codable {
 
     public var end: StudioColor {
         stops[stops.count - 1]
+    }
+
+    /// Adds a stop halfway between the ends, or drops the ones already there.
+    ///
+    /// The midpoint starts at the colour the ramp already shows at its middle, so adding one
+    /// changes nothing until it is dragged — an edit that redraws the picture the moment it
+    /// is offered is an edit nobody trusts.
+    public func togglingMidpoint() -> StudioGradient {
+        var next = self
+        if stops.count > 2 {
+            next.stops = [start, end]
+        } else {
+            next.stops = [start, start.blended(with: end), end]
+        }
+        return next
     }
 
     private enum CodingKeys: String, CodingKey {

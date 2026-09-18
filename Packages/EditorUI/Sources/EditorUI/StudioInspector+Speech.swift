@@ -21,7 +21,7 @@ extension StudioInspector {
     /// not what that button says it does — and on a machine with no network it would be a
     /// button that hangs instead of one that explains.
     var speechSection: some View {
-        StudioInspectorSection(title: "Speech", key: "speech", startsOpen: false) {
+        Section {
             if !model.supportedLocales.isEmpty {
                 Picker("Language", selection: Bindable(model).speechLocaleIdentifier) {
                     ForEach(model.supportedLocales, id: \.self) { identifier in
@@ -33,50 +33,165 @@ extension StudioInspector {
                     Task { await model.refreshSpeechStatus() }
                 }
             }
-            switch model.speechStatus {
-            case .installed, .none:
-                tidyControl
-            case .notApplicable:
-                if model.dictationSettingsNeeded {
-                    Text("Removing filler words needs on-device dictation for this language. "
-                        + "Turn it on in System Settings ▸ Keyboard ▸ Dictation.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Button("Open Dictation Settings") {
-                        if let url = SpeechDictationSettings.url {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                } else {
-                    tidyControl
-                }
-            case .available:
-                Text("Removing filler words needs the language model for your language, which "
-                    + "this Mac does not have yet. Everything else in the studio works without it.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                installControl
-            case .downloading:
-                installControl
-            case .unsupported:
-                Text("macOS has no speech model for your language, so filler words cannot be "
-                    + "found automatically.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+            speechControl
             if !model.pendingCuts.isEmpty {
                 cutReview
             }
-            if model.transcript != nil {
+        } header: {
+            Text("Speech")
+        } footer: {
+            speechFooter
+        }
+        .onChange(of: model.pendingCuts.map(\.id)) {
+            largeRemovalArmed = false
+        }
+    }
+
+    @ViewBuilder
+    private var speechControl: some View {
+        switch model.speechStatus {
+        case .installed, .none:
+            tidyControl
+        case .notApplicable:
+            if model.dictationSettingsNeeded {
+                Button("Open Dictation Settings") {
+                    if let url = SpeechDictationSettings.url {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            } else {
+                tidyControl
+            }
+        case .available, .downloading:
+            installControl
+        case .unsupported:
+            EmptyView()
+        }
+    }
+
+    /// One footer per state, because each state has exactly one thing worth saying.
+    @ViewBuilder
+    private var speechFooter: some View {
+        switch model.speechStatus {
+        case .notApplicable where model.dictationSettingsNeeded:
+            Text("Removing filler words needs on-device dictation for this language. Turn it on in "
+                + "System Settings ▸ Keyboard ▸ Dictation.")
+        case .available, .downloading:
+            Text("Apple's on-device model is the only thing in the studio that uses the network, "
+                + "it is optional, and your recording is never uploaded — the model comes here, "
+                + "the audio stays.")
+        case .unsupported:
+            Text("macOS has no speech model for your language, so filler words cannot be found "
+                + "automatically.")
+        default:
+            Text("Cuts “um” and pauses over a second. They become clip boundaries, so one undo puts "
+                + "them all back and the recording is never altered.")
+        }
+    }
+
+    @ViewBuilder
+    var tidyControl: some View {
+        if model.isTranscribing {
+            LabeledContent("Listening…") {
+                HStack(spacing: 8) {
+                    if let progress = model.transcriptionProgress {
+                        ProgressView(value: progress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 90)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Button("Cancel") { model.cancelTidySpeech() }
+                        .buttonStyle(.link)
+                }
+            }
+        } else {
+            Button("Remove Filler Words…") {
+                Task { await model.tidySpeech() }
+            }
+        }
+    }
+
+    @ViewBuilder
+    var cutReview: some View {
+        ForEach(model.pendingCuts) { cut in
+            HStack {
+                Toggle(isOn: Binding(
+                    get: { model.selectedCutIDs.contains(cut.id) },
+                    set: { _ in model.toggleCut(cut.id) }
+                )) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(cut.label)
+                        Text(Self.clock(cut.start) + " · " + cut.reason.title)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Button("Preview") { model.seekToCut(cut) }
+                    .buttonStyle(.link)
+            }
+        }
+        if model.requiresCutConfirmation {
+            Label(
+                largeRemovalArmed
+                    ? "This removes more than 40% of the recording. Apply anyway to confirm."
+                    : "This removes more than 40% of the recording. Apply again to confirm.",
+                systemImage: "exclamationmark.triangle"
+            )
+            .foregroundStyle(.orange)
+            .font(.callout)
+        }
+        HStack {
+            Button("Cancel", role: .cancel) {
+                largeRemovalArmed = false
+                model.discardPendingCuts()
+            }
+            Spacer(minLength: 0)
+            Button(largeRemovalArmed ? "Apply Anyway" : "Apply Selected") {
+                if model.requiresCutConfirmation, !largeRemovalArmed {
+                    largeRemovalArmed = true
+                    return
+                }
+                model.applyPendingCuts(confirmingLargeRemoval: largeRemovalArmed)
+                largeRemovalArmed = false
+            }
+            .keyboardShortcut(.defaultAction)
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder
+    var installControl: some View {
+        if let progress = model.installProgress {
+            LabeledContent("Downloading…") {
+                HStack(spacing: 8) {
+                    ProgressView(value: progress)
+                        .progressViewStyle(.linear)
+                        .frame(width: 90)
+                    Button("Cancel") { model.cancelSpeechModelInstall() }
+                        .buttonStyle(.link)
+                }
+            }
+        } else {
+            Button("Download Language Model…") { model.installSpeechModel() }
+        }
+    }
+
+    // MARK: - Captions
+
+    /// Burned-in captions, which exist only once there is a transcript to draw.
+    @ViewBuilder
+    var captionSection: some View {
+        if model.transcript != nil {
+            Section {
                 Toggle("Burn in captions", isOn: Binding(
                     get: { model.edit.showsCaptions },
                     set: { value in model.change { $0.showsCaptions = value } }
                 ))
                 if model.edit.showsCaptions {
-                    Text("Position")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    overlayPlacementGrid(selection: Binding(
+                    OverlayPlacementPicker(selection: Binding(
                         get: { model.edit.captionPlacement },
                         set: { value in model.change { $0.captionPlacement = value } }
                     ))
@@ -96,100 +211,13 @@ extension StudioInspector {
                         set: { value in model.change { $0.highlightsSpokenWord = value } }
                     ))
                 }
-            }
-        }
-        .onChange(of: model.pendingCuts.map(\.id)) {
-            largeRemovalArmed = false
-        }
-    }
-
-    @ViewBuilder
-    var tidyControl: some View {
-        if model.isTranscribing {
-            VStack(alignment: .leading, spacing: 6) {
-                if let progress = model.transcriptionProgress {
-                    ProgressView(value: progress)
-                        .progressViewStyle(.linear)
-                } else {
-                    ProgressView().controlSize(.small)
+            } header: {
+                Text("Captions")
+            } footer: {
+                if model.edit.showsCaptions {
+                    Text("Captions are drawn into the exported movie, not attached as a track.")
                 }
-                Text("Listening to the recording…")
-                    .foregroundStyle(.secondary)
-                Button("Cancel") { model.cancelTidySpeech() }
-                    .controlSize(.small)
             }
-        } else {
-            Button("Remove filler words and long pauses") {
-                Task { await model.tidySpeech() }
-            }
-            Text("Cuts \u{201C}um\u{201D} and pauses over a second. They become clip boundaries, "
-                + "so one undo puts them all back and the recording is never altered.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    var cutReview: some View {
-        Text("Proposed cuts")
-            .font(.callout.weight(.semibold))
-        ForEach(model.pendingCuts) { cut in
-            HStack {
-                Toggle(isOn: Binding(
-                    get: { model.selectedCutIDs.contains(cut.id) },
-                    set: { _ in model.toggleCut(cut.id) }
-                )) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(cut.label)
-                        Text(Self.clock(cut.start) + " · " + cut.reason.title)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Button("Preview") { model.seekToCut(cut) }
-                    .controlSize(.small)
-            }
-        }
-        HStack {
-            Button(largeRemovalArmed ? "Apply anyway" : "Apply selected") {
-                if model.requiresCutConfirmation, !largeRemovalArmed {
-                    largeRemovalArmed = true
-                    return
-                }
-                model.applyPendingCuts(confirmingLargeRemoval: largeRemovalArmed)
-                largeRemovalArmed = false
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {
-                largeRemovalArmed = false
-                model.discardPendingCuts()
-            }
-        }
-        if model.requiresCutConfirmation {
-            Text(largeRemovalArmed
-                ? "This would remove more than 40% of the recording. Press Apply anyway to confirm."
-                : "This would remove more than 40% of the recording. Press Apply again to confirm.")
-                .font(.callout)
-                .foregroundStyle(.orange)
-        }
-    }
-
-    @ViewBuilder
-    var installControl: some View {
-        if let progress = model.installProgress {
-            VStack(alignment: .leading, spacing: 6) {
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                Button("Cancel download") { model.cancelSpeechModelInstall() }
-                    .controlSize(.small)
-            }
-        } else {
-            Button("Download the language model…") { model.installSpeechModel() }
-            Text("Downloads Apple's on-device model. It is the only thing in the studio that "
-                + "uses the network, it is optional, and your recording is never uploaded — "
-                + "the model comes here, the audio stays.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
     }
 }

@@ -122,4 +122,43 @@ struct StudioCanvasTests {
         let decoded = try JSONDecoder().decode(StudioCanvas.self, from: data)
         #expect(decoded.background == canvas.background)
     }
+
+    @Test("A midpoint starts on the ramp it is added to")
+    func midpointStartsNeutral() {
+        let ramp = StudioGradient(
+            from: StudioColor(red: 0, green: 0, blue: 0),
+            to: StudioColor(red: 1, green: 0.5, blue: 0)
+        )
+        let withMid = ramp.togglingMidpoint()
+
+        #expect(withMid.stops.count == 3)
+        #expect(withMid.start == ramp.start)
+        #expect(withMid.end == ramp.end)
+        // Halfway on every channel, so the picture does not change until it is dragged.
+        #expect(abs(withMid.stops[1].red - 0.5) < 0.001)
+        #expect(abs(withMid.stops[1].green - 0.25) < 0.001)
+        #expect(abs(withMid.stops[1].blue) < 0.001)
+    }
+
+    @Test("Toggling again leaves the two ends it started with")
+    func midpointTogglesBack() {
+        let ramp = StudioGradient(
+            from: StudioColor(red: 0.2, green: 0.4, blue: 0.6),
+            to: StudioColor(red: 0.8, green: 0.1, blue: 0.3),
+            angleDegrees: 45
+        )
+
+        let round = ramp.togglingMidpoint().togglingMidpoint()
+
+        #expect(round.stops == ramp.stops)
+        #expect(abs(round.angleDegrees - 45) < 0.001)
+    }
+
+    @Test("Blending clamps to the ends", arguments: [(0.0, 0.2), (1.0, 0.8), (0.5, 0.5)])
+    func blendClamps(amount: Double, expectedRed: Double) {
+        let from = StudioColor(red: 0.2, green: 0, blue: 0)
+        let to = StudioColor(red: 0.8, green: 0, blue: 0)
+
+        #expect(abs(from.blended(with: to, amount: amount).red - expectedRed) < 0.001)
+    }
 }

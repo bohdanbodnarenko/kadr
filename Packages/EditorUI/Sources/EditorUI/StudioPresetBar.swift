@@ -1,8 +1,11 @@
 import StudioSession
 import SwiftUI
 
-/// Saved looks at the top of the inspector — apply, save, delete, pick a default for the
-/// next recording (docs/09 U3.5).
+/// Saved looks — apply, save, delete, pick a default for the next recording (docs/09 U3.5).
+///
+/// A row inside the Frame pane's first section, not a bar pinned above the inspector: the
+/// name of the current look belongs beside the controls that change it, and one column
+/// under two stacked toolbars is a column with no room left.
 struct StudioPresetBar: View {
     let model: StudioDocumentModel
 
@@ -23,8 +26,6 @@ struct StudioPresetBar: View {
                 isNaming = true
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .alert("Save this look", isPresented: $isNaming) {
             TextField("Name", text: $draftName)
             Button("Save") { model.saveCurrentPreset(named: draftName) }

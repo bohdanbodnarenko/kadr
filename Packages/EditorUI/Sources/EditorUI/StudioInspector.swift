@@ -6,41 +6,107 @@ import SwiftUI
 
 /// The studio's controls (docs/09 U3.3–U3.5).
 ///
-/// Grouped by what the user is deciding rather than by which type holds the value: the
-/// shape of the output, what the camera does, what is drawn on top. A form organised by the
-/// model's structure makes somebody learn the model to find a setting.
+/// A segmented control over a grouped form, which is what macOS inspectors of this size look
+/// like. Each pane is one question — what is selected, how the picture is framed, what is
+/// drawn on it, what it sounds like — and within a pane every group is a plain `Section`
+/// with a header and, where something needs saying, a footer. Explanations belong in
+/// footers: as body text they read as content, and the eye stops separating the paragraph
+/// that matters from the six that do not.
 @MainActor
 struct StudioInspector: View {
     let model: StudioDocumentModel
     /// Read by `StudioInspector+Speech.swift`: a large removal has to be confirmed twice,
     /// and the confirmation lives in the speech half while the state belongs to the view.
     @State var largeRemovalArmed = false
+    @AppStorage("studio.inspector.tab") private var storedTab = StudioInspectorTab.clip.rawValue
+
+    private var tab: StudioInspectorTab {
+        StudioInspectorTab(rawValue: storedTab) ?? .clip
+    }
 
     var body: some View {
-        Form {
-            selectedClipSection
-            selectedZoomSection
-            shapeSection
-            canvasSection
-            cropSection
-            cameraSection
-            overlaySection
-            speechSection
-            audioSection
+        VStack(spacing: 0) {
+            tabPicker
+            Divider()
+            Form {
+                switch tab {
+                case .clip: clipPane
+                case .frame: framePane
+                case .effects: effectsPane
+                case .audio: audioPane
+                }
+            }
+            .formStyle(.grouped)
         }
-        .formStyle(.grouped)
+        .onChange(of: model.selectedZoom) { _, zoom in reveal(zoom: zoom != nil, clip: false) }
+        .onChange(of: model.selectedClip) { _, clip in reveal(zoom: false, clip: clip != nil) }
         .task {
             await model.refreshSpeechStatus()
             model.warmUpSpeech()
         }
     }
 
-    // MARK: - The selected clip
+    private func reveal(zoom: Bool, clip: Bool) {
+        guard let next = StudioInspectorTab.revealing(zoom: zoom, clip: clip) else { return }
+        storedTab = next.rawValue
+    }
+
+    private var tabPicker: some View {
+        Picker("Inspector", selection: Binding(
+            get: { tab },
+            set: { storedTab = $0.rawValue }
+        )) {
+            ForEach(StudioInspectorTab.allCases) { pane in
+                Text(pane.title)
+                    .accessibilityLabel(pane.accessibilityLabel)
+                    .tag(pane)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    // MARK: - Panes
 
     @ViewBuilder
-    private var selectedClipSection: some View {
+    private var clipPane: some View {
+        clipSection
+        selectedZoomSection
+    }
+
+    @ViewBuilder
+    private var framePane: some View {
+        lookSection
+        shapeSection
+        cropSection
+        canvasSection
+        cameraSection
+    }
+
+    @ViewBuilder
+    private var effectsPane: some View {
+        pointerSection
+        clickSection
+        zoomMotionSection
+        keystrokeSection
+    }
+
+    @ViewBuilder
+    private var audioPane: some View {
+        audioSection
+        speechSection
+        captionSection
+    }
+
+    // MARK: - Clip
+
+    @ViewBuilder
+    private var clipSection: some View {
         if let clip = selectedClip {
-            StudioInspectorSection(title: "Clip", key: "clip") {
+            Section {
                 InspectorSlider(
                     title: "Speed",
                     value: Binding(
@@ -50,16 +116,28 @@ struct StudioInspector: View {
                     range: Clip.minimumSpeed ... Clip.maximumSpeed,
                     format: .multiplier
                 )
-                Text("Audio stays in sync. Faster than 8× is unreadable, so that is the cap.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Button("Split at playhead") { model.splitAtPlayhead() }
-                    .controlSize(.small)
-                Button("Delete clip") { model.removeClipAtPlayhead() }
-                    .controlSize(.small)
-                    .disabled(model.edit.clips.clips.count < 2)
+                HStack {
+                    Button("Split at Playhead") { model.splitAtPlayhead() }
+                    Spacer(minLength: 0)
+                    Button("Delete Clip", role: .destructive) { model.removeClipAtPlayhead() }
+                        .disabled(model.edit.clips.clips.count < 2)
+                }
+            } header: {
+                Text("Clip \(clipPosition)")
+            } footer: {
+                Text("Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap.")
             }
         }
+    }
+
+    /// "2 of 5" — which cut this is, so the header is not the same word on every clip.
+    private var clipPosition: String {
+        guard let clip = selectedClip,
+              let index = model.edit.clips.clips.firstIndex(where: { $0.id == clip.id })
+        else {
+            return ""
+        }
+        return "\(index + 1) of \(model.edit.clips.clips.count)"
     }
 
     private var selectedClip: Clip? {
@@ -70,156 +148,6 @@ struct StudioInspector: View {
         // playhead crosses into another clip, not on every playback tick (docs/11 S2).
         guard let index = model.currentClipIndex, model.edit.clips.clips.indices.contains(index) else { return nil }
         return model.edit.clips.clips[index]
-    }
-
-    // MARK: - Shape
-
-    private var shapeSection: some View {
-        StudioInspectorSection(title: "Shape", key: "shape") {
-            Picker("Aspect", selection: Binding(
-                get: { model.edit.reframe.aspect },
-                set: { value in model.change { $0.reframe.aspect = value } }
-            )) {
-                ForEach(ReframeAspect.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            Picker("Fit", selection: Binding(
-                get: { model.edit.reframe.fill },
-                set: { value in model.change { $0.reframe.fill = value } }
-            )) {
-                ForEach(ReframeFill.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .disabled(model.edit.reframe.aspect == .original)
-        }
-    }
-
-    // MARK: - Crop
-
-    /// An arbitrary rectangle in the recording, applied before the aspect reframe
-    /// (docs/10 R3.5).
-    private var cropSection: some View {
-        StudioInspectorSection(title: "Crop", key: "crop", startsOpen: false) {
-            if model.canTrimNotch {
-                Button("Remove the notch strip") { model.trimNotchStrip() }
-                Text("This display has a notch, so the top of the recording has a bite out "
-                    + "of it. This crops that strip away.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            InspectorSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
-            // "Top", not "Bottom" (docs/11 S2). `cropRect` is normalised source space and
-            // the renderer treats it as top-left throughout — `pixelCrop` hands the plan a
-            // rect it offsets by `crop.minY` and the composer flips once at the very end.
-            // So raising this slider moves the crop *down*, and the label said the opposite.
-            InspectorSlider(title: "Top", value: cropY, range: 0 ... 0.9, format: .percent)
-            InspectorSlider(title: "Width", value: cropWidth, range: 0.1 ... 1, format: .percent)
-            InspectorSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
-            Button("Reset crop") { model.change { $0.cropRect = nil } }
-                .disabled(model.edit.cropRect == nil)
-            Button("Crop on preview") { model.beginCrop() }
-                .help("Drag the crop on the picture rather than with these sliders")
-        }
-    }
-
-    private var normalizedCrop: CGRect {
-        model.edit.cropRect ?? CGRect(x: 0, y: 0, width: 1, height: 1)
-    }
-
-    private var cropX: Binding<Double> {
-        cropEdge(gesture: "crop.x", get: { $0.origin.x }, set: { $0.origin.x = $1 })
-    }
-
-    private var cropY: Binding<Double> {
-        cropEdge(gesture: "crop.y", get: { $0.origin.y }, set: { $0.origin.y = $1 })
-    }
-
-    private var cropWidth: Binding<Double> {
-        cropEdge(gesture: "crop.width", get: { $0.width }, set: { $0.size.width = $1 })
-    }
-
-    private var cropHeight: Binding<Double> {
-        cropEdge(gesture: "crop.height", get: { $0.height }, set: { $0.size.height = $1 })
-    }
-
-    /// - Parameter gesture: names this slider, so one drag of it is one undo step and
-    ///   dragging a different edge afterwards starts another (docs/11 S2).
-    private func cropEdge(
-        gesture: String,
-        get: @escaping (CGRect) -> CGFloat,
-        set: @escaping (inout CGRect, Double) -> Void
-    ) -> Binding<Double> {
-        Binding(
-            get: { Double(get(normalizedCrop)) },
-            set: { value in
-                var rect = normalizedCrop
-                set(&rect, value)
-                let x = min(max(rect.origin.x, 0), 0.95)
-                let y = min(max(rect.origin.y, 0), 0.95)
-                let width = min(max(rect.width, 0.05), 1 - x)
-                let height = min(max(rect.height, 0.05), 1 - y)
-                let next = CGRect(x: x, y: y, width: width, height: height)
-                model.change(coalescingAs: gesture) {
-                    $0.cropRect = next == CGRect(x: 0, y: 0, width: 1, height: 1) ? nil : next
-                }
-            }
-        )
-    }
-
-    // MARK: - Camera
-
-    private var cameraSection: some View {
-        StudioInspectorSection(title: "Camera", key: "camera") {
-            Toggle("Show the camera", isOn: Binding(
-                get: { model.edit.camera.isVisible },
-                set: { value in model.change { $0.camera.isVisible = value } }
-            ))
-            .disabled(!model.manifest.hasCamera)
-            if model.manifest.hasCamera {
-                Text("Drag the bubble to place it, or drag a corner to resize.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            if !model.manifest.hasCamera {
-                Text("This recording has no camera track.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Toggle("Fill the frame", isOn: Binding(
-                get: { model.edit.camera.isFullscreen },
-                set: { value in model.change { $0.camera.isFullscreen = value } }
-            ))
-            .help("Talking-head mode: the camera fills the export.")
-            Picker("Corner", selection: Binding(
-                get: { model.edit.camera.placement },
-                set: { value in model.snapCamera(to: value) }
-            )) {
-                ForEach(BubblePlacement.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .disabled(model.edit.camera.isFullscreen)
-            InspectorSlider(
-                title: "Size",
-                value: Binding(
-                    get: { model.edit.camera.sizeFraction },
-                    set: { value in
-                        model.change(coalescingAs: "camera.size") { $0.camera.sizeFraction = value }
-                    }
-                ),
-                range: 0.08 ... 0.6,
-                format: .percent
-            )
-            .disabled(model.edit.camera.isFullscreen)
-            InspectorSlider(
-                title: "Roundness",
-                value: Binding(
-                    get: { model.edit.camera.roundness },
-                    set: { value in
-                        model.change(coalescingAs: "camera.roundness") { $0.camera.roundness = value }
-                    }
-                ),
-                range: 0 ... 1,
-                format: .percent
-            )
-        }
-        .disabled(!model.manifest.hasCamera)
     }
 
     static func clock(_ seconds: TimeInterval) -> String {

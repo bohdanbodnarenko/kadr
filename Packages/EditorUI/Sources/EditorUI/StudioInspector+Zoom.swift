@@ -1,149 +1,163 @@
 import StudioSession
 import SwiftUI
 
+/// The selected zoom cue (docs/09 U3.4).
+@MainActor
 extension StudioInspector {
     @ViewBuilder
     var selectedZoomSection: some View {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
-            StudioInspectorSection(title: "Zoom", key: "zoom") {
+            Section {
                 zoomNavigationRow(id: id)
                 Toggle("Use this zoom", isOn: Binding(
                     get: { cue.isEnabled },
                     set: { value in model.updateZoom(id) { $0.isEnabled = value } }
                 ))
-                zoomFocusRow(id: id, cue: cue)
-                InspectorSlider(
-                    title: "Starts at",
-                    value: Binding(
-                        // Edited time both ways: `cue.start` is source time, and after a
-                        // cut the slider showed one clock and moved the cue on the other.
-                        get: { model.editedDisplayRange(of: cue).lowerBound },
-                        set: { value in model.moveZoom(id, to: value) }
-                    ),
-                    range: 0 ... max(model.edit.duration, 1),
-                    format: .seconds
-                )
-                Button("Move to playhead") { model.moveZoom(id, to: model.playhead) }
-                    .controlSize(.small)
-                if !cue.anchor.followsPointer {
-                    Button("Aim at the pointer") { model.aimSelectedZoomAtPointer() }
-                        .controlSize(.small)
-                        .disabled(!model.hasPointerAtPlayhead)
-                        .help("Point this zoom at where the pointer was at the playhead")
-                    StudioZoomFocusPad(
-                        position: Binding(
-                            get: { model.normalizedZoomAnchor(for: id) },
-                            set: { model.setZoomAnchor(id, toNormalized: $0) }
-                        ),
-                        magnification: cue.magnification,
-                        aspect: model.manifest.pixelSize
-                    )
+                zoomFocusControls(id: id, cue: cue)
+                zoomTimingControls(id: id, cue: cue)
+                HStack {
+                    Button("Move to Playhead") { model.moveZoom(id, to: model.playhead) }
+                    Spacer(minLength: 0)
+                    Button("Remove", role: .destructive) { model.removeSelectedZoom() }
                 }
-                InspectorSlider(
-                    title: "Magnification",
-                    value: Binding(
-                        get: { cue.magnification },
-                        set: { value in
-                            model.updateZoom(id, coalescingAs: "zoom.magnification") { $0.magnification = value }
-                        }
-                    ),
-                    range: 1 ... ZoomCue.maximumMagnification,
-                    format: .multiplier
-                )
-                InspectorSlider(
-                    title: "Hold",
-                    value: Binding(
-                        get: { cue.duration },
-                        set: { value in model.updateZoom(id, coalescingAs: "zoom.hold") { $0.duration = value } }
-                    ),
-                    // Thirty seconds, or the recording if it is shorter — not the whole
-                    // recording. A slider that spans ten minutes puts every useful hold in
-                    // its first two pixels, and a zoom nobody holds for nine minutes is not
-                    // worth making the other case unusable for.
-                    range: 0.2 ... min(max(model.edit.duration, 1), 30),
-                    format: .seconds
-                )
-                InspectorSlider(
-                    title: "Move",
-                    value: Binding(
-                        get: { cue.transitionDuration },
-                        set: { value in
-                            model.updateZoom(id, coalescingAs: "zoom.move") { $0.transitionDuration = value }
-                        }
-                    ),
-                    range: 0.1 ... 2,
-                    format: .seconds
-                )
-                Button("Remove zoom", role: .destructive) { model.removeSelectedZoom() }
+            } header: {
+                Text("Zoom \(zoomPosition(of: id))")
+            } footer: {
+                if cue.anchor.followsPointer {
+                    Text("The camera stays on the pointer for the life of this zoom.")
+                }
+            }
+        } else {
+            Section {
+                Text("Select a zoom on the timeline to edit it, or press Z to add one at the playhead.")
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Zoom")
             }
         }
+    }
+
+    private func zoomPosition(of id: ZoomCue.ID) -> String {
+        let ordered = model.zoomsInOrder
+        let index = (ordered.firstIndex { $0.id == id } ?? 0) + 1
+        return "\(index) of \(ordered.count)"
     }
 
     /// Which zoom this is, the way to the others, and a way to watch it.
     private func zoomNavigationRow(id: ZoomCue.ID) -> some View {
         let ordered = model.zoomsInOrder
         let index = ordered.firstIndex { $0.id == id } ?? 0
-        return HStack(spacing: 6) {
-            Text("Zoom \(index + 1) of \(ordered.count)")
-                .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button {
-                model.selectAdjacentZoom(forward: false)
-            } label: {
-                Image(systemName: "chevron.left")
+        return LabeledContent("Step through") {
+            HStack(spacing: 6) {
+                Button {
+                    model.selectAdjacentZoom(forward: false)
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(index == 0)
+                .help("Previous zoom ([)")
+                .accessibilityLabel("Previous zoom")
+                Button {
+                    model.selectAdjacentZoom(forward: true)
+                } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(index >= ordered.count - 1)
+                .help("Next zoom (])")
+                .accessibilityLabel("Next zoom")
+                Button {
+                    model.previewZoom(id)
+                } label: {
+                    Label("Play", systemImage: "play.fill")
+                }
+                .help("Play this zoom from just before it starts (Return)")
             }
-            .disabled(index == 0)
-            .help("Previous zoom ([)")
-            .accessibilityLabel("Previous zoom")
-            Button {
-                model.selectAdjacentZoom(forward: true)
-            } label: {
-                Image(systemName: "chevron.right")
-            }
-            .disabled(index >= ordered.count - 1)
-            .help("Next zoom (])")
-            .accessibilityLabel("Next zoom")
-            Button {
-                model.previewZoom(id)
-            } label: {
-                Label("Play", systemImage: "play.fill")
-            }
-            .help("Play this zoom from just before it starts (Return)")
         }
-        .controlSize(.small)
-        .buttonStyle(.bordered)
     }
 
-    private func zoomFocusRow(id: ZoomCue.ID, cue: ZoomCue) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Focus")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 4) {
-                ForEach(StudioZoomFocus.allCases, id: \.self) { focus in
-                    Button(focus.title) { model.setZoomFocus(id, to: focus) }
-                        .buttonStyle(.bordered)
-                        .tint(model.zoomFocus(of: id) == focus ? .accentColor : .secondary)
-                        .controlSize(.small)
-                }
-            }
-            if cue.anchor.followsPointer {
-                Text("The camera stays on the pointer for the life of this zoom.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                InspectorSlider(
-                    title: "Edge in frame",
-                    value: Binding(
-                        get: { cue.boundsBias },
-                        set: { value in
-                            model.updateZoom(id, coalescingAs: "zoom.bias") { $0.boundsBias = value }
-                        }
-                    ),
-                    range: 0 ... 1,
-                    format: .percent
-                )
-            }
+    @ViewBuilder
+    private func zoomFocusControls(id: ZoomCue.ID, cue: ZoomCue) -> some View {
+        Picker("Focus", selection: Binding(
+            get: { model.zoomFocus(of: id) },
+            set: { value in model.setZoomFocus(id, to: value) }
+        )) {
+            ForEach(StudioZoomFocus.allCases, id: \.self) { Text($0.title).tag($0) }
         }
+        .pickerStyle(.segmented)
+        if cue.anchor.followsPointer {
+            InspectorSlider(
+                title: "Edge in frame",
+                value: Binding(
+                    get: { cue.boundsBias },
+                    set: { value in
+                        model.updateZoom(id, coalescingAs: "zoom.bias") { $0.boundsBias = value }
+                    }
+                ),
+                range: 0 ... 1,
+                format: .percent
+            )
+        } else {
+            StudioZoomFocusPad(
+                position: Binding(
+                    get: { model.normalizedZoomAnchor(for: id) },
+                    set: { model.setZoomAnchor(id, toNormalized: $0) }
+                ),
+                magnification: cue.magnification,
+                aspect: model.manifest.pixelSize
+            )
+            Button("Aim at the Pointer") { model.aimSelectedZoomAtPointer() }
+                .disabled(!model.hasPointerAtPlayhead)
+                .help("Point this zoom at where the pointer was at the playhead")
+        }
+    }
+
+    @ViewBuilder
+    private func zoomTimingControls(id: ZoomCue.ID, cue: ZoomCue) -> some View {
+        InspectorSlider(
+            title: "Magnification",
+            value: Binding(
+                get: { cue.magnification },
+                set: { value in
+                    model.updateZoom(id, coalescingAs: "zoom.magnification") { $0.magnification = value }
+                }
+            ),
+            range: 1 ... ZoomCue.maximumMagnification,
+            format: .multiplier
+        )
+        InspectorSlider(
+            title: "Starts at",
+            value: Binding(
+                // Edited time both ways: `cue.start` is source time, and after a cut the
+                // slider showed one clock and moved the cue on the other.
+                get: { model.editedDisplayRange(of: cue).lowerBound },
+                set: { value in model.moveZoom(id, to: value) }
+            ),
+            range: 0 ... max(model.edit.duration, 1),
+            format: .seconds
+        )
+        InspectorSlider(
+            title: "Hold",
+            value: Binding(
+                get: { cue.duration },
+                set: { value in model.updateZoom(id, coalescingAs: "zoom.hold") { $0.duration = value } }
+            ),
+            // Thirty seconds, or the recording if it is shorter — not the whole recording. A
+            // slider that spans ten minutes puts every useful hold in its first two pixels,
+            // and a zoom nobody holds for nine minutes is not worth making the other case
+            // unusable for.
+            range: 0.2 ... min(max(model.edit.duration, 1), 30),
+            format: .seconds
+        )
+        InspectorSlider(
+            title: "Move",
+            value: Binding(
+                get: { cue.transitionDuration },
+                set: { value in
+                    model.updateZoom(id, coalescingAs: "zoom.move") { $0.transitionDuration = value }
+                }
+            ),
+            range: 0.1 ... 2,
+            format: .seconds
+        )
     }
 }

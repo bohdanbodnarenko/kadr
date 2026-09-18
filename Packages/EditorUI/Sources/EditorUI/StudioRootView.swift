@@ -126,15 +126,6 @@ public struct StudioRootView: View {
             }
         }
         .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                StudioPresetBar(model: model)
-                Rectangle()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(height: 0.5)
-            }
-            .background(.bar)
-        }
         .onAppear { model.applyDefaultPresetIfFresh() }
         .onChange(of: model.exportProgress) { _, progress in
             Self.updateDockProgress(progress)

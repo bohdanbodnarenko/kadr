@@ -2,19 +2,24 @@ import AnnotationModel
 import StudioSession
 import SwiftUI
 
+/// What sits around the recording: a colour, a gradient or a picture (docs/09 U3.5).
+@MainActor
 extension StudioInspector {
     var canvasSection: some View {
-        StudioInspectorSection(title: "Canvas", key: "canvas") {
-            HStack {
-                Button("As recorded") { model.change { $0.canvas = .identity } }
-                    .controlSize(.small)
-                Button("Presenter") { model.change { $0.canvas = .presenter } }
-                    .controlSize(.small)
-                Button("Paper") { model.change { $0.canvas = .paper } }
-                    .controlSize(.small)
+        Section {
+            // A segmented control, not four tinted buttons: this is one exclusive choice,
+            // and the control macOS has for that reads as a choice at a glance. The label is
+            // hidden so four segments get the whole row — at the inspector's narrowest they
+            // do not fit beside one, and the section header already says Canvas. VoiceOver
+            // still reads the title.
+            Picker("Backdrop", selection: backdropKind) {
+                ForEach(StudioBackdropKind.allCases) { kind in
+                    Text(kind.title).tag(kind)
+                }
             }
-            canvasBackdropKind
-            canvasBackdropSwatches
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            canvasBackdrop
             InspectorSlider(
                 title: "Padding",
                 value: Binding(
@@ -50,101 +55,46 @@ extension StudioInspector {
                 range: 0 ... 1,
                 format: .percent
             )
-            Text("A colour, gradient or wallpaper sits around the recording. As recorded is the raw frame.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var canvasBackdropKind: some View {
-        HStack(spacing: 6) {
-            ForEach(StudioBackdropKind.allCases) { kind in
-                Button(kind.title) {
-                    if kind == .wallpaper, model.edit.canvas.wallpaperFileName == nil {
-                        model.chooseWallpaper()
-                    } else {
-                        model.change { $0.canvas.setBackdropKind(kind) }
-                    }
-                }
-                .controlSize(.small)
+        } header: {
+            Text("Canvas")
+        } footer: {
+            if case .none = model.edit.canvas.background {
+                Text("No backdrop: the recording fills the frame edge to edge.")
             }
         }
     }
 
+    /// Choosing a kind switches to it — except a wallpaper nobody has picked yet, which asks
+    /// for the file first rather than switching to an empty backdrop.
+    private var backdropKind: Binding<StudioBackdropKind> {
+        Binding(
+            get: { model.edit.canvas.background.kind },
+            set: { kind in
+                if kind == .wallpaper, model.edit.canvas.wallpaperFileName == nil {
+                    model.chooseWallpaper()
+                } else {
+                    model.change { $0.canvas.setBackdropKind(kind) }
+                }
+            }
+        )
+    }
+
     @ViewBuilder
-    private var canvasBackdropSwatches: some View {
+    private var canvasBackdrop: some View {
         switch model.edit.canvas.background {
         case .none:
             EmptyView()
         case let .solid(current):
             canvasSolidSwatches(current: current)
-            ColorPicker(
-                "Colour",
-                selection: Binding(
-                    get: { Color(current) },
-                    set: { color in
-                        model.change(coalescingAs: "canvas.fill") { $0.canvas.setSolid(StudioColor(color)) }
-                    }
-                )
-            )
+            ColorPicker("Colour", selection: Binding(
+                get: { Color(current) },
+                set: { color in
+                    model.change(coalescingAs: "canvas.fill") { $0.canvas.setSolid(StudioColor(color)) }
+                }
+            ))
         case let .gradient(ramp):
             canvasGradientSwatches(ramp: ramp)
-            ColorPicker(
-                "From",
-                selection: Binding(
-                    get: { Color(ramp.start) },
-                    set: { color in
-                        var next = ramp
-                        var stops = next.stops
-                        stops[0] = StudioColor(color)
-                        next.stops = stops
-                        model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
-                    }
-                )
-            )
-            ColorPicker(
-                "To",
-                selection: Binding(
-                    get: { Color(ramp.end) },
-                    set: { color in
-                        var next = ramp
-                        var stops = next.stops
-                        stops[stops.count - 1] = StudioColor(color)
-                        next.stops = stops
-                        model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
-                    }
-                )
-            )
-            if ramp.stops.count > 2 {
-                ColorPicker(
-                    "Middle",
-                    selection: Binding(
-                        get: { Color(ramp.stops[1]) },
-                        set: { color in
-                            var next = ramp
-                            var stops = next.stops
-                            stops[1] = StudioColor(color)
-                            next.stops = stops
-                            model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
-                        }
-                    )
-                )
-            }
-            Button(ramp.stops.count > 2 ? "Remove midpoint" : "Add midpoint") {
-                var next = ramp
-                if next.stops.count > 2 {
-                    next.stops = [next.start, next.end]
-                } else {
-                    let mid = StudioColor(
-                        red: (next.start.red + next.end.red) / 2,
-                        green: (next.start.green + next.end.green) / 2,
-                        blue: (next.start.blue + next.end.blue) / 2
-                    )
-                    next.stops = [next.start, mid, next.end]
-                }
-                model.change { $0.canvas.setGradient(next) }
-            }
-            .controlSize(.small)
+            gradientStops(ramp: ramp)
             InspectorSlider(
                 title: "Angle",
                 value: Binding(
@@ -160,34 +110,49 @@ extension StudioInspector {
             )
         case .wallpaper:
             studioWallpaperRecents
-            Button("Choose Image…") { model.chooseWallpaper() }
-                .controlSize(.small)
-            if model.edit.canvas.wallpaperFileName != nil {
-                Button("Remove wallpaper") { model.removeWallpaper() }
-                    .controlSize(.small)
+            HStack {
+                Button("Choose Image…") { model.chooseWallpaper() }
+                Spacer(minLength: 0)
+                if model.edit.canvas.wallpaperFileName != nil {
+                    Button("Remove", role: .destructive) { model.removeWallpaper() }
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private func gradientStops(ramp: StudioGradient) -> some View {
+        ColorPicker("From", selection: gradientStop(ramp: ramp, index: 0))
+        if ramp.stops.count > 2 {
+            ColorPicker("Middle", selection: gradientStop(ramp: ramp, index: 1))
+        }
+        ColorPicker("To", selection: gradientStop(ramp: ramp, index: ramp.stops.count - 1))
+        Button(ramp.stops.count > 2 ? "Remove Midpoint" : "Add Midpoint") {
+            model.change { $0.canvas.setGradient(ramp.togglingMidpoint()) }
+        }
+    }
+
+    private func gradientStop(ramp: StudioGradient, index: Int) -> Binding<Color> {
+        Binding(
+            get: { Color(ramp.stops[min(index, ramp.stops.count - 1)]) },
+            set: { color in
+                var next = ramp
+                var stops = next.stops
+                stops[min(index, stops.count - 1)] = StudioColor(color)
+                next.stops = stops
+                model.change(coalescingAs: "canvas.fill") { $0.canvas.setGradient(next) }
+            }
+        )
     }
 
     private func canvasSolidSwatches(current: StudioColor) -> some View {
         LazyVGrid(columns: Self.swatchColumns, spacing: 6) {
             ForEach(Array(Self.solidPresets.enumerated()), id: \.offset) { _, color in
-                Button {
+                swatch(isSelected: color == current, label: "Canvas colour") {
                     model.change { $0.canvas.setSolid(color) }
-                } label: {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(Color(color))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(
-                                    color == current ? Color.accentColor : Color.primary.opacity(0.12),
-                                    lineWidth: color == current ? 2 : 1
-                                )
-                        )
+                } fill: {
+                    Color(color)
                 }
-                .buttonStyle(.plain)
-                .frame(height: 22)
-                .accessibilityLabel("Canvas colour")
             }
         }
     }
@@ -196,51 +161,59 @@ extension StudioInspector {
         LazyVGrid(columns: Self.swatchColumns, spacing: 6) {
             ForEach(Array(Self.gradientPresets.enumerated()), id: \.offset) { _, preset in
                 let selected = preset.0 == ramp.start && preset.1 == ramp.end && ramp.stops.count == 2
-                Button {
+                swatch(isSelected: selected, label: "Canvas gradient") {
                     model.change { $0.canvas.setGradient(from: preset.0, to: preset.1) }
-                } label: {
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(LinearGradient(
-                            colors: [Color(preset.0), Color(preset.1)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(
-                                    selected ? Color.accentColor : Color.primary.opacity(0.12),
-                                    lineWidth: selected ? 2 : 1
-                                )
-                        )
+                } fill: {
+                    LinearGradient(
+                        colors: [Color(preset.0), Color(preset.1)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 }
-                .buttonStyle(.plain)
-                .frame(height: 22)
-                .accessibilityLabel("Canvas gradient")
             }
         }
+    }
+
+    /// One swatch: the selected one wears the accent ring every other macOS colour grid uses.
+    private func swatch(
+        isSelected: Bool,
+        label: String,
+        action: @escaping () -> Void,
+        @ViewBuilder fill: () -> some ShapeStyle
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        return Button(action: action) {
+            shape
+                .fill(fill())
+                .overlay {
+                    shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                }
+                .overlay {
+                    shape
+                        .inset(by: -2)
+                        .strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0)
+                }
+        }
+        .buttonStyle(.plain)
+        .frame(height: 22)
+        .padding(2)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder
     private var studioWallpaperRecents: some View {
         let recents = BackdropRecents.load()
         if !recents.isEmpty {
-            HStack(spacing: 6) {
-                ForEach(recents.prefix(6), id: \.self) { path in
-                    Button {
-                        model.importWallpaper(from: URL(fileURLWithPath: path))
-                    } label: {
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(Color.secondary.opacity(0.2))
-                            .overlay {
-                                Text(URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 4)
-                            }
+            LabeledContent("Recent") {
+                HStack(spacing: 6) {
+                    ForEach(recents.prefix(4), id: \.self) { path in
+                        Button(URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent) {
+                            model.importWallpaper(from: URL(fileURLWithPath: path))
+                        }
+                        .buttonStyle(.link)
+                        .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .frame(height: 22)
-                    .accessibilityLabel(URL(fileURLWithPath: path).lastPathComponent)
                 }
             }
         }
