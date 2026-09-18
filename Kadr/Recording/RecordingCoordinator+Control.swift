@@ -73,7 +73,14 @@ extension RecordingCoordinator {
     /// Read before the stop tears anything down: the travel is a fact about the recording
     /// that has just ended, and the telemetry recorder stops with it.
     private func travelTail() -> TimeInterval {
-        let tail = StopTailPolicy.tail(travel: studio.travelToControls, duration: elapsed)
+        let tail = StopTailPolicy.tail(
+            travel: studio.travelToControls,
+            content: StopTailPolicy.Content(
+                lastInput: studio.lastInputTime,
+                lastAudible: lastAudibleTime
+            ),
+            duration: elapsed
+        )
         if tail > 0 {
             logger.info("Trimming \(tail, format: .fixed(precision: 2), privacy: .public)s of travel to Stop")
         }

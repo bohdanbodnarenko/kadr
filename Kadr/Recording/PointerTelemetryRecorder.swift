@@ -85,6 +85,14 @@ final class PointerTelemetryRecorder {
         return max(recordingTime - chromeEnteredAt, 0)
     }
 
+    /// When the user last clicked or typed, on the recording's clock.
+    ///
+    /// Clicks on Kadr's own controls never reach the telemetry, so this is the last thing
+    /// the user did *in* the recording — which is what the stop trim must not cut into.
+    /// Tracked rather than read back off the arrays, which are flushed to the journal every
+    /// few seconds and are empty for most of a long take.
+    private(set) var lastInputTime: TimeInterval?
+
     /// The flip axis between the two global spaces, read when the recording starts.
     var space = GlobalCoordinateSpace.current
 
@@ -298,6 +306,7 @@ final class PointerTelemetryRecorder {
             button: button,
             isDown: isDown
         ))
+        lastInputTime = recordingTime
     }
 
     /// Whether this event is one the recorder has already seen.
@@ -357,6 +366,7 @@ final class PointerTelemetryRecorder {
             return
         }
         keystrokes.append(KeystrokeEvent(time: recordingTime, caption: caption))
+        lastInputTime = recordingTime
     }
 
     /// Cheap evidence that this is a cursor already seen (docs/10 R1.3).

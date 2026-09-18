@@ -99,6 +99,7 @@ extension RecordingCoordinator {
     func startTicking() {
         stopTicking()
         microphonePeakMax = 0
+        lastAudibleTime = nil
         audioMeter = AudioMeter()
         onAudioLevel?(0)
         tickTask = Task { [weak self] in
@@ -120,6 +121,12 @@ extension RecordingCoordinator {
             system: max(fresh.system, audioMeter.system * 0.72)
         )
         elapsed = Date().timeIntervalSince(startedAt) - pausedDuration
+        if fresh.peak >= StopTailPolicy.audibleLevel {
+            // Remembered for the stop trim: nothing is cut over someone still talking
+            // (docs/03 §1.8). The *fresh* peak, not the decayed one the bar draws, or the
+            // decay would keep the recording "audible" for a second after silence.
+            lastAudibleTime = elapsed
+        }
         onAudioLevel?(audioMeter.peak)
         if RecordingTickPolicy.shouldNotify(previous: before, next: tickDisplay) {
             onStateChanged?()

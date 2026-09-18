@@ -34,6 +34,11 @@ final class StudioSessionRecorder {
         telemetry.travelToControls
     }
 
+    /// When the user last clicked or typed, so the trim does not cut into the result of it.
+    var lastInputTime: TimeInterval? {
+        telemetry.lastInputTime
+    }
+
     private let camera: CameraFileRecorder
     private var session: RecordingSession?
     /// When the session began, on the same clock the camera reports its first frame on.

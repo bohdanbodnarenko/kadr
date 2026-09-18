@@ -58,6 +58,8 @@ final class RecordingCoordinator {
 
     /// Last-buffer loudness for the control bar meter (CleanShot §13.3).
     @ObservationIgnored var audioMeter = AudioMeter()
+    /// When something was last audible, for the stop trim (docs/03 §1.8).
+    @ObservationIgnored var lastAudibleTime: TimeInterval?
 
     /// Where the tick sends the meter level, ten times a second.
     ///
