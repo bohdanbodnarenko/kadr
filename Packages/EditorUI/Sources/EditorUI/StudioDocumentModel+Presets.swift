@@ -38,13 +38,15 @@ public extension StudioDocumentModel {
     /// A brand-new recording picks up a studio look and, when the clicks support it,
     /// automatic zooms to open with — never a raw ScreenCaptureKit movie.
     ///
-    /// A draft or a committed edit is already a decision, so it is left alone. The
-    /// Presenter card is the fallback when nobody has chosen a default — opening onto a
-    /// raw SCK movie is what made the studio feel unfinished.
+    /// A draft or a committed edit is already a decision, so it is left alone. When nobody
+    /// has chosen a default the recording opens as recorded — the same size as the footage,
+    /// with no backdrop, padding or shadow. Those are things a person adds; a file that
+    /// comes out bigger than the screen it was recorded from, with a colour nobody picked
+    /// behind it, is a surprise in the one place a surprise is least wanted.
     func applyDefaultPresetIfFresh() {
         guard document.edit(StudioEdit.self) == nil else { return }
         guard !canUndo else { return }
-        let preset = presetStore.defaultPreset() ?? StudioPreset.presenter
+        let preset = presetStore.defaultPreset() ?? StudioPreset.asRecorded
         var next = resolvingBakedCursor(preset.applied(to: edit))
         let planned = ZoomCuePlanner().cues(
             for: telemetry.clicks,
@@ -55,9 +57,9 @@ public extension StudioDocumentModel {
         if !rebased.isEmpty {
             next.zooms = rebased
         }
+        appliedPresetID = preset.id
         guard next != edit else { return }
         adoptEditWithoutUndo(next)
-        appliedPresetID = preset.id
     }
 
     var isAppliedPresetEdited: Bool {

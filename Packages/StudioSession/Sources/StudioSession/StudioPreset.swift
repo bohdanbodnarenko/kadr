@@ -248,7 +248,13 @@ public struct StudioPreset: Sendable, Hashable, Codable, Identifiable {
         )
     ]
 
-    /// The look a recording nobody has styled yet opens with.
+    /// The look a recording nobody has styled yet opens with: the picture itself, at its own
+    /// size, with no card, backdrop or shadow around it until somebody adds one.
+    public static var asRecorded: StudioPreset {
+        builtIn.first { $0.name == "As Recorded" } ?? StudioPreset(name: "As Recorded")
+    }
+
+    /// The rounded card on a gradient.
     public static var presenter: StudioPreset {
         builtIn.first { $0.name == "Presenter" } ?? StudioPreset(name: "Presenter", canvas: .presenter)
     }

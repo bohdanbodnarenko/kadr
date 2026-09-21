@@ -90,17 +90,28 @@ struct StudioStylePresetTests {
         #expect(reopened.edit.canvas == .paper, "a draft was overwritten by the default look")
     }
 
-    @Test("A fresh recording without a chosen default opens as Presenter")
-    func presenterIsTheFallbackLook() throws {
+    @Test("A fresh recording without a chosen default opens as recorded, with no canvas")
+    func asRecordedIsTheFallbackLook() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder, store: throwawayStore())
         studio.applyDefaultPresetIfFresh()
-        #expect(studio.edit.canvas == .presenter)
-        #expect(studio.appliedPresetName == "Presenter")
-        #expect(!studio.edit.showsCursor, "Presenter must not redraw a pointer already in the footage")
+        #expect(studio.edit.canvas.isIdentity, "a backdrop nobody chose was added")
+        #expect(studio.edit.canvas == .identity)
+        #expect(studio.appliedPresetName == "As Recorded")
+        #expect(!studio.edit.showsCursor, "the fallback must not redraw a pointer already in the footage")
         #expect(!studio.isAppliedPresetEdited)
         #expect(!studio.canUndo)
+    }
+
+    @Test("The output is the recording's own size until a canvas is added")
+    func freshRecordingKeepsItsSize() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder, store: throwawayStore())
+        studio.applyDefaultPresetIfFresh()
+        let layout = studio.edit.canvas.layout(cardSize: CGSize(width: 1920, height: 1080))
+        #expect(layout.cardRect == CGRect(x: 0, y: 0, width: 1920, height: 1080))
     }
 
     @Test("A default look does not stack a reconstructed pointer on baked footage")
