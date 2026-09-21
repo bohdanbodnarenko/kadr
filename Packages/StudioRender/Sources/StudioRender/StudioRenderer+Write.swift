@@ -58,6 +58,7 @@ extension StudioRenderer {
             throw RenderError.couldNotCreateWriter(writer.writer.error?.localizedDescription ?? "unknown")
         }
         writer.writer.startSession(atSourceTime: CMTime.zero)
+        writer.audio?.attach(reader.audio)
 
         var throttle = ProgressThrottle(progress)
         let frameCount = try await renderLoop(
@@ -78,15 +79,20 @@ extension StudioRenderer {
         // truncation, with a certificate of authenticity attached.
         try check(reader.reader, expecting: state.duration)
 
+        // The picture is finished before the last of the sound is copied, not after. While the
+        // video input is still open the writer is waiting on it, and holds back the sound
+        // that outlasts the last frame — so a drain that came first waited for the writer,
+        // which was waiting for the picture that this was about to say was not coming.
+        writer.video.markAsFinished()
+
         // Whatever audio outlasts the last video frame. A recording that ends mid-sentence
         // because the final frame arrived first is a real thing.
-        try await drainAudio(upTo: CMTime.positiveInfinity, reader: reader, writer: writer)
+        try await drainAudio(upTo: CMTime.positiveInfinity, writer: writer)
 
         // The audio drain reads too, so the reader gets asked a second time.
         try check(reader.reader, expecting: state.duration)
 
-        writer.video.markAsFinished()
-        writer.audio?.markAsFinished()
+        writer.audio?.finish()
         await writer.writer.finishWriting()
 
         if writer.writer.status == .failed {
@@ -190,7 +196,7 @@ extension StudioRenderer {
     ) async throws -> RenderedJob {
         // Waited for here, as before, so a writer that is not yet taking frames is not
         // asked for a buffer; the pool exists from `startWriting` on.
-        try await waitUntilReady(writer.video)
+        try await waitUntilReady(writer)
         let interval = Self.signposter.beginInterval("studio.export.compose")
         defer { Self.signposter.endInterval("studio.export.compose", interval) }
         guard let pool = writer.adaptor.pixelBufferPool else {
@@ -230,7 +236,7 @@ extension StudioRenderer {
         progress: inout ProgressThrottle
     ) async throws {
         try await append(job, to: io.writer)
-        try await drainAudio(upTo: job.time, reader: io.reader, writer: io.writer)
+        try await drainAudio(upTo: job.time, writer: io.writer)
         progress.update(min(Double(job.frame + 1) / Double(frames), 1))
     }
 
@@ -339,7 +345,7 @@ extension StudioRenderer {
     struct WriterBundle {
         let writer: AVAssetWriter
         let video: AVAssetWriterInput
-        let audio: AVAssetWriterInput?
+        let audio: AudioRelay?
         let adaptor: AVAssetWriterInputPixelBufferAdaptor
     }
 
@@ -371,13 +377,13 @@ extension StudioRenderer {
         }
         writer.add(video)
 
-        var audio: AVAssetWriterInput?
+        var audio: AudioRelay?
         if options.includeAudio, !state.audioTracks.isEmpty {
             let input = AVAssetWriterInput(mediaType: .audio, outputSettings: options.aacSettings)
             input.expectsMediaDataInRealTime = false
             if writer.canAdd(input) {
                 writer.add(input)
-                audio = input
+                audio = AudioRelay(input: input)
             }
         }
 
@@ -404,52 +410,11 @@ extension StudioRenderer {
         } catch {
             throw RenderError.writingFailed(error.localizedDescription)
         }
-        try await waitUntilReady(writer.video)
+        try await waitUntilReady(writer)
         guard writer.adaptor.append(job.buffer, withPresentationTime: job.time) else {
             throw RenderError.writingFailed(writer.writer.error?.localizedDescription ?? "a frame was refused")
         }
     }
-
-    /// Copies audio through until it has caught up with the video.
-    private func drainAudio(
-        upTo time: CMTime,
-        reader: ReaderBundle,
-        writer: WriterBundle
-    ) async throws {
-        guard let output = reader.audio, let input = writer.audio else { return }
-        let limit = time == .positiveInfinity ? Double.infinity : CMTimeGetSeconds(time)
-        while true {
-            try await waitUntilReady(input)
-            guard let sample = output.copyNextSampleBuffer() else { return }
-            input.append(sample)
-            if CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample)) >= limit {
-                return
-            }
-        }
-    }
-
-    /// Waits for an input to want more data.
-    ///
-    /// A poll rather than `requestMediaDataWhenReady(on:using:)`, which would mean a
-    /// dispatch queue and a continuation to hand each frame back to the render — for a
-    /// flag that is almost always already true by the time the next frame is composed
-    /// (CLAUDE.md rule 5).
-    ///
-    /// The sleep is what stops the rare stall from becoming a spin, and it backs off: a
-    /// stall that clears within a millisecond — the encoder finishing one frame — costs
-    /// half of one, and one that does not — the writer interleaving a long run of audio —
-    /// settles at ten milliseconds between looks rather than a thousand wake-ups a second.
-    private func waitUntilReady(_ input: AVAssetWriterInput) async throws {
-        var pause = Self.readyPollInitial
-        while !input.isReadyForMoreMediaData {
-            try Task.checkCancellation()
-            try await Task.sleep(nanoseconds: pause)
-            pause = min(pause * 2, Self.readyPollLimit)
-        }
-    }
-
-    static let readyPollInitial: UInt64 = 500_000
-    static let readyPollLimit: UInt64 = 10_000_000
 
     // MARK: - Pixels
 
