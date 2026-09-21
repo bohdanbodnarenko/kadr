@@ -27,11 +27,7 @@ extension AnnotationExportRenderer {
             context.clip()
         }
 
-        // Images are drawn in the flipped space every command works in, so the transform
-        // is undone around this one draw rather than the image being mirrored.
-        context.translateBy(x: 0, y: rect.midY * 2)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(image, in: rect)
+        context.drawUpright(image, in: rect)
 
         if spec.cornerRadius > 0 {
             context.endTransparencyLayer()

@@ -104,7 +104,7 @@ enum BeautifyCompositor {
             context.setFillColor(ExpandCanvasFill.color(around: contents.source))
             context.fill(content)
         }
-        context.draw(contents.source, in: document.baseImage.bounds)
+        context.drawUpright(contents.source, in: document.baseImage.bounds)
         context.restoreGState()
     }
 
@@ -178,13 +178,7 @@ enum BeautifyCompositor {
             destination = layout.cardRect
         }
 
-        // Drawn in the flipped space every command works in, so the transform is undone
-        // around this one draw rather than the bitmap being mirrored.
-        context.saveGState()
-        context.translateBy(x: 0, y: destination.midY * 2)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(drawable, in: destination)
-        context.restoreGState()
+        context.drawUpright(drawable, in: destination)
         return true
     }
 
@@ -357,7 +351,7 @@ enum BeautifyCompositor {
         let origin = CGPoint(x: rect.midX - drawSize.width / 2, y: rect.midY - drawSize.height / 2)
         context.saveGState()
         context.clip(to: rect)
-        context.draw(image, in: CGRect(origin: origin, size: drawSize))
+        context.drawUpright(image, in: CGRect(origin: origin, size: drawSize))
         context.restoreGState()
     }
 }

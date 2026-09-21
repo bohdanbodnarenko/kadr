@@ -30,7 +30,7 @@ extension AnnotationExportRenderer {
                 target.setFillColor(ExpandCanvasFill.color(around: source))
                 target.fill(canvas)
             }
-            target.draw(source, in: document.baseImage.bounds)
+            target.drawUpright(source, in: document.baseImage.bounds)
             if includeAnnotations {
                 drawSpotlights(of: document, in: target)
                 for command in document.resolvedCommands {
