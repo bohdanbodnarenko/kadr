@@ -1,6 +1,8 @@
 import AppKit
 import AVFoundation
 import Foundation
+import OverlayKit
+import Shared
 
 /// Cameras and microphones the recording picker can offer (docs/03 §1.8).
 ///
@@ -58,6 +60,21 @@ nonisolated enum RecordingDeviceCatalog {
             mediaType: .video,
             position: .unspecified
         ).devices.first { $0.uniqueID == uniqueID }
+    }
+
+    /// The display under the pointer, which is where somebody is working — not the one
+    /// with the menu bar (docs/17 T-REC-9).
+    @MainActor
+    static func pointerDisplayID() -> CGDirectDisplayID? {
+        let pointer = ScreenPoint(x: NSEvent.mouseLocation.x, y: NSEvent.mouseLocation.y)
+        return SystemScreens().currentScreens().first { $0.frame.contains(pointer) }?.displayID
+    }
+
+    /// The pointer's screen, for panels that should appear where the user is looking.
+    @MainActor
+    static func pointerScreen() -> NSScreen? {
+        let location = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(location, $0.frame, false) }
     }
 
     @MainActor

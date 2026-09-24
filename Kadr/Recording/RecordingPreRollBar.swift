@@ -36,7 +36,7 @@ struct RecordingPreRollBar: View {
                     help: settings.recordsMicrophone ? "Microphone is on" : "Microphone is off",
                     isOn: settings.recordsMicrophone
                 ) {
-                    settings.recordsMicrophone.toggle()
+                    toggle(.microphone, isOn: settings.recordsMicrophone) { settings.recordsMicrophone = $0 }
                 }
                 .accessibilityLabel("Microphone")
                 .accessibilityValue(settings.recordsMicrophone ? "On" : "Off")
@@ -55,7 +55,7 @@ struct RecordingPreRollBar: View {
                 help: settings.recordingShowsWebcam ? "Camera is on" : "Camera is off",
                 isOn: settings.recordingShowsWebcam
             ) {
-                settings.recordingShowsWebcam.toggle()
+                toggle(.camera, isOn: settings.recordingShowsWebcam) { settings.recordingShowsWebcam = $0 }
             }
             .accessibilityLabel("Camera")
             .accessibilityValue(settings.recordingShowsWebcam ? "On" : "Off")
@@ -76,5 +76,24 @@ struct RecordingPreRollBar: View {
             .accessibilityLabel("Cancel countdown")
         }
         .onExitCommand { preRoll.cancel() }
+    }
+
+    /// Turning a device on goes through the same access check as the recorder's own
+    /// toggles. It used to flip the setting and let the start silently drop a device the
+    /// app was not allowed to use (docs/17 T-REC-9).
+    private func toggle(_ kind: CaptureAccessKind, isOn: Bool, set: @escaping (Bool) -> Void) {
+        guard !isOn else {
+            set(false)
+            return
+        }
+        guard CaptureAccessGate.needsPrompt(status: CaptureMediaAccess.status(for: kind)) else {
+            set(true)
+            return
+        }
+        Task { @MainActor in
+            if await CaptureMediaAccess.request(kind) {
+                set(true)
+            }
+        }
     }
 }

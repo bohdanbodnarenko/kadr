@@ -98,4 +98,26 @@ struct RecordingCoordinatorGuardTests {
         #expect(RecordingAnnouncement.message(from: .idle, to: .starting) == nil)
         #expect(RecordingAnnouncement.message(from: .starting, to: .idle) == nil)
     }
+
+    /// T-REC-9: a camera switched on without choosing a device used to record nothing.
+    @Test("A wanted camera with no device falls back to the default, or says there is none")
+    func cameraFallsBackToDefault() {
+        let none = RecordingInputResolver.resolve(
+            options: RecordingOptions(capturesSystemAudio: false, capturesMicrophone: false),
+            cameraDeviceID: "",
+            wantsCamera: true,
+            defaultCamera: { nil }
+        )
+        #expect(none.cameraDeviceID.isEmpty)
+        #expect(none.notice == "No camera found — recording without it.")
+
+        let unwanted = RecordingInputResolver.resolve(
+            options: RecordingOptions(capturesSystemAudio: false, capturesMicrophone: false),
+            cameraDeviceID: "",
+            wantsCamera: false,
+            defaultCamera: { "should-not-be-used" }
+        )
+        #expect(unwanted.cameraDeviceID.isEmpty)
+        #expect(unwanted.notice == nil)
+    }
 }

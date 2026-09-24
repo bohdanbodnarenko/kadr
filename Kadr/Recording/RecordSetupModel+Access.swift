@@ -41,6 +41,15 @@ extension RecordSetupModel {
         armCamera()
     }
 
+    /// Turning the keystroke overlay on is when its permissions are asked for, not the
+    /// start of the recording, where the prompts would be filmed (docs/17 T-REC-9).
+    func toggleKeystrokes() {
+        settings.recordingShowsKeystrokes.toggle()
+        if settings.recordingShowsKeystrokes, !KeystrokeAccess.isGranted {
+            KeystrokeAccess.request()
+        }
+    }
+
     func requestMicrophoneEnabled(_ enabled: Bool) {
         if !enabled {
             settings.recordsMicrophone = false

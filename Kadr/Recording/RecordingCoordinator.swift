@@ -77,12 +77,16 @@ final class RecordingCoordinator {
     /// Whether the microphone is on but has picked nothing up this take.
     var microphoneIsSilent: Bool {
         RecordingTickPolicy.microphoneIsSilent(
-            recordsMicrophone: settings.recordsMicrophone,
+            recordsMicrophone: microphoneThisTake,
             elapsed: elapsed,
             peak: microphonePeakMax
         )
     }
 
+    /// Whether the resolved options for this take record the microphone.
+    @ObservationIgnored var microphoneThisTake = false
+    /// A device the take had to go without, shown on the bar once it is rolling.
+    @ObservationIgnored var startNotice: String?
     /// Loudest microphone sample so far this take, for the silent-mic notice.
     @ObservationIgnored var microphonePeakMax: Float = 0
 
@@ -264,9 +268,13 @@ final class RecordingCoordinator {
         }
         let resolved = RecordingInputResolver.resolve(
             options: currentOptions,
-            cameraDeviceID: settings.recordingCameraDeviceID
+            cameraDeviceID: settings.recordingCameraDeviceID,
+            wantsCamera: settings.recordingShowsWebcam
         )
         let options = resolved.options
+        // What this take really records, not what the settings asked for (T-REC-9).
+        microphoneThisTake = options.recordsMicrophone
+        startNotice = resolved.notice
         if let notice = resolved.notice {
             logger.info("\(notice, privacy: .public)")
         }
@@ -290,76 +298,6 @@ final class RecordingCoordinator {
         case .usePicker, .dismiss:
             break
         }
-    }
-
-    /// Turns on only the overlays the user asked for, and tells the engine where to get
-    /// them (docs/03 §1.8).
-    func startOverlays(for target: RecordingTarget) {
-        // The webcam belongs to one of the two paths, never both: a studio session records
-        // the camera to its own file so the bubble stays editable, and macOS will not hand
-        // the same device to two capture sessions. Baking a bubble that can no longer be
-        // moved is also the exact decision the studio exists to postpone.
-        let bakesWebcam = settings.recordingShowsWebcam && !capturesStudioSession
-        let wantsAny = settings.recordingShowsClicks
-            || settings.recordingShowsKeystrokes
-            || bakesWebcam
-        // Nothing is baked into an HDR recording (docs/11 S0.5).
-        //
-        // HDR moves the stream to `ARGB2101010LEPacked`, and `CGBitmapContext` has no
-        // representation for it — not a missing branch, an absent capability: no
-        // combination of bits-per-component, alpha and byte order CoreGraphics accepts
-        // describes that layout. It used to be described as 8-bit BGRA instead, which
-        // *succeeded*, because both are four bytes per pixel, and then reinterpreted
-        // 10-bit data as 8888 over every pixel the overlay touched. Two independent
-        // switches in the same settings pane.
-        //
-        // Skipped rather than worked around, because the studio already draws all of this
-        // at export time from the telemetry — and does it better, since an overlay that was
-        // never baked can still be turned off, moved or restyled afterwards. The user loses
-        // nothing but the preview-in-the-file, and gains a recording whose pixels are the
-        // ones the display sent.
-        guard !currentOptions.recordsHDR else {
-            logger.info("HDR recording: overlays are left to the studio rather than baked in")
-            Task { await engine.setOverlayProvider(nil) }
-            return
-        }
-        guard wantsAny else {
-            Task { await engine.setOverlayProvider(nil) }
-            return
-        }
-
-        var configuration = RecordingOverlaySource.Configuration()
-        configuration.showsClicks = settings.recordingShowsClicks
-        configuration.showsKeystrokes = settings.recordingShowsKeystrokes
-        configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
-        configuration.keystrokePosition = KeystrokePosition(
-            rawValue: settings.recordingKeystrokePosition.rawValue
-        ) ?? .bottomCentre
-        configuration.keystrokeAppearance = settings.recordingKeystrokeAppearance
-        configuration.keystrokeScale = CGFloat(settings.recordingKeystrokeScale)
-        configuration.showsWebcam = bakesWebcam
-        configuration.webcamDeviceID = settings.recordingCameraDeviceID
-        configuration.webcamIsCircular = settings.recordingWebcamCircular
-        configuration.webcamSizeFraction = CGFloat(settings.recordingWebcamSize)
-        configuration.webcamFillsFrame = settings.recordingWebcamFillsFrame
-        configuration.webcamCorner = OverlayCornerSlot(
-            rawValue: settings.recordingWebcamCorner.rawValue
-        ) ?? .bottomTrailing
-        configuration.webcamPixelSide = Self.webcamPixelSide(
-            recordedPixels: Self.recordedPixelSize(for: target),
-            sizeFraction: configuration.webcamSizeFraction,
-            fillsFrame: configuration.webcamFillsFrame
-        )
-        configuration.clickRed = settings.recordingClickRed
-        configuration.clickGreen = settings.recordingClickGreen
-        configuration.clickBlue = settings.recordingClickBlue
-        configuration.clickScale = CGFloat(settings.recordingClickScale)
-        configuration.clickFilled = settings.recordingClickFilled
-        configuration.pointConverter = Self.pointConverter(for: target)
-
-        overlaySource.start(configuration: configuration)
-        let source = overlaySource
-        Task { await engine.setOverlayProvider(source) }
     }
 
     /// Whether this recording keeps a studio session beside it.

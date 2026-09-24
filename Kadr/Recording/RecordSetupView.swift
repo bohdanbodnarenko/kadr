@@ -74,7 +74,7 @@ struct RecordSetupView: View {
         case .area, .window, .screen: arm(key)
         case .microphone, .systemAudio, .camera: toggleInput(key)
         case .clicks: model.settings.recordingShowsClicks.toggle()
-        case .keystrokes: model.settings.recordingShowsKeystrokes.toggle()
+        case .keystrokes: model.toggleKeystrokes()
         case .teleprompter: model.onTeleprompterComposer()
         case .record:
             // Nothing armed is not a failure to understand Return; it is a recorder with
@@ -90,7 +90,10 @@ struct RecordSetupView: View {
         switch key {
         case .area: model.requestAreaPick()
         case .window: model.requestWindowPick()
-        default: model.armScreen(model.displays.first?.displayID ?? CGMainDisplayID())
+        default:
+            model.armScreen(
+                RecordingDeviceCatalog.pointerDisplayID() ?? model.displays.first?.displayID ?? CGMainDisplayID()
+            )
         }
     }
 
@@ -242,7 +245,7 @@ struct RecordSetupView: View {
                 key: RecordSetupKey.keystrokes.caption,
                 isOn: model.settings.recordingShowsKeystrokes
             ) {
-                model.settings.recordingShowsKeystrokes.toggle()
+                model.toggleKeystrokes()
             }
             .accessibilityLabel("Keystroke overlay")
             .accessibilityValue(model.settings.recordingShowsKeystrokes ? "On" : "Off")

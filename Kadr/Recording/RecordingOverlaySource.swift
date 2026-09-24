@@ -240,22 +240,17 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
 
     // MARK: - Keystrokes
 
-    /// Starts the keystroke overlay, asking for Accessibility only now (docs/04 §3.2).
+    /// Starts the keystroke overlay if its permissions are already granted (docs/04 §3.2).
     ///
     /// A `CGEventTap` is the only way to see keys pressed in other apps, and it is a
-    /// serious permission. It is requested at the moment the feature is switched on, runs
-    /// only while recording, and is torn down on stop.
+    /// serious permission. It is *asked for* where the feature is switched on
+    /// (`KeystrokeAccess.request`); here it is only checked, because a system prompt at
+    /// this moment lands on top of the content being recorded (docs/17 T-REC-9).
     @MainActor
     private func startKeystrokeMonitor() {
-        // The prompt key is a global the SDK exposes as a mutable var; naming it as a
-        // string avoids the concurrency complaint without changing what is asked for.
-        let promptOption = "AXTrustedCheckOptionPrompt" as CFString
-        guard AXIsProcessTrustedWithOptions([promptOption: true] as CFDictionary) else {
+        guard AXIsProcessTrusted() else {
             logger.info("Keystroke overlay needs Accessibility permission; skipping it this time")
             return
-        }
-        if !CGPreflightListenEventAccess() {
-            _ = CGRequestListenEventAccess()
         }
         guard CGPreflightListenEventAccess() else {
             logger.info("Keystroke overlay needs Input Monitoring permission; skipping it this time")
@@ -432,5 +427,25 @@ private nonisolated struct SessionBox: @unchecked Sendable {
 
     init(_ session: AVCaptureSession) {
         self.session = session
+    }
+}
+
+/// The two grants the keystroke overlay needs: Accessibility and Input Monitoring.
+@MainActor
+enum KeystrokeAccess {
+    static var isGranted: Bool {
+        AXIsProcessTrusted() && CGPreflightListenEventAccess()
+    }
+
+    /// Shows whichever system prompts are still needed. Call it where the user switches
+    /// the overlay on, never at recording start.
+    static func request() {
+        // The prompt key is a global the SDK exposes as a mutable var; naming it as a
+        // string avoids the concurrency complaint without changing what is asked for.
+        let promptOption = "AXTrustedCheckOptionPrompt" as CFString
+        guard AXIsProcessTrustedWithOptions([promptOption: true] as CFDictionary) else { return }
+        if !CGPreflightListenEventAccess() {
+            _ = CGRequestListenEventAccess()
+        }
     }
 }

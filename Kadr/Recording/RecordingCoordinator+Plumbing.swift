@@ -40,7 +40,7 @@ extension RecordingCoordinator {
         generation: Int
     ) async {
         do {
-            startOverlays(for: target)
+            startOverlays(for: target, cameraDeviceID: cameraDeviceID)
             startStudioSession(for: target, cameraDeviceID: cameraDeviceID)
             await CaptureExclusionPush.into(engine)
             try await engine.start(target: target, options: options)
@@ -74,6 +74,7 @@ extension RecordingCoordinator {
             startTicking()
             hygiene?.beginRecording()
             isTransitioning = false
+            showStartNotice()
             logger.info("Recording started")
         } catch {
             // Only this start's own pieces. A Stop or Cancel during the start has already
@@ -101,6 +102,21 @@ extension RecordingCoordinator {
             permissions.noteCaptureFailure(error)
             presentPermissionRecoveryIfNeeded(error)
             RecordingFailureNotice.presentStartFailure(error)
+        }
+    }
+
+    /// Says on the bar what the take had to go without — a camera or microphone that was
+    /// missing or not allowed — rather than only logging it (docs/17 T-REC-9).
+    ///
+    /// Cleared after a few seconds by a Task that exists only while a take does.
+    private func showStartNotice() {
+        guard let notice = startNotice else { return }
+        startNotice = nil
+        liveNotice = notice
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, liveNotice == notice else { return }
+            liveNotice = nil
         }
     }
 

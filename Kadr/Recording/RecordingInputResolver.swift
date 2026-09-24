@@ -14,11 +14,22 @@ struct RecordingInputResolution: Sendable {
 enum RecordingInputResolver {
     static func resolve(
         options: RecordingOptions,
-        cameraDeviceID: String
+        cameraDeviceID: String,
+        wantsCamera: Bool = false,
+        defaultCamera: () -> String? = RecordingInputResolver.defaultCameraID
     ) -> RecordingInputResolution {
         var options = options
         var camera = cameraDeviceID
         var notices: [String] = []
+
+        // The camera switched on from Settings or the pre-roll never chose a device, so the
+        // take recorded no camera at all (docs/17 T-REC-9). Take the system's default.
+        if wantsCamera, camera.isEmpty {
+            camera = defaultCamera() ?? ""
+            if camera.isEmpty {
+                notices.append("No camera found — recording without it.")
+            }
+        }
 
         if options.capturesMicrophone {
             if let id = options.microphoneDeviceID, RecordingDeviceCatalog.microphone(withID: id) == nil {
@@ -46,5 +57,11 @@ enum RecordingInputResolver {
             cameraDeviceID: camera,
             notice: notices.first
         )
+    }
+
+    /// The system's default camera, or the first one attached.
+    nonisolated static func defaultCameraID() -> String? {
+        AVCaptureDevice.default(for: .video)?.uniqueID
+            ?? RecordingDeviceCatalog.cameras().first?.uniqueID
     }
 }
