@@ -120,7 +120,7 @@ struct StudioInspector: View {
                 HStack {
                     Button("Split at Playhead") { model.splitAtPlayhead() }
                     Spacer(minLength: 0)
-                    Button("Delete Clip", role: .destructive) { model.removeClipAtPlayhead() }
+                    Button("Delete Clip", role: .destructive) { model.removeClip(id: clip.id) }
                         .disabled(model.edit.clips.clips.count < 2)
                 }
             } header: {

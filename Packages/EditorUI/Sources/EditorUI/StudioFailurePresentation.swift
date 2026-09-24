@@ -143,4 +143,13 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
             primaryAction: .retry
         )
     }
+
+    /// docs/17 T-STU-9: an edit this build could not read was kept, not overwritten.
+    public static func unreadableEditBackedUp(_ fileName: String) -> Self {
+        Self(
+            title: "This recording's edit couldn't be read.",
+            message: "It may have been saved by a newer version of Kadr. It was kept in the recording "
+                + "as “\(fileName)”, and the recording opened without it."
+        )
+    }
 }

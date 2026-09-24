@@ -46,11 +46,15 @@ struct StudioCanvasEditTests {
         try Data("image".utf8).write(to: source)
         studio.importWallpaper(from: source)
         #expect(studio.edit.canvas.background == .wallpaper)
-        #expect(studio.edit.canvas.wallpaperFileName == "wallpaper.png")
+        #expect(studio.edit.canvas.wallpaperFileName?.hasPrefix("wallpaper-") == true)
         #expect(studio.edit.canvas.paddingFraction > 0)
         #expect(studio.session.wallpaperURLs.count == 1)
         studio.removeWallpaper()
         #expect(studio.edit.canvas.wallpaperFileName == nil)
+        studio.undo()
+        #expect(studio.session.wallpaperURL(for: studio.edit) != nil)
+        studio.redo()
+        studio.commitOnClose()
         #expect(studio.session.wallpaperURLs.isEmpty)
     }
 }

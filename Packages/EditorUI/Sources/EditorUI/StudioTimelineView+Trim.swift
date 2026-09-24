@@ -12,7 +12,18 @@ extension StudioTimelineView {
         .frame(width: handleWidth, height: clipHeight)
         .contentShape(Rectangle())
         .accessibilityLabel(isLeading ? "Trim clip start" : "Trim clip end")
-        .accessibilityAddTraits(.isButton)
+        // Adjustable rather than a button with no action (docs/17 T-STU-11): each step
+        // moves the edge one frame.
+        .accessibilityAdjustableAction { direction in
+            let frame = 1.0 / Double(max(model.manifest.frameRate, 1))
+            let delta = direction == .increment ? frame : -frame
+            let edge = model.editedStart(ofClipAt: index) + (isLeading ? 0 : clip.editedDuration)
+            if isLeading {
+                model.trimClipStart(clip.id, toEdited: edge + delta)
+            } else {
+                model.trimClipEnd(clip.id, toEdited: edge + delta)
+            }
+        }
         // Measured from where the edge was when the drag began, in the timeline's own
         // space. Adding the whole translation to the edge's *current* position compounded
         // every event — the edge ran ahead of the pointer — and the handle's local space
@@ -69,14 +80,19 @@ extension StudioTimelineView {
         if shift, let index = model.selectedClip.flatMap({ id in
             model.edit.clips.clips.firstIndex(where: { $0.id == id })
         }) ?? model.currentClipIndex {
+            // Symmetric, and in the recording's own frames (docs/17 T-STU-11): ⇧← and ⇧→
+            // move whichever edge of the clip is nearer the playhead one frame left or
+            // right. They used to trim the start from ← and the end from →, by 1/30 s
+            // whatever the frame rate.
             let clip = model.edit.clips.clips[index]
             let start = model.editedStart(ofClipAt: index)
-            let step = option ? 1.0 : (1.0 / 30.0)
-            let delta = Double(frames) * step
-            if frames < 0 {
-                model.trimClipStart(clip.id, toEdited: model.playhead + delta)
+            let end = start + clip.editedDuration
+            let frame = 1.0 / Double(max(model.manifest.frameRate, 1))
+            let delta = Double(frames) * (option ? 1.0 : frame)
+            if abs(model.playhead - start) <= abs(end - model.playhead) {
+                model.trimClipStart(clip.id, toEdited: start + delta)
             } else {
-                model.trimClipEnd(clip.id, toEdited: start + clip.editedDuration + delta)
+                model.trimClipEnd(clip.id, toEdited: end + delta)
             }
             return .handled
         }

@@ -51,6 +51,19 @@ struct SpeechModelInstallerTests {
         _ = try? await task.value
     }
 
+    /// docs/17 T-STU-5: a cancel that reaches the task must reach the work. The download
+    /// and the recogniser both run in Apple's code, so the only way to prove it without
+    /// a network or a model is that the handles are kept and cancelled.
+    @Test("Cancellation reaches the download and the legacy recogniser", arguments: [
+        ("SpeechModelInstaller.swift", "requestProgress.cancel()"),
+        ("SpeechModelInstaller.swift", "try Task.checkCancellation()"),
+        ("SpeechEngines.swift", "withTaskCancellationHandler"),
+        ("SpeechEngines.swift", "task.cancel()")
+    ])
+    func cancellationIsWired(file: String, needle: String) throws {
+        #expect(try Self.code(of: file).contains(needle))
+    }
+
     @Test("Nothing on the transcription path can start a download")
     func transcriptionNeverDownloads() throws {
         let code = try Self.code(of: "SpeechEngines.swift")

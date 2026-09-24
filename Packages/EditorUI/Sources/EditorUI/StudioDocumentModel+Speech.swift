@@ -60,9 +60,14 @@ public extension StudioDocumentModel {
         }
     }
 
+    /// Starts the speech helper early, but only for a recording with sound in it
+    /// (docs/17 T-STU-12): warming a model for a silent recording is memory and CPU for
+    /// a button that can do nothing.
     func warmUpSpeech() {
         let locale = SpeechLanguage.currentIdentifier(speechLocaleIdentifier)
+        let screen = session.screenURL
         Task { @MainActor [weak self] in
+            guard await StudioAudioExporter.durationIfAudio(at: screen) != nil else { return }
             try? await VisionClient().warmUpSpeech(SpeechStatusRequest(localeIdentifier: locale))
             await self?.refreshSpeechStatus()
         }
@@ -96,11 +101,11 @@ public extension StudioDocumentModel {
         }
     }
 
+    /// Cancelling the task is what stops the download: the client sends the cancel on
+    /// the install's own connection and drops it, which the helper treats as a cancel
+    /// too (docs/17 T-STU-5). A fresh `VisionClient` here reached nothing.
     func cancelSpeechModelInstall() {
         installTask?.cancel()
-        Task { @MainActor in
-            VisionClient().cancelSpeech()
-        }
         installTask = nil
         installProgress = nil
     }
@@ -123,11 +128,10 @@ public extension StudioDocumentModel {
         transcriptionProgress = nil
     }
 
+    /// Cancels through the transcription's own task, and so its own connection
+    /// (docs/17 T-STU-5).
     func cancelTidySpeech() {
         transcribeTask?.cancel()
-        Task { @MainActor in
-            VisionClient().cancelSpeech()
-        }
     }
 
     private func runTidy() async {
@@ -188,10 +192,15 @@ public extension StudioDocumentModel {
         chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
         try? document.write(processed)
 
-        let planner = TranscriptCutPlanner()
-        let cuts = planner.cuts(for: processed, duration: manifest.duration)
+        let planner = tidyPlanner
+        // Tidy only runs on an uncut recording, so the telemetry's time is the edit's.
+        let cuts = planner.cuts(
+            for: processed,
+            duration: manifest.duration,
+            protecting: TranscriptCutPlanner.activityRanges(in: telemetry)
+        )
         guard !cuts.isEmpty else {
-            notice = "There were no filler words or long pauses to remove."
+            notice = tidyNothingFoundNotice
             pendingCuts = []
             selectedCutIDs = []
             requiresCutConfirmation = false
@@ -242,6 +251,19 @@ public extension StudioDocumentModel {
         pendingCuts = []
         selectedCutIDs = []
         requiresCutConfirmation = false
+    }
+
+    /// The planner for what the user chose to tidy (docs/17 T-STU-6).
+    internal var tidyPlanner: TranscriptCutPlanner {
+        TranscriptCutPlanner(removesFillers: tidyRemovesFillers, removesSilences: tidyShortensPauses)
+    }
+
+    private var tidyNothingFoundNotice: String {
+        switch (tidyRemovesFillers, tidyShortensPauses) {
+        case (true, false): "There were no filler words to remove."
+        case (false, true): "There were no long pauses to shorten."
+        default: "There were no filler words or long pauses to tidy."
+        }
     }
 
     func toggleCut(_ id: UUID) {

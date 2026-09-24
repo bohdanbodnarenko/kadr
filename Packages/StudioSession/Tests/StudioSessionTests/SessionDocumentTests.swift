@@ -188,6 +188,72 @@ struct SessionDocumentTests {
         ))
     }
 
+    /// docs/17 T-STU-1: an app update, a wallpaper swap or a re-transcription changes the
+    /// pixels without changing the edit, so the stamp carries a digest of those too.
+    @Test("A stamp with inputs does not match other inputs, and one without inputs is stale")
+    func stampInputsDigest() throws {
+        let scratch = try scratch()
+        let root = scratch.root
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let output = root.appendingPathComponent("out.mov")
+        try Data("movie".utf8).write(to: output)
+        let size = CGSize(width: 1920, height: 1080)
+        let stamped = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size, inputsDigest: "build-1")
+        let legacy = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size)
+
+        #expect(stamped.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-1"))
+        #expect(!stamped.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-2"))
+        #expect(!legacy.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-1"))
+        #expect(legacy.matches(editDigest: "abc", pixelSize: size, inputsDigest: nil))
+    }
+
+    /// docs/17 T-STU-9: an edit a newer build wrote is moved aside, never overwritten.
+    struct UnreadableCase: Sendable, CustomTestStringConvertible {
+        var draft: String?
+        var edit: String?
+        var backups: Int
+
+        var testDescription: String {
+            "draft \(draft ?? "none"), edit \(edit ?? "none")"
+        }
+    }
+
+    @Test("Unreadable edits are moved aside and readable ones are left alone", arguments: [
+        UnreadableCase(draft: "not json", edit: nil, backups: 1),
+        UnreadableCase(draft: nil, edit: "{\"clips\": 7}", backups: 1),
+        UnreadableCase(draft: "junk", edit: "junk", backups: 2),
+        UnreadableCase(draft: nil, edit: nil, backups: 0)
+    ])
+    func unreadableEditsAreBackedUp(_ testCase: UnreadableCase) throws {
+        let draft = testCase.draft
+        let edit = testCase.edit
+        let scratch = try scratch()
+        defer { try? FileManager.default.removeItem(at: scratch.root) }
+        if let draft {
+            try Data(draft.utf8).write(to: scratch.session.draftEditURL)
+        }
+        if let edit {
+            try Data(edit.utf8).write(to: scratch.session.editURL)
+        }
+        let moved = scratch.document.backUpUnreadableEdits(StudioEdit.self)
+        #expect(moved.count == testCase.backups)
+        for url in moved {
+            #expect(FileManager.default.fileExists(atPath: url.path))
+            #expect(url.lastPathComponent.contains("unreadable"))
+        }
+        #expect(!FileManager.default.fileExists(atPath: scratch.session.draftEditURL.path) || draft == nil)
+    }
+
+    @Test("A readable edit is not moved")
+    func readableEditStays() throws {
+        let scratch = try scratch()
+        defer { try? FileManager.default.removeItem(at: scratch.root) }
+        try scratch.document.commit(StudioEdit.untouched(duration: 3))
+        #expect(scratch.document.backUpUnreadableEdits(StudioEdit.self).isEmpty)
+        #expect(scratch.document.edit(StudioEdit.self) != nil)
+    }
+
     @Test("An empty digest is a miss, even against another empty digest")
     func emptyDigestNeverMatches() {
         let stamp = RenderStamp(editDigest: "", outputPath: "/tmp/out.mp4", pixelSize: .zero)

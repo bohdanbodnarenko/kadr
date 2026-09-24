@@ -117,9 +117,11 @@ struct TextRecognizerTests {
 
 @Suite("Vision result shaping")
 struct VisionAnalysisTests {
+    /// Two lines one above the other. Zero boxes used to stand in, but reading order
+    /// groups lines by position, and two zero boxes are one row.
     private let lines = [
-        RecognizedLine(text: "first", confidence: 0.9, boundingBox: .zero),
-        RecognizedLine(text: "second", confidence: 0.7, boundingBox: .zero)
+        RecognizedLine(text: "first", confidence: 0.9, boundingBox: CGRect(x: 0.1, y: 0.6, width: 0.3, height: 0.1)),
+        RecognizedLine(text: "second", confidence: 0.7, boundingBox: CGRect(x: 0.1, y: 0.4, width: 0.3, height: 0.1))
     ]
 
     @Test("Line breaks are preserved or folded, per the setting")

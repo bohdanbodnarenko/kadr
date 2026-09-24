@@ -85,8 +85,9 @@ extension StudioInspector {
             Text("macOS has no speech model for your language, so filler words cannot be found "
                 + "automatically.")
         default:
-            Text("Cuts “um” and pauses over a second. They become clip boundaries, so one undo puts "
-                + "them all back and the recording is never altered.")
+            Text("Finds “um” and shortens pauses over a second to half a second, except where "
+                + "you clicked, typed or moved the pointer. Cuts become clip boundaries, so one undo "
+                + "puts them all back and the recording is never altered.")
         }
     }
 
@@ -108,9 +109,12 @@ extension StudioInspector {
                 }
             }
         } else {
-            Button("Remove Filler Words…") {
+            Toggle("Filler words", isOn: Bindable(model).tidyRemovesFillers)
+            Toggle("Long pauses", isOn: Bindable(model).tidyShortensPauses)
+            Button("Find Cuts…") {
                 Task { await model.tidySpeech() }
             }
+            .disabled(!model.tidyRemovesFillers && !model.tidyShortensPauses)
         }
     }
 
@@ -158,7 +162,8 @@ extension StudioInspector {
                 model.applyPendingCuts(confirmingLargeRemoval: largeRemovalArmed)
                 largeRemovalArmed = false
             }
-            .keyboardShortcut(.defaultAction)
+            // Not the default button (docs/17 T-STU-6): Return pressed for anything else in
+            // the studio could apply dozens of cuts the user has not looked at.
             .buttonStyle(.borderedProminent)
         }
     }

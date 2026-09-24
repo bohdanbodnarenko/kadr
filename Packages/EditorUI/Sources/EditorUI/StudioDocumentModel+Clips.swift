@@ -70,18 +70,37 @@ public extension StudioDocumentModel {
     /// The last clip stays: a timeline with nothing in it is not an edit, it is a deleted
     /// recording, and deleting a recording is not something a trim button should do.
     func removeClipAtPlayhead() {
+        guard let index = clipIndex(at: playhead) else { return }
+        removeClip(id: edit.clips.clips[index].id)
+    }
+
+    /// Removes one clip by identity (docs/17 T-STU-8).
+    ///
+    /// By id rather than by where the playhead is: the inspector, the Delete key and the
+    /// context menu each name a clip — the selected one, the right-clicked one — and
+    /// deleting whatever sat under the playhead instead removed a clip the user had not
+    /// pointed at.
+    func removeClip(id: Clip.ID) {
         let clips = edit.clips.clips
         guard clips.count > 1 else {
             failure = .onlyClipLeft()
             return
         }
-        guard let index = clipIndex(at: playhead) else { return }
+        guard let index = clips.firstIndex(where: { $0.id == id }) else { return }
         change {
             var remaining = $0.clips.clips
             remaining.remove(at: index)
             $0.clips = ClipTimeline(clips: remaining)
         }
+        if selectedClip == id {
+            selectedClip = nil
+        }
         playhead = min(playhead, edit.duration)
+    }
+
+    /// The clip at an edited time, for acting on the one under the pointer.
+    func clipID(at time: TimeInterval) -> Clip.ID? {
+        clipIndex(at: time).map { edit.clips.clips[$0].id }
     }
 
     /// Puts the recording back to one uncut clip at real speed.

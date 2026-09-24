@@ -270,12 +270,12 @@ struct StudioExportSettingsTests {
         #expect(settings.gifOptions.frameRate == 15)
     }
 
-    @Test("A smaller GIF uses the chosen resolution cap")
+    @Test("A smaller GIF uses the chosen width and rate")
     func gifResolutionCap() {
         var settings = StudioExportSettings()
         settings.container = .gif
-        settings.resolution = .sd
-        settings.quality = .low
+        settings.gifWidth = .small
+        settings.gifFrameRate = .light
         #expect(settings.gifOptions.maximumWidth == 480)
         #expect(settings.gifOptions.frameRate == 8)
     }

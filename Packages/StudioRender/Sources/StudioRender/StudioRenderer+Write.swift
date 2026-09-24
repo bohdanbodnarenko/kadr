@@ -368,7 +368,8 @@ extension StudioRenderer {
             AVVideoCodecKey: options.codec,
             AVVideoWidthKey: Int(size.width),
             AVVideoHeightKey: Int(size.height),
-            AVVideoCompressionPropertiesKey: compression
+            AVVideoCompressionPropertiesKey: compression,
+            AVVideoColorPropertiesKey: Self.colorProperties
         ])
         video.expectsMediaDataInRealTime = false
         writer.shouldOptimizeForNetworkUse = options.fileType == .mp4

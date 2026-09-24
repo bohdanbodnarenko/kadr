@@ -22,6 +22,14 @@ public struct StudioRenderer: Sendable {
 
     public init() {}
 
+    /// The version of what a render looks like, for the render stamp (docs/17 T-STU-1).
+    ///
+    /// Bump it with any change that makes the same edit render differently — a fixed
+    /// cursor, a new spring, a colour tag. A finished export is only reused while this
+    /// matches, so without a bump a tester who updates to a build with a render fix is
+    /// handed the old, buggy movie and cannot verify the fix.
+    public static let version = 3
+
     public enum RenderError: Error, Equatable, Sendable {
         case noVideoTrack
         case couldNotCreateWriter(String)
@@ -125,6 +133,7 @@ public struct StudioRenderer: Sendable {
         edit: StudioEdit,
         to destination: URL,
         options: Options = Options(),
+        transcript: Transcript? = nil,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> Output {
         let document = SessionDocument(session: session)
@@ -137,24 +146,32 @@ public struct StudioRenderer: Sendable {
             pixelSize: manifest?.pixelSize,
             cameraStartOffset: manifest?.cameraStartOffset ?? 0,
             pointPixelScale: manifest?.scale ?? 2,
-            transcript: document.transcript() ?? Transcript(),
+            // The caller's snapshot when it has one (docs/17 T-STU-2): a re-transcription
+            // that lands mid-render must not change the captions of the file in flight.
+            transcript: transcript ?? document.transcript() ?? Transcript(),
             soundtrack: session.soundtrackURL(for: edit),
             wallpaper: session.wallpaperURL(for: edit)
         )
         return try await render(
             source,
             to: destination,
-            // The recording's own frame rate rather than the caller's: rendering 30 fps
-            // footage at 60 writes every frame twice and doubles the file for nothing.
-            // Copied whole and changed in one field, so an option added later cannot be
-            // dropped here by a field-by-field rebuild that forgot it.
-            options: manifest.map { manifest in
-                var adjusted = options
-                adjusted.frameRate = manifest.frameRate
-                return adjusted
-            } ?? options,
+            options: Self.capped(options, toSourceFrameRate: manifest?.frameRate),
             progress: progress
         )
+    }
+
+    /// The caller's frame rate, never above the recording's own (docs/17 T-STU-3).
+    ///
+    /// Capped rather than replaced: rendering 30 fps footage at 60 writes every frame
+    /// twice and doubles the file for nothing, but a 60 fps recording exported at 30 must
+    /// come out at 30. Replacing it outright is what made the export's frame-rate option
+    /// do nothing. Copied whole and changed in one field, so an option added later cannot
+    /// be dropped here by a field-by-field rebuild that forgot it.
+    static func capped(_ options: Options, toSourceFrameRate sourceRate: Int?) -> Options {
+        guard let sourceRate, sourceRate > 0 else { return options }
+        var adjusted = options
+        adjusted.frameRate = max(1, min(options.frameRate, sourceRate))
+        return adjusted
     }
 
     /// Everything a render needs that is not about where the file goes.

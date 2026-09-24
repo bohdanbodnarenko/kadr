@@ -107,6 +107,7 @@ struct StudioTimelineView: View {
             .onKeyPress(.leftArrow, phases: .down) { press in
                 nudgePlayhead(press, frames: -1)
             }
+            .modifier(StudioTimelineTransportKeys(model: model))
             .onKeyPress(.rightArrow, phases: .down) { press in
                 nudgePlayhead(press, frames: 1)
             }
@@ -128,10 +129,14 @@ struct StudioTimelineView: View {
                 return .ignored
             }
             .onDeleteCommand {
+                // Delete acts on a selection, never on whatever the playhead is over
+                // (docs/17 T-STU-8).
                 if model.selectedZoom != nil {
                     model.removeSelectedZoom()
+                } else if let clip = model.selectedClip {
+                    model.removeClip(id: clip)
                 } else {
-                    model.removeClipAtPlayhead()
+                    NSSound.beep()
                 }
             }
             zoomControls(viewportWidth: viewportWidth)
@@ -233,13 +238,18 @@ struct StudioTimelineView: View {
             }
         }
         .contextMenu {
+            // Built when the menu opens, so this is the clip that was right-clicked.
+            let time = hoverTime ?? model.playhead
+            let clip = model.clipID(at: time)
             Button("Split Clip Here") {
-                model.split(at: hoverTime ?? model.playhead)
+                model.split(at: time)
             }
             Button("Delete Clip", role: .destructive) {
-                model.removeClipAtPlayhead()
+                if let clip {
+                    model.removeClip(id: clip)
+                }
             }
-            .disabled(model.edit.clips.clips.count < 2)
+            .disabled(model.edit.clips.clips.count < 2 || clip == nil)
         }
     }
 
@@ -278,6 +288,9 @@ struct StudioTimelineView: View {
                 clips(scale: scale)
             }
             .contentShape(Rectangle())
+            PendingCutMarks(model: model, scale: scale)
+                .offset(y: cueHeight + 6)
+                .frame(height: clipHeight)
             HoverSplitMarker(clock: model.playheadClock, scale: scale, height: cueHeight + clipHeight + 6)
         }
     }
@@ -344,6 +357,25 @@ struct StudioTimelineView: View {
         }
         .frame(width: width, height: clipHeight)
         .help("Drag the ends to trim. Hover and press C to split.")
+        // One element per clip (docs/17 T-STU-11): "Clip 2 of 5, 0:12 to 0:31, 2×".
+        // Adjusting it moves between clips, and its action selects this one.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Clip \(index + 1) of \(model.edit.clips.clips.count)")
+        .accessibilityValue(clipAccessibilityValue(clip, index: index))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAction(named: "Select") {
+            model.selectedClip = clip.id
+            model.playhead = model.editedStart(ofClipAt: index)
+        }
+        .accessibilityAction(named: "Delete Clip") {
+            model.removeClip(id: clip.id)
+        }
+    }
+
+    private func clipAccessibilityValue(_ clip: Clip, index: Int) -> String {
+        let start = model.editedStart(ofClipAt: index)
+        let range = "\(StudioClock.precise(start)) to \(StudioClock.precise(start + clip.editedDuration))"
+        return clip.speed == 1 ? range : "\(range), \(speedLabel(clip.speed))"
     }
 
     // MARK: - Formatting

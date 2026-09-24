@@ -87,7 +87,18 @@ public struct SecretScanner: Sendable {
     )
 
     /// 13–19 digits, optional space or dash between them (how cards are printed).
-    private static let card = regex(#"\b(?:\d[ \-]?){13,19}\b"#, options: [])
+    ///
+    /// Bounded by "not a digit" rather than `\b` (docs/17 T-REL-8): OCR routinely hangs a
+    /// stray glyph on the end of a line — `5500000000000004ÍšÍš` — and a letter there is a
+    /// word character, so `\b` found no boundary and the card went unredacted.
+    private static let card = regex(#"(?<!\d)(?:\d[ \-]?){12,18}\d(?!\d)"#, options: [])
+
+    /// A run that could be a number read by OCR: digits, the glyphs OCR confuses with
+    /// them, and the separators cards are printed with.
+    static let digitLikeRun = regex(
+        #"[0-9OoDQIl|!ZzSsB][0-9OoDQIl|!ZzSsB \-]{11,}[0-9OoDQIl|!ZzSsB]"#,
+        options: []
+    )
 
     /// Country code + check digits + BBAN, optional spaces every four characters.
     private static let iban = regex(#"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b"#, options: [])
@@ -96,8 +107,11 @@ public struct SecretScanner: Sendable {
     /// `eyJ`. Character class is deliberately loose (`[^\s.]`) because screenshot OCR
     /// routinely substitutes lookalikes (`I`/`l`, Latin/`Cyrillic`) and the review strip
     /// is where the user confirms, not the detector.
+    ///
+    /// A single space inside a segment is tolerated too: OCR breaks long tokens at
+    /// lookalike glyphs (`IUz|1 Nils`), and the transform strips it again.
     private static let jwt = regex(
-        #"eyJ[^\s.]{8,}\.[^\s.]{8,}\.[^\s.]{8,}"#,
+        #"eyJ(?:[^\s.]| (?=[^\s.])){8,}\.(?:[^\s.]| (?=[^\s.])){8,}\.[^\s.]{8,}"#,
         options: []
     )
 
@@ -127,6 +141,15 @@ public struct SecretScanner: Sendable {
             + #"|github_pat_[A-Za-z0-9_]{20,}"#
             + #"|xox[baprs]-[A-Za-z0-9-]{10,}"#
             + #"|AIza[0-9A-Za-z\-_]{35})\b"#,
+        options: []
+    )
+
+    /// A known-prefix key that OCR split with one space (`sk_live_51 FakeTest…`). Only
+    /// when the part before the space is too short to be the whole key, so a key followed
+    /// by an ordinary word is not stretched over it.
+    private static let splitAPIKeyPrefix = regex(
+        #"\b((?:sk_(?:live|test)|rk_live|pk_(?:live|test))_[0-9A-Za-z]{1,15} [0-9A-Za-z]{8,}"#
+            + #"|gh[pousr]_[A-Za-z0-9]{1,19} [A-Za-z0-9]{8,})\b"#,
         options: []
     )
 
@@ -179,7 +202,10 @@ public struct SecretScanner: Sendable {
     }
 
     private static func findCards(in text: String) -> [SecretMatch] {
-        matchResults(card, in: text).compactMap { result in
+        // Matched on a copy where OCR's digit lookalikes are read as digits. The copy is
+        // the same length in UTF-16, so every range found in it is a range in `text`.
+        let text = digitized(text)
+        return matchResults(card, in: text).compactMap { result in
             let raw = (text as NSString).substring(with: result.range)
             let digits = raw.filter(\.isNumber)
             guard digits.count >= 13, digits.count <= 19, luhnIsValid(digits) else { return nil }
@@ -208,6 +234,7 @@ public struct SecretScanner: Sendable {
 
     private static func findAPIKeys(in text: String) -> [SecretMatch] {
         var found = find(pattern: apiKeyPrefix, kind: .apiKey, in: text)
+        found += find(pattern: splitAPIKeyPrefix, kind: .apiKey, in: text) { $0.filter { !$0.isWhitespace } }
         for result in matchResults(apiKeyEntropy, in: text) {
             let raw = (text as NSString).substring(with: result.range)
             guard looksLikeHighEntropyKey(raw) else { continue }
@@ -286,53 +313,6 @@ public struct SecretScanner: Sendable {
     private static func isPlaceholder(_ value: String) -> Bool {
         let masks: Set<Character> = ["*", "•", "●", "·", "-", "_", ".", "#", "x", "X"]
         return value.allSatisfy { masks.contains($0) }
-    }
-
-    // MARK: - Checksums
-
-    /// Luhn (mod-10) as used on payment cards. Double every second digit from the right;
-    /// a valid number sums to a multiple of 10.
-    public static func luhnIsValid(_ digits: String) -> Bool {
-        guard digits.allSatisfy(\.isNumber), digits.count >= 13 else { return false }
-        var sum = 0
-        var doubleIt = false
-        for character in digits.reversed() {
-            guard let value = character.wholeNumberValue else { return false }
-            var term = value
-            if doubleIt {
-                term *= 2
-                if term > 9 {
-                    term -= 9
-                }
-            }
-            sum += term
-            doubleIt.toggle()
-        }
-        return sum % 10 == 0
-    }
-
-    /// ISO 13616: move the first four characters to the end, A=10…Z=35, remainder 1 mod 97.
-    public static func ibanChecksumIsValid(_ compact: String) -> Bool {
-        let compact = compact.uppercased()
-        guard compact.count >= 15, compact.count <= 34 else { return false }
-        let letters = CharacterSet.letters
-        let alphanumerics = CharacterSet.alphanumerics
-        guard compact.unicodeScalars.allSatisfy({ alphanumerics.contains($0) }) else { return false }
-        guard compact.prefix(2).unicodeScalars.allSatisfy({ letters.contains($0) }) else { return false }
-
-        let rearranged = String(compact.dropFirst(4) + compact.prefix(4))
-        var remainder = 0
-        for character in rearranged {
-            if let digit = character.wholeNumberValue {
-                remainder = (remainder * 10 + digit) % 97
-            } else if let ascii = character.asciiValue, character.isASCII, character.isLetter {
-                let value = Int(ascii - 65) + 10
-                remainder = (remainder * 100 + value) % 97
-            } else {
-                return false
-            }
-        }
-        return remainder == 1
     }
 
     /// Shannon entropy in bits/char. Random tokens sit near 4–5; English words sit lower.
@@ -484,7 +464,7 @@ public struct SecretScanner: Sendable {
         )
     }
 
-    private static func matchResults(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
+    static func matchResults(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
         pattern.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
     }
 

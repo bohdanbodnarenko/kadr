@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import StudioSession
 
@@ -64,7 +65,9 @@ public struct TranscriptCutPlanner: Sendable {
     /// How much silence to leave at each end of a removed pause.
     ///
     /// Without it, the words either side are butted together and the result sounds
-    /// clipped — the characteristic artefact of automatic silence removal.
+    /// clipped — the characteristic artefact of automatic silence removal. A quarter of a
+    /// second each side shortens a long pause to about half a second rather than deleting
+    /// it (docs/17 T-STU-6): the speaker still breathes, the viewer still gets a beat.
     public var silencePadding: TimeInterval
     /// Whether to propose removing filler words.
     public var removesFillers: Bool
@@ -76,7 +79,7 @@ public struct TranscriptCutPlanner: Sendable {
 
     public init(
         minimumSilence: TimeInterval = 1.1,
-        silencePadding: TimeInterval = 0.35,
+        silencePadding: TimeInterval = 0.25,
         removesFillers: Bool = true,
         removesSilences: Bool = true,
         maximumRemovedFraction: Double = 0.4
@@ -101,17 +104,104 @@ public struct TranscriptCutPlanner: Sendable {
     ///
     /// Ordered by time and never overlapping, so applying them is a walk rather than an
     /// interval-merge at the call site.
-    public func cuts(for transcript: Transcript, duration: TimeInterval) -> [ProposedCut] {
-        guard !transcript.isEmpty else { return [] }
+    ///
+    /// - Parameter protected: stretches that are never cut for being silent — where the
+    ///   pointer moved, a key was pressed or a button clicked (docs/17 T-STU-6). In a
+    ///   screen recording the quiet part is often the demonstration itself.
+    ///
+    /// Planned from the speaker's words only: a recognised word from recorded system
+    /// audio is the app being demonstrated, not the narrator, and an "um" in somebody
+    /// else's video is not the user's to cut (docs/03 §1.9).
+    public func cuts(
+        for transcript: Transcript,
+        duration: TimeInterval,
+        protecting protected: [ClosedRange<TimeInterval>] = []
+    ) -> [ProposedCut] {
+        let speaker = Transcript(words: transcript.words.filter { $0.track != .system })
+        guard !speaker.isEmpty else { return [] }
         var cuts: [ProposedCut] = []
 
         if removesFillers {
-            cuts.append(contentsOf: fillerCuts(in: transcript))
+            cuts.append(contentsOf: fillerCuts(in: speaker))
         }
         if removesSilences {
-            cuts.append(contentsOf: silenceCuts(in: transcript, duration: duration))
+            let ranges = Self.merged(protected)
+            cuts.append(contentsOf: silenceCuts(in: speaker, duration: duration)
+                .flatMap { Self.subtracting(ranges, from: $0) })
         }
         return merged(cuts.sorted { $0.start < $1.start })
+    }
+
+    /// When something happened on screen, padded, in recording time (docs/17 T-STU-6).
+    ///
+    /// Clicks and keystrokes each protect a little either side; pointer travel protects
+    /// the stretch it covered. A pointer that drifts a point or two is a hand resting on
+    /// the mouse, not a demonstration, so small moves are ignored.
+    public static func activityRanges(
+        in telemetry: InputTelemetry,
+        padding: TimeInterval = 0.4,
+        minimumTravel: CGFloat = 6
+    ) -> [ClosedRange<TimeInterval>] {
+        var ranges: [ClosedRange<TimeInterval>] = []
+        for click in telemetry.clicks where click.isDown {
+            ranges.append(max(click.time - padding, 0) ... click.time + padding)
+        }
+        for key in telemetry.keystrokes {
+            ranges.append(max(key.time - padding, 0) ... key.time + padding)
+        }
+        var anchor = telemetry.pointer.first
+        for sample in telemetry.pointer.dropFirst() {
+            guard let from = anchor else { break }
+            let travel = hypot(sample.position.x - from.position.x, sample.position.y - from.position.y)
+            if travel >= minimumTravel {
+                ranges.append(max(from.time - padding, 0) ... sample.time + padding)
+                anchor = sample
+            } else if sample.time - from.time > 0.5 {
+                // Re-anchor after a still spell, so a slow drift over minutes is not
+                // mistaken for one long gesture.
+                anchor = sample
+            }
+        }
+        return merged(ranges)
+    }
+
+    /// Sorted, with touching and overlapping ranges joined.
+    static func merged(_ ranges: [ClosedRange<TimeInterval>]) -> [ClosedRange<TimeInterval>] {
+        var result: [ClosedRange<TimeInterval>] = []
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = result.last, range.lowerBound <= last.upperBound {
+                result[result.count - 1] = last.lowerBound ... max(last.upperBound, range.upperBound)
+            } else {
+                result.append(range)
+            }
+        }
+        return result
+    }
+
+    /// The parts of `cut` outside `protected` (sorted, merged), each still worth cutting.
+    static func subtracting(
+        _ protected: [ClosedRange<TimeInterval>],
+        from cut: ProposedCut,
+        minimumPiece: TimeInterval = 0.3
+    ) -> [ProposedCut] {
+        var pieces: [ProposedCut] = []
+        var start = cut.start
+        for range in protected where range.upperBound > start && range.lowerBound < cut.end {
+            if range.lowerBound - start >= minimumPiece {
+                pieces.append(ProposedCut(start: start, end: range.lowerBound, reason: cut.reason, label: cut.label))
+            }
+            start = max(start, range.upperBound)
+        }
+        if cut.end - start >= minimumPiece {
+            pieces.append(ProposedCut(
+                id: pieces.isEmpty && start == cut.start ? cut.id : UUID(),
+                start: start,
+                end: cut.end,
+                reason: cut.reason,
+                label: cut.label
+            ))
+        }
+        return pieces
     }
 
     /// How much of the recording these cuts would throw away.
@@ -162,7 +252,7 @@ public struct TranscriptCutPlanner: Sendable {
                         start: start,
                         end: end,
                         reason: .silence,
-                        label: String(format: "%.1f s pause", gap)
+                        label: String(format: "Shorten a %.1f s pause", gap)
                     ))
                 }
             }

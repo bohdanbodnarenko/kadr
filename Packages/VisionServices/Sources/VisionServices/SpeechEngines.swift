@@ -233,30 +233,79 @@ struct LegacyEngine: SpeechEngine {
         with recognizer: SFSpeechRecognizer
     ) async throws -> [SpeechWordDTO] {
         let box = ResumeBox()
-        return try await withCheckedThrowingContinuation { continuation in
-            recognizer.recognitionTask(with: request) { result, error in
-                if let error {
-                    box.resume(continuation, with: .failure(VisionServiceError.transcriptionFailed))
-                    _ = error
-                    return
+        // The recognition task is kept and cancelled with the Swift task (docs/17 T-STU-5).
+        // Dropping it meant a cancelled Tidy kept recognising the whole file in the helper,
+        // and pressing Tidy again ran two at once.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    if error != nil {
+                        let failure: any Error = box.wasCancelled
+                            ? CancellationError()
+                            : VisionServiceError.transcriptionFailed
+                        box.resume(continuation, with: .failure(failure))
+                        return
+                    }
+                    guard let result, result.isFinal else { return }
+                    let words = result.bestTranscription.segments.map { segment in
+                        SpeechWordDTO(
+                            text: segment.substring,
+                            start: segment.timestamp,
+                            end: segment.timestamp + segment.duration,
+                            track: .mixed
+                        )
+                    }
+                    box.resume(continuation, with: .success(words))
                 }
-                guard let result, result.isFinal else { return }
-                let words = result.bestTranscription.segments.map { segment in
-                    SpeechWordDTO(
-                        text: segment.substring,
-                        start: segment.timestamp,
-                        end: segment.timestamp + segment.duration,
-                        track: .mixed
-                    )
-                }
-                box.resume(continuation, with: .success(words))
+                box.hold(task, continuation: continuation)
             }
+        } onCancel: {
+            box.cancel()
         }
     }
 
+    /// Resumes the continuation once, and owns the recognition task so a cancel can reach it.
+    ///
+    /// `@unchecked Sendable` under the lock: every field is read and written holding it.
     private final class ResumeBox: @unchecked Sendable {
         private let lock = NSLock()
         private var hasResumed = false
+        private var task: SFSpeechRecognitionTask?
+        private var isCancelled = false
+
+        /// Keeps `task`, or cancels it at once if the Swift task was cancelled first.
+        func hold(
+            _ task: SFSpeechRecognitionTask,
+            continuation: CheckedContinuation<[SpeechWordDTO], any Error>
+        ) {
+            lock.lock()
+            let cancelledAlready = isCancelled
+            if !cancelledAlready {
+                self.task = task
+            }
+            lock.unlock()
+            if cancelledAlready {
+                task.cancel()
+                resume(continuation, with: .failure(CancellationError()))
+            }
+        }
+
+        func cancel() {
+            lock.lock()
+            isCancelled = true
+            let task = task
+            self.task = nil
+            lock.unlock()
+            // Cancelling makes the recognizer call back with an error, which resumes the
+            // continuation; the caller sees the cancellation, not a failure.
+            task?.cancel()
+        }
+
+        var wasCancelled: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return isCancelled
+        }
 
         func resume(
             _ continuation: CheckedContinuation<[SpeechWordDTO], any Error>,

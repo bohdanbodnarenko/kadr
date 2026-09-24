@@ -137,85 +137,6 @@ public struct RecordingSession: Sendable, Hashable {
         directory.appendingPathComponent("transcript.json")
     }
 
-    /// Base name for an imported soundtrack. The picked file is copied in with its own
-    /// extension so a WAV stays a WAV; only one soundtrack lives here at a time.
-    public static let soundtrackBaseName = "soundtrack"
-
-    /// Imported replacement audio files currently in this session.
-    public var soundtrackURLs: [URL] {
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil
-        )) ?? []
-        return contents.filter {
-            $0.deletingPathExtension().lastPathComponent == Self.soundtrackBaseName
-        }.map(\.standardizedFileURL)
-    }
-
-    /// The soundtrack named in `edit`, if that file is still here.
-    public func soundtrackURL(for edit: StudioEdit) -> URL? {
-        guard let name = edit.soundtrackFileName, !name.isEmpty else { return nil }
-        let url = directory
-            .appendingPathComponent(URL(fileURLWithPath: name).lastPathComponent)
-            .standardizedFileURL
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
-    }
-
-    /// Copies `url` in as the session's soundtrack, replacing any previous import.
-    public func replaceSoundtrack(copying url: URL) throws -> String {
-        let ext = url.pathExtension.lowercased()
-        let fileName = "\(Self.soundtrackBaseName).\(ext.isEmpty ? "m4a" : ext)"
-        let destination = directory.appendingPathComponent(fileName)
-        try removeSoundtracks()
-        try FileManager.default.copyItem(at: url, to: destination)
-        return fileName
-    }
-
-    public func removeSoundtracks() throws {
-        for existing in soundtrackURLs {
-            try FileManager.default.removeItem(at: existing)
-        }
-    }
-
-    /// Base name for an imported canvas wallpaper. Copied in with its own extension.
-    public static let wallpaperBaseName = "wallpaper"
-
-    /// Imported wallpaper files currently in this session.
-    public var wallpaperURLs: [URL] {
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil
-        )) ?? []
-        return contents.filter {
-            $0.deletingPathExtension().lastPathComponent == Self.wallpaperBaseName
-        }.map(\.standardizedFileURL)
-    }
-
-    /// The wallpaper named in `edit`, if that file is still here.
-    public func wallpaperURL(for edit: StudioEdit) -> URL? {
-        guard let name = edit.canvas.wallpaperFileName, !name.isEmpty else { return nil }
-        let url = directory
-            .appendingPathComponent(URL(fileURLWithPath: name).lastPathComponent)
-            .standardizedFileURL
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
-    }
-
-    /// Copies `url` in as the session's wallpaper, replacing any previous import.
-    public func replaceWallpaper(copying url: URL) throws -> String {
-        let ext = url.pathExtension.lowercased()
-        let fileName = "\(Self.wallpaperBaseName).\(ext.isEmpty ? "png" : ext)"
-        let destination = directory.appendingPathComponent(fileName)
-        try removeWallpapers()
-        try FileManager.default.copyItem(at: url, to: destination)
-        return fileName
-    }
-
-    public func removeWallpapers() throws {
-        for existing in wallpaperURLs {
-            try FileManager.default.removeItem(at: existing)
-        }
-    }
-
     /// Every file a session may contain, for sweeps and size reporting.
     public var allURLs: [URL] {
         [
@@ -323,8 +244,8 @@ public struct RecordingSession: Sendable, Hashable {
         allURLs
             .filter { url in
                 url != screenURL && url != cameraURL
-                    && url.deletingPathExtension().lastPathComponent != Self.soundtrackBaseName
-                    && url.deletingPathExtension().lastPathComponent != Self.wallpaperBaseName
+                    && !Self.isImport(url, named: Self.soundtrackBaseName)
+                    && !Self.isImport(url, named: Self.wallpaperBaseName)
             }
             .reduce(0) { total, url in
                 total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)

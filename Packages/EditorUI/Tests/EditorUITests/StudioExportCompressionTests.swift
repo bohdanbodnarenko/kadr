@@ -49,11 +49,12 @@ struct StudioExportCompressionTests {
         let settings = StudioExportSettings(container: .gif, compresses: true)
         #expect(!settings.usesCompression)
         #expect(settings.rendererOptions.targetQuality == nil)
+        // docs/17 T-STU-7: a GIF has a size estimate too now.
         #expect(settings.estimatedBytes(
             outputSize: CGSize(width: 800, height: 450),
             duration: 10,
             manifestFrameRate: 30
-        ) == nil)
+        ) != nil)
     }
 
     @Test("The estimate follows the bit rate, the length and the quality")

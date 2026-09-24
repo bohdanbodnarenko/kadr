@@ -43,7 +43,7 @@ struct StudioCropOverlay: View {
             .gesture(dragGesture(handle: handle))
             .onHover { hovering in
                 if hovering {
-                    NSCursor.resizeLeftRight.set()
+                    Self.cursor(for: handle).set()
                 } else {
                     NSCursor.arrow.set()
                 }
@@ -114,4 +114,30 @@ private extension CropHandle {
         case .bottomTrailing: "Crop bottom right"
         }
     }
+}
+
+extension StudioCropOverlay {
+    /// The resize cursor that matches the handle (docs/17 T-STU-12): every handle used to
+    /// show left-right, including the top, the bottom and the corners.
+    static func cursor(for handle: CropHandle) -> NSCursor {
+        if #available(macOS 15, *) {
+            guard let position = framePositions[handle] else { return .openHand }
+            return .frameResize(position: position, directions: .all)
+        }
+        return legacyCursors[handle] ?? .crosshair
+    }
+
+    @available(macOS 15, *)
+    private static let framePositions: [CropHandle: NSCursor.FrameResizePosition] = [
+        .topLeading: .topLeft, .top: .top, .topTrailing: .topRight,
+        .leading: .left, .trailing: .right,
+        .bottomLeading: .bottomLeft, .bottom: .bottom, .bottomTrailing: .bottomRight
+    ]
+
+    /// macOS 14 has only the two straight resize cursors.
+    private static let legacyCursors: [CropHandle: NSCursor] = [
+        .top: .resizeUpDown, .bottom: .resizeUpDown,
+        .leading: .resizeLeftRight, .trailing: .resizeLeftRight,
+        .body: .openHand
+    ]
 }

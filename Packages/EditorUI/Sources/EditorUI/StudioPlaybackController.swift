@@ -280,6 +280,16 @@ final class StudioPlaybackController {
         return !composition.tracks(withMediaType: .audio).isEmpty
     }
 
+    /// The speed the player rolls at, from L (docs/17 T-STU-11). Back to 1 on pause.
+    private var rate: Float = 1
+
+    func setRate(_ rate: Float) {
+        self.rate = max(rate, 0.25)
+        if let player, player.rate > 0 {
+            player.rate = self.rate
+        }
+    }
+
     func play() {
         guard let model, !model.isPlaying, model.edit.duration > 0 else { return }
         // Playing from the end means playing from the start. Anything else leaves the user
@@ -325,10 +335,11 @@ final class StudioPlaybackController {
                 self?.reachedEnd()
             }
         }
-        player.play()
+        player.rate = rate
     }
 
     func pause() {
+        rate = 1
         guard let model else { return }
         removeObservers()
         if let player, player.rate != 0 {

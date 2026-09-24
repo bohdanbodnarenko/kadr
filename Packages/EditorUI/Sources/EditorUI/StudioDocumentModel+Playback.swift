@@ -61,6 +61,43 @@ public extension StudioDocumentModel {
         playhead += seconds
     }
 
+    /// Jumps to the previous or next edit point: a clip boundary, or either end
+    /// (docs/17 T-STU-11, ↑ and ↓).
+    func seekToEditPoint(forward: Bool) {
+        pausePlayback()
+        let points = [0] + clipEnds
+        let epsilon = 0.5 / Double(max(manifest.frameRate, 1))
+        if forward {
+            playhead = points.first { $0 > playhead + epsilon } ?? edit.duration
+        } else {
+            playhead = points.last { $0 < playhead - epsilon } ?? 0
+        }
+    }
+
+    enum Shuttle {
+        case reverse, stop, forward
+    }
+
+    /// J, K and L (docs/17 T-STU-11). L plays, and a second L doubles the speed; K stops;
+    /// J steps back a second at a time, twice as far on a second press — the preview
+    /// player does not play a composition backwards smoothly.
+    func shuttle(_ direction: Shuttle) {
+        switch direction {
+        case .stop:
+            shuttleSpeed = 0
+            pausePlayback()
+        case .forward:
+            shuttleSpeed = isPlaying && shuttleSpeed >= 1 ? 2 : 1
+            previewPlayback.setRate(Float(shuttleSpeed))
+            if !isPlaying {
+                play()
+            }
+        case .reverse:
+            shuttleSpeed = shuttleSpeed <= -1 ? -2 : -1
+            step(seconds: Double(shuttleSpeed))
+        }
+    }
+
     /// Jumps to the start of the edit.
     func seekToStart() {
         pausePlayback()
