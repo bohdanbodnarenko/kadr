@@ -5,12 +5,14 @@ struct RecordingBarTooltipLayer: View {
     let tooltip: RecordingBarTooltipModel
     /// Above the floating bar; below the notch island, where above is off the display.
     var edge: VerticalEdge = .top
+    @State private var pillWidth: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
             if let target = tooltip.visible {
                 RecordingBarTooltipPill(text: target.text, key: target.key)
-                    .position(x: target.frame.midX, y: pillCentre(in: proxy.size))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pillWidth = $0 }
+                    .position(x: pillCentreX(for: target, in: proxy.size), y: pillCentre(in: proxy.size))
             }
         }
         .allowsHitTesting(false)
@@ -19,6 +21,28 @@ struct RecordingBarTooltipLayer: View {
         .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.id)
         .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.text)
         .animation(RecordingBarMetrics.tooltipAnimation, value: tooltip.visible?.key)
+    }
+
+    /// Centred on the control, but kept inside the panel: the window only extends
+    /// `shadowSlack` past the glass, so a wide label over an end control was clipped.
+    private func pillCentreX(for target: RecordingBarTooltipTarget, in size: CGSize) -> CGFloat {
+        Self.clampedCentreX(
+            controlMidX: target.frame.midX,
+            pillWidth: pillWidth,
+            barWidth: size.width,
+            overhang: RecordingBarMetrics.shadowSlack - 4
+        )
+    }
+
+    static func clampedCentreX(
+        controlMidX: CGFloat, pillWidth: CGFloat, barWidth: CGFloat, overhang: CGFloat
+    ) -> CGFloat {
+        let half = pillWidth / 2
+        let low = -overhang + half
+        let high = barWidth + overhang - half
+        // A pill wider than the whole panel stays centred on the bar.
+        guard low <= high else { return barWidth / 2 }
+        return min(max(controlMidX, low), high)
     }
 
     private func pillCentre(in size: CGSize) -> CGFloat {
