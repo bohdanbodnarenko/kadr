@@ -340,7 +340,7 @@ public actor RecordingEngine {
         do {
             try await stream.startCapture()
         } catch {
-            throw RecordingError.writingFailed(error.localizedDescription)
+            throw Self.startError(error, otherwise: RecordingError.writingFailed)
         }
     }
 

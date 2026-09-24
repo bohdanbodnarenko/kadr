@@ -49,6 +49,9 @@ extension RecordingCoordinator {
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze to pick a window: \(error.localizedDescription, privacy: .public)")
+                // A lapsed grant ended here silently: the picker simply never appeared
+                // (docs/16 REC-20, docs/17 T-REC-9).
+                presentPermissionRecoveryIfNeeded(error)
                 completion(nil)
             }
         }
