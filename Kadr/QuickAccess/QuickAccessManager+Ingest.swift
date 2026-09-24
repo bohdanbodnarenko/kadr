@@ -42,9 +42,8 @@ extension QuickAccessManager {
             of: video,
             maxPixelSize: HistoryThumbnailWriter.maxPixelSize
         ) else { return nil }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-poster-\(UUID().uuidString).jpg")
         do {
+            let url = try LaunchScratch.current.url(named: "poster.jpg")
             try HistoryThumbnailWriter.write(image, to: url)
             return url
         } catch {

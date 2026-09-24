@@ -10,7 +10,7 @@ extension HistoryController {
         markAccessed(first)
         if selected.count == 1, first.kind != .video, let data = try? Data(contentsOf: url) {
             let format = ImageFormat(fileExtension: url.pathExtension) ?? .png
-            ClipboardWriter.shared.write(data: data, format: format, fileURL: url)
+            ClipboardWriter.shared.write(data: data, format: format, fileURL: namedURL(for: first) ?? url)
             return
         }
         let pasteboard = NSPasteboard.general
@@ -49,10 +49,17 @@ extension HistoryController {
         }
     }
 
+    /// The library file under the name the user knows it by, for anything that hands it
+    /// to another app (docs/17 T-OUT-10). Falls back to the hash-named file only if the
+    /// scratch folder cannot be written.
+    func namedURL(for record: HistoryRecord) -> URL? {
+        guard let source = fileURL(for: record) else { return nil }
+        return hardLink(for: record, at: source)
+    }
+
     private func hardLink(for record: HistoryRecord, at source: URL) -> URL {
-        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(record.originalFilename)
-        try? FileManager.default.removeItem(at: temp)
-        try? FileManager.default.linkItem(at: source, to: temp)
-        return FileManager.default.fileExists(atPath: temp.path) ? temp : source
+        let name = HistoryStore.sanitisedFilename(record.originalFilename)
+        guard !name.isEmpty else { return source }
+        return (try? LaunchScratch.current.link(source, named: name)) ?? source
     }
 }

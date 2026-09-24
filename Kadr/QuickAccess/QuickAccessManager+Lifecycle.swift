@@ -233,10 +233,16 @@ extension QuickAccessManager {
     /// copy of the item still holds the path it had before the move.
     func resolveForDrag(_ item: QuickAccessItem) -> URL? {
         finalizeIfStaged(item)
-        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
+        let live = items.first { $0.id == item.id } ?? item
+        let url = live.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
             logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .public)")
             return nil
+        }
+        // A History card's file is named by its hash; the receiver gets the name the card
+        // shows (docs/03 §2 "drag-out delivers a correctly named file", docs/17 T-OUT-10).
+        if live.origin == .library, live.filename != url.lastPathComponent {
+            return (try? LaunchScratch.current.link(url, named: Self.saveFilename(for: live))) ?? url
         }
         return url
     }

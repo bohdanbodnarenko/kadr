@@ -131,7 +131,7 @@ final class PinManager {
         for record in store.load() {
             let url = URL(fileURLWithPath: record.path)
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            pendingRestore = record
+            pendingRestore = record.clamped(to: NSScreen.screens.map(\.visibleFrame))
             _ = pin(
                 url,
                 copy: copy,
@@ -163,10 +163,12 @@ final class PinManager {
 
     /// The "Close all pins" global command (docs/03 §4).
     func closeAll() {
+        let urls = pins.map(\.fileURL)
         for pin in pins {
             pin.dismiss()
         }
         pins.removeAll()
+        urls.forEach(discardClipboardCopy(of:))
         cascadeStep = 0
         areHidden = false
         persist()
@@ -174,8 +176,21 @@ final class PinManager {
 
     private func close(_ panel: PinPanel) {
         guard let index = pins.firstIndex(where: { $0 === panel }) else { return }
-        pins.remove(at: index).dismiss()
+        let closed = pins.remove(at: index)
+        closed.dismiss()
+        discardClipboardCopy(of: closed.fileURL)
         persist()
+    }
+
+    /// Where a pin of clipboard-only content should keep its bytes, or nil without a store.
+    var clipboardDirectory: URL? {
+        store?.clipboardDirectory
+    }
+
+    /// Deletes a clipboard pin's private copy once no pin shows it.
+    private func discardClipboardCopy(of url: URL) {
+        guard let store, store.ownsClipboardCopy(url), !pins.contains(where: { $0.fileURL == url }) else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 
     /// Asks for a save once the pins have been still for `saveDebounce`.

@@ -321,7 +321,7 @@ extension QuickAccessManager {
         if let url = ClipboardMedia.fileURL(from: .general) {
             return pinFile(at: url)
         }
-        guard let pngURL = ClipboardMedia.stillPNGFile(from: .general) else {
+        guard let pngURL = ClipboardMedia.stillPNGFile(from: .general, in: pins.clipboardDirectory) else {
             return false
         }
         return pinFile(at: pngURL)

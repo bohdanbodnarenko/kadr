@@ -68,9 +68,8 @@ struct ProjectIngest {
     /// A scratch file rather than a permanent one: `HistoryStore` copies what it needs
     /// into the library, and this is gone by the next launch's staging sweep.
     private func writeThumbnailSource(_ png: Data) -> URL? {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-project-\(UUID().uuidString).png")
         do {
+            let url = try LaunchScratch.current.url(named: "project.png")
             try png.write(to: url, options: .atomic)
             return url
         } catch {

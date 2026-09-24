@@ -13,7 +13,10 @@ extension QuickAccessManager {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         let format = settings.compressionFormat
-        let destination = FileManager.default.temporaryDirectory
+        // Scratch: the helper writes here and the result is copied beside the original,
+        // so nothing needs this once the launch is over (docs/17 §5 theme 7).
+        let destination = (try? LaunchScratch.current.url(named: "compressed.\(format.fileExtension)"))
+            ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-compressed-\(UUID().uuidString)")
             .appendingPathExtension(format.fileExtension)
 
