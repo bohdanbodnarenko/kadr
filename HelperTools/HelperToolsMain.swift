@@ -422,7 +422,12 @@ final class ServiceDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendabl
         connection.exportedInterface = NSXPCInterface(with: VisionServiceProtocol.self)
         connection.remoteObjectInterface = NSXPCInterface(with: SpeechClientProtocol.self)
         connection.exportedObject = service
+        // The editor lets go of its connection to cancel (docs/17 T-STU-5): a cancel sent
+        // on a fresh connection reached a fresh `VisionService` with nothing to stop, so a
+        // cancelled Tidy kept burning CPU and a cancelled model download kept downloading.
+        // Whatever this connection started ends with it.
         connection.invalidationHandler = {
+            service.cancelSpeech()
             service.stopLiveSpeech()
         }
         connection.resume()

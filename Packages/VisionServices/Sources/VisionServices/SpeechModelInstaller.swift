@@ -82,11 +82,25 @@ public struct SpeechModelInstaller: Sendable {
             return
         }
 
-        progress?(request.progress)
+        // Checked at every step (docs/17 T-STU-5). The user was told the download stopped
+        // when they pressed Cancel, and a fetch that carried on anyway would make that a
+        // lie about the one thing here that uses the network (CLAUDE.md rule 1).
+        try Task.checkCancellation()
+        let requestProgress = request.progress
+        progress?(requestProgress)
         do {
-            try await request.downloadAndInstall()
+            try await withTaskCancellationHandler {
+                try await request.downloadAndInstall()
+            } onCancel: {
+                // The request's progress is its cancel handle.
+                requestProgress.cancel()
+            }
+            try Task.checkCancellation()
             logger.info("Installed the on-device speech model")
         } catch is CancellationError {
+            throw CancellationError()
+        } catch where Task.isCancelled {
+            // A cancelled progress fails the request with its own error; it is still a cancel.
             throw CancellationError()
         } catch {
             logger.error("The speech model download failed: \(error.localizedDescription, privacy: .public)")

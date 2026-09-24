@@ -185,10 +185,16 @@ public final class VisionClient {
         }
     }
 
+    /// Stops the transcription or model install this client started, and lets go of the
+    /// connection so the helper ends it even if the message is lost.
+    ///
+    /// Does nothing without a connection: a cancel on a new connection reaches a new
+    /// service in the helper, which has nothing to cancel (docs/17 T-STU-5). Cancelling
+    /// the task that awaits the call does the same thing and is usually simpler.
     public func cancelSpeech() {
-        let connection = connection ?? makeConnection()
-        self.connection = connection
+        guard let connection else { return }
         (connection.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
+        disconnect()
     }
 
     public func warmUpSpeech(_ request: SpeechStatusRequest) async throws {
@@ -257,16 +263,27 @@ public final class VisionClient {
         }
 
         let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask { try await Self.request(on: boxed.value, fallback: fallback, invoke: invoke) }
-            group.addTask {
-                try await Task.sleep(for: timeout)
-                throw ClientError.timedOut
+        let resultData = try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: Data.self) { group in
+                group.addTask { try await Self.request(on: boxed.value, fallback: fallback, invoke: invoke) }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    throw ClientError.timedOut
+                }
+                defer { group.cancelAll() }
+                guard let first = try await group.next() else { throw ClientError.timedOut }
+                return first
             }
-            defer { group.cancelAll() }
-            guard let first = try await group.next() else { throw ClientError.timedOut }
-            return first
+        } onCancel: {
+            // Cancelling the caller's task stops the work in the helper (docs/17 T-STU-5).
+            // On *this* connection — the helper keeps one service per connection, so a
+            // cancel sent anywhere else reaches nothing — and then the connection goes,
+            // which ends whatever it started even if the cancel message is lost, and
+            // fails the pending reply so this call returns now rather than at the timeout.
+            (boxed.value.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
+            boxed.value.invalidate()
         }
+        try Task.checkCancellation()
         return try JSONDecoder().decode(Response.self, from: resultData)
     }
 

@@ -96,11 +96,11 @@ public extension StudioDocumentModel {
         }
     }
 
+    /// Cancelling the task is what stops the download: the client sends the cancel on
+    /// the install's own connection and drops it, which the helper treats as a cancel
+    /// too (docs/17 T-STU-5). A fresh `VisionClient` here reached nothing.
     func cancelSpeechModelInstall() {
         installTask?.cancel()
-        Task { @MainActor in
-            VisionClient().cancelSpeech()
-        }
         installTask = nil
         installProgress = nil
     }
@@ -123,11 +123,10 @@ public extension StudioDocumentModel {
         transcriptionProgress = nil
     }
 
+    /// Cancels through the transcription's own task, and so its own connection
+    /// (docs/17 T-STU-5).
     func cancelTidySpeech() {
         transcribeTask?.cancel()
-        Task { @MainActor in
-            VisionClient().cancelSpeech()
-        }
     }
 
     private func runTidy() async {
