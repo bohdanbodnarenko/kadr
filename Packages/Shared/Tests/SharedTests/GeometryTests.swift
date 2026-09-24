@@ -237,3 +237,30 @@ struct PixelPointTests {
         #expect(point.y == 300)
     }
 }
+
+/// Seeding the overlay's pointer before the first mouse event (T-CAP-2): AppKit screen
+/// space in, flipped view points out.
+@Suite("ScreenRect top-left local point")
+struct TopLeftLocalPointTests {
+    /// A secondary display to the right of, and lower than, the main one.
+    private let frame = ScreenRect(x: 1440, y: -200, width: 1920, height: 1080)
+
+    @Test("Screen points map to top-left view points", arguments: [
+        (ScreenPoint(x: 1440, y: 879), CGPoint(x: 0, y: 1)),
+        (ScreenPoint(x: 1440, y: -200), CGPoint(x: 0, y: 1080)),
+        (ScreenPoint(x: 2400, y: 340), CGPoint(x: 960, y: 540)),
+        (ScreenPoint(x: 3359, y: 0), CGPoint(x: 1919, y: 880)),
+    ])
+    func maps(point: ScreenPoint, expected: CGPoint) {
+        #expect(frame.topLeftLocalPoint(for: point) == expected)
+    }
+
+    @Test("A point on another display is nil", arguments: [
+        ScreenPoint(x: 100, y: 100),
+        ScreenPoint(x: 3360, y: 0),
+        ScreenPoint(x: 2000, y: 880),
+    ])
+    func outside(point: ScreenPoint) {
+        #expect(frame.topLeftLocalPoint(for: point) == nil)
+    }
+}

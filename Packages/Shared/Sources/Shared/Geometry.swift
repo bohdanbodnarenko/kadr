@@ -95,6 +95,13 @@ public struct ScreenRect: Hashable, Sendable, Codable {
         point.x >= minX && point.x < maxX && point.y >= minY && point.y < maxY
     }
 
+    /// A screen point in this rect's own points, origin top-left — where it lands in a
+    /// flipped view that fills the rect. Nil outside it.
+    public func topLeftLocalPoint(for point: ScreenPoint) -> CGPoint? {
+        guard contains(point) else { return nil }
+        return CGPoint(x: point.x - minX, y: maxY - point.y)
+    }
+
     /// A screen point in this rect's own backing pixels, origin top-left.
     ///
     /// Clicks arrive in AppKit space (origin bottom-left). Captured frames are pixels
