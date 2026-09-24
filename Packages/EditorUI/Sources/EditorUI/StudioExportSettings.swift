@@ -183,7 +183,11 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
     public func rendererOptions(manifestFrameRate: Int = 60) -> StudioRenderer.Options {
         StudioRenderer.Options(
             codec: container == .gif ? .h264 : codec.videoCodec,
-            frameRate: frameRate.applied(to: manifestFrameRate),
+            // A GIF samples its intermediate movie at its own rate, so rendering that movie
+            // at 60 fps was four times the frames for nothing (docs/17 T-STU-3).
+            frameRate: container == .gif
+                ? min(gifOptions.frameRate, max(manifestFrameRate, 1))
+                : frameRate.applied(to: manifestFrameRate),
             bitRateMultiplier: quality.bitRateMultiplier,
             fileType: container == .gif ? .mov : container.fileType,
             includeAudio: container == .gif ? false : includeAudio,
