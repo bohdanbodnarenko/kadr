@@ -127,7 +127,7 @@ struct StudioExportStateTests {
         try Data("a finished export".utf8).write(to: rendered)
         let snapshot = studio.exportSnapshot()
         try SessionDocument(session: studio.session).write(RenderStamp(
-            editDigest: try #require(RenderStamp.digest(of: snapshot.edit)),
+            editDigest: #require(RenderStamp.digest(of: snapshot.edit)),
             outputPath: rendered.path,
             pixelSize: StudioRenderPlan(edit: snapshot.edit, sourceSize: studio.manifest.pixelSize).outputSize,
             settingsDigest: RenderStamp.digest(of: snapshot.settings),

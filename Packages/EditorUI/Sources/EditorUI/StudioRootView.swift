@@ -470,7 +470,7 @@ private final class DockProgressView: NSView {
     /// The app's own icon with a thin bar along the bottom, the way Finder shows a copy
     /// (docs/17 T-STU-12). It used to cover the icon with a dark overlay.
     override func draw(_ dirtyRect: NSRect) {
-        let bounds = self.bounds
+        let bounds = bounds
         NSApp.applicationIconImage?.draw(in: bounds)
         let track = NSRect(x: bounds.minX + 14, y: bounds.minY + 10, width: bounds.width - 28, height: 12)
         let radius = track.height / 2

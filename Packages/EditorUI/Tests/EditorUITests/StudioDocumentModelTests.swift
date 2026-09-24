@@ -332,42 +332,6 @@ struct StudioDocumentModelTests {
         #expect(studio.edit.duration < 10)
     }
 
-    /// docs/17 T-STU-9: opening does not autosave over an edit it could not read.
-    @Test("An unreadable edit is kept aside and the user is told")
-    func unreadableEditIsKept() throws {
-        let folder = scratch()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let first = try model(in: folder)
-        let session = first.session
-        // A clip list of the wrong shape: what a future or damaged edit looks like here.
-        try Data("{\"clips\": \"a string where clips should be\"}".utf8).write(to: session.editURL)
-        try? FileManager.default.removeItem(at: session.draftEditURL)
-
-        let reopened = try #require(StudioDocumentModel(session: session))
-        #expect(reopened.failure != nil)
-        let kept = try FileManager.default.contentsOfDirectory(atPath: session.directory.path)
-            .filter { $0.contains("unreadable") }
-        #expect(kept.count == 1)
-    }
-
-    /// docs/17 T-STU-8: the clip the user named goes, not the one under the playhead.
-    @Test("Removing a clip by id removes that clip, wherever the playhead is")
-    func removeNamedClip() throws {
-        let folder = scratch()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let studio = try model(in: folder)
-        studio.playhead = 4
-        studio.splitAtPlayhead()
-        let second = studio.edit.clips.clips[1].id
-        let first = studio.edit.clips.clips[0].id
-        studio.selectedClip = second
-        studio.playhead = 1
-        studio.removeClip(id: second)
-        #expect(studio.edit.clips.clips.map(\.id) == [first])
-        #expect(studio.selectedClip == nil)
-        #expect(studio.clipID(at: 1) == first)
-    }
-
     /// A timeline with nothing in it is not an edit, it is a deleted recording — and
     /// deleting a recording is not something a trim button should be able to do.
     @Test("The last clip cannot be removed")

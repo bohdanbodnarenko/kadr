@@ -136,7 +136,7 @@ public extension StudioDocumentModel {
     }
 
     /// Writes the current edit to `destination`, reusing a stamped render when possible.
-    fileprivate func writeEditedRecording(to destination: URL) async throws {
+    private func writeEditedRecording(to destination: URL) async throws {
         let snapshot = exportSnapshot()
         if reuseRenderedFile(for: snapshot, at: destination) {
             return
@@ -271,7 +271,7 @@ public extension StudioDocumentModel {
         }
     }
 
-    fileprivate func performExport(to destination: URL) async {
+    private func performExport(to destination: URL) async {
         // The stamp is finally read (docs/11 S2).
         //
         // `renderStamp()` and `matches(editDigest:pixelSize:)` were written, tested and had
@@ -393,6 +393,8 @@ public extension StudioDocumentModel {
     private func notifyExportFinished(at destination: URL) {
         // No app (a test host) is not "in the background": there is nobody to notify.
         guard NSApp?.isActive == false else { return }
+        // Notification Center throws for a process with no bundle, which is a test runner.
+        guard Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" else { return }
         let fileName = destination.lastPathComponent
         Task {
             let center = UNUserNotificationCenter.current()

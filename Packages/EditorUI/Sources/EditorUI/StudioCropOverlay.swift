@@ -121,27 +121,23 @@ extension StudioCropOverlay {
     /// show left-right, including the top, the bottom and the corners.
     static func cursor(for handle: CropHandle) -> NSCursor {
         if #available(macOS 15, *) {
-            let position: NSCursor.FrameResizePosition? = switch handle {
-            case .topLeading: .topLeft
-            case .top: .top
-            case .topTrailing: .topRight
-            case .leading: .left
-            case .trailing: .right
-            case .bottomLeading: .bottomLeft
-            case .bottom: .bottom
-            case .bottomTrailing: .bottomRight
-            case .body: nil
-            }
-            if let position {
-                return .frameResize(position: position, directions: .all)
-            }
-            return .openHand
+            guard let position = framePositions[handle] else { return .openHand }
+            return .frameResize(position: position, directions: .all)
         }
-        return switch handle {
-        case .top, .bottom: .resizeUpDown
-        case .leading, .trailing: .resizeLeftRight
-        case .body: .openHand
-        default: .crosshair
-        }
+        return legacyCursors[handle] ?? .crosshair
     }
+
+    @available(macOS 15, *)
+    private static let framePositions: [CropHandle: NSCursor.FrameResizePosition] = [
+        .topLeading: .topLeft, .top: .top, .topTrailing: .topRight,
+        .leading: .left, .trailing: .right,
+        .bottomLeading: .bottomLeft, .bottom: .bottom, .bottomTrailing: .bottomRight
+    ]
+
+    /// macOS 14 has only the two straight resize cursors.
+    private static let legacyCursors: [CropHandle: NSCursor] = [
+        .top: .resizeUpDown, .bottom: .resizeUpDown,
+        .leading: .resizeLeftRight, .trailing: .resizeLeftRight,
+        .body: .openHand
+    ]
 }

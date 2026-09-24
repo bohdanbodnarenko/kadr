@@ -235,7 +235,12 @@ struct StudioSpeechTests {
             TranscriptWord(text: "this", start: 8, end: 9)
         ])
         let telemetry = InputTelemetry(clicks: (2 ... 7).map { ClickEvent(time: Double($0), position: .zero) })
-        let studio = try model(in: folder, duration: 9, telemetry: telemetry, transcriber: StubTranscriber(transcript: words))
+        let studio = try model(
+            in: folder,
+            duration: 9,
+            telemetry: telemetry,
+            transcriber: StubTranscriber(transcript: words)
+        )
 
         await studio.tidySpeech()
         #expect(studio.pendingCuts.allSatisfy { $0.reason == .fillerWord || $0.end <= 1.7 || $0.start >= 7.3 })

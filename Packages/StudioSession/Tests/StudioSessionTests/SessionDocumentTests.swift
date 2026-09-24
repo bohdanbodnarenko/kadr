@@ -202,25 +202,32 @@ struct SessionDocumentTests {
         let stamped = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size, inputsDigest: "build-1")
         let legacy = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size)
 
-        let cases: [(RenderStamp, String?, Bool)] = [
-            (stamped, "build-1", true),
-            (stamped, "build-2", false),
-            (legacy, "build-1", false),
-            (legacy, nil, true)
-        ]
-        for (stamp, inputs, expected) in cases {
-            #expect(stamp.matches(editDigest: "abc", pixelSize: size, inputsDigest: inputs) == expected)
-        }
+        #expect(stamped.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-1"))
+        #expect(!stamped.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-2"))
+        #expect(!legacy.matches(editDigest: "abc", pixelSize: size, inputsDigest: "build-1"))
+        #expect(legacy.matches(editDigest: "abc", pixelSize: size, inputsDigest: nil))
     }
 
     /// docs/17 T-STU-9: an edit a newer build wrote is moved aside, never overwritten.
+    struct UnreadableCase: Sendable, CustomTestStringConvertible {
+        var draft: String?
+        var edit: String?
+        var backups: Int
+
+        var testDescription: String {
+            "draft \(draft ?? "none"), edit \(edit ?? "none")"
+        }
+    }
+
     @Test("Unreadable edits are moved aside and readable ones are left alone", arguments: [
-        (draft: "not json", edit: nil as String?, backups: 1),
-        (draft: nil as String?, edit: "{\"clips\": 7}", backups: 1),
-        (draft: "junk", edit: "junk", backups: 2),
-        (draft: nil as String?, edit: nil as String?, backups: 0)
+        UnreadableCase(draft: "not json", edit: nil, backups: 1),
+        UnreadableCase(draft: nil, edit: "{\"clips\": 7}", backups: 1),
+        UnreadableCase(draft: "junk", edit: "junk", backups: 2),
+        UnreadableCase(draft: nil, edit: nil, backups: 0)
     ])
-    func unreadableEditsAreBackedUp(draft: String?, edit: String?, backups: Int) throws {
+    func unreadableEditsAreBackedUp(_ testCase: UnreadableCase) throws {
+        let draft = testCase.draft
+        let edit = testCase.edit
         let scratch = try scratch()
         defer { try? FileManager.default.removeItem(at: scratch.root) }
         if let draft {
@@ -230,7 +237,7 @@ struct SessionDocumentTests {
             try Data(edit.utf8).write(to: scratch.session.editURL)
         }
         let moved = scratch.document.backUpUnreadableEdits(StudioEdit.self)
-        #expect(moved.count == backups)
+        #expect(moved.count == testCase.backups)
         for url in moved {
             #expect(FileManager.default.fileExists(atPath: url.path))
             #expect(url.lastPathComponent.contains("unreadable"))

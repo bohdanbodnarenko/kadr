@@ -159,8 +159,7 @@ public final class StudioDocumentModel {
     }
 
     /// Whether an export is running, and how far along.
-    /// Drives the Dock tile from here rather than from a view (docs/17 T-STU-12): the view
-    /// that used to do it lives in the inspector, and hiding the inspector froze the bar.
+    /// Drives the Dock tile, not a view: hiding the inspector froze it (docs/17 T-STU-12).
     public internal(set) var exportProgress: Double? {
         didSet {
             if NSApp != nil {
@@ -180,34 +179,12 @@ public final class StudioDocumentModel {
 
     /// Set when something went wrong that the user should see.
     public var failure: StudioFailurePresentation? {
-        didSet {
-            if let failure, failure != oldValue {
-                Self.announce(failure.title + " " + failure.message)
-            }
-        }
+        didSet { Self.announce(failure.map { $0.title + " " + $0.message }, unless: oldValue == failure) }
     }
 
     /// Set when something worked and saying so is the whole feedback.
     public var notice: String? {
-        didSet {
-            if let notice, notice != oldValue {
-                Self.announce(notice)
-            }
-        }
-    }
-
-    /// Says `text` to VoiceOver (docs/17 T-STU-11). A banner that appears is silent to
-    /// someone who cannot see it, so exports, notices and failures are announced too.
-    static func announce(_ text: String) {
-        guard let app = NSApp else { return }
-        NSAccessibility.post(
-            element: app,
-            notification: .announcementRequested,
-            userInfo: [
-                .announcement: text,
-                .priority: NSAccessibilityPriorityLevel.high.rawValue
-            ]
-        )
+        didSet { Self.announce(notice, unless: oldValue == notice) }
     }
 
     /// The look last applied from the preset bar.
@@ -237,8 +214,7 @@ public final class StudioDocumentModel {
 
     /// Cuts waiting for the user to review (docs/13 T0.4).
     public var pendingCuts: [ProposedCut] = []
-    /// What Tidy looks for (docs/17 T-STU-6). Two choices because they are different
-    /// decisions: an "um" is never content, a silent stretch sometimes is.
+    /// What Tidy looks for (docs/17 T-STU-6): an "um" is never content, a pause may be.
     public var tidyRemovesFillers = true
     public var tidyShortensPauses = true
     /// The J/K/L speed: −2, −1, 0, 1 or 2 (docs/17 T-STU-11).
@@ -271,9 +247,8 @@ public final class StudioDocumentModel {
     /// Unstructured on purpose: an export outlives the save panel's completion handler, and
     /// nothing on the way in owns a scope that lasts as long as the render does.
     @ObservationIgnored var exportTask: Task<Void, Never>?
-    /// The edited-soundtrack export, so closing and quitting can wait for it (T-STU-9).
+    /// The soundtrack export (T-STU-9) and the Share button the picker hangs off (T-STU-4).
     @ObservationIgnored var audioExportTask: Task<Void, Never>?
-    /// The Share button, so the share picker can hang off it (docs/17 T-STU-4).
     @ObservationIgnored weak var shareAnchorView: NSView?
     /// Validating and loading the persisted transcript; cancelled on close.
     @ObservationIgnored var transcriptLoadTask: Task<Void, Never>?
@@ -310,8 +285,7 @@ public final class StudioDocumentModel {
         self.transcriber = transcriber ?? HelperTranscriber()
         self.presetStore = presetStore
 
-        // An edit this build cannot read is moved aside before anything can autosave over
-        // it, and the user is told (docs/17 T-STU-9).
+        // Moved aside before anything can autosave over it (docs/17 T-STU-9).
         let backups = document.backUpUnreadableEdits(StudioEdit.self)
 
         // The draft wins over the commit, so reopening lands where the user left off
@@ -517,37 +491,4 @@ public final class StudioDocumentModel {
 
     nonisolated static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
         + "Undo your clip edits first, or trim the pauses by hand."
-
-    /// Records that the window closed on purpose (docs/09 U3.1).
-    ///
-    /// The draft says "somebody was in the middle of this" and the commit says "somebody
-    /// stopped on purpose", and the difference between them is the entire definition of a
-    /// session a crash interrupted. Without this every session anyone ever opened would
-    /// look unfinished forever, and a recovery prompt that is always showing is one nobody
-    /// reads.
-    ///
-    /// The draft stays. It is what reopening reads first, and after a clean close the two
-    /// agree — so keeping it costs nothing and losing it would throw away the position the
-    /// user left off at.
-    ///
-    /// Also where the studio lets go of what it started: the transcript check stops reading
-    /// the footage, and the filmstrip forgets this recording's decoders and tiles.
-    public func commitOnClose() {
-        transcriptLoadTask?.cancel()
-        transcriptLoadTask = nil
-        flushDraft()
-        do {
-            try document.commit(edit)
-            // Only once the edit is on disk: until then undo can still reach a replaced
-            // or removed import, and after it nothing can.
-            session.purgeUnusedImports(keeping: edit)
-        } catch {
-            logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
-        }
-        purgeStagedRenders()
-        let path = session.screenURL.path
-        Task.detached(priority: .utility) {
-            await StudioThumbnailStore.shared.purge(path: path)
-        }
-    }
 }

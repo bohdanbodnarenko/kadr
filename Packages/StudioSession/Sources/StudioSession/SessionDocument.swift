@@ -323,7 +323,7 @@ public struct SessionDocument: Sendable {
     /// the studio opened the recording untouched, and the next autosave **overwrote** the
     /// user's work with that. Moved rather than deleted, so a downgrade can be undone by
     /// upgrading again and putting the file back.
-    public func backUpUnreadableEdits<Edit: Decodable>(_ type: Edit.Type, now: Date = Date()) -> [URL] {
+    public func backUpUnreadableEdits(_ type: (some Decodable).Type, now: Date = Date()) -> [URL] {
         var backups: [URL] = []
         for url in [session.draftEditURL, session.editURL] {
             guard let data = try? Data(contentsOf: url),

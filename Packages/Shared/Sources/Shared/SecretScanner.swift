@@ -95,7 +95,10 @@ public struct SecretScanner: Sendable {
 
     /// A run that could be a number read by OCR: digits, the glyphs OCR confuses with
     /// them, and the separators cards are printed with.
-    private static let digitLikeRun = regex(#"[0-9OoDQIl|!ZzSsB][0-9OoDQIl|!ZzSsB \-]{11,}[0-9OoDQIl|!ZzSsB]"#, options: [])
+    static let digitLikeRun = regex(
+        #"[0-9OoDQIl|!ZzSsB][0-9OoDQIl|!ZzSsB \-]{11,}[0-9OoDQIl|!ZzSsB]"#,
+        options: []
+    )
 
     /// Country code + check digits + BBAN, optional spaces every four characters.
     private static let iban = regex(#"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b"#, options: [])
@@ -215,81 +218,6 @@ public struct SecretScanner: Sendable {
         }
     }
 
-    /// `text` with the glyphs OCR mistakes for digits — `O` for 0, `l` `I` `|` for 1,
-    /// `Z` for 2, `S` for 5, `B` for 8 — read as digits, but only inside runs that are
-    /// mostly digits already (docs/17 T-REL-8).
-    ///
-    /// Mostly-digits is the guard against reading words as numbers. A card number that
-    /// comes out of OCR as `4111 l111 1111 1111` is still a card, and still has to be
-    /// redacted: an auto-redaction that silently misses one is a privacy defect. Luhn,
-    /// checked afterwards, is what keeps a mis-read that is not a card from being one.
-    static func digitized(_ text: String) -> String {
-        let units = Array(text.utf16)
-        var output = units
-        let map: [UInt16: UInt16] = [
-            "O", "o", "D", "Q", "I", "l", "|", "!", "Z", "z", "S", "s", "B"
-        ].reduce(into: [:]) { result, glyph in
-            let digit: Character = switch glyph {
-            case "O", "o", "D", "Q": "0"
-            case "I", "l", "|", "!": "1"
-            case "Z", "z": "2"
-            case "S", "s": "5"
-            default: "8"
-            }
-            result[glyph.utf16.first ?? 0] = digit.utf16.first ?? 0
-        }
-        for result in matchResults(digitLikeRun, in: text) {
-            let range = result.range
-            let run = units[range.location ..< range.location + range.length]
-            let digits = run.count(where: { (48 ... 57).contains($0) })
-            let glyphs = run.count(where: { map[$0] != nil })
-            // At least ten real digits, and the lookalikes a small minority of them.
-            guard digits >= 10, glyphs * 4 <= digits else { continue }
-            mapGroups(in: range, units: units, into: &output, using: map)
-        }
-        return String(decoding: output, as: UTF16.self)
-    }
-
-    /// Maps lookalikes group by group (a group is what sits between spaces and dashes).
-    ///
-    /// A group is read as digits only if it has at least as many real digits as
-    /// lookalikes, and does not run on into a word outside the run — so the `s` of
-    /// `4111… suffix` stays a letter.
-    private static func mapGroups(
-        in range: NSRange,
-        units: [UInt16],
-        into output: inout [UInt16],
-        using map: [UInt16: UInt16]
-    ) {
-        let separators: Set<UInt16> = [32, 45]
-        let end = range.location + range.length
-        var start = range.location
-        while start < end {
-            var stop = start
-            while stop < end, !separators.contains(units[stop]) {
-                stop += 1
-            }
-            let group = units[start ..< stop]
-            let digits = group.count { (48 ... 57).contains($0) }
-            let glyphs = group.count { map[$0] != nil }
-            let before = start > 0 ? units[start - 1] : 32
-            let after = stop < units.count ? units[stop] : 32
-            let touchesWord = isLetter(before) || isLetter(after)
-            if digits > 0, digits >= glyphs, !touchesWord {
-                for index in start ..< stop {
-                    if let digit = map[units[index]] {
-                        output[index] = digit
-                    }
-                }
-            }
-            start = stop + 1
-        }
-    }
-
-    private static func isLetter(_ unit: UInt16) -> Bool {
-        (65 ... 90).contains(unit) || (97 ... 122).contains(unit)
-    }
-
     private static func findIBANs(in text: String) -> [SecretMatch] {
         matchResults(iban, in: text).compactMap { result in
             let raw = (text as NSString).substring(with: result.range)
@@ -385,53 +313,6 @@ public struct SecretScanner: Sendable {
     private static func isPlaceholder(_ value: String) -> Bool {
         let masks: Set<Character> = ["*", "•", "●", "·", "-", "_", ".", "#", "x", "X"]
         return value.allSatisfy { masks.contains($0) }
-    }
-
-    // MARK: - Checksums
-
-    /// Luhn (mod-10) as used on payment cards. Double every second digit from the right;
-    /// a valid number sums to a multiple of 10.
-    public static func luhnIsValid(_ digits: String) -> Bool {
-        guard digits.allSatisfy(\.isNumber), digits.count >= 13 else { return false }
-        var sum = 0
-        var doubleIt = false
-        for character in digits.reversed() {
-            guard let value = character.wholeNumberValue else { return false }
-            var term = value
-            if doubleIt {
-                term *= 2
-                if term > 9 {
-                    term -= 9
-                }
-            }
-            sum += term
-            doubleIt.toggle()
-        }
-        return sum % 10 == 0
-    }
-
-    /// ISO 13616: move the first four characters to the end, A=10…Z=35, remainder 1 mod 97.
-    public static func ibanChecksumIsValid(_ compact: String) -> Bool {
-        let compact = compact.uppercased()
-        guard compact.count >= 15, compact.count <= 34 else { return false }
-        let letters = CharacterSet.letters
-        let alphanumerics = CharacterSet.alphanumerics
-        guard compact.unicodeScalars.allSatisfy({ alphanumerics.contains($0) }) else { return false }
-        guard compact.prefix(2).unicodeScalars.allSatisfy({ letters.contains($0) }) else { return false }
-
-        let rearranged = String(compact.dropFirst(4) + compact.prefix(4))
-        var remainder = 0
-        for character in rearranged {
-            if let digit = character.wholeNumberValue {
-                remainder = (remainder * 10 + digit) % 97
-            } else if let ascii = character.asciiValue, character.isASCII, character.isLetter {
-                let value = Int(ascii - 65) + 10
-                remainder = (remainder * 100 + value) % 97
-            } else {
-                return false
-            }
-        }
-        return remainder == 1
     }
 
     /// Shannon entropy in bits/char. Random tokens sit near 4–5; English words sit lower.
@@ -583,7 +464,7 @@ public struct SecretScanner: Sendable {
         )
     }
 
-    private static func matchResults(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
+    static func matchResults(_ pattern: NSRegularExpression, in text: String) -> [NSTextCheckingResult] {
         pattern.matches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
     }
 
