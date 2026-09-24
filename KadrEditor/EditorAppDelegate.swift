@@ -165,24 +165,32 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             controller.flushAutosaveSynchronously()
         }
 
-        let exporting = studioWindows.filter(\.isExporting)
-        guard !exporting.isEmpty else { return .terminateNow }
+        // Every long operation, not only exports (docs/17 T-STU-9): a transcription, a
+        // model download or an audio export was ended by ⌘Q without a word.
+        let busy = studioWindows.filter { !$0.longOperations.isEmpty }
+        guard !busy.isEmpty else {
+            commitStudioSessions()
+            return .terminateNow
+        }
 
+        let operations = busy.flatMap(\.longOperations)
         let alert = NSAlert()
-        alert.messageText = exporting.count == 1
-            ? "An export is still running."
-            : "\(exporting.count) exports are still running."
-        alert.informativeText = "Quitting now discards the export, and the partly-written "
-            + "file is deleted."
+        alert.messageText = operations.count == 1
+            ? "Studio work is still running."
+            : "\(operations.count) studio tasks are still running."
+        alert.informativeText = "Quitting now stops "
+            + StudioWindowController.list(operations)
+            + ", and any partly-written file is deleted."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Quit Anyway")
-        alert.addButton(withTitle: "Keep Exporting")
+        alert.addButton(withTitle: "Keep Working")
         guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
 
         Task { @MainActor in
-            for window in exporting {
-                await window.cancelExport()
+            for window in busy {
+                await window.cancelLongOperations()
             }
+            self.commitStudioSessions()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
@@ -267,7 +275,20 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         return RecordingSessionStore(root: root).session(forFootageAt: url)
     }
 
+    /// ⌘Q never reaches `windowWillClose`, so each studio commits here (docs/17 T-STU-9).
+    private func commitStudioSessions() {
+        for window in studioWindows {
+            window.commitForQuit()
+        }
+    }
+
     private func openInStudio(_ session: RecordingSession) {
+        // One window per recording (docs/17 T-STU-9): two would autosave over each other.
+        let directory = session.directory.standardizedFileURL
+        if let open = studioWindows.first(where: { $0.sessionDirectory == directory }) {
+            open.bringToFront()
+            return
+        }
         do {
             let controller = try StudioWindowController(session: session)
             controller.onClose = { [weak self, weak controller] in

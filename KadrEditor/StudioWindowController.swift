@@ -46,6 +46,38 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         await model.cancelExport()
     }
 
+    /// What quitting or closing would interrupt (docs/17 T-STU-9).
+    var longOperations: [String] {
+        model.longOperations
+    }
+
+    /// Stops all of it and waits for partial files to be deleted.
+    func cancelLongOperations() async {
+        await model.cancelLongOperations()
+    }
+
+    /// The recording this window edits, so a second open can find it (docs/17 T-STU-9).
+    var sessionDirectory: URL {
+        model.session.directory.standardizedFileURL
+    }
+
+    /// Commits the edit on quit (docs/17 T-STU-9).
+    ///
+    /// `windowWillClose` is not called when the app terminates, so ⌘Q left every open
+    /// session with a draft and no commit — which is what a crash looks like, and the
+    /// agent then offered to "recover" a recording nobody lost.
+    func commitForQuit() {
+        model.stopPlayback()
+        model.commitOnClose()
+    }
+
+    /// Brings an already-open window forward rather than opening a second one over the
+    /// same session, which would autosave over each other.
+    func bringToFront() {
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     init(session: RecordingSession) throws {
         guard let model = StudioDocumentModel(session: session) else {
             throw OpenError.notASession(session.directory)
@@ -221,48 +253,39 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             return true
         }
 
-        if model.isSpeechBusy {
-            let alert = NSAlert()
-            alert.messageText = "Stop speech work on “\(sender.title)”?"
-            alert.informativeText = "A transcription or a model download is still running. "
-                + "Closing now cancels it."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Stop and Close")
-            alert.addButton(withTitle: "Keep Working")
-            let responder = FocusRestoration.capture(from: sender)
-            alert.beginSheetModal(for: sender) { [weak self] response in
-                guard let self, response == .alertFirstButtonReturn else {
-                    FocusRestoration.restore(responder, in: sender)
-                    return
-                }
-                model.cancelTidySpeech()
-                model.cancelSpeechModelInstall()
-                isClosingConfirmed = true
-                sender.close()
-            }
-            return false
-        }
-        guard model.isExporting else { return true }
+        let operations = model.longOperations
+        guard !operations.isEmpty else { return true }
 
         let alert = NSAlert()
-        alert.messageText = "Stop exporting “\(sender.title)”?"
-        alert.informativeText = "The export is not finished. Closing now discards it, "
-            + "and the partly-written file is deleted."
+        alert.messageText = "Stop work on “\(sender.title)”?"
+        alert.informativeText = Self.list(operations).prefix(1).uppercased()
+            + Self.list(operations).dropFirst()
+            + (operations.count == 1 ? " is" : " are")
+            + " still running. Closing now stops it, and any partly-written file is deleted."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Stop Exporting")
-        alert.addButton(withTitle: "Keep Exporting")
+        alert.addButton(withTitle: "Stop and Close")
+        alert.addButton(withTitle: "Keep Working")
+        let responder = FocusRestoration.capture(from: sender)
         alert.beginSheetModal(for: sender) { [weak self] response in
-            guard response == .alertFirstButtonReturn else { return }
-            // Closed once the render has actually unwound, not once it has been told to. The
-            // renderer deletes the partial file on its way out, and a window that vanished
-            // first would let the process quit before that ran.
+            guard response == .alertFirstButtonReturn else {
+                FocusRestoration.restore(responder, in: sender)
+                return
+            }
+            // Closed once everything has actually unwound, not once it has been told to.
+            // The renderer deletes the partial file on its way out, and a window that
+            // vanished first would let the process quit before that ran.
             Task { @MainActor [weak self] in
-                await self?.model.cancelExport()
+                await self?.model.cancelLongOperations()
                 self?.isClosingConfirmed = true
                 self?.window?.close()
             }
         }
         return false
+    }
+
+    /// "an export and a transcription".
+    static func list(_ items: [String]) -> String {
+        ListFormatter.localizedString(byJoining: items)
     }
 
     func windowWillClose(_ notification: Notification) {

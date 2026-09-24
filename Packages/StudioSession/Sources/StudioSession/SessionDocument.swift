@@ -316,6 +316,35 @@ public struct SessionDocument: Sendable {
         read(type, from: session.draftEditURL) ?? read(type, from: session.editURL)
     }
 
+    /// Moves aside any edit or draft that exists but does not decode as `type`, and
+    /// returns where the copies went (docs/17 T-STU-9).
+    ///
+    /// Without this an edit written by a newer build — or damaged — was silently ignored,
+    /// the studio opened the recording untouched, and the next autosave **overwrote** the
+    /// user's work with that. Moved rather than deleted, so a downgrade can be undone by
+    /// upgrading again and putting the file back.
+    public func backUpUnreadableEdits<Edit: Decodable>(_ type: Edit.Type, now: Date = Date()) -> [URL] {
+        var backups: [URL] = []
+        for url in [session.draftEditURL, session.editURL] {
+            guard let data = try? Data(contentsOf: url),
+                  (try? JSONDecoder().decode(type, from: data)) == nil
+            else { continue }
+            let stamp = Int(now.timeIntervalSince1970)
+            let backup = url.deletingPathExtension()
+                .appendingPathExtension("unreadable-\(stamp)")
+                .appendingPathExtension(url.pathExtension)
+            do {
+                try? FileManager.default.removeItem(at: backup)
+                try FileManager.default.moveItem(at: url, to: backup)
+                backups.append(backup)
+                logger.error("Moved an unreadable \(url.lastPathComponent, privacy: .public) aside")
+            } catch {
+                logger.error("Could not move an unreadable edit aside: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        return backups
+    }
+
     private func read<Value: Decodable>(_ type: Value.Type, from url: URL) -> Value? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {

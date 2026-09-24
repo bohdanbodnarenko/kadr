@@ -164,6 +164,38 @@ public extension StudioDocumentModel {
         exportTask != nil
     }
 
+    /// What this window is in the middle of that closing or quitting would end
+    /// (docs/17 T-STU-9), in words for the alert. Empty when it is safe to go.
+    ///
+    /// One list, so the close and quit guards ask about everything at once. Asking about
+    /// speech and then closing used to end a render running beside it without a word.
+    var longOperations: [String] {
+        var operations: [String] = []
+        if isExporting {
+            operations.append("an export")
+        }
+        if isTranscribing {
+            operations.append("a transcription")
+        }
+        if installTask != nil {
+            operations.append("a language model download")
+        }
+        if audioExportTask != nil {
+            operations.append("an audio export")
+        }
+        return operations
+    }
+
+    /// Stops everything in `longOperations` and waits for the export and the audio export
+    /// to delete their partial files.
+    func cancelLongOperations() async {
+        cancelTidySpeech()
+        cancelSpeechModelInstall()
+        audioExportTask?.cancel()
+        await audioExportTask?.value
+        await cancelExport()
+    }
+
     /// Stops an export and waits for it to finish tearing itself down (docs/11 S0.4).
     ///
     /// Waiting is the whole point. The renderer's `defer` is what deletes the half-written

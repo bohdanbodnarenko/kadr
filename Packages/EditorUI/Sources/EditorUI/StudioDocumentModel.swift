@@ -235,6 +235,8 @@ public final class StudioDocumentModel {
     /// Unstructured on purpose: an export outlives the save panel's completion handler, and
     /// nothing on the way in owns a scope that lasts as long as the render does.
     @ObservationIgnored var exportTask: Task<Void, Never>?
+    /// The edited-soundtrack export, so closing and quitting can wait for it (T-STU-9).
+    @ObservationIgnored var audioExportTask: Task<Void, Never>?
     /// The Share button, so the share picker can hang off it (docs/17 T-STU-4).
     @ObservationIgnored weak var shareAnchorView: NSView?
     /// Validating and loading the persisted transcript; cancelled on close.
@@ -272,6 +274,10 @@ public final class StudioDocumentModel {
         self.transcriber = transcriber ?? HelperTranscriber()
         self.presetStore = presetStore
 
+        // An edit this build cannot read is moved aside before anything can autosave over
+        // it, and the user is told (docs/17 T-STU-9).
+        let backups = document.backUpUnreadableEdits(StudioEdit.self)
+
         // The draft wins over the commit, so reopening lands where the user left off
         // rather than at the last thing they exported.
         edit = document.edit(StudioEdit.self) ?? StudioEdit.untouched(duration: manifest.duration)
@@ -282,6 +288,9 @@ public final class StudioDocumentModel {
         }
 
         refreshPlayheadDerivedState()
+        if let backup = backups.first {
+            failure = .unreadableEditBackedUp(backup.lastPathComponent)
+        }
 
         // The transcript arrives after the window does (docs/11 S2). Validating it means
         // hashing the whole of `screen.mov`, which on a long recording was seconds of

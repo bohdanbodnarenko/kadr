@@ -66,7 +66,11 @@ public extension StudioDocumentModel {
         panel.message = "Export the edited soundtrack, without the picture."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let format: StudioAudioExporter.Format = url.pathExtension.lowercased() == "wav" ? .wav : .m4a
-        Task { await exportEditedAudio(to: url, format: format) }
+        guard audioExportTask == nil else { return }
+        audioExportTask = Task { [self] in
+            await exportEditedAudio(to: url, format: format)
+            audioExportTask = nil
+        }
     }
 
     func exportEditedAudio(to url: URL, format: StudioAudioExporter.Format) async {

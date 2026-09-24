@@ -213,6 +213,40 @@ struct SessionDocumentTests {
         }
     }
 
+    /// docs/17 T-STU-9: an edit a newer build wrote is moved aside, never overwritten.
+    @Test("Unreadable edits are moved aside and readable ones are left alone", arguments: [
+        (draft: "not json", edit: nil as String?, backups: 1),
+        (draft: nil as String?, edit: "{\"clips\": 7}", backups: 1),
+        (draft: "junk", edit: "junk", backups: 2),
+        (draft: nil as String?, edit: nil as String?, backups: 0)
+    ])
+    func unreadableEditsAreBackedUp(draft: String?, edit: String?, backups: Int) throws {
+        let scratch = try scratch()
+        defer { try? FileManager.default.removeItem(at: scratch.root) }
+        if let draft {
+            try Data(draft.utf8).write(to: scratch.session.draftEditURL)
+        }
+        if let edit {
+            try Data(edit.utf8).write(to: scratch.session.editURL)
+        }
+        let moved = scratch.document.backUpUnreadableEdits(StudioEdit.self)
+        #expect(moved.count == backups)
+        for url in moved {
+            #expect(FileManager.default.fileExists(atPath: url.path))
+            #expect(url.lastPathComponent.contains("unreadable"))
+        }
+        #expect(!FileManager.default.fileExists(atPath: scratch.session.draftEditURL.path) || draft == nil)
+    }
+
+    @Test("A readable edit is not moved")
+    func readableEditStays() throws {
+        let scratch = try scratch()
+        defer { try? FileManager.default.removeItem(at: scratch.root) }
+        try scratch.document.commit(StudioEdit.untouched(duration: 3))
+        #expect(scratch.document.backUpUnreadableEdits(StudioEdit.self).isEmpty)
+        #expect(scratch.document.edit(StudioEdit.self) != nil)
+    }
+
     @Test("An empty digest is a miss, even against another empty digest")
     func emptyDigestNeverMatches() {
         let stamp = RenderStamp(editDigest: "", outputPath: "/tmp/out.mp4", pixelSize: .zero)
