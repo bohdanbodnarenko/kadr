@@ -1,3 +1,4 @@
+import ControlKit
 import SettingsKit
 import Shared
 import StudioSession
@@ -32,7 +33,7 @@ struct TeleprompterSection: View {
                 value: $settings.teleprompterWordsPerMinute,
                 range: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
                 step: 5,
-                unit: .wordsPerMinute
+                format: .wordsPerMinute
             )
             .disabled(!settings.teleprompterEnabled)
 
@@ -41,7 +42,7 @@ struct TeleprompterSection: View {
                 value: $settings.teleprompterFontSize,
                 range: TeleprompterAppearance.smallestFont ... TeleprompterAppearance.largestFont,
                 step: 1,
-                unit: .points
+                format: .screenPoints
             )
             .disabled(!settings.teleprompterEnabled)
 

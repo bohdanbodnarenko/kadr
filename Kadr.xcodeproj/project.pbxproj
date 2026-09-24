@@ -14,6 +14,7 @@
 		KADR000000000000000000CC /* MediaExport in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000068 /* MediaExport */; };
 		KADR000000000000000000CD /* AutomationKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000069 /* AutomationKit */; };
 		KADR000000000000000000CE /* SettingsKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006A /* SettingsKit */; };
+		KADR00000000000000000F01 /* ControlKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR00000000000000000F02 /* ControlKit */; };
 		KADR000000000000000000CF /* RecordingCore in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006B /* RecordingCore */; };
 		KADR000000000000000000D0 /* SelectionUI in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006C /* SelectionUI */; };
 		KADR000000000000000000D2 /* HistoryKit in Frameworks */ = {isa = PBXBuildFile; productRef = KADR0000000000000000006E /* HistoryKit */; };
@@ -173,6 +174,7 @@
 				KADR000000000000000000CC /* MediaExport in Frameworks */,
 				KADR000000000000000000CD /* AutomationKit in Frameworks */,
 				KADR000000000000000000CE /* SettingsKit in Frameworks */,
+				KADR00000000000000000F01 /* ControlKit in Frameworks */,
 				KADR000000000000000000CF /* RecordingCore in Frameworks */,
 				KADR000000000000000000FE /* StudioSession in Frameworks */,
 				KADR000000000000000000D0 /* SelectionUI in Frameworks */,
@@ -282,6 +284,7 @@
 				KADR00000000000000000068 /* MediaExport */,
 				KADR00000000000000000069 /* AutomationKit */,
 				KADR0000000000000000006A /* SettingsKit */,
+				KADR00000000000000000F02 /* ControlKit */,
 				KADR0000000000000000006B /* RecordingCore */,
 				KADR000000000000000000FF /* StudioSession */,
 				KADR0000000000000000006C /* SelectionUI */,
@@ -433,6 +436,7 @@
 				KADR00000000000000000005 /* XCLocalSwiftPackageReference "Packages/VisionServices" */,
 				KADR00000000000000000006 /* XCLocalSwiftPackageReference "Packages/AutomationKit" */,
 				KADR00000000000000000007 /* XCLocalSwiftPackageReference "Packages/SettingsKit" */,
+				KADR00000000000000000F03 /* XCLocalSwiftPackageReference "Packages/ControlKit" */,
 				KADR00000000000000000008 /* XCLocalSwiftPackageReference "Packages/RecordingCore" */,
 				KADR00000000000000000010 /* XCLocalSwiftPackageReference "Packages/StudioSession" */,
 				KADR00000000000000000011 /* XCLocalSwiftPackageReference "Packages/StudioRender" */,
@@ -1042,6 +1046,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/SettingsKit;
 		};
+		KADR00000000000000000F03 /* XCLocalSwiftPackageReference "Packages/ControlKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ControlKit;
+		};
 		KADR00000000000000000008 /* XCLocalSwiftPackageReference "Packages/RecordingCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/RecordingCore;
@@ -1119,6 +1127,10 @@
 		KADR0000000000000000006A /* SettingsKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SettingsKit;
+		};
+		KADR00000000000000000F02 /* ControlKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = ControlKit;
 		};
 		KADR0000000000000000006B /* RecordingCore */ = {
 			isa = XCSwiftPackageProductDependency;

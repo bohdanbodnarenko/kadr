@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Everything a text annotation actually has (docs/03 §3, docs/14 UX-30A).
@@ -40,7 +41,7 @@ struct EditorTextInspector: View {
 
         InspectorSegmented([false, true], selection: weightBinding, title: { $0 ? "Bold" : "Regular" })
 
-        InspectorSlider(
+        KadrSlider(
             title: "Size",
             value: Binding(
                 get: { Double(style.fontSize) },

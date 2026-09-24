@@ -106,10 +106,9 @@ struct RecordingPane: View {
                     }
                     SettingsValueRow(
                         title: "Click size",
-                        value: clickScaleBinding,
-                        range: 50 ... 250,
-                        step: 5,
-                        unit: .percent
+                        value: $settings.recordingClickScale,
+                        range: 0.5 ... 2.5,
+                        step: 0.05
                     )
                     ColorPicker(
                         "Click colour",
@@ -136,10 +135,9 @@ struct RecordingPane: View {
                     }
                     SettingsValueRow(
                         title: "Keystroke size",
-                        value: keystrokeScaleBinding,
-                        range: 60 ... 180,
-                        step: 5,
-                        unit: .percent
+                        value: $settings.recordingKeystrokeScale,
+                        range: 0.6 ... 1.8,
+                        step: 0.05
                     )
                 }
                 Toggle("Show the webcam", isOn: $settings.recordingShowsWebcam)
@@ -154,10 +152,9 @@ struct RecordingPane: View {
                     .disabled(settings.recordingWebcamFillsFrame)
                     SettingsValueRow(
                         title: "Webcam size",
-                        value: webcamSizeBinding,
-                        range: 8 ... 60,
-                        step: 1,
-                        unit: .percent
+                        value: $settings.recordingWebcamSize,
+                        range: 0.08 ... 0.6,
+                        step: 0.01
                     )
                     .disabled(settings.recordingWebcamFillsFrame)
                 }
@@ -230,27 +227,6 @@ struct RecordingPane: View {
         Binding(
             get: { settings.recordingClickFilled },
             set: { settings.recordingClickFilled = $0 }
-        )
-    }
-
-    private var clickScaleBinding: Binding<Double> {
-        Binding(
-            get: { settings.recordingClickScale * 100 },
-            set: { settings.recordingClickScale = $0 / 100 }
-        )
-    }
-
-    private var keystrokeScaleBinding: Binding<Double> {
-        Binding(
-            get: { settings.recordingKeystrokeScale * 100 },
-            set: { settings.recordingKeystrokeScale = $0 / 100 }
-        )
-    }
-
-    private var webcamSizeBinding: Binding<Double> {
-        Binding(
-            get: { settings.recordingWebcamSize * 100 },
-            set: { settings.recordingWebcamSize = $0 / 100 }
         )
     }
 

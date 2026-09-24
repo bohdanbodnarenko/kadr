@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -63,14 +64,14 @@ extension StudioInspector {
                 Button("Remove Notch Strip") { model.trimNotchStrip() }
             }
             DisclosureGroup("Adjust Numerically") {
-                InspectorSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
+                KadrSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
                 // "Top", not "Bottom" (docs/11 S2). `cropRect` is normalised source space and
                 // the renderer treats it as top-left throughout — `pixelCrop` hands the plan a
                 // rect it offsets by `crop.minY` and the composer flips once at the very end.
                 // So raising this slider moves the crop *down*, and the label said the opposite.
-                InspectorSlider(title: "Top", value: cropY, range: 0 ... 0.9, format: .percent)
-                InspectorSlider(title: "Width", value: cropWidth, range: 0.1 ... 1, format: .percent)
-                InspectorSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
+                KadrSlider(title: "Top", value: cropY, range: 0 ... 0.9, format: .percent)
+                KadrSlider(title: "Width", value: cropWidth, range: 0.1 ... 1, format: .percent)
+                KadrSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
             }
             if model.edit.cropRect != nil {
                 Button("Reset Crop") { model.change { $0.cropRect = nil } }
@@ -170,7 +171,7 @@ extension StudioInspector {
             ForEach(BubblePlacement.allCases, id: \.self) { Text($0.title).tag($0) }
         }
         .disabled(!bubbled)
-        InspectorSlider(
+        KadrSlider(
             title: "Size",
             value: Binding(
                 get: { model.edit.camera.sizeFraction },
@@ -182,7 +183,7 @@ extension StudioInspector {
             format: .percent
         )
         .disabled(!bubbled)
-        InspectorSlider(
+        KadrSlider(
             title: "Roundness",
             value: Binding(
                 get: { model.edit.camera.roundness },

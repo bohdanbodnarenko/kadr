@@ -1,6 +1,6 @@
 import Foundation
 
-/// How an inspector value is written and read back (docs/09 U1.5).
+/// How a slider's value is written and read back (docs/09 U1.5).
 ///
 /// The point of typing into a slider is that the user can say what they mean exactly, and
 /// what they type is what they see: a field showing "45%" has to accept "45%". It also has
@@ -9,13 +9,17 @@ import Foundation
 ///
 /// Kept apart from the control because parsing is where this goes wrong and a pure function
 /// is where that can be caught.
-public struct InspectorValueFormat: Equatable, Sendable {
+public struct SliderValueFormat: Equatable, Sendable {
     /// What the number means, which decides both the suffix and the display scale.
     public enum Unit: String, Equatable, Sendable {
         /// Stored 0…1, shown 0…100 with a per-cent sign.
         case percent
-        /// Shown as-is, in points.
+        /// Shown as-is, in image pixels.
         case points
+        /// Shown as-is, in screen points — a card width or a type size.
+        case screenPoints
+        /// Shown as-is, in words per minute.
+        case wordsPerMinute
         /// Shown as-is, in degrees.
         case degrees
         /// Shown as-is, with a multiplication sign.
@@ -29,6 +33,8 @@ public struct InspectorValueFormat: Equatable, Sendable {
             switch self {
             case .percent: "%"
             case .points: " px"
+            case .screenPoints: " pt"
+            case .wordsPerMinute: " wpm"
             case .degrees: "°"
             case .multiplier: "×"
             case .seconds: " s"
@@ -46,6 +52,8 @@ public struct InspectorValueFormat: Equatable, Sendable {
             switch self {
             case .percent: ["%", "percent", "pct"]
             case .points: ["pixels", "points", "pts", "px", "pt"]
+            case .screenPoints: ["points", "pts", "pt", "px"]
+            case .wordsPerMinute: ["words per minute", "wpm"]
             case .degrees: ["°", "deg", "degrees"]
             case .multiplier: ["×", "x", "*"]
             case .seconds: ["seconds", "second", "secs", "sec", "s"]
@@ -66,18 +74,20 @@ public struct InspectorValueFormat: Equatable, Sendable {
         self.showsPositiveSign = showsPositiveSign
     }
 
-    public static let percent = InspectorValueFormat(unit: .percent)
-    public static let points = InspectorValueFormat(unit: .points)
-    public static let degrees = InspectorValueFormat(unit: .degrees)
-    public static let multiplier = InspectorValueFormat(unit: .multiplier, decimals: 2)
-    public static let seconds = InspectorValueFormat(unit: .seconds, decimals: 1)
+    public static let percent = SliderValueFormat(unit: .percent)
+    public static let points = SliderValueFormat(unit: .points)
+    public static let degrees = SliderValueFormat(unit: .degrees)
+    public static let multiplier = SliderValueFormat(unit: .multiplier, decimals: 2)
+    public static let seconds = SliderValueFormat(unit: .seconds, decimals: 1)
+    public static let screenPoints = SliderValueFormat(unit: .screenPoints)
+    public static let wordsPerMinute = SliderValueFormat(unit: .wordsPerMinute)
 
-    public static func percent(signed: Bool, decimals: Int = 0) -> InspectorValueFormat {
-        InspectorValueFormat(unit: .percent, decimals: decimals, showsPositiveSign: signed)
+    public static func percent(signed: Bool, decimals: Int = 0) -> SliderValueFormat {
+        SliderValueFormat(unit: .percent, decimals: decimals, showsPositiveSign: signed)
     }
 
-    public static func degrees(signed: Bool) -> InspectorValueFormat {
-        InspectorValueFormat(unit: .degrees, showsPositiveSign: signed)
+    public static func degrees(signed: Bool) -> SliderValueFormat {
+        SliderValueFormat(unit: .degrees, showsPositiveSign: signed)
     }
 
     /// One arrow-key press, in stored units: one of whatever the field shows.
@@ -88,14 +98,24 @@ public struct InspectorValueFormat: Equatable, Sendable {
     /// The stored value, written the way the field shows it (including the suffix).
     public func string(for value: Double) -> String {
         let shown = value * unit.displayScale
-        let number = String(format: "%.\(decimals)f", shown)
-        let sign = showsPositiveSign && shown > 0 ? "+" : ""
+        let number = Self.withoutNegativeZero(String(format: "%.\(decimals)f", shown))
+        let isPositive = number.first != "-" && number.contains { $0 != "0" && $0 != "." }
+        let sign = showsPositiveSign && isPositive ? "+" : ""
         return sign + number + unit.suffix
+    }
+
+    /// "-0" is what rounding a tiny negative number produces, and it reads as a value that is
+    /// somehow not zero. Zero has no sign.
+    private static func withoutNegativeZero(_ number: String) -> String {
+        guard number.hasPrefix("-"), !number.contains(where: { $0 != "-" && $0 != "0" && $0 != "." }) else {
+            return number
+        }
+        return String(number.dropFirst())
     }
 
     /// The number alone, for the focused value field — the suffix is already implied.
     public func editingString(for value: Double) -> String {
-        String(format: "%.\(decimals)f", value * unit.displayScale)
+        Self.withoutNegativeZero(String(format: "%.\(decimals)f", value * unit.displayScale))
     }
 
     /// A typed string as a stored value, or nil if it is not a number.
@@ -124,15 +144,17 @@ public struct InspectorValueFormat: Equatable, Sendable {
     /// The value stepped by one arrow-key press.
     ///
     /// One unit of whatever the field shows, so a per-cent field steps by a whole per cent
-    /// rather than by a hundredth of one. Multipliers with two decimals step by 0.01×.
-    public func stepped(_ value: Double, by steps: Int) -> Double {
-        value + Double(steps) * step
+    /// rather than by a hundredth of one. Multipliers with two decimals step by 0.01×. A
+    /// slider with its own `stepSize` steps by that instead, in stored units.
+    public func stepped(_ value: Double, by steps: Int, stepSize: Double? = nil) -> Double {
+        value + Double(steps) * (stepSize ?? step)
     }
 }
 
-extension InspectorValueFormat.Unit {
+extension SliderValueFormat.Unit {
     /// Every suffix of every unit, for stripping.
     static var allSuffixes: [String] {
-        [percent, points, degrees, multiplier, seconds].flatMap(\.acceptedSuffixes)
+        [percent, points, screenPoints, wordsPerMinute, degrees, multiplier, seconds]
+            .flatMap(\.acceptedSuffixes)
     }
 }

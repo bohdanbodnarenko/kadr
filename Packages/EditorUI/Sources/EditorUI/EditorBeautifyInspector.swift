@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Canvas chrome: padding, backdrop, corners, shadow, aspect, alignment, border
@@ -38,8 +39,8 @@ struct EditorBeautifyInspector: View {
             startsOpen: false,
             isEnabled: enabledBinding
         ) {
-            InspectorSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
-            InspectorSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
+            KadrSlider(title: "Padding", value: paddingBinding, range: 0 ... 0.35)
+            KadrSlider(title: "Corners", value: radiusBinding, range: 0 ... 0.15)
             InspectorToggleRow("Shadow", isOn: shadowBinding)
             if spec.shadow.isEnabled {
                 InspectorSegmented(
@@ -47,7 +48,7 @@ struct EditorBeautifyInspector: View {
                     selection: shadowStyleBinding,
                     title: \.title
                 )
-                InspectorSlider(title: "Strength", value: shadowStrengthBinding, range: 0.15 ... 1)
+                KadrSlider(title: "Strength", value: shadowStrengthBinding, range: 0.15 ... 1)
             }
             InspectorRow("Aspect") {
                 Picker("Aspect", selection: aspectBinding) {
@@ -83,7 +84,7 @@ struct EditorBeautifyInspector: View {
     private var border: some View {
         InspectorToggleRow("Border", isOn: borderBinding)
         if spec.border.isEnabled {
-            InspectorSlider(title: "Thickness", value: borderThicknessBinding, range: 0.002 ... 0.06)
+            KadrSlider(title: "Thickness", value: borderThicknessBinding, range: 0.002 ... 0.06)
             InspectorColorRow("Border colour", selection: borderColourBinding)
         }
     }

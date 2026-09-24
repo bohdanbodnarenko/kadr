@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The perspective camera's controls (docs/09 U1.2).
@@ -36,25 +37,25 @@ struct EditorCameraInspector: View {
     @ViewBuilder
     private var controls: some View {
         presets
-        InspectorSlider(
+        KadrSlider(
             title: "Tilt",
             value: tiltBinding,
             range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
             format: .degrees(signed: true)
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Orbit",
             value: orbitBinding,
             range: -AnnotationCameraSpec.maximumTilt ... AnnotationCameraSpec.maximumTilt,
             format: .degrees(signed: true)
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Roll",
             value: rollBinding,
             range: -180 ... 180,
             format: .degrees(signed: true)
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Lens",
             value: fieldOfViewBinding,
             range: AnnotationCameraSpec.minimumFieldOfView
@@ -62,19 +63,19 @@ struct EditorCameraInspector: View {
             format: .degrees
         )
         .help("A narrow lens flattens the perspective; a wide one exaggerates it.")
-        InspectorSlider(
+        KadrSlider(
             title: "Zoom",
             value: zoomBinding,
             range: AnnotationCameraSpec.minimumZoom ... AnnotationCameraSpec.maximumZoom,
             format: .multiplier
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Pan X",
             value: panXBinding,
             range: -0.5 ... 0.5,
             format: .percent(signed: true)
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Pan Y",
             value: panYBinding,
             range: -0.5 ... 0.5,

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import Shared
 import StudioSession
@@ -107,7 +108,7 @@ struct StudioInspector: View {
     private var clipSection: some View {
         if let clip = selectedClip {
             Section {
-                InspectorSlider(
+                KadrSlider(
                     title: "Speed",
                     value: Binding(
                         get: { clip.speed },

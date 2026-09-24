@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import Shared
 import StudioSession
@@ -195,7 +196,7 @@ extension StudioInspector {
                         get: { model.edit.captionPlacement },
                         set: { value in model.change { $0.captionPlacement = value } }
                     ))
-                    InspectorSlider(
+                    KadrSlider(
                         title: "Size",
                         value: Binding(
                             get: { model.edit.captionScale },

@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The watermark's controls (docs/09 U1.4).
@@ -49,7 +50,7 @@ struct EditorWatermarkInspector: View {
             .help("A repeated mark survives being cropped; a single one is a signature.")
 
         if spec.isTiled {
-            InspectorSlider(
+            KadrSlider(
                 title: "Spacing",
                 value: spacingBinding,
                 range: 1 ... 6,
@@ -61,9 +62,9 @@ struct EditorWatermarkInspector: View {
             }
         }
 
-        InspectorSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
-        InspectorSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
-        InspectorSlider(
+        KadrSlider(title: "Size", value: sizeBinding, range: 0.01 ... 0.15)
+        KadrSlider(title: "Opacity", value: opacityBinding, range: 0 ... 1)
+        KadrSlider(
             title: "Angle",
             value: rotationBinding,
             range: -90 ... 90,

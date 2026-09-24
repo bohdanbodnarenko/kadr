@@ -1,12 +1,12 @@
 import Foundation
 
-/// Pure mapping for the inspector scrub track (docs/09 U1.5).
+/// Pure mapping for the slider's scrub track (docs/09 U1.5).
 ///
 /// Kept off the view so the detent and the absolute-position mapping can be tested
 /// without standing up SwiftUI. Dragging is absolute: the pointer's x on the track *is*
 /// the value, the way a native slider works, not a relative nudge from wherever the
 /// press started.
-enum InspectorSliderMapping {
+enum SliderMapping {
     /// Sticky zone around zero, in points. Small enough that nearby values stay
     /// reachable, large enough that landing on zero is something you feel.
     static let detentRadius: Double = 3
@@ -47,6 +47,19 @@ enum InspectorSliderMapping {
 
         let progress = min(max(locationX / width, 0), 1)
         return range.lowerBound + progress * (range.upperBound - range.lowerBound)
+    }
+
+    /// `value` moved onto the nearest multiple of `step`, then clamped into the range.
+    ///
+    /// Steps count from zero when the range crosses it, so a signed range keeps 0 as one of
+    /// its stops — otherwise the detent would land on a value the step grid cannot reach.
+    /// Otherwise they count from the lower bound, so a 140…420 range in 20s starts at 140.
+    static func snapped(_ value: Double, step: Double?, in range: ClosedRange<Double>) -> Double {
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        guard let step, step.isFinite, step > 0 else { return clamped }
+        let origin = range.contains(0) ? 0 : range.lowerBound
+        let snapped = origin + ((clamped - origin) / step).rounded() * step
+        return min(max(snapped, range.lowerBound), range.upperBound)
     }
 
     private static func detentValue(

@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Shared"),
+        .package(path: "../ControlKit"),
         .package(path: "../AnnotationModel"),
         .package(path: "../AnnotationRender"),
         .package(path: "../MediaExport"),
@@ -25,6 +26,7 @@ let package = Package(
             name: "EditorUI",
             dependencies: [
                 .product(name: "Shared", package: "Shared"),
+                .product(name: "ControlKit", package: "ControlKit"),
                 .product(name: "AnnotationModel", package: "AnnotationModel"),
                 .product(name: "AnnotationRender", package: "AnnotationRender"),
                 .product(name: "MediaExport", package: "MediaExport"),

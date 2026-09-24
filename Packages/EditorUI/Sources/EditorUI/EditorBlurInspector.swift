@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The progressive blur's controls (docs/09 U1.3).
@@ -48,11 +49,11 @@ struct EditorBlurInspector: View {
             .inspectorMenuPicker()
         }
 
-        InspectorSlider(title: "Strength", value: radiusBinding, range: 0 ... 0.2)
-        InspectorSlider(title: "Sharp area", value: focusBinding, range: 0 ... 1)
-        InspectorSlider(title: "Falloff", value: falloffBinding, range: 0 ... 1.5)
+        KadrSlider(title: "Strength", value: radiusBinding, range: 0 ... 0.2)
+        KadrSlider(title: "Sharp area", value: focusBinding, range: 0 ... 1)
+        KadrSlider(title: "Falloff", value: falloffBinding, range: 0 ... 1.5)
         if spec.shape == .directional {
-            InspectorSlider(
+            KadrSlider(
                 title: "Direction",
                 value: angleBinding,
                 range: 0 ... 360,

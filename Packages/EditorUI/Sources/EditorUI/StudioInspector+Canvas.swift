@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -20,7 +21,7 @@ extension StudioInspector {
             .pickerStyle(.segmented)
             .labelsHidden()
             canvasBackdrop
-            InspectorSlider(
+            KadrSlider(
                 title: "Padding",
                 value: Binding(
                     get: { model.edit.canvas.paddingFraction },
@@ -31,7 +32,7 @@ extension StudioInspector {
                 range: 0 ... StudioCanvas.maximumPadding,
                 format: .percent
             )
-            InspectorSlider(
+            KadrSlider(
                 title: "Corners",
                 value: Binding(
                     get: { model.edit.canvas.cornerRadiusFraction },
@@ -44,7 +45,7 @@ extension StudioInspector {
                 range: 0 ... StudioCanvas.maximumCornerRadius,
                 format: .percent
             )
-            InspectorSlider(
+            KadrSlider(
                 title: "Shadow",
                 value: Binding(
                     get: { model.edit.canvas.shadow },
@@ -95,7 +96,7 @@ extension StudioInspector {
         case let .gradient(ramp):
             canvasGradientSwatches(ramp: ramp)
             gradientStops(ramp: ramp)
-            InspectorSlider(
+            KadrSlider(
                 title: "Angle",
                 value: Binding(
                     get: { ramp.angleDegrees },

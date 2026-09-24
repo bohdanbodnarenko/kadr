@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import SettingsKit
 import Shared
@@ -155,12 +156,15 @@ struct TeleprompterComposerView: View {
                 Text("Pace")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Slider(
+                KadrSlider(
+                    title: "Pace",
                     value: $settings.teleprompterWordsPerMinute,
-                    in: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
-                    step: 5
+                    range: TeleprompterPacing.slowest ... TeleprompterPacing.fastest,
+                    format: .wordsPerMinute,
+                    step: 5,
+                    showsTitle: false
                 )
-                .frame(width: 120)
+                .frame(width: 140)
                 .controlSize(.small)
                 .disabled(!settings.teleprompterEnabled)
             }

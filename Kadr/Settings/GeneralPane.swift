@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import MediaExport
 import os
 import SettingsKit
@@ -100,10 +101,7 @@ struct GeneralPane: View {
                 Toggle("Convert to sRGB when saving", isOn: $settings.convertExportsToSRGB)
                 Toggle("Play a sound when capturing", isOn: $settings.playsCaptureSound)
                 if settings.imageFormat != .png {
-                    Slider(value: $settings.lossyQuality, in: 0.1 ... 1)
-                    Text("Quality")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    KadrSlider(title: "Quality", value: $settings.lossyQuality, range: 0.1 ... 1)
                 }
                 Text("Off keeps a wide-gamut capture in Display P3. On converts so "
                     + "browsers and Windows apps show the same colours as this Mac.")

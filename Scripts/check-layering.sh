@@ -217,7 +217,7 @@ fi
 layer_of() {
     case "$1" in
         Shared) echo 0 ;;
-        CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit|StudioSession) echo 1 ;;
+        CaptureCore|OverlayKit|AnnotationModel|MediaExport|VisionServices|AutomationKit|SettingsKit|StudioSession|ControlKit) echo 1 ;;
         RecordingCore|SelectionUI|AnnotationRender|HistoryKit|StudioRender) echo 2 ;;
         EditorUI) echo 3 ;;
         *) echo "" ;;

@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The Style pane: the armed tool, or the selection, and nothing else (docs/14 UX-30).
@@ -76,7 +77,7 @@ struct EditorStylePane: View {
 
     private func imageGroup(_ image: ImageSpec) -> some View {
         InspectorGroup("Image", accessory: { selectionActions }, content: {
-            InspectorSlider(
+            KadrSlider(
                 title: "Size",
                 value: Binding(
                     get: { Double(image.scaleFactor) },
@@ -85,7 +86,7 @@ struct EditorStylePane: View {
                 range: 0.1 ... 4,
                 format: .multiplier
             )
-            InspectorSlider(
+            KadrSlider(
                 title: "Opacity",
                 value: Binding(
                     get: { image.opacity },
@@ -94,7 +95,7 @@ struct EditorStylePane: View {
                 range: 0.1 ... 1,
                 format: .percent
             )
-            InspectorSlider(
+            KadrSlider(
                 title: "Corners",
                 value: Binding(
                     get: { Double(image.cornerRadius) },

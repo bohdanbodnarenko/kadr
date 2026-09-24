@@ -71,6 +71,9 @@ Packages/
                       transcription. Editor-only (docs/10 R2.1).
   AutomationKit/      URL-scheme + CLI verb parsing → typed AppCommand values.
   SettingsKit/        UserDefaults-backed @Observable settings, migration.
+  ControlKit/         SwiftUI controls the agent's Settings and the editor's inspector
+                      share: the pill slider (KadrSlider) and its pure mapping, geometry
+                      and value parsing. Depends on nothing; not linked by helpers.
   Shared/             Logging (os.Logger + signposts), geometry helpers
                       (point/pixel, flipped-coords), error types.
 ```

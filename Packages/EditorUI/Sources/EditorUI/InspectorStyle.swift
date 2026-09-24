@@ -8,8 +8,6 @@ import SwiftUI
 /// Xcode's inspectors do — rather than a grouped Form of mixed system widgets.
 enum InspectorMetrics {
     static let sliderHeight: CGFloat = 32
-    /// Wide enough for "+180°", "100%" and "3840 pt" at the value font.
-    static let sliderValueWidth: CGFloat = 64
     static let sliderRadius: CGFloat = 8
     /// Segmented controls, buttons, text fields.
     static let controlHeight: CGFloat = 28
@@ -101,15 +99,5 @@ extension View {
         labelsHidden()
             .pickerStyle(.menu)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// macOS 15's column-resize pointer; a no-op on 14, where the drag still works.
-    @ViewBuilder
-    func inspectorColumnResizePointer(enabled: Bool) -> some View {
-        if #available(macOS 15.0, *) {
-            pointerStyle(enabled ? PointerStyle.columnResize : nil)
-        } else {
-            self
-        }
     }
 }

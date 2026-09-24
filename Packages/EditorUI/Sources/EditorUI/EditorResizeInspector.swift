@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// Change output resolution without leaving the editor (docs/03 §3 P2, CleanShot 4.7).
@@ -17,7 +18,7 @@ struct EditorResizeInspector: View {
                     .minimumScaleFactor(0.8)
             }
 
-            InspectorSlider(
+            KadrSlider(
                 title: "Width",
                 value: Binding(
                     get: { Double(model.exportPixelSize.width) },

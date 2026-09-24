@@ -168,8 +168,8 @@ final class ScrollCaptureCoordinator {
                     on: display.displayID,
                     axis: settings.scrollAxis,
                     frameRate: settings.scrollFrameRate
-                ) { note in
-                    Task { @MainActor [weak self] in
+                ) { [weak self] note in
+                    Task { @MainActor in
                         self?.received(note)
                     }
                 }

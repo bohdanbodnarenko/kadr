@@ -47,6 +47,9 @@
          location = "group:SettingsKit">
       </FileRef>
       <FileRef
+         location = "group:ControlKit">
+      </FileRef>
+      <FileRef
          location = "group:StudioSession">
       </FileRef>
       <FileRef

@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The controls one annotation tool has (docs/03 §3).
@@ -37,7 +38,7 @@ struct EditorToolOptions: View {
         InspectorRow("Stroke") {
             EditorWidthPresets(selected: stroke.width, onSelect: { model.applyStrokeWidth($0) })
         }
-        InspectorSlider(
+        KadrSlider(
             title: "Width",
             value: Binding(
                 get: { Double(model.styleMemory.stroke(for: tool).width) },
@@ -97,7 +98,7 @@ struct EditorToolOptions: View {
         ))
 
         if model.styleMemory.fill(for: .shape).color != nil {
-            InspectorSlider(
+            KadrSlider(
                 title: "Fill opacity",
                 value: Binding(
                     get: { model.styleMemory.lastFillOpacity },
@@ -123,7 +124,7 @@ struct EditorToolOptions: View {
         )
 
         if style.kind != .erase {
-            InspectorSlider(
+            KadrSlider(
                 title: "Strength",
                 value: Binding(
                     get: { Double(style.density) },
@@ -144,7 +145,7 @@ struct EditorToolOptions: View {
 
     @ViewBuilder
     private var spotlightOptions: some View {
-        InspectorSlider(
+        KadrSlider(
             title: "Dim",
             value: Binding(
                 get: { Double(inspectedSpotlight.dimOpacity) },
@@ -155,7 +156,7 @@ struct EditorToolOptions: View {
             format: .percent,
             onEditingEnded: { model.endInspectorStyleEdit() }
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Corners",
             value: Binding(
                 get: { Double(inspectedSpotlight.cornerRadius) },

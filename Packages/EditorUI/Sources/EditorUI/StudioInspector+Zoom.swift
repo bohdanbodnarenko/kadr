@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -85,7 +86,7 @@ extension StudioInspector {
         }
         .pickerStyle(.segmented)
         if cue.anchor.followsPointer {
-            InspectorSlider(
+            KadrSlider(
                 title: "Edge in frame",
                 value: Binding(
                     get: { cue.boundsBias },
@@ -115,7 +116,7 @@ extension StudioInspector {
 
     @ViewBuilder
     private func zoomTimingControls(id: ZoomCue.ID, cue: ZoomCue) -> some View {
-        InspectorSlider(
+        KadrSlider(
             title: "Magnification",
             value: Binding(
                 get: { cue.magnification },
@@ -126,7 +127,7 @@ extension StudioInspector {
             range: 1 ... ZoomCue.maximumMagnification,
             format: .multiplier
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Starts at",
             value: Binding(
                 // Edited time both ways: `cue.start` is source time, and after a cut the
@@ -137,7 +138,7 @@ extension StudioInspector {
             range: 0 ... max(model.edit.duration, 1),
             format: .seconds
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Hold",
             value: Binding(
                 get: { cue.duration },
@@ -150,7 +151,7 @@ extension StudioInspector {
             range: 0.2 ... min(max(model.edit.duration, 1), 30),
             format: .seconds
         )
-        InspectorSlider(
+        KadrSlider(
             title: "Move",
             value: Binding(
                 get: { cue.transitionDuration },

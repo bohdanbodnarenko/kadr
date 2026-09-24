@@ -1,3 +1,4 @@
+import ControlKit
 import SettingsKit
 import Shared
 import SwiftUI
@@ -27,20 +28,16 @@ struct OverlayPane: View {
             }
 
             Section {
-                Slider(
+                KadrSlider(
+                    title: "Card size",
                     value: Binding(
                         get: { Double(settings.overlayCardWidth) },
                         set: { settings.overlayCardWidth = Int($0) }
                     ),
-                    in: 140 ... 420,
+                    range: 140 ... 420,
+                    format: .screenPoints,
                     step: 20
-                ) {
-                    Text("Card size")
-                } minimumValueLabel: {
-                    Text("S").font(.caption)
-                } maximumValueLabel: {
-                    Text("L").font(.caption)
-                }
+                )
 
                 Stepper(
                     "Stack up to \(settings.overlayMaxVisibleCards) cards",

@@ -55,7 +55,7 @@ Kadr.xcworkspace          open this, not the .xcodeproj
 Kadr.xcodeproj            the agent app target `Kadr` (LSUIElement, macOS 14+)
 Kadr/                     agent app sources (AppKit shell only)
 KadrTests/                agent app unit tests
-Packages/<Module>/        15 local SPM packages, docs/04 §2
+Packages/<Module>/        16 local SPM packages, docs/04 §2
 Scripts/                  check-layering.sh, check-size.sh
 .github/workflows/ci.yml  packages (matrix) · app build · lint + checks
 ```
@@ -69,6 +69,7 @@ enforced by `Scripts/check-layering.sh` and by the module tests.
 |---|---|---|
 | 0 | Shared | — |
 | 1 | CaptureCore, OverlayKit, AnnotationModel, MediaExport, VisionServices, AutomationKit, SettingsKit, StudioSession | Shared |
+| 1 | ControlKit (SwiftUI controls shared by Settings and the editor) | — |
 | 2 | RecordingCore (CaptureCore), SelectionUI (OverlayKit), AnnotationRender (AnnotationModel), HistoryKit (MediaExport), StudioRender (StudioSession) | Shared + the package in brackets |
 | 3 | EditorUI | Shared, AnnotationModel, AnnotationRender, MediaExport, StudioSession, StudioRender |
 

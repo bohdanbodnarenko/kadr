@@ -1,3 +1,4 @@
+import ControlKit
 import Shared
 import StudioSession
 import SwiftUI
@@ -20,7 +21,7 @@ extension StudioInspector {
             ))
             .disabled(model.manifest.hasBakedCursor)
             if !model.manifest.hasBakedCursor, model.edit.showsCursor {
-                InspectorSlider(
+                KadrSlider(
                     title: "Size",
                     value: Binding(
                         get: { model.edit.cursorScale },
@@ -67,7 +68,7 @@ extension StudioInspector {
                     get: { model.edit.showsClickPress },
                     set: { value in model.change { $0.showsClickPress = value } }
                 ))
-                InspectorSlider(
+                KadrSlider(
                     title: "Size",
                     value: Binding(
                         get: { model.edit.clickScale },
@@ -111,7 +112,7 @@ extension StudioInspector {
                 )) {
                     ForEach(ZoomAnimationStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                InspectorSlider(
+                KadrSlider(
                     title: "Motion blur",
                     value: Binding(
                         get: { model.edit.motionBlur },
@@ -143,7 +144,7 @@ extension StudioInspector {
                     get: { model.edit.keystrokePlacement },
                     set: { value in model.change { $0.keystrokePlacement = value } }
                 ))
-                InspectorSlider(
+                KadrSlider(
                     title: "Size",
                     value: Binding(
                         get: { model.edit.keystrokeScale },

@@ -315,6 +315,9 @@ plus typed field pattern.
 persistent numeric value field. Do not import `EditorUI` into the agent. Use meaningful
 units: percent, words/minute, and points. Arrow keys adjust by one displayed unit.
 
+**As built:** the row wraps `KadrSlider` from `ControlKit` — the one pill slider the editor's
+inspector also uses — with the value inside the track, click-to-type, and the same units.
+
 **Accept:** every numeric recording setting can be read and entered exactly; changing it
 does not shift adjacent layout.
 

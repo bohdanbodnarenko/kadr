@@ -23,7 +23,7 @@ enum RecordingNotchScreen {
 /// inverse corner the hardware notch has, so the shell reads as the notch growing rather
 /// than a black slab pasted under it — and convex rounded corners at the bottom. Both radii
 /// animate, so compact → expanded → hidden is one continuous shape.
-struct RecordingNotchShape: Shape {
+nonisolated struct RecordingNotchShape: Shape {
     var topCornerRadius: CGFloat
     var bottomCornerRadius: CGFloat
 

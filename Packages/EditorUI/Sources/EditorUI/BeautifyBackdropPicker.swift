@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -76,7 +77,7 @@ struct BeautifyBackdropPicker: View {
                     onChoose(.gradient(next))
                 }
             ))
-            InspectorSlider(
+            KadrSlider(
                 title: "Angle",
                 value: Binding(
                     get: { Double(ramp.angleDegrees) },
