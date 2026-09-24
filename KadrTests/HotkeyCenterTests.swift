@@ -77,10 +77,15 @@ struct CaptureCommandTests {
         #expect(names == CaptureCommand.allCases.map(\.rawValue))
     }
 
+    /// Plus ⌘⌥L for click-through pins, which is registered only while a pin is
+    /// click-through, so it takes nothing from other apps the rest of the time
+    /// (docs/17 T-OUT-9).
     @Test("Only the five everyday commands ship a default, and none collide")
     func initialShortcutsAreFewAndDistinct() {
         let shipped = CaptureCommand.allCases.filter { $0.shortcutName.initialShortcut != nil }
-        #expect(Set(shipped) == [.allInOne, .captureArea, .captureFullscreen, .recordSetup, .stopRecording])
+        #expect(Set(shipped) == [
+            .allInOne, .captureArea, .captureFullscreen, .recordSetup, .stopRecording, .togglePinClickThrough
+        ])
         let defaults = shipped.compactMap(\.shortcutName.initialShortcut)
         #expect(Set(defaults).count == defaults.count)
     }

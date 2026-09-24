@@ -133,8 +133,13 @@ struct CaptureOutputPolicyTests {
         #expect(await settles(store, itemCount: 1), "the capture should reach the library")
 
         harness.manager.delete(item)
+        // The purge waits out the Undo window (docs/17 T-OUT-1); settling it now is what
+        // quitting or a second delete does.
+        #expect(await settles(store, itemCount: 1), "the library copy stays while Undo is on offer")
+        harness.manager.commitPendingDeletions()
 
         #expect(await settles(store, itemCount: 0), "a deleted capture must not survive in the library")
+        FailurePresenter.dismiss()
     }
 
     /// Polls until the library holds `itemCount` records, or gives up.
