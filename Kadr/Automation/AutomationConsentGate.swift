@@ -1,6 +1,7 @@
 import AppKit
 import AutomationKit
 import os
+import OverlayKit
 import SettingsKit
 import Shared
 
@@ -109,12 +110,9 @@ final class AutomationConsentGate {
         alert.buttons.first?.keyEquivalent = "\r"
         alert.buttons.last?.keyEquivalent = ""
 
-        let previous = NSWorkspace.shared.frontmostApplication
-        NSApp.activate(ignoringOtherApps: true)
-        let allowed = alert.runModal() == .alertSecondButtonReturn
-        if let previous, previous != NSRunningApplication.current {
-            previous.activate()
-        }
+        let allowed = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) { alert.runModal() } == .alertSecondButtonReturn
         consent.record(allowed ? .allowed : .denied, for: sender)
         return allowed
     }

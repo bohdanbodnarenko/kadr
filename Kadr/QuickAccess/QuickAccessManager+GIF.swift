@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import os
+import OverlayKit
 import SettingsKit
 import Shared
 
@@ -92,7 +93,9 @@ extension QuickAccessManager {
         alert.informativeText = detail
         alert.addButton(withTitle: "Export")
         alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        return alert.runModal() == .alertFirstButtonReturn
+        let answer = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) { alert.runModal() }
+        return answer == .alertFirstButtonReturn
     }
 }
