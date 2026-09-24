@@ -72,6 +72,17 @@ public struct ImageIOGIFEncoder: GIFEncoding {
     public init() {}
 
     public func encode(movieAt url: URL, to destination: URL, options: GIFOptions) async throws -> URL {
+        try await encode(movieAt: url, to: destination, options: options, progress: nil)
+    }
+
+    /// Encodes, reporting 0…1 per frame and stopping at the next frame when the task is
+    /// cancelled (docs/17 T-STU-7). A cancelled encode leaves nothing at `destination`.
+    public func encode(
+        movieAt url: URL,
+        to destination: URL,
+        options: GIFOptions,
+        progress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL {
         let asset = AVURLAsset(url: url)
         // A file that is not a movie fails inside AVFoundation with its own error; the
         // caller only needs to know there was nothing to encode.
@@ -116,9 +127,14 @@ public struct ImageIOGIFEncoder: GIFEncoding {
         let frameProperties = Self.frameProperties(frameRate: plan.frameRate)
 
         var written = 0
-        for time in times {
+        for (index, time) in times.enumerated() {
+            if Task.isCancelled {
+                try? FileManager.default.removeItem(at: destination)
+                throw CancellationError()
+            }
             // ImageIO keeps every frame until `finalize`, so how many there are is the
             // memory question — `plan` is what answers it.
+            progress?(Double(index) / Double(times.count))
             guard let image = try? await generator.image(at: time).image else { continue }
             CGImageDestinationAddImage(output, image, frameProperties)
             written += 1

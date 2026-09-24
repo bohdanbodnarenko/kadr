@@ -294,7 +294,8 @@ public extension StudioDocumentModel {
 
     private func renderMovie(
         _ snapshot: StudioExportSnapshot,
-        to destination: URL
+        to destination: URL,
+        progress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> StudioRenderer.Output {
         try await StudioRenderer().render(
             session: session,
@@ -302,7 +303,7 @@ public extension StudioDocumentModel {
             to: destination,
             options: snapshot.settings.rendererOptions(manifestFrameRate: manifest.frameRate),
             transcript: snapshot.transcript,
-            progress: progressPublisher()
+            progress: progress ?? progressPublisher()
         )
     }
 
@@ -348,6 +349,10 @@ public extension StudioDocumentModel {
         return Int((min(max(value, 0), 1) * 100).rounded(.down))
     }
 
+    /// How much of a GIF export's progress bar the movie render takes; the encode has the
+    /// rest.
+    internal nonisolated static let gifRenderShare = 0.7
+
     /// A local notification when the studio window is not key (docs/16 STU-C6).
     ///
     /// Only the file name crosses into the task. The request is built after permission is
@@ -382,12 +387,17 @@ public extension StudioDocumentModel {
             .appendingPathComponent("kadr-gif-\(UUID().uuidString)")
             .appendingPathExtension("mov")
         defer { try? FileManager.default.removeItem(at: temp) }
-        let movie = try await renderMovie(snapshot, to: temp)
+        // One bar across both phases (docs/17 T-STU-7): it used to reach 100% at the end
+        // of the movie and then sit there while the GIF was encoded.
+        let publish = progressPublisher()
+        let split = Self.gifRenderShare
+        let movie = try await renderMovie(snapshot, to: temp) { publish($0 * split) }
         try Task.checkCancellation()
         _ = try await ImageIOGIFEncoder().encode(
             movieAt: temp,
             to: destination,
-            options: snapshot.settings.gifOptions
+            options: snapshot.settings.gifOptions,
+            progress: { publish(split + $0 * (1 - split)) }
         )
         return StudioRenderer.Output(
             fileURL: destination,

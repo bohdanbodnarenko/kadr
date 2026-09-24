@@ -251,3 +251,42 @@ struct GIFEncoderTests {
         #expect(GIFOptions(frameRate: 10).frameDelay == 0.1)
     }
 }
+
+/// docs/17 T-STU-7: the studio's GIF phase reports progress and stops when cancelled.
+@Suite("GIF encoder progress and cancellation")
+struct GIFEncoderProgressTests {
+    @Test("Progress rises through the encode, and a cancelled encode leaves no file")
+    func progressAndCancel() async throws {
+        let folder = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = folder.appendingPathComponent("in.mp4")
+        try await makeMovie(at: movie, seconds: 2, width: 320, height: 180)
+
+        let reports = ProgressLog()
+        let done = folder.appendingPathComponent("done.gif")
+        _ = try await ImageIOGIFEncoder().encode(movieAt: movie, to: done, options: GIFOptions()) { reports.add($0) }
+        #expect(reports.values.count > 10)
+        #expect(reports.values == reports.values.sorted())
+
+        let cancelled = folder.appendingPathComponent("cancelled.gif")
+        let task = Task {
+            try await ImageIOGIFEncoder().encode(movieAt: movie, to: cancelled, options: GIFOptions(), progress: nil)
+        }
+        task.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await task.value }
+        #expect(!FileManager.default.fileExists(atPath: cancelled.path))
+    }
+}
+
+private final class ProgressLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [Double] = []
+
+    func add(_ value: Double) {
+        lock.withLock { stored.append(value) }
+    }
+
+    var values: [Double] {
+        lock.withLock { stored }
+    }
+}
