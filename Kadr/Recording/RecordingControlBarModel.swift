@@ -37,9 +37,11 @@ final class RecordingControlBarModel {
     var notchVisible = false
     var notchExpanded = false
     var notchMetrics = RecordingNotchMetrics.fallback
-    /// The transport has turned into "Discard this recording?". Shared by both chromes so
-    /// the notch stays expanded while it is asking.
-    var isConfirmingDiscard = false
+    /// The transport has turned into "Discard this recording?" or "Start over?". Shared by
+    /// both chromes so the notch stays expanded while it is asking.
+    var confirmation: RecordingBarConfirmation?
+    /// Stopped, and the file is being finalised: the transport gives way to "Saving…".
+    var isSaving = false
     /// The size the bar opens at when it takes over from the All-in-One island, before it
     /// springs to its own width. Nil the rest of the time.
     var entranceSize: CGSize?
@@ -67,7 +69,7 @@ final class RecordingControlBarModel {
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(
             hardware: notchMetrics,
-            isExpanded: notchExpanded || preRoll != nil || isConfirmingDiscard
+            isExpanded: notchExpanded || preRoll != nil || confirmation != nil
                 || AccessibilityChrome.voiceOverEnabled,
             isVisible: notchVisible
         )
@@ -99,11 +101,25 @@ final class RecordingControlBarModel {
         if isTransitioning != controls.isTransitioning {
             isTransitioning = controls.isTransitioning
         }
+        if isSaving != controls.isSaving {
+            isSaving = controls.isSaving
+            if isSaving {
+                confirmation = nil
+            }
+        }
         stop = controls.stop
         togglePause = controls.togglePause
         cancel = controls.cancel
         restart = controls.restart
     }
+}
+
+/// A destructive transport action the bar is asking about in place.
+///
+/// Discard and Start Over both throw the take away, so both ask first (docs/17 T-REC-11).
+enum RecordingBarConfirmation: Equatable {
+    case discard
+    case restart
 }
 
 /// The floating bar's level meter, as its own observable (PRD §8).

@@ -59,7 +59,7 @@ extension RecordingCoordinator {
     /// Used by automation and GIF-style one-shots that should start as soon as a window
     /// is chosen. The floating island uses `pickWindow` so Record is a separate press.
     func beginWindowRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         pickWindow { [weak self] selection in
             guard let self, let selection else { return }
             beginWindowHighlight(from: selection)

@@ -25,7 +25,6 @@ final class RecordingCoordinator {
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored let overlay: SelectionOverlayController
     @ObservationIgnored let hygiene: DesktopHygieneController?
-    @ObservationIgnored let focus = FocusMode()
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
     @ObservationIgnored let overlaySource = RecordingOverlaySource()
@@ -44,7 +43,14 @@ final class RecordingCoordinator {
     /// this state machine lives in `RecordingCoordinator+Control.swift`, and this is the app
     /// target — nothing outside it can reach the coordinator at all.
     var state: RecordingState = .idle {
-        didSet { onStateChanged?() }
+        didSet {
+            onStateChanged?()
+            // The bar and the menu-bar timer change silently; VoiceOver users need to hear
+            // that the take began, paused or ended (docs/17 T-REC-11).
+            if let message = RecordingAnnouncement.message(from: oldValue, to: state) {
+                FeedbackAnnouncement.post(message)
+            }
+        }
     }
 
     /// Seconds recorded so far, pauses taken out.
@@ -164,6 +170,12 @@ final class RecordingCoordinator {
         state.isActive && state != .finishing
     }
 
+    /// Whether a take exists at all, saving included — what every *start* asks. A start during
+    /// `.finishing` found the last take's studio session still attached (docs/17 T-REC-4).
+    var isBusy: Bool {
+        state.isActive
+    }
+
     /// The window/area overlay is up to choose a recording target.
     var isSelectingTarget: Bool {
         overlay.isPresented
@@ -197,13 +209,19 @@ final class RecordingCoordinator {
 
     /// Whether the recording about to start was asked for by a script rather than a person.
     @ObservationIgnored var startedByAutomation = false
+    /// Which call to `start` owns the recording being set up, so a failing start tears
+    /// down only what it built and never a take that replaced it (docs/17 T-REC-3).
+    @ObservationIgnored var startGeneration = 0
+    /// The pause or resume in flight, so Stop can wait for it rather than race it
+    /// (docs/17 T-REC-8).
+    @ObservationIgnored var transportTask: Task<Void, Never>?
     /// Dedicated GIF capture (All-in-One G / `record-gif`): encode a GIF when this
     /// recording stops, instead of leaving only the MP4 card (CleanShot §13.6).
     @ObservationIgnored var wantsGIFExport = false
 
     /// Records a whole display, with no overlay.
     func beginDisplayRecording(_ displayID: CGDirectDisplayID = CGMainDisplayID()) {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         startAfterCountdown(target: .display(displayID))
     }
 
@@ -213,7 +231,15 @@ final class RecordingCoordinator {
     ///   the state, so the bar would be torn down and rebuilt in the same breath and the
     ///   user would watch it blink between the countdown ending and the recording starting.
     func start(target: RecordingTarget, alreadyClaimed: Bool = false) {
-        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else {
+            // A countdown claimed `.starting` for this take. Returning without handing the
+            // claim back left a red "0:00" in the menu bar, live controls and the dim, all
+            // for a recording that could never begin (docs/17 T-REC-2).
+            if alreadyClaimed {
+                abandonUnstartedRecording(reason: "Kadr needs Screen Recording permission to record.")
+            }
+            return
+        }
         // Claimed synchronously, before the first await (docs/10 R0.3).
         //
         // Setting up a capture is a few hundred milliseconds of asking ScreenCaptureKit
@@ -223,11 +249,13 @@ final class RecordingCoordinator {
         // failure path then ran `studio.cancel()`, deleting the *first* recording's session
         // directory, and put the desktop icons back while the first was still filming.
         if !alreadyClaimed {
-            guard !isRecording else { return }
+            guard !state.isActive else { return }
             state = .starting
         }
         isTransitioning = true
         lastTarget = target
+        startGeneration &+= 1
+        let generation = startGeneration
 
         if case .window = target {
             isWindowRecording = true
@@ -246,7 +274,8 @@ final class RecordingCoordinator {
             await self?.runEngineStart(
                 target: target,
                 options: options,
-                cameraDeviceID: resolved.cameraDeviceID
+                cameraDeviceID: resolved.cameraDeviceID,
+                generation: generation
             )
         }
     }
@@ -334,7 +363,7 @@ final class RecordingCoordinator {
     }
 
     /// Whether this recording keeps a studio session beside it.
-    private var capturesStudioSession: Bool {
+    var capturesStudioSession: Bool {
         settings.recordingCapturesStudioSession
     }
 
@@ -465,36 +494,5 @@ final class RecordingCoordinator {
         overlaySource.resetClock()
         areaHighlight.hide()
         Task { await engine.setOverlayProvider(nil) }
-    }
-
-    private var currentOptions: RecordingOptions {
-        let requestedRate = overrides.frameRate ?? settings.recordingFrameRate.rawValue
-        return RecordingOptions(
-            // An automation may ask for a frame rate the encoder presets do not have; the
-            // nearest preset is a better answer than refusing the recording.
-            frameRate: RecordingFrameRate.nearest(to: requestedRate),
-            codec: settings.recordingCodec == .hevc ? .hevc : .h264,
-            capturesSystemAudio: overrides.recordsSystemAudio ?? settings.recordsSystemAudio,
-            capturesMicrophone: overrides.recordsMicrophone ?? settings.recordsMicrophone,
-            microphoneDeviceID: settings.recordingMicrophoneDeviceID.isEmpty
-                ? nil
-                : settings.recordingMicrophoneDeviceID,
-            showsCursor: showsCursor,
-            dynamicRange: settings.recordingDynamicRange,
-            recordsMono: settings.recordsMono
-        )
-    }
-
-    /// Whether the system cursor is baked into the recording.
-    ///
-    /// Left out only when the user has asked the studio to draw it back, and only when
-    /// there is a session to draw it back from. A cursor cannot be added to footage that
-    /// never had one and has no sidecar either, so recording without one in that case would
-    /// simply lose the pointer (docs/09 U3.1).
-    private var showsCursor: Bool {
-        guard settings.recordingReconstructsCursor, capturesStudioSession else {
-            return settings.recordingShowsCursor
-        }
-        return false
     }
 }

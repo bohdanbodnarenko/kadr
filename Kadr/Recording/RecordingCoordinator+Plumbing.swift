@@ -36,7 +36,8 @@ extension RecordingCoordinator {
     func runEngineStart(
         target: RecordingTarget,
         options: RecordingOptions,
-        cameraDeviceID: String?
+        cameraDeviceID: String?,
+        generation: Int
     ) async {
         do {
             startOverlays(for: target)
@@ -68,13 +69,17 @@ extension RecordingCoordinator {
             pausedDuration = 0
             pausedAt = nil
             startTicking()
-            if settings.recordingEnablesFocus {
-                focus.enable()
-            }
             hygiene?.beginRecording()
             isTransitioning = false
             logger.info("Recording started")
         } catch {
+            // Only this start's own pieces. A Stop or Cancel during the start has already
+            // torn them down, and if another take has claimed the coordinator since, the
+            // overlays, studio session and state are its, not ours (docs/17 T-REC-3).
+            guard generation == startGeneration, state == .starting else {
+                logger.info("A superseded recording start failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             stopOverlays()
             studio.cancel()
             stopGeometryObserver()
@@ -171,21 +176,4 @@ nonisolated enum RecordingTickPolicy {
     static func microphoneIsSilent(recordsMicrophone: Bool, elapsed: TimeInterval, peak: Float) -> Bool {
         recordsMicrophone && elapsed > silenceGraceSeconds && peak < AudioMeter.silence
     }
-}
-
-/// Do Not Disturb while recording (docs/03 §1.8).
-///
-/// macOS gives apps no supported way to set a Focus mode, so this does the honest thing:
-/// it suppresses Kadr's own notifications and tells the user what it cannot do, rather
-/// than pretending. A banner from another app landing in a recording is a real problem;
-/// silently failing to prevent it would be worse than saying so.
-@MainActor
-struct FocusMode {
-    private let logger = KadrLog.logger(.recording)
-
-    func enable() {
-        logger.info("Recording started; macOS Focus must be set by the user if wanted")
-    }
-
-    func disable() {}
 }

@@ -18,15 +18,22 @@ extension RecordingCoordinator {
         isTransitioning = true
         studio.pauseCamera()
         studio.pauseTelemetry()
-        Task { [weak self] in
+        transportTask = Task { [weak self] in
             guard let self else { return }
-            defer { isTransitioning = false }
+            defer {
+                isTransitioning = false
+                transportTask = nil
+            }
             do {
                 try await engine.pause()
             } catch {
                 logger.error("Could not pause: \(error.localizedDescription, privacy: .public)")
                 return
             }
+            // Stop or Discard may have landed while the segment closed. Writing `.paused`
+            // over their `.finishing` or `.idle` left a phantom paused take that only Stop
+            // could clear, and Stop then reported an error (docs/17 T-REC-8).
+            guard state == .recording else { return }
             // The script holds where it is: a prompter that keeps scrolling through a
             // pause is one the reader has to scroll back on when they resume.
             teleprompter.pause()
@@ -42,15 +49,21 @@ extension RecordingCoordinator {
         isTransitioning = true
         studio.resumeTelemetry()
         studio.resumeCamera()
-        Task { [weak self] in
+        transportTask = Task { [weak self] in
             guard let self else { return }
-            defer { isTransitioning = false }
+            defer {
+                isTransitioning = false
+                transportTask = nil
+            }
             do {
                 try await engine.resume()
             } catch {
                 logger.error("Could not resume: \(error.localizedDescription, privacy: .public)")
                 return
             }
+            // Same as pause: a Stop in the meantime owns the state now, and restarting the
+            // tick here would leave it running at 10 Hz with nothing recording (rule 2).
+            guard state == .paused else { return }
             if let pausedAt {
                 // Paused time is time the user chose not to record, so the clock skips it
                 // exactly as the file does.
@@ -110,7 +123,6 @@ extension RecordingCoordinator {
         state = .finishing
         isTransitioning = true
         stopTicking()
-        focus.disable()
         stopOverlays()
         stopGeometryObserver()
         teleprompter.stop()
@@ -120,12 +132,16 @@ extension RecordingCoordinator {
         let interruption = pendingInterruption
         pendingInterruption = nil
         let tail = trimmingTravel ? travelTail() : 0
+        let transport = transportTask
         Task { [weak self] in
             guard let self else { return }
             defer {
                 isTransitioning = false
                 liveNotice = nil
             }
+            // A pause or resume still in flight finishes first, so the engine sees one
+            // transition at a time rather than a stop inside a half-closed segment.
+            await transport?.value
             do {
                 let result = try await engine.stop(
                     savingTo: destination,
@@ -172,6 +188,19 @@ extension RecordingCoordinator {
 
     private func resetAfterStopping() {
         state = .idle
+        clearTakeState()
+    }
+
+    /// Forgets everything about the take that just ended.
+    ///
+    /// The tick is stopped here as well as where the take stopped: a resume that finished
+    /// after the stop could restart it, and a 10 Hz loop running while idle breaks the
+    /// agent's zero-CPU budget (rule 2, docs/17 T-REC-8).
+    func clearTakeState() {
+        stopTicking()
+        startedAt = nil
+        pausedAt = nil
+        pausedDuration = 0
         elapsed = 0
         overrides = .none
         startedByAutomation = false
@@ -190,7 +219,6 @@ extension RecordingCoordinator {
         isTransitioning = false
         liveNotice = nil
         stopTicking()
-        focus.disable()
         stopOverlays()
         hygiene?.endRecording()
         studio.cancel()
@@ -199,10 +227,7 @@ extension RecordingCoordinator {
         Task { [weak self] in
             await self?.engine.cancel()
             self?.state = .idle
-            self?.elapsed = 0
-            self?.overrides = .none
-            self?.startedByAutomation = false
-            self?.wantsGIFExport = false
+            self?.clearTakeState()
             self?.report(.cancelled)
             self?.finishTerminationIfNeeded()
         }
@@ -217,7 +242,10 @@ extension RecordingCoordinator {
     func restart() {
         let target = pendingTarget ?? lastTarget
         guard let target else { return }
+        // The same take again, so the same kind of take: a GIF restarts as a GIF.
+        let gif = wantsGIFExport
         if cancelCountdown() {
+            wantsGIFExport = gif
             startAfterCountdown(target: target)
             return
         }
@@ -225,6 +253,7 @@ extension RecordingCoordinator {
         Task { [weak self] in
             guard let self else { return }
             await discardWithoutReporting()
+            wantsGIFExport = gif
             startAfterCountdown(target: target)
         }
     }
@@ -237,22 +266,18 @@ extension RecordingCoordinator {
     private func discardWithoutReporting() async {
         state = .idle
         stopTicking()
-        focus.disable()
         stopOverlays()
         hygiene?.endRecording()
         studio.cancel()
         stopGeometryObserver()
         teleprompter.stop()
         await engine.cancel()
-        elapsed = 0
-        overrides = .none
-        startedByAutomation = false
-        wantsGIFExport = false
         state = .idle
+        clearTakeState()
     }
 
     /// Reports to whoever asked for this recording, once.
-    private func report(_ outcome: CaptureOutcome) {
+    func report(_ outcome: CaptureOutcome) {
         guard let automationCompletion else { return }
         self.automationCompletion = nil
         automationCompletion(outcome)

@@ -134,7 +134,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     func didClickStatusItem() {
         guard showsRecordingIcon else { return }
         let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.option) == true {
+        // ⌃-click is the Mac's secondary click. Treating it as a plain click stopped the take
+        // for anyone who reaches the menu that way (docs/03 §8.1, docs/17 T-REC-11).
+        let modifiers = event?.modifierFlags ?? []
+        if event?.type == .rightMouseUp || !modifiers.isDisjoint(with: [.option, .control]) {
             popRecordingMenu()
             return
         }
@@ -322,4 +325,6 @@ struct RecordingControls {
     /// Transient status while a take is interrupted or the transport is settling.
     var notice: String?
     var isTransitioning: Bool = false
+    /// The take has stopped and its file is being finalised (docs/17 T-REC-4).
+    var isSaving: Bool = false
 }

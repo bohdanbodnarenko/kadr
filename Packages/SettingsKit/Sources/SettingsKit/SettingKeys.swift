@@ -98,7 +98,6 @@ public enum SettingKeys {
     public static let askForSaveDestination = SettingKey("general.askForSaveDestination", default: false)
     public static let recordingShowsCursor = SettingKey("recording.showsCursor", default: true)
     /// Turn on Do Not Disturb while recording, so notifications stay out of the file.
-    public static let recordingEnablesFocus = SettingKey("recording.enablesFocus", default: true)
     /// Draw a halo where the user clicks (docs/03 §1.8).
     public static let recordingShowsClicks = SettingKey("recording.showsClicks", default: false)
     /// The floating Stop/Pause bar (docs/03 §1.8). On by default: the recorder shipped with

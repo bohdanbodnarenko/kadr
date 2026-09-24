@@ -174,7 +174,7 @@ extension RecordingCoordinator {
 
     /// Records a named rectangle with no overlay (docs/03 §8.4 `x,y,w,h` and `display=`).
     func beginRegionRecording(_ screenRect: ScreenRect) {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         let global = screenRect.inDisplaySpace(.current)
         guard let displayID = DisplayLookup.display(containing: global) else {
             logger.error("The requested recording region is not on any display")
@@ -216,7 +216,7 @@ extension RecordingCoordinator {
 
     /// Picks a region with the selection overlay, then records it.
     func beginRegionRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         pickRegion { [weak self] result in
             guard let self, let result else {
                 self?.wantsGIFExport = false
@@ -230,7 +230,7 @@ extension RecordingCoordinator {
 
     /// Dedicated GIF capture: same region overlay, then GIF-encode on stop (CleanShot §13.6).
     func beginGIFRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         wantsGIFExport = true
         beginRegionRecording()
     }

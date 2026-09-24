@@ -36,14 +36,14 @@ struct SegmentWriterPauseTests {
             decodeTimeStamp: .invalid
         )
         var sample: CMSampleBuffer?
-        CMSampleBufferCreateReadyWithImageBuffer(
+        try CMSampleBufferCreateReadyWithImageBuffer(
             allocator: kCFAllocatorDefault,
             imageBuffer: image,
-            formatDescription: try #require(format),
+            formatDescription: #require(format),
             sampleTiming: &timing,
             sampleBufferOut: &sample
         )
-        return SampleBufferBox(buffer: try #require(sample), kind: kind)
+        return try SampleBufferBox(buffer: #require(sample), kind: kind)
     }
 
     private func fileDuration(_ url: URL) async throws -> Double {
@@ -68,19 +68,19 @@ struct SegmentWriterPauseTests {
         await engine.primeForTesting(state: .recording, segments: [], sessionDirectory: directory, writer: first)
 
         for time in stride(from: 10.0, through: 11.0, by: 0.1) {
-            await engine.deliverForTesting(try frame(at: time))
+            try await engine.deliverForTesting(frame(at: time))
             // A real-time input refuses frames it has not caught up with; pace like SCK.
             try await Task.sleep(for: .milliseconds(15))
         }
         try await engine.pause()
         // Frames keep arriving while paused and are dropped.
-        await engine.deliverForTesting(try frame(at: 12.0))
+        try await engine.deliverForTesting(frame(at: 12.0))
         try await engine.resume()
 
         // A static screen after the resume: only an idle (clock) sample, then pictures.
-        await engine.deliverForTesting(try frame(at: 13.0, kind: .clock))
+        try await engine.deliverForTesting(frame(at: 13.0, kind: .clock))
         for time in stride(from: 13.1, through: 14.0, by: 0.1) {
-            await engine.deliverForTesting(try frame(at: time))
+            try await engine.deliverForTesting(frame(at: time))
             // A real-time input refuses frames it has not caught up with; pace like SCK.
             try await Task.sleep(for: .milliseconds(15))
         }

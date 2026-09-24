@@ -151,7 +151,11 @@ extension AppDelegate {
         case .screen: areaCapture.captureAllDisplays()
         case .record:
             let source = allInOne.takeHandOffFrame()
-            if recordSetup.isShowing {
+            // A take is live, starting or saving: the recorder would only arm a second one
+            // that orphans it. Bring the take's own controls forward instead (docs/17 T-REC-3).
+            if recordingStorage?.isBusy == true {
+                refreshRecordingControlBar()
+            } else if recordSetup.isShowing {
                 recordSetup.toggle()
             } else {
                 recordSetup.present(morphingFrom: source)
@@ -178,7 +182,9 @@ extension AppDelegate {
 
     /// Keeps the menu bar and the floating controls in step with the recording.
     func refreshStatusItemIcon() {
-        guard let recording = recordingStorage, recording.isRecording else {
+        // Through `.finishing` too: the bar says "Saving…" until the file exists, rather
+        // than going idle while a multi-second join is still running (docs/17 T-REC-4).
+        guard let recording = recordingStorage, recording.isBusy else {
             // Recording always wins; armed is what is left when a capture surface is up.
             if isCaptureArmed {
                 statusItemController?.showArmedIcon()
@@ -233,7 +239,8 @@ extension AppDelegate {
 
     /// The menu's view of a recording in progress, or nil when nothing is recording.
     func currentRecordingControls() -> RecordingControls? {
-        guard let recording = recordingStorage, recording.isRecording else { return nil }
+        guard let recording = recordingStorage, recording.isBusy else { return nil }
+        let isSaving = recording.state == .finishing
         return RecordingControls(
             elapsedText: recording.elapsedText,
             isPaused: recording.state == .paused,
@@ -253,7 +260,8 @@ extension AppDelegate {
             audioLevel: recording.audioMeter.peak,
             microphoneIsSilent: recording.microphoneIsSilent,
             notice: recording.liveNotice,
-            isTransitioning: recording.isTransitioning
+            isTransitioning: recording.isTransitioning,
+            isSaving: isSaving
         )
     }
 
@@ -326,6 +334,12 @@ extension AppDelegate {
     private func performRecording(_ command: CaptureCommand) {
         if recording.isRecording, command != .stopRecording {
             recording.stop()
+            return
+        }
+        // Still saving the last take. Opening the recorder now would arm a start the
+        // coordinator has to refuse; the bar already says what is happening.
+        if recording.state == .finishing {
+            NSSound.beep()
             return
         }
         switch command {

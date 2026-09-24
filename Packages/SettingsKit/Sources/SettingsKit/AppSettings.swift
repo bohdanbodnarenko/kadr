@@ -11,7 +11,7 @@ import Shared
 /// observation too.
 @MainActor
 @Observable
-public final class AppSettings { // swiftlint:disable:this type_body_length
+public final class AppSettings {
     @ObservationIgnored let store: UserDefaults
 
     public var hasCompletedOnboarding: Bool {
@@ -161,10 +161,6 @@ public final class AppSettings { // swiftlint:disable:this type_body_length
 
     public var recordingShowsCursor: Bool {
         didSet { store[SettingKeys.recordingShowsCursor] = recordingShowsCursor }
-    }
-
-    public var recordingEnablesFocus: Bool {
-        didSet { store[SettingKeys.recordingEnablesFocus] = recordingEnablesFocus }
     }
 
     /// Whether the floating Stop/Pause bar appears while recording (docs/03 §1.8).
@@ -433,7 +429,6 @@ public final class AppSettings { // swiftlint:disable:this type_body_length
         recordsSystemAudio = store[SettingKeys.recordsSystemAudio]
         recordsMicrophone = store[SettingKeys.recordsMicrophone]
         recordingShowsCursor = store[SettingKeys.recordingShowsCursor]
-        recordingEnablesFocus = store[SettingKeys.recordingEnablesFocus]
         hasSeenQuickAccessTip = store[SettingKeys.hasSeenQuickAccessTip]
         hasSeenMenuBarHint = store[SettingKeys.hasSeenMenuBarHint]
         hasSeenIslandTour = store[SettingKeys.hasSeenIslandTour]

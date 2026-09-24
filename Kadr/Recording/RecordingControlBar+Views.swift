@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import OverlayKit
 import SettingsKit
 import SwiftUI
@@ -84,8 +85,11 @@ struct RecordingLiveControls: View {
                 elapsed
             }
 
-            if model.isConfirmingDiscard {
-                discardConfirmation
+            if model.isSaving {
+                saving
+                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+            } else if let confirmation = model.confirmation {
+                confirmationRow(confirmation)
                     .transition(.asymmetric(insertion: .opacity, removal: .identity))
             } else {
                 transport
@@ -123,14 +127,14 @@ struct RecordingLiveControls: View {
                 symbol: "arrow.counterclockwise",
                 help: "Start over"
             ) {
-                model.restart()
+                setConfirmation(.restart)
             }
             .disabled(model.isTransitioning)
             .accessibilityLabel("Restart — discard what's recorded and record again")
 
             RecordingBarFilledCircleButton(
                 symbol: "stop.fill",
-                help: "Stop and save (⌃⇧.)"
+                help: stopHelp
             ) {
                 model.stop()
             }
@@ -138,8 +142,11 @@ struct RecordingLiveControls: View {
             .accessibilityLabel("Stop and save the recording")
 
             RecordingBarCircleButton(symbol: "trash.fill", help: "Discard recording") {
-                setConfirmingDiscard(true)
+                setConfirmation(.discard)
             }
+            // A pause or resume settling can still be overtaken by Stop, but not by a
+            // Discard racing it into a phantom paused take (docs/17 T-REC-8).
+            .disabled(model.isTransitioning)
             .accessibilityLabel("Discard — delete this recording without saving")
         }
     }
@@ -150,9 +157,10 @@ struct RecordingLiveControls: View {
     /// window behind it, a grey slab around the bar or the notch. A standalone alert would
     /// instead activate Kadr and change what is being recorded. The recording keeps
     /// running meanwhile, so the clock stays.
-    private var discardConfirmation: some View {
-        HStack(spacing: 8) {
-            Text("Discard this recording?")
+    private func confirmationRow(_ confirmation: RecordingBarConfirmation) -> some View {
+        let copy = ConfirmationCopy(confirmation)
+        return HStack(spacing: 8) {
+            Text(copy.question)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(RecordingBarMetrics.activeTint)
                 .lineLimit(1)
@@ -160,26 +168,76 @@ struct RecordingLiveControls: View {
                 .padding(.horizontal, 6)
 
             Button("Keep Recording") {
-                setConfirmingDiscard(false)
+                setConfirmation(nil)
             }
             .buttonStyle(RecordingBarCapsuleButtonStyle())
+            .keyboardShortcut(.cancelAction)
 
-            Button("Discard") {
-                model.isConfirmingDiscard = false
-                model.cancel()
+            Button(copy.action) {
+                model.confirmation = nil
+                switch confirmation {
+                case .discard: model.cancel()
+                case .restart: model.restart()
+                }
             }
             .buttonStyle(RecordingBarCapsuleButtonStyle(isDestructive: true))
-            .accessibilityHint("What you have recorded so far will be deleted.")
+            .accessibilityHint(copy.consequence)
         }
         .padding(.horizontal, 4)
         .frame(height: RecordingBarMetrics.controlSize)
-        .help("What you have recorded so far will be deleted.")
+        .help(copy.consequence)
         .accessibilityElement(children: .contain)
     }
 
-    private func setConfirmingDiscard(_ confirming: Bool) {
+    private struct ConfirmationCopy {
+        let question: String
+        let action: String
+        let consequence: String
+
+        init(_ confirmation: RecordingBarConfirmation) {
+            switch confirmation {
+            case .discard:
+                question = String(localized: "Discard this recording?")
+                action = String(localized: "Discard")
+                consequence = String(localized: "What you have recorded so far will be deleted.")
+            case .restart:
+                question = String(localized: "Start over?")
+                action = String(localized: "Start Over")
+                consequence = String(
+                    localized: "What you have recorded so far will be deleted, and recording starts again."
+                )
+            }
+        }
+    }
+
+    /// Shown from Stop until the file exists, so the bar never looks idle while a join is
+    /// still running (docs/17 T-REC-4).
+    private var saving: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("Saving…")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(RecordingBarMetrics.activeTint)
+                .fixedSize()
+        }
+        .padding(.horizontal, 8)
+        .frame(height: RecordingBarMetrics.controlSize)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Saving the recording")
+    }
+
+    /// The Stop tooltip names the shortcut the user actually has, or none if unbound.
+    private var stopHelp: String {
+        guard let shortcut = KeyboardShortcuts.getShortcut(for: .stopRecording) else {
+            return String(localized: "Stop and save")
+        }
+        return String(localized: "Stop and save (\(shortcut.description))")
+    }
+
+    private func setConfirmation(_ confirmation: RecordingBarConfirmation?) {
         withAnimation(AccessibilityChrome.animation(RecordingBarMetrics.modeChange)) {
-            model.isConfirmingDiscard = confirming
+            model.confirmation = confirmation
         }
     }
 
