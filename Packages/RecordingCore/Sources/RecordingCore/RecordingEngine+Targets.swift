@@ -1,3 +1,4 @@
+import CaptureCore
 import CoreGraphics
 import Foundation
 import ScreenCaptureKit
@@ -13,8 +14,28 @@ extension RecordingEngine {
         do {
             return try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
-            throw RecordingError.targetUnavailable
+            throw Self.startError(error, otherwise: { _ in .targetUnavailable })
         }
+    }
+
+    /// What a ScreenCaptureKit failure during start means to the user (docs/17 T-REC-9).
+    ///
+    /// Every failure here used to read "That screen or window is no longer available",
+    /// including the lapsed monthly consent on macOS 15+ — so the user was never offered
+    /// the way back to System Settings. A declined grant comes out as
+    /// `CaptureError.permissionDenied`, which the coordinator's recovery already knows.
+    static func startError(
+        _ error: any Error,
+        otherwise: (String) -> RecordingError
+    ) -> any Error {
+        let mapped = CaptureError.mapping(error)
+        if mapped.indicatesPermissionLoss {
+            return mapped
+        }
+        if mapped == .noCaptureSource {
+            return RecordingError.targetUnavailable
+        }
+        return otherwise(error.localizedDescription)
     }
 
     /// What one target resolves to: what to capture, how big, and which part of it.

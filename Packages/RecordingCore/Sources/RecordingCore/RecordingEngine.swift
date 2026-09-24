@@ -89,6 +89,8 @@ public actor RecordingEngine {
     /// Last complete video frame, so a resume on a static screen still starts the writer
     /// and a static tail survives Stop (docs/16 REC-5).
     var lastVideoBox: SampleBufferBox?
+    /// What the running stream records, so its filter can be rebuilt mid-take.
+    var liveTarget: RecordingTarget?
     var segmentHasVideo = false
 
     /// Supplies click halos, keystrokes and the webcam picture, frame by frame.
@@ -151,6 +153,29 @@ public actor RecordingEngine {
         excludedWindowIDs = ids
     }
 
+    /// Changes which of Kadr's windows are left out of a recording that is already running.
+    ///
+    /// The filter used to be fixed when the stream started, so a panel created after that —
+    /// the teleprompter is the one that matters — was recorded into the file (docs/17
+    /// T-REC-7). A window recording is untouched: it never contained Kadr's windows.
+    public func updateExcludedWindowIDs(_ ids: Set<CGWindowID>) async {
+        guard ids != excludedWindowIDs else { return }
+        excludedWindowIDs = ids
+        guard let stream, let liveTarget else { return }
+        if case .window = liveTarget {
+            return
+        }
+        do {
+            let content = try await shareableContent()
+            // The recording may have ended while ScreenCaptureKit answered.
+            guard self.stream === stream else { return }
+            let setup = try makeFilter(for: liveTarget, in: content)
+            try await stream.updateContentFilter(setup.filter)
+        } catch {
+            logger.error("Could not update the recording's exclusions: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     #if DEBUG
         /// Puts the engine into the state a running recording leaves it in.
         ///
@@ -193,6 +218,11 @@ public actor RecordingEngine {
         func deliverStreamStopForTesting(_ message: String) {
             noteInterruption(.streamStopped(message))
             output?.finish()
+        }
+
+        /// Hands a sample to the engine as the stream's consumer would.
+        func deliverForTesting(_ box: SampleBufferBox) async {
+            await consume(box)
         }
 
         func deliverWriterFailureForTesting(_ message: String) {
@@ -310,7 +340,7 @@ public actor RecordingEngine {
         do {
             try await stream.startCapture()
         } catch {
-            throw RecordingError.writingFailed(error.localizedDescription)
+            throw Self.startError(error, otherwise: RecordingError.writingFailed)
         }
     }
 
@@ -354,14 +384,13 @@ public actor RecordingEngine {
             let time = recordingTime(of: box.buffer)
             reportGeometry(of: box, at: time)
             clockObserver?(time)
-            if !segmentHasVideo, let lastVideoBox {
-                let accepted = await writer.append(lastVideoBox)
-                segmentHasVideo = accepted
-                if !accepted, let reason = await writer.failureReason {
-                    noteInterruption(.writerFailed(reason))
-                }
-            }
+            await seedHeldFrame(into: writer, at: box)
             return
+        }
+        if box.kind != .video {
+            // Audio can arrive before the first picture after a resume; the held frame
+            // opens the segment so that sound is not dropped by a session with no video.
+            await seedHeldFrame(into: writer, at: box)
         }
         if box.kind == .microphone {
             audioMeter.microphone = AudioLevel.peak(of: box.buffer)
@@ -384,6 +413,30 @@ public actor RecordingEngine {
             }
         }
         let accepted = await writer.append(box)
+        if !accepted, box.kind == .video {
+            // A frame the encoder refused, usually back-pressure. Visible in Instruments
+            // next to the pool's queue depth, which is what tuning it needs (rule 8,
+            // docs/17 T-REC-10).
+            signposter.emitEvent("Dropped frame")
+        }
+        if !accepted, let reason = await writer.failureReason {
+            noteInterruption(.writerFailed(reason))
+        }
+    }
+
+    /// Opens a segment that has no picture yet with the last frame seen, re-timed to `box`.
+    ///
+    /// The frame was captured before the pause. Appended with its own time it would start
+    /// the writer's session there, and `last − first` would count the pause as footage — a
+    /// frozen stretch in the file and every later click early by its length (docs/17
+    /// T-REC-1). Stamped with the live sample's time, the segment starts where the
+    /// recording clock restarts, so the file and the telemetry agree.
+    private func seedHeldFrame(into writer: any SegmentWriting, at box: SampleBufferBox) async {
+        guard !segmentHasVideo, let lastVideoBox else { return }
+        let time = CMSampleBufferGetPresentationTimeStamp(box.buffer)
+        guard let held = lastVideoBox.retimed(to: time) else { return }
+        let accepted = await writer.append(held)
+        segmentHasVideo = accepted
         if !accepted, let reason = await writer.failureReason {
             noteInterruption(.writerFailed(reason))
         }

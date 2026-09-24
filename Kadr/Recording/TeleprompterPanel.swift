@@ -10,10 +10,11 @@ import StudioSession
 /// they are showing. It is movable, unlike Kadr's other overlays — a prompter has to sit
 /// where the reader's eyes want it, which is usually just under the camera.
 ///
-/// It stays out of the recording without doing anything: display and region captures
-/// exclude every window belonging to Kadr, and a window capture of somebody else's app
-/// never contained it. That is worth knowing rather than assuming, because a prompter that
-/// appears in the file is a recording somebody has to make again.
+/// It registers itself for capture exclusion, but it is created after the recording's stream
+/// has started, so the coordinator pushes the new exclusion list into the live stream right
+/// after opening it (docs/17 T-REC-7). A window capture of somebody else's app never
+/// contained it. A prompter that appears in the file is a recording somebody has to make
+/// again.
 @MainActor
 final class TeleprompterPanel: NonActivatingPanel {
     private let scriptView = TeleprompterScriptView()

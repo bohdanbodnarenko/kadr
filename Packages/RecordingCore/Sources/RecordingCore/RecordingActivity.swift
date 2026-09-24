@@ -12,13 +12,16 @@ public protocol RecordingActivityAsserting: Sendable {
     func begin() -> any RecordingActivitySession
 }
 
-/// `ProcessInfo.beginActivity` with idle-sleep disabled.
+/// `ProcessInfo.beginActivity` with idle system *and display* sleep disabled.
+///
+/// Display sleep too: a hands-off narrated take has no input for minutes, and a display
+/// that dims or sleeps mid-take is recorded dimming (docs/17 T-REC-10).
 public struct ProcessInfoRecordingActivity: RecordingActivityAsserting, Sendable {
     public init() {}
 
     public func begin() -> any RecordingActivitySession {
         let token = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated, .idleSystemSleepDisabled],
+            options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled],
             reason: "Kadr is recording the screen"
         )
         return ProcessInfoActivitySession(token: token)

@@ -241,7 +241,9 @@ final class AutomationRouter {
         completion: (AutomationResponse) -> Void,
         begin: () -> Void
     ) {
-        guard !recording.isRecording else {
+        // `state.isActive`, not `isRecording`: a take still being saved refuses a new
+        // start too, or the new one would find the old studio session attached (T-REC-4).
+        guard !recording.isBusy else {
             completion(.failed("A recording is already running."))
             return
         }

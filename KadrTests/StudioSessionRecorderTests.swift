@@ -56,7 +56,7 @@ struct StudioSessionRecorderTests {
     // MARK: - Attaching footage
 
     @Test("The recording is attached without writing a second copy of it")
-    func footageIsLinkedNotCopied() throws {
+    func footageIsLinkedNotCopied() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let footage = folder.appendingPathComponent("recording.mp4")
@@ -65,7 +65,7 @@ struct StudioSessionRecorderTests {
         let session = RecordingSession.create(in: folder, named: "attach")
         try session.create()
         let recorder = StudioSessionRecorder()
-        #expect(recorder.attachForTesting(footage, to: session))
+        #expect(await recorder.attachForTesting(footage, to: session))
 
         let manager = FileManager.default
         #expect(manager.fileExists(atPath: session.screenURL.path))
@@ -79,7 +79,7 @@ struct StudioSessionRecorderTests {
     }
 
     @Test("Deleting the user's recording leaves the session's footage readable")
-    func linkSurvivesDeletion() throws {
+    func linkSurvivesDeletion() async throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let footage = folder.appendingPathComponent("recording.mp4")
@@ -89,20 +89,21 @@ struct StudioSessionRecorderTests {
         let session = RecordingSession.create(in: folder, named: "survives")
         try session.create()
         let recorder = StudioSessionRecorder()
-        #expect(recorder.attachForTesting(footage, to: session))
+        #expect(await recorder.attachForTesting(footage, to: session))
         try FileManager.default.removeItem(at: footage)
 
         #expect(try Data(contentsOf: session.screenURL) == payload)
     }
 
     @Test("Attaching a recording that is not there fails rather than pretending")
-    func missingFootage() {
+    func missingFootage() async {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
         let session = RecordingSession.create(in: folder, named: "missing")
         try? session.create()
         let recorder = StudioSessionRecorder()
-        #expect(!recorder.attachForTesting(folder.appendingPathComponent("nope.mp4"), to: session))
+        let attached = await recorder.attachForTesting(folder.appendingPathComponent("nope.mp4"), to: session)
+        #expect(!attached)
     }
 
     // MARK: - Finishing

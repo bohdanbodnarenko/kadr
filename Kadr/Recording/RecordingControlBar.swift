@@ -223,7 +223,7 @@ final class RecordingControlBar {
             // then take the window away, so it never vanishes mid-spring (macos-notch-ui).
             RecordingBarHoverView.endActiveHover()
             model.notchExpanded = false
-            model.isConfirmingDiscard = false
+            model.confirmation = nil
             model.preRoll = nil
             hideTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(200))
@@ -422,7 +422,7 @@ final class RecordingControlBar {
         model.docksToNotch = false
         model.notchVisible = false
         model.notchExpanded = false
-        model.isConfirmingDiscard = false
+        model.confirmation = nil
     }
 
     private func revealNotchIfNeeded() {
@@ -444,7 +444,9 @@ final class RecordingControlBar {
     }
 
     private func floatingFrame() -> NSRect {
-        let visible = ActiveScreen.resolve()?.visibleFrame
+        // The pointer's screen: `NSScreen.main` follows key focus, which for an agent that
+        // never activates is usually the menu-bar display, not the one being worked on.
+        let visible = (RecordingDeviceCatalog.pointerScreen() ?? ActiveScreen.resolve())?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = Self.savedOrigin ?? Self.defaultOrigin(in: visible)
         let barWidth = model.barFrameInPanel.width > 0 ? model.barFrameInPanel.width : Self.estimatedBarWidth

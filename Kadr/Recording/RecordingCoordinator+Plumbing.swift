@@ -18,8 +18,10 @@ extension RecordingCoordinator {
     /// Counted like every other capture: two recordings stopped inside the same second
     /// used to resolve to the same name, and the second overwrote the first (docs/07 M6).
     func destinationURL() -> URL {
-        let template = FilenameTemplate("Kadr recording {date} {time}")
-        let context = FilenameContext(applicationName: "Screen", date: Date())
+        // The user's own template, as every other capture uses (docs/03 §8.3). `{app}` names
+        // what kind of capture this is: the recorded app is not known for a screen or area.
+        let template = FilenameTemplate(settings.filenameTemplate)
+        let context = FilenameContext(applicationName: "Screen Recording", date: Date())
         let folder = settings.saveFolder
 
         if let url = try? CaptureFileWriter().availableURL(
@@ -36,10 +38,11 @@ extension RecordingCoordinator {
     func runEngineStart(
         target: RecordingTarget,
         options: RecordingOptions,
-        cameraDeviceID: String?
+        cameraDeviceID: String?,
+        generation: Int
     ) async {
         do {
-            startOverlays(for: target)
+            startOverlays(for: target, cameraDeviceID: cameraDeviceID)
             startStudioSession(for: target, cameraDeviceID: cameraDeviceID)
             await CaptureExclusionPush.into(engine)
             try await engine.start(target: target, options: options)
@@ -47,6 +50,9 @@ extension RecordingCoordinator {
             await teleprompter.start(
                 microphone: options.recordsMicrophone ? engine.microphoneTap : nil
             )
+            // The prompter's panel exists only now, after the stream's filter was fixed;
+            // hand the live stream the new list or the script is in the file (T-REC-7).
+            await engine.updateExcludedWindowIDs(CaptureExclusionPush.ids)
             // Still ours to claim (docs/11 S0.3).
             //
             // Everything above suspends, and Stop and Cancel both run to completion
@@ -68,13 +74,18 @@ extension RecordingCoordinator {
             pausedDuration = 0
             pausedAt = nil
             startTicking()
-            if settings.recordingEnablesFocus {
-                focus.enable()
-            }
             hygiene?.beginRecording()
             isTransitioning = false
+            showStartNotice()
             logger.info("Recording started")
         } catch {
+            // Only this start's own pieces. A Stop or Cancel during the start has already
+            // torn them down, and if another take has claimed the coordinator since, the
+            // overlays, studio session and state are its, not ours (docs/17 T-REC-3).
+            guard generation == startGeneration, state == .starting else {
+                logger.info("A superseded recording start failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             stopOverlays()
             studio.cancel()
             stopGeometryObserver()
@@ -93,6 +104,21 @@ extension RecordingCoordinator {
             permissions.noteCaptureFailure(error)
             presentPermissionRecoveryIfNeeded(error)
             RecordingFailureNotice.presentStartFailure(error)
+        }
+    }
+
+    /// Says on the bar what the take had to go without — a camera or microphone that was
+    /// missing or not allowed — rather than only logging it (docs/17 T-REC-9).
+    ///
+    /// Cleared after a few seconds by a Task that exists only while a take does.
+    private func showStartNotice() {
+        guard let notice = startNotice else { return }
+        startNotice = nil
+        liveNotice = notice
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, liveNotice == notice else { return }
+            liveNotice = nil
         }
     }
 
@@ -171,21 +197,4 @@ nonisolated enum RecordingTickPolicy {
     static func microphoneIsSilent(recordsMicrophone: Bool, elapsed: TimeInterval, peak: Float) -> Bool {
         recordsMicrophone && elapsed > silenceGraceSeconds && peak < AudioMeter.silence
     }
-}
-
-/// Do Not Disturb while recording (docs/03 §1.8).
-///
-/// macOS gives apps no supported way to set a Focus mode, so this does the honest thing:
-/// it suppresses Kadr's own notifications and tells the user what it cannot do, rather
-/// than pretending. A banner from another app landing in a recording is a real problem;
-/// silently failing to prevent it would be worse than saying so.
-@MainActor
-struct FocusMode {
-    private let logger = KadrLog.logger(.recording)
-
-    func enable() {
-        logger.info("Recording started; macOS Focus must be set by the user if wanted")
-    }
-
-    func disable() {}
 }

@@ -25,7 +25,6 @@ final class RecordingCoordinator {
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored let overlay: SelectionOverlayController
     @ObservationIgnored let hygiene: DesktopHygieneController?
-    @ObservationIgnored let focus = FocusMode()
     /// Click halos, keystrokes and the webcam. Started with the recording and stopped
     /// with it — none of its monitors exist while Kadr is idle (docs/03 §1.8).
     @ObservationIgnored let overlaySource = RecordingOverlaySource()
@@ -44,7 +43,14 @@ final class RecordingCoordinator {
     /// this state machine lives in `RecordingCoordinator+Control.swift`, and this is the app
     /// target — nothing outside it can reach the coordinator at all.
     var state: RecordingState = .idle {
-        didSet { onStateChanged?() }
+        didSet {
+            onStateChanged?()
+            // The bar and the menu-bar timer change silently; VoiceOver users need to hear
+            // that the take began, paused or ended (docs/17 T-REC-11).
+            if let message = RecordingAnnouncement.message(from: oldValue, to: state) {
+                FeedbackAnnouncement.post(message)
+            }
+        }
     }
 
     /// Seconds recorded so far, pauses taken out.
@@ -71,12 +77,16 @@ final class RecordingCoordinator {
     /// Whether the microphone is on but has picked nothing up this take.
     var microphoneIsSilent: Bool {
         RecordingTickPolicy.microphoneIsSilent(
-            recordsMicrophone: settings.recordsMicrophone,
+            recordsMicrophone: microphoneThisTake,
             elapsed: elapsed,
             peak: microphonePeakMax
         )
     }
 
+    /// Whether the resolved options for this take record the microphone.
+    @ObservationIgnored var microphoneThisTake = false
+    /// A device the take had to go without, shown on the bar once it is rolling.
+    @ObservationIgnored var startNotice: String?
     /// Loudest microphone sample so far this take, for the silent-mic notice.
     @ObservationIgnored var microphonePeakMax: Float = 0
 
@@ -164,6 +174,12 @@ final class RecordingCoordinator {
         state.isActive && state != .finishing
     }
 
+    /// Whether a take exists at all, saving included — what every *start* asks. A start during
+    /// `.finishing` found the last take's studio session still attached (docs/17 T-REC-4).
+    var isBusy: Bool {
+        state.isActive
+    }
+
     /// The window/area overlay is up to choose a recording target.
     var isSelectingTarget: Bool {
         overlay.isPresented
@@ -197,13 +213,19 @@ final class RecordingCoordinator {
 
     /// Whether the recording about to start was asked for by a script rather than a person.
     @ObservationIgnored var startedByAutomation = false
+    /// Which call to `start` owns the recording being set up, so a failing start tears
+    /// down only what it built and never a take that replaced it (docs/17 T-REC-3).
+    @ObservationIgnored var startGeneration = 0
+    /// The pause or resume in flight, so Stop can wait for it rather than race it
+    /// (docs/17 T-REC-8).
+    @ObservationIgnored var transportTask: Task<Void, Never>?
     /// Dedicated GIF capture (All-in-One G / `record-gif`): encode a GIF when this
     /// recording stops, instead of leaving only the MP4 card (CleanShot §13.6).
     @ObservationIgnored var wantsGIFExport = false
 
     /// Records a whole display, with no overlay.
     func beginDisplayRecording(_ displayID: CGDirectDisplayID = CGMainDisplayID()) {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         startAfterCountdown(target: .display(displayID))
     }
 
@@ -213,7 +235,15 @@ final class RecordingCoordinator {
     ///   the state, so the bar would be torn down and rebuilt in the same breath and the
     ///   user would watch it blink between the countdown ending and the recording starting.
     func start(target: RecordingTarget, alreadyClaimed: Bool = false) {
-        guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else {
+            // A countdown claimed `.starting` for this take. Returning without handing the
+            // claim back left a red "0:00" in the menu bar, live controls and the dim, all
+            // for a recording that could never begin (docs/17 T-REC-2).
+            if alreadyClaimed {
+                abandonUnstartedRecording(reason: "Kadr needs Screen Recording permission to record.")
+            }
+            return
+        }
         // Claimed synchronously, before the first await (docs/10 R0.3).
         //
         // Setting up a capture is a few hundred milliseconds of asking ScreenCaptureKit
@@ -223,11 +253,13 @@ final class RecordingCoordinator {
         // failure path then ran `studio.cancel()`, deleting the *first* recording's session
         // directory, and put the desktop icons back while the first was still filming.
         if !alreadyClaimed {
-            guard !isRecording else { return }
+            guard !state.isActive else { return }
             state = .starting
         }
         isTransitioning = true
         lastTarget = target
+        startGeneration &+= 1
+        let generation = startGeneration
 
         if case .window = target {
             isWindowRecording = true
@@ -236,9 +268,13 @@ final class RecordingCoordinator {
         }
         let resolved = RecordingInputResolver.resolve(
             options: currentOptions,
-            cameraDeviceID: settings.recordingCameraDeviceID
+            cameraDeviceID: settings.recordingCameraDeviceID,
+            wantsCamera: settings.recordingShowsWebcam
         )
         let options = resolved.options
+        // What this take really records, not what the settings asked for (T-REC-9).
+        microphoneThisTake = options.recordsMicrophone
+        startNotice = resolved.notice
         if let notice = resolved.notice {
             logger.info("\(notice, privacy: .public)")
         }
@@ -246,7 +282,8 @@ final class RecordingCoordinator {
             await self?.runEngineStart(
                 target: target,
                 options: options,
-                cameraDeviceID: resolved.cameraDeviceID
+                cameraDeviceID: resolved.cameraDeviceID,
+                generation: generation
             )
         }
     }
@@ -263,78 +300,8 @@ final class RecordingCoordinator {
         }
     }
 
-    /// Turns on only the overlays the user asked for, and tells the engine where to get
-    /// them (docs/03 §1.8).
-    func startOverlays(for target: RecordingTarget) {
-        // The webcam belongs to one of the two paths, never both: a studio session records
-        // the camera to its own file so the bubble stays editable, and macOS will not hand
-        // the same device to two capture sessions. Baking a bubble that can no longer be
-        // moved is also the exact decision the studio exists to postpone.
-        let bakesWebcam = settings.recordingShowsWebcam && !capturesStudioSession
-        let wantsAny = settings.recordingShowsClicks
-            || settings.recordingShowsKeystrokes
-            || bakesWebcam
-        // Nothing is baked into an HDR recording (docs/11 S0.5).
-        //
-        // HDR moves the stream to `ARGB2101010LEPacked`, and `CGBitmapContext` has no
-        // representation for it — not a missing branch, an absent capability: no
-        // combination of bits-per-component, alpha and byte order CoreGraphics accepts
-        // describes that layout. It used to be described as 8-bit BGRA instead, which
-        // *succeeded*, because both are four bytes per pixel, and then reinterpreted
-        // 10-bit data as 8888 over every pixel the overlay touched. Two independent
-        // switches in the same settings pane.
-        //
-        // Skipped rather than worked around, because the studio already draws all of this
-        // at export time from the telemetry — and does it better, since an overlay that was
-        // never baked can still be turned off, moved or restyled afterwards. The user loses
-        // nothing but the preview-in-the-file, and gains a recording whose pixels are the
-        // ones the display sent.
-        guard !currentOptions.recordsHDR else {
-            logger.info("HDR recording: overlays are left to the studio rather than baked in")
-            Task { await engine.setOverlayProvider(nil) }
-            return
-        }
-        guard wantsAny else {
-            Task { await engine.setOverlayProvider(nil) }
-            return
-        }
-
-        var configuration = RecordingOverlaySource.Configuration()
-        configuration.showsClicks = settings.recordingShowsClicks
-        configuration.showsKeystrokes = settings.recordingShowsKeystrokes
-        configuration.keystrokesOnlyWithModifiers = settings.recordingKeystrokesShortcutsOnly
-        configuration.keystrokePosition = KeystrokePosition(
-            rawValue: settings.recordingKeystrokePosition.rawValue
-        ) ?? .bottomCentre
-        configuration.keystrokeAppearance = settings.recordingKeystrokeAppearance
-        configuration.keystrokeScale = CGFloat(settings.recordingKeystrokeScale)
-        configuration.showsWebcam = bakesWebcam
-        configuration.webcamDeviceID = settings.recordingCameraDeviceID
-        configuration.webcamIsCircular = settings.recordingWebcamCircular
-        configuration.webcamSizeFraction = CGFloat(settings.recordingWebcamSize)
-        configuration.webcamFillsFrame = settings.recordingWebcamFillsFrame
-        configuration.webcamCorner = OverlayCornerSlot(
-            rawValue: settings.recordingWebcamCorner.rawValue
-        ) ?? .bottomTrailing
-        configuration.webcamPixelSide = Self.webcamPixelSide(
-            recordedPixels: Self.recordedPixelSize(for: target),
-            sizeFraction: configuration.webcamSizeFraction,
-            fillsFrame: configuration.webcamFillsFrame
-        )
-        configuration.clickRed = settings.recordingClickRed
-        configuration.clickGreen = settings.recordingClickGreen
-        configuration.clickBlue = settings.recordingClickBlue
-        configuration.clickScale = CGFloat(settings.recordingClickScale)
-        configuration.clickFilled = settings.recordingClickFilled
-        configuration.pointConverter = Self.pointConverter(for: target)
-
-        overlaySource.start(configuration: configuration)
-        let source = overlaySource
-        Task { await engine.setOverlayProvider(source) }
-    }
-
     /// Whether this recording keeps a studio session beside it.
-    private var capturesStudioSession: Bool {
+    var capturesStudioSession: Bool {
         settings.recordingCapturesStudioSession
     }
 
@@ -376,7 +343,7 @@ final class RecordingCoordinator {
             recordsCamera: settings.recordingShowsWebcam && !camera.isEmpty,
             cameraDeviceID: camera,
             pointConverter: converter,
-            pointPixelScale: Self.pointPixelScale(for: target),
+            pointPixelScale: Self.pointPixelScale(for: target, windowDisplay: windowHighlightDisplayID),
             topInset: Self.topInset(for: target)
         )
         observeClock()
@@ -465,36 +432,5 @@ final class RecordingCoordinator {
         overlaySource.resetClock()
         areaHighlight.hide()
         Task { await engine.setOverlayProvider(nil) }
-    }
-
-    private var currentOptions: RecordingOptions {
-        let requestedRate = overrides.frameRate ?? settings.recordingFrameRate.rawValue
-        return RecordingOptions(
-            // An automation may ask for a frame rate the encoder presets do not have; the
-            // nearest preset is a better answer than refusing the recording.
-            frameRate: RecordingFrameRate.nearest(to: requestedRate),
-            codec: settings.recordingCodec == .hevc ? .hevc : .h264,
-            capturesSystemAudio: overrides.recordsSystemAudio ?? settings.recordsSystemAudio,
-            capturesMicrophone: overrides.recordsMicrophone ?? settings.recordsMicrophone,
-            microphoneDeviceID: settings.recordingMicrophoneDeviceID.isEmpty
-                ? nil
-                : settings.recordingMicrophoneDeviceID,
-            showsCursor: showsCursor,
-            dynamicRange: settings.recordingDynamicRange,
-            recordsMono: settings.recordsMono
-        )
-    }
-
-    /// Whether the system cursor is baked into the recording.
-    ///
-    /// Left out only when the user has asked the studio to draw it back, and only when
-    /// there is a session to draw it back from. A cursor cannot be added to footage that
-    /// never had one and has no sidecar either, so recording without one in that case would
-    /// simply lose the pointer (docs/09 U3.1).
-    private var showsCursor: Bool {
-        guard settings.recordingReconstructsCursor, capturesStudioSession else {
-            return settings.recordingShowsCursor
-        }
-        return false
     }
 }

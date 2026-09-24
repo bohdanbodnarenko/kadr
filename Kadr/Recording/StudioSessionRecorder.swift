@@ -182,7 +182,7 @@ final class StudioSessionRecorder {
         let captured = telemetry.stop()
         let cameraOutcome = await camera.finish()
 
-        guard attach(result.fileURL, to: session) else {
+        guard await attach(result.fileURL, to: session) else {
             try? session.delete()
             return nil
         }
@@ -283,7 +283,10 @@ final class StudioSessionRecorder {
     /// A link cannot cross volumes, so a save folder on an external disk falls back to a
     /// copy — chosen deliberately over abandoning the session, because the user turned this
     /// on and a slow success beats a silent nothing. It is logged either way.
-    private func attach(_ footage: URL, to session: RecordingSession) -> Bool {
+    ///
+    /// The copy runs off the main actor: a multi-gigabyte copy there froze the whole agent —
+    /// menu bar, hotkeys, the card — right after Stop (docs/17 T-REC-10).
+    private func attach(_ footage: URL, to session: RecordingSession) async -> Bool {
         let manager = FileManager.default
         try? manager.removeItem(at: session.screenURL)
         do {
@@ -292,8 +295,11 @@ final class StudioSessionRecorder {
         } catch {
             logger.info("The recording is on another volume; copying it into the studio session")
         }
+        let destination = session.screenURL
         do {
-            try manager.copyItem(at: footage, to: session.screenURL)
+            try await Task.detached(priority: .utility) {
+                try FileManager.default.copyItem(at: footage, to: destination)
+            }.value
             // A copy is not a hard link: referenceCount is 1 even though the original
             // still exists on another volume, and treating it as the only copy would
             // keep every external-disk recording in Application Support forever
@@ -388,8 +394,8 @@ final class StudioSessionRecorder {
         return session
     }
 
-    func attachForTesting(_ footage: URL, to session: RecordingSession) -> Bool {
-        attach(footage, to: session)
+    func attachForTesting(_ footage: URL, to session: RecordingSession) async -> Bool {
+        await attach(footage, to: session)
     }
 
     /// A name that sorts by when it was recorded and collides with nothing.

@@ -239,7 +239,7 @@ final class RecordSetupModel {
 
     func armDefaultScreenIfNeeded() {
         guard armedTarget == nil else { return }
-        armScreen(displays.first?.displayID ?? CGMainDisplayID())
+        armScreen(RecordingDeviceCatalog.pointerDisplayID() ?? displays.first?.displayID ?? CGMainDisplayID())
     }
 
     func armScreen(_ displayID: CGDirectDisplayID) {

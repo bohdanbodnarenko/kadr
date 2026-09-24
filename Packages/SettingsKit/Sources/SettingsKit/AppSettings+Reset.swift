@@ -70,7 +70,6 @@ public extension AppSettings {
         recordsMicrophone = SettingKeys.recordsMicrophone.defaultValue
         recordsMono = SettingKeys.recordsMono.defaultValue
         recordingShowsCursor = SettingKeys.recordingShowsCursor.defaultValue
-        recordingEnablesFocus = SettingKeys.recordingEnablesFocus.defaultValue
         recordingShowsClicks = SettingKeys.recordingShowsClicks.defaultValue
         recordingShowsKeystrokes = SettingKeys.recordingShowsKeystrokes.defaultValue
         recordingKeystrokesShortcutsOnly = SettingKeys.recordingKeystrokesShortcutsOnly.defaultValue

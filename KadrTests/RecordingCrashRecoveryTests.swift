@@ -52,6 +52,37 @@ struct RecordingCrashRecoveryTests {
         #expect(!RecordingSessionStore(root: sessions).sessions().isEmpty)
     }
 
+    /// A quit during setup leaves a folder with nothing recorded in it (docs/17 T-REC-10).
+    @Test("A leftover folder with no footage is removed")
+    func removesEmptyLeftovers() async throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let temporary = root.appendingPathComponent("tmp", isDirectory: true)
+        let empty = temporary.appendingPathComponent(
+            "\(InterruptedRecordingStore.directoryPrefix)\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let zeroByte = temporary.appendingPathComponent(
+            "\(InterruptedRecordingStore.directoryPrefix)\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: zeroByte, withIntermediateDirectories: true)
+        try Data().write(to: zeroByte.appendingPathComponent("segment-0.mp4"))
+
+        let count = await RecordingCrashRecovery.recover(
+            temporaryDirectory: temporary,
+            inProgressDirectory: root.appendingPathComponent("in-progress", isDirectory: true),
+            saveFolder: root,
+            sessions: nil,
+            present: { _ in }
+        )
+
+        #expect(count == 0)
+        #expect(!FileManager.default.fileExists(atPath: empty.path))
+        #expect(!FileManager.default.fileExists(atPath: zeroByte.path))
+    }
+
     @Test("Unreadable leftovers are left alone")
     func leavesUnreadableSegments() async throws {
         let root = scratch()

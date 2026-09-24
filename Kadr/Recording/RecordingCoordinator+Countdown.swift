@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import OverlayKit
 import RecordingCore
 import SettingsKit
@@ -32,6 +33,29 @@ extension RecordingCoordinator {
         // Never for an automated recording: `kadr record-screen` is a script, and a script
         // does not need three seconds to put its pointer somewhere. A countdown there is
         // just latency somebody has to work around.
+        // One take at a time, including one still being saved: a second start used to
+        // orphan the running one — the engine kept recording with no controls — and its
+        // failure path cancelled the first take's studio session (docs/17 T-REC-3/4).
+        guard !state.isActive else {
+            logger.info("Ignoring a start while a recording is \(String(describing: self.state), privacy: .public)")
+            return
+        }
+        // Asked before the countdown, not after it: three seconds of numbers ending in a
+        // permission alert is a countdown for nothing (docs/17 T-REC-2).
+        guard recovery.allowCapture(permissions: permissions, includePicker: false) else {
+            abandonUnstartedRecording(reason: "Kadr needs Screen Recording permission to record.")
+            return
+        }
+        if let shortage = RecordingDiskSpace.shortage(
+            in: [InterruptedRecordingStore.inProgressRoot(), settings.saveFolder]
+        ) {
+            let scripted = startedByAutomation
+            abandonUnstartedRecording(reason: shortage.localizedDescription)
+            if !scripted {
+                RecordingFailureNotice.presentStartFailure(shortage)
+            }
+            return
+        }
         let seconds = startedByAutomation ? 0 : settings.recordingCountdownSeconds
         state = .starting
         pendingTarget = target
@@ -106,11 +130,30 @@ extension RecordingCoordinator {
         countdown.onTick = nil
         countdown.onCancel = nil
         countdown.cancel()
+        abandonUnstartedRecording(reason: nil)
+        return true
+    }
+
+    /// Hands back everything a take that never started had claimed.
+    ///
+    /// The dim, the one-run overrides and the GIF flag all belong to that take. Left set,
+    /// a GIF countdown cancelled with Esc turned the *next* ordinary recording into a GIF
+    /// (docs/17 T-REC-9).
+    ///
+    /// - Parameter reason: why it could not start, for a script waiting on the answer;
+    ///   nil when the user called it off.
+    func abandonUnstartedRecording(reason: String?) {
         windowHighlightHole = nil
         windowHighlightDisplayID = nil
         areaHighlight.hide()
         pendingTarget = nil
-        state = .idle
-        return true
+        overrides = .none
+        startedByAutomation = false
+        wantsGIFExport = false
+        isTransitioning = false
+        if state == .starting {
+            state = .idle
+        }
+        report(reason.map(CaptureOutcome.failed) ?? .cancelled)
     }
 }

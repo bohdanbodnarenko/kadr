@@ -82,16 +82,19 @@ extension RecordingCoordinator {
         return screen.safeAreaInsets.top * screen.backingScaleFactor
     }
 
-    static func pointPixelScale(for target: RecordingTarget) -> CGFloat {
+    /// - Parameter windowDisplay: for a window, the display it was picked on.
+    static func pointPixelScale(
+        for target: RecordingTarget,
+        windowDisplay: CGDirectDisplayID? = nil
+    ) -> CGFloat {
         let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
         let displayID: CGDirectDisplayID? = switch target {
         case let .display(id): id
         case let .region(_, id): id
-        // A window recording is captured at the scale of whatever display it is on, and
-        // SCK reports that per frame; the main display is the best answer available here
-        // and is the right one whenever the window has not been dragged to a second screen
-        // with a different density.
-        case .window: CGMainDisplayID()
+        // A window recording is captured at the scale of whatever display it is on. The
+        // display it was picked on is the answer until it is dragged elsewhere; the main
+        // display was wrong for any window on a second screen of another density (REC-11).
+        case .window: windowDisplay ?? CGMainDisplayID()
         }
         guard let displayID,
               let screen = screens.first(where: { $0.displayID == displayID })
@@ -174,7 +177,7 @@ extension RecordingCoordinator {
 
     /// Records a named rectangle with no overlay (docs/03 §8.4 `x,y,w,h` and `display=`).
     func beginRegionRecording(_ screenRect: ScreenRect) {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         let global = screenRect.inDisplaySpace(.current)
         guard let displayID = DisplayLookup.display(containing: global) else {
             logger.error("The requested recording region is not on any display")
@@ -216,7 +219,7 @@ extension RecordingCoordinator {
 
     /// Picks a region with the selection overlay, then records it.
     func beginRegionRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         pickRegion { [weak self] result in
             guard let self, let result else {
                 self?.wantsGIFExport = false
@@ -230,7 +233,7 @@ extension RecordingCoordinator {
 
     /// Dedicated GIF capture: same region overlay, then GIF-encode on stop (CleanShot §13.6).
     func beginGIFRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         wantsGIFExport = true
         beginRegionRecording()
     }

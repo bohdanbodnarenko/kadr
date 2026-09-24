@@ -74,7 +74,7 @@ struct RecordSetupView: View {
         case .area, .window, .screen: arm(key)
         case .microphone, .systemAudio, .camera: toggleInput(key)
         case .clicks: model.settings.recordingShowsClicks.toggle()
-        case .keystrokes: model.settings.recordingShowsKeystrokes.toggle()
+        case .keystrokes: model.toggleKeystrokes()
         case .teleprompter: model.onTeleprompterComposer()
         case .record:
             // Nothing armed is not a failure to understand Return; it is a recorder with
@@ -90,7 +90,10 @@ struct RecordSetupView: View {
         switch key {
         case .area: model.requestAreaPick()
         case .window: model.requestWindowPick()
-        default: model.armScreen(model.displays.first?.displayID ?? CGMainDisplayID())
+        default:
+            model.armScreen(
+                RecordingDeviceCatalog.pointerDisplayID() ?? model.displays.first?.displayID ?? CGMainDisplayID()
+            )
         }
     }
 
@@ -242,7 +245,7 @@ struct RecordSetupView: View {
                 key: RecordSetupKey.keystrokes.caption,
                 isOn: model.settings.recordingShowsKeystrokes
             ) {
-                model.settings.recordingShowsKeystrokes.toggle()
+                model.toggleKeystrokes()
             }
             .accessibilityLabel("Keystroke overlay")
             .accessibilityValue(model.settings.recordingShowsKeystrokes ? "On" : "Off")
@@ -314,20 +317,12 @@ struct RecordSetupView: View {
                 } label: {
                     microphoneLabel("Off", selected: !model.settings.recordsMicrophone)
                 }
-                if !model.microphones.isEmpty {
-                    Divider()
-                    ForEach(model.microphones) { device in
-                        Button {
-                            model.settings.recordingMicrophoneDeviceID = device.uniqueID
-                            model.requestMicrophoneEnabled(true)
-                        } label: {
-                            microphoneLabel(
-                                device.localizedName,
-                                selected: model.settings.recordsMicrophone
-                                    && model.settings.recordingMicrophoneDeviceID == device.uniqueID
-                            )
-                        }
-                    }
+                Divider()
+                // Follows whatever macOS uses for input, including a headset plugged in
+                // later; an empty id is what the engine reads as the default (T-REC-11).
+                microphoneChoice(String(localized: "System Default"), deviceID: "")
+                ForEach(model.microphones) { device in
+                    microphoneChoice(device.localizedName, deviceID: device.uniqueID)
                 }
             } label: {
                 RecordingBarIcon(
@@ -381,5 +376,21 @@ struct RecordSetupView: View {
 
     private func timerTitle(_ seconds: Int) -> String {
         seconds == 0 ? KadrText.string("None") : KadrPlural.seconds(seconds)
+    }
+}
+
+private extension RecordSetupView {
+    /// One row of the microphone menu: picking it turns the microphone on with that input.
+    func microphoneChoice(_ title: String, deviceID: String) -> some View {
+        Button {
+            model.settings.recordingMicrophoneDeviceID = deviceID
+            model.requestMicrophoneEnabled(true)
+        } label: {
+            microphoneLabel(
+                title,
+                selected: model.settings.recordsMicrophone
+                    && model.settings.recordingMicrophoneDeviceID == deviceID
+            )
+        }
     }
 }

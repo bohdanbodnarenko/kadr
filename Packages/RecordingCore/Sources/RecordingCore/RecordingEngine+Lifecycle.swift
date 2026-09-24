@@ -40,6 +40,7 @@ extension RecordingEngine {
             try checkAlive(token)
             let capture = try makeFilter(for: target, in: content)
             pixelSize = capture.pixelSize
+            liveTarget = target
 
             // Everything for this recording lives in one directory, so a crash leaves an
             // obvious place to recover segments from.
@@ -179,11 +180,10 @@ extension RecordingEngine {
         segmentStartTime = nil
         let url = sessionDirectory.appendingPathComponent("segment-\(segments.count).mp4")
         writer = try makeWriter(url, pixelSize.width, pixelSize.height, options)
+        // The held frame is not appended here. It still carries its pre-pause time, and a
+        // segment that opened on it would write the whole pause back in as a frozen frame
+        // (docs/17 T-REC-1). `consume` seeds it, re-timed, with the first live sample.
         segmentHasVideo = false
-        if let lastVideoBox {
-            _ = await writer?.append(lastVideoBox)
-            segmentHasVideo = true
-        }
     }
 
     /// - Parameter trimmingTail: only a stop passes one. A pause closes a segment too, and
@@ -234,6 +234,7 @@ extension RecordingEngine {
         segments = []
         interruptionReason = nil
         lastVideoBox = nil
+        liveTarget = nil
         segmentHasVideo = false
         endActivity()
         if deletingFiles, let sessionDirectory {

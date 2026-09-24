@@ -49,6 +49,9 @@ extension RecordingCoordinator {
             } catch {
                 permissions.noteCaptureFailure(error)
                 logger.error("Could not freeze to pick a window: \(error.localizedDescription, privacy: .public)")
+                // A lapsed grant ended here silently: the picker simply never appeared
+                // (docs/16 REC-20, docs/17 T-REC-9).
+                presentPermissionRecoveryIfNeeded(error)
                 completion(nil)
             }
         }
@@ -59,7 +62,7 @@ extension RecordingCoordinator {
     /// Used by automation and GIF-style one-shots that should start as soon as a window
     /// is chosen. The floating island uses `pickWindow` so Record is a separate press.
     func beginWindowRecording() {
-        guard !isRecording else { return }
+        guard !state.isActive else { return }
         pickWindow { [weak self] selection in
             guard let self, let selection else { return }
             beginWindowHighlight(from: selection)
