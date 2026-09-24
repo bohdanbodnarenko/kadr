@@ -444,7 +444,7 @@ final class RecordingControlBar {
     }
 
     private func floatingFrame() -> NSRect {
-        // The pointer's screen: `NSScreen.main` follows key focus, which for an agent that
+        // The pointer's screen: the main screen follows key focus, which for an agent that
         // never activates is usually the menu-bar display, not the one being worked on.
         let visible = (RecordingDeviceCatalog.pointerScreen() ?? ActiveScreen.resolve())?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
