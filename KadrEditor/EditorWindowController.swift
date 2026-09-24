@@ -194,6 +194,15 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 display: false
             )
         }
+        // A second capture opened while one is up cascades from it, rather than landing on
+        // the same saved frame exactly on top of it (T-ED-12). Only one window can own the
+        // autosave name, so the others simply do not remember their frames.
+        if let neighbour = NSApp.orderedWindows.first(where: {
+            $0 !== window && $0.isVisible && $0.delegate is EditorWindowController
+        }) {
+            let topLeft = CGPoint(x: neighbour.frame.minX, y: neighbour.frame.maxY)
+            window.setFrameTopLeftPoint(window.cascadeTopLeft(from: topLeft))
+        }
         window.setFrameAutosaveName(autosaveName)
 
         self.window = window

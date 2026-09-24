@@ -224,8 +224,9 @@ extension EditorWindowController {
             components.host = "pin"
             components.queryItems = [URLQueryItem(name: "path", value: url.path)]
             guard let target = components.url else { return }
-            NSWorkspace.shared.open(target)
+            Self.openInBackground(target)
         } catch {
+            model.failExport(.pin, message: error.localizedDescription)
             logger.error("Pin from editor failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -280,8 +281,16 @@ extension EditorWindowController {
         _ = model.insertImage(pngData: png, pixelSize: pixelSize, at: point)
     }
 
+    /// A PNG for Pin or Share, in the editor's temporary folder.
+    ///
+    /// Not beside the capture: those used to leave "<stem> pin.png" and "<stem> share.png"
+    /// in the user's folder after every pin or share (T-ED-12). The same name is reused, so
+    /// repeating the action replaces the file rather than adding one, and the system clears
+    /// the temporary folder.
     func writeExportPNG(_ image: CGImage, suffix: String) throws -> URL {
-        let directory = documentURL.deletingLastPathComponent()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kadr Editor", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let stem = documentURL.deletingPathExtension().lastPathComponent
         let url = directory.appendingPathComponent("\(stem) \(suffix).png")
         let data = try ImageEncoder().encode(image, options: exportEncodingOptions)
