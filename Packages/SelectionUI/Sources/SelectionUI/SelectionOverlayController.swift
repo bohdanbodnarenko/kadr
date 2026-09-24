@@ -124,6 +124,12 @@ final class SelectionPanel: NonActivatingPanel, OverlayWindowing {
     func present(on screen: ScreenDescriptor) {
         setFrame(screen.frame.cgRect, display: true)
         orderFrontRegardless()
+        // Not made key here: with several displays the last panel created would win. The
+        // controller makes the pointer's display key once every panel is up (T-CAP-2).
+    }
+
+    /// Takes the keyboard for this display.
+    func takeKeyboard() {
         makeKey()
         makeFirstResponder(overlayView)
     }
@@ -155,6 +161,7 @@ public final class SelectionOverlayController {
     private var purpose: SelectionPurpose = .capture
     /// Windows offered for picking, keyed by the display they are shown on.
     private var pickableWindows: [CGDirectDisplayID: [PickableWindow]] = [:]
+    /// Where activation goes back to on dismiss; never Kadr itself (T-CAP-3).
     private var previouslyActiveApp: NSRunningApplication?
     private var isPrecisionMode = false
     /// Fired when the user toggles precision guides with `C` (docs/03 §7).
@@ -211,6 +218,9 @@ public final class SelectionOverlayController {
     ///   - mode: whether to start in region or window-pick mode (docs/03 §1.1, §1.2).
     ///   - windows: the windows available to pick, in front-to-back order and in global
     ///     display space. Ignored in region mode.
+    ///   - returningFocusTo: the app to hand activation back to on dismiss, if Kadr holds
+    ///     it then. The caller knows better than the overlay: by the time the overlay is up,
+    ///     the island may have made Kadr frontmost.
     public func present(
         freezes: [FrozenDisplay],
         mode: SelectionMode = .area,
@@ -218,6 +228,7 @@ public final class SelectionOverlayController {
         windows: [PickableWindowDescriptor] = [],
         precisionMode: Bool = false,
         eyedropper: Bool = false,
+        returningFocusTo: NSRunningApplication? = ActivationJuggler.returnTarget(),
         signpostState: OSSignpostIntervalState? = nil,
         completion: @escaping (SelectionOutcome?) -> Void
     ) {
@@ -237,7 +248,7 @@ public final class SelectionOverlayController {
         isEyedropperMode = eyedropper
         self.freezes = Dictionary(uniqueKeysWithValues: freezes.map { ($0.geometry.displayID, $0) })
         pickableWindows = Self.mapWindows(windows, onto: freezes.map(\.geometry))
-        previouslyActiveApp = NSWorkspace.shared.frontmostApplication
+        previouslyActiveApp = ActivationJuggler.returnTarget(returningFocusTo)
 
         let set = PerScreenWindowSet<SelectionPanel>(screens: screens) { [weak self] descriptor in
             self?.makePanel(for: descriptor)
@@ -249,7 +260,8 @@ public final class SelectionOverlayController {
             self?.dismiss(result: nil)
         }
         windowSet = set
-        set.present()
+        let descriptors = set.present()
+        focusDisplayUnderPointer(descriptors)
 
         if let signpostState {
             signposter.endInterval("hotkeyToOverlay", signpostState)
@@ -260,6 +272,29 @@ public final class SelectionOverlayController {
         // every frozen bitmap, and the hotkey→overlay budget has no room for it (PRD §8).
         // The overlay is already usable; snapping switches on when the answer arrives.
         prepareSnapping(for: freezes)
+    }
+
+    /// Gives the keyboard to the display the pointer is on, and tells every display where
+    /// the pointer is, so window mode highlights before the first move (T-CAP-2).
+    private func focusDisplayUnderPointer(_ descriptors: [ScreenDescriptor]) {
+        guard let windowSet else { return }
+        let pointer = ScreenPoint(x: NSEvent.mouseLocation.x, y: NSEvent.mouseLocation.y)
+        let target = Self.display(under: pointer, in: descriptors) ?? descriptors.first
+        for descriptor in descriptors {
+            guard let panel = windowSet.windows[descriptor.displayID] else { continue }
+            if let local = descriptor.frame.topLeftLocalPoint(for: pointer) {
+                panel.view.seedPointer(at: local)
+            }
+        }
+        guard let target, let panel = windowSet.windows[target.displayID] else { return }
+        panel.takeKeyboard()
+        makeActive(displayID: target.displayID)
+        detectEdges(forDisplay: target.displayID)
+    }
+
+    /// The display containing `pointer`, in AppKit screen space.
+    public static func display(under pointer: ScreenPoint, in descriptors: [ScreenDescriptor]) -> ScreenDescriptor? {
+        descriptors.first { $0.frame.contains(pointer) }
     }
 
     /// Remembers the frozen displays so their edges can be found when they are needed.
@@ -458,8 +493,9 @@ public final class SelectionOverlayController {
         pickableWindows.removeAll()
 
         // Hand focus back to whatever the user was in, so the overlay is invisible in
-        // the app-switching sense as well as the visual one.
-        previouslyActiveApp?.activate()
+        // the app-switching sense as well as the visual one. Only if Kadr took it: the
+        // panels are non-activating, so usually the user's app never lost it.
+        ActivationJuggler.shared.yieldActivation(to: previouslyActiveApp)
         previouslyActiveApp = nil
 
         let completion = completion

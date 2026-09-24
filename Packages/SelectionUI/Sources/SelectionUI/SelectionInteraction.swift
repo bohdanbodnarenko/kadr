@@ -187,13 +187,39 @@ public struct SelectionInteraction: Equatable, Sendable {
     public mutating func endMovingSelection() {
         guard isMovingSelection else { return }
         isMovingSelection = false
-        // Re-anchor so continuing the drag resizes from the rect's far corner rather
-        // than jumping back to where the drag originally started.
-        if let rect {
-            anchor = CGPoint(x: rect.minX, y: rect.minY)
+        // Re-anchor on the corner opposite the pointer, so continuing the drag resizes
+        // from where the rect now is instead of snapping it to its top-left (T-CAP-12).
+        if let rect, let pointer {
+            anchor = Self.corner(of: rect, opposite: pointer)
         }
         moveOrigin = nil
         moveRectOrigin = nil
+    }
+
+    /// A press inside a committed selection: drag it along, keeping its size.
+    ///
+    /// Unlike `begin(at:)` this keeps the rect, so a click that does not move is a no-op
+    /// rather than a reset — what confirm-selection mode needs (T-CAP-12).
+    public mutating func beginMove(at point: CGPoint) {
+        guard let rect, !rect.isEmpty else {
+            begin(at: point)
+            return
+        }
+        let point = clampToBounds(point)
+        pointer = point
+        anchor = rect.origin
+        phase = .dragging
+        isMovingSelection = true
+        moveOrigin = point
+        moveRectOrigin = rect.origin
+    }
+
+    /// The corner of `rect` farthest from `point`.
+    static func corner(of rect: CGRect, opposite point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: point.x >= rect.midX ? rect.minX : rect.maxX,
+            y: point.y >= rect.midY ? rect.minY : rect.maxY
+        )
     }
 
     private mutating func moveDuringDrag(to point: CGPoint) {

@@ -168,6 +168,63 @@ struct SelectionMoveTests {
     }
 }
 
+@Suite("Re-anchoring and moving a committed selection (T-CAP-12)")
+struct SelectionReanchorTests {
+    @Test("Releasing Space keeps the corner opposite the pointer", arguments: [
+        // Dragged up-left, so the pointer is the rect's top-left and the anchor bottom-right.
+        (CGPoint(x: 300, y: 300), CGPoint(x: 100, y: 100), CGPoint(x: 350, y: 350),
+         CGRect(x: 350, y: 350, width: 50, height: 50)),
+        // Dragged down-right: the anchor is the top-left, as before.
+        (CGPoint(x: 100, y: 100), CGPoint(x: 300, y: 300), CGPoint(x: 450, y: 450),
+         CGRect(x: 200, y: 200, width: 250, height: 250)),
+    ])
+    func oppositeCorner(start: CGPoint, end: CGPoint, resizeTo: CGPoint, expected: CGRect) {
+        var selection = interaction()
+        selection.begin(at: start)
+        selection.drag(to: end)
+        selection.beginMovingSelection()
+        selection.drag(to: CGPoint(x: end.x + 100, y: end.y + 100))
+        selection.endMovingSelection()
+        selection.drag(to: resizeTo)
+        #expect(selection.rect == expected)
+    }
+
+    @Test("A click inside a committed selection keeps it")
+    func clickInsideKeeps() {
+        var selection = interaction()
+        selection.begin(at: CGPoint(x: 100, y: 100))
+        selection.drag(to: CGPoint(x: 300, y: 200))
+        selection.end()
+        selection.beginMove(at: CGPoint(x: 150, y: 150))
+        selection.end()
+        #expect(selection.phase == .selected)
+        #expect(selection.rect == CGRect(x: 100, y: 100, width: 200, height: 100))
+    }
+
+    @Test("Dragging inside a committed selection moves it without resizing")
+    func dragInsideMoves() {
+        var selection = interaction()
+        selection.begin(at: CGPoint(x: 100, y: 100))
+        selection.drag(to: CGPoint(x: 300, y: 200))
+        selection.end()
+        selection.beginMove(at: CGPoint(x: 150, y: 150))
+        selection.drag(to: CGPoint(x: 170, y: 190))
+        selection.end()
+        #expect(selection.rect == CGRect(x: 120, y: 140, width: 200, height: 100))
+    }
+
+    @Test("The corner opposite a point", arguments: [
+        (CGPoint(x: 0, y: 0), CGPoint(x: 20, y: 20)),
+        (CGPoint(x: 20, y: 20), CGPoint(x: 10, y: 10)),
+        (CGPoint(x: 20, y: 0), CGPoint(x: 10, y: 20)),
+        (CGPoint(x: 0, y: 20), CGPoint(x: 20, y: 10)),
+    ])
+    func corner(point: CGPoint, expected: CGPoint) {
+        let rect = CGRect(x: 10, y: 10, width: 10, height: 10)
+        #expect(SelectionInteraction.corner(of: rect, opposite: point) == expected)
+    }
+}
+
 @Suite("Keyboard adjustment")
 struct SelectionKeyboardTests {
     private func selected() -> SelectionInteraction {

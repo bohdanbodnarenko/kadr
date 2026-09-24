@@ -251,6 +251,12 @@ final class SelectionOverlayView: NSView {
     // MARK: - Mouse
 
     override func mouseEntered(with event: NSEvent) {
+        // The keyboard follows the pointer: F, ⌘A, a typed size and the arrows all mean
+        // "this display", so this display's panel has to be key (T-CAP-2).
+        if let window, !window.isKeyWindow {
+            window.makeKey()
+        }
+        window?.makeFirstResponder(self)
         onBecameActive?()
     }
 
@@ -276,7 +282,8 @@ final class SelectionOverlayView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
-        if mode == .window {
+        // The eyedropper answers on mouse-up; a press starts no selection (T-CAP-1).
+        if mode == .window || isEyedropperMode {
             return
         }
 
@@ -289,8 +296,7 @@ final class SelectionOverlayView: NSView {
             }
             if rect.contains(point) {
                 sizeEntry.reset()
-                interaction.begin(at: point)
-                interaction.beginMovingSelection()
+                interaction.beginMove(at: point)
                 redraw()
                 return
             }
@@ -305,6 +311,12 @@ final class SelectionOverlayView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if isEyedropperMode {
+            // A drag while picking colours only moves the loupe; it never selects.
+            interaction.pointerMoved(to: point)
+            redraw()
+            return
+        }
         if mode == .area, let corner = activeHandle, let anchor = handleAnchor {
             interaction.setRect(resizedRect(from: corner, anchor: anchor, to: point))
             redraw()
@@ -324,6 +336,10 @@ final class SelectionOverlayView: NSView {
             guard let window = windowPick.hovered else { return }
             // ⌥ at click inverts the shadow setting for this capture (docs/03 §1.2).
             onCommitWindow?(window, event.modifierFlags.contains(.option))
+            return
+        }
+        if isEyedropperMode {
+            pickColor(at: convert(event.locationInWindow, from: nil))
             return
         }
 
@@ -424,6 +440,15 @@ final class SelectionOverlayView: NSView {
     func setPrecisionMode(_ enabled: Bool) {
         guard enabled != isPrecisionMode else { return }
         isPrecisionMode = enabled
+        redraw()
+    }
+
+    /// Where the pointer is before any mouse event arrives, in view points.
+    func seedPointer(at point: CGPoint) {
+        interaction.pointerMoved(to: point)
+        if mode == .window {
+            windowPick.pointerMoved(to: point)
+        }
         redraw()
     }
 
