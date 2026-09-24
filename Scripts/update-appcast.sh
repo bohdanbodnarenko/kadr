@@ -14,6 +14,10 @@ DMG=""
 SIGNATURE_LINE=""
 APPCAST="appcast.xml"
 REPO="kadr-app/kadr"
+TAG=""
+CHANNEL="stable"
+NOTES_LINK=""
+URL_PREFIX=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -23,20 +27,46 @@ while [ $# -gt 0 ]; do
         --signature-line) SIGNATURE_LINE="$2"; shift 2 ;;
         --appcast) APPCAST="$2"; shift 2 ;;
         --repo) REPO="$2"; shift 2 ;;
+        # The tag the DMG is published under; defaults to v<version>.
+        --tag) TAG="$2"; shift 2 ;;
+        # beta items are only offered to installs that opted in (UpdaterManager's
+        # allowedChannels). stable items carry no channel, which Sparkle offers to all.
+        --channel) CHANNEL="$2"; shift 2 ;;
+        --release-notes-link) NOTES_LINK="$2"; shift 2 ;;
+        # For a feed host other than GitHub releases: the DMG's URL is <prefix>/<name>.
+        --download-url-prefix) URL_PREFIX="$2"; shift 2 ;;
         *) echo "unknown argument: $1"; exit 2 ;;
     esac
 done
 
 [ -n "$VERSION" ] && [ -n "$BUILD" ] && [ -f "$DMG" ] || {
     echo "usage: update-appcast.sh --version X --build N --dmg path [--signature-line '…']"
+    echo "         [--tag vX-bN] [--channel beta|stable] [--release-notes-link URL]"
+    echo "         [--download-url-prefix URL] [--appcast path] [--repo owner/name]"
     exit 2
 }
+case "$CHANNEL" in beta|stable) ;; *) echo "--channel must be beta or stable"; exit 2 ;; esac
+[ -n "$TAG" ] || TAG="v$VERSION"
 
 # sign_update prints an attribute fragment; take the signature out of it.
 SIGNATURE=$(printf '%s' "$SIGNATURE_LINE" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
+# An item without a signature is one Sparkle refuses to install, so do not write one.
+[ -n "$SIGNATURE" ] || { echo "no sparkle:edSignature in --signature-line"; exit 1; }
 LENGTH=$(stat -f%z "$DMG")
 PUBDATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
-URL="https://github.com/$REPO/releases/download/v$VERSION/$(basename "$DMG")"
+if [ -n "$URL_PREFIX" ]; then
+    URL="${URL_PREFIX%/}/$(basename "$DMG")"
+else
+    URL="https://github.com/$REPO/releases/download/$TAG/$(basename "$DMG")"
+fi
+
+EXTRA=""
+if [ "$CHANNEL" = "beta" ]; then
+    EXTRA+=$'\n      <sparkle:channel>beta</sparkle:channel>'
+fi
+if [ -n "$NOTES_LINK" ]; then
+    EXTRA+=$'\n      <sparkle:releaseNotesLink>'"$NOTES_LINK"'</sparkle:releaseNotesLink>'
+fi
 
 ITEM=$(cat <<ITEMEOF
     <item>
@@ -44,7 +74,7 @@ ITEM=$(cat <<ITEMEOF
       <pubDate>$PUBDATE</pubDate>
       <sparkle:version>$BUILD</sparkle:version>
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>$EXTRA
       <enclosure url="$URL"
                  type="application/octet-stream"
                  sparkle:edSignature="$SIGNATURE"
@@ -66,4 +96,4 @@ with open(path, "w") as file:
     file.write(contents.replace(marker, marker + item + "\n", 1))
 PYEOF
 
-echo "added version $VERSION (build $BUILD) to $APPCAST"
+echo "added version $VERSION (build $BUILD, $CHANNEL) to $APPCAST"

@@ -50,8 +50,13 @@ if [ -n "$app" ] && [ -d "$app/Products/Applications" ]; then
 fi
 
 if [ -z "$app" ]; then
+    # An archive from an older commit is passed over for a current build product rather
+    # than failing the run: `make size-gate` rebuilds it when the real answer is wanted.
+    head_commit_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
     for candidate in build/Kadr.xcarchive/Products/Applications/Kadr.app; do
-        [ -d "$candidate" ] && app="$candidate" && is_archive=1 && break
+        [ -d "$candidate" ] || continue
+        [ "$(stat -f %m "$candidate/Contents/MacOS/Kadr" 2>/dev/null || echo 0)" -ge "$head_commit_time" ] || continue
+        app="$candidate" && is_archive=1 && break
     done
 fi
 
@@ -74,6 +79,19 @@ if [ -z "$app" ] || [ ! -d "$app" ]; then
     fi
     echo "• no Kadr.app found — size check skipped (build first, or pass a path)"
     exit 0
+fi
+
+# A product older than the checked-out commit measures some other tree: on 2026-09-24
+# this gate read a four-week-old archive and reported 2 MB of headroom nobody had checked
+# (docs/17 T-REL-8). A stale product fails; a missing one is still only skipped above.
+head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+binary="$app/Contents/MacOS/Kadr"
+[ -f "$binary" ] || binary="$app"
+product_time=$(stat -f %m "$binary" 2>/dev/null || echo 0)
+if [ "$product_time" -lt "$head_time" ]; then
+    printf '\033[0;31m✘ %s is older than HEAD — build first (`make build`, or `make size-gate`\n' "$app"
+    printf '  for the archive), or pass the path of a current product\033[0m\n'
+    exit 1
 fi
 
 raw_kb=$(du -sk "$app" | cut -f1)

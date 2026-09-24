@@ -185,6 +185,17 @@ if [ -z "$agent_binary" ]; then
         -path '*/Build/Products/*/Kadr.app/Contents/MacOS/Kadr' 2>/dev/null)
 fi
 
+# A product older than the checked-out commit describes some other tree. Grepping it
+# passed on 2026-09-24 against a build three days stale (docs/17 T-REL-8), so a stale
+# product fails rather than being checked; a missing one is still only skipped, so the
+# static CI job (which has no build) keeps running. Build first: `make build`.
+head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+if [ -n "$agent_binary" ] && [ "$agent_mtime" -lt "$head_time" ]; then
+    fail "the newest agent binary is older than HEAD — run \`make build\` first"
+    note "found $agent_binary"
+    agent_binary=""
+fi
+
 if [ -n "$agent_binary" ] && [ -f "$agent_binary" ]; then
     # Debug builds emit a stub `Kadr` that only links `Kadr.debug.dylib`. The frameworks
     # live on the dylib; grepping the stub would pass this denylist without proving anything.
