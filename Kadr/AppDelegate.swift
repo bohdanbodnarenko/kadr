@@ -141,7 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             perform: { [weak self] mode in self?.performAllInOne(mode) },
             pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
             performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
-            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false }
+            desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
+            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) }
         )
         hud.onShowingChanged = { [weak self] in
             self?.refreshStatusItemIcon()

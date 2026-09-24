@@ -103,7 +103,7 @@ struct AllInOneView: View {
 
     private var screenMenu: some View {
         Menu {
-            Button("Active display") { model.pick(.screen) }
+            screenTargetRow("Active Display", .activeDisplay)
             ForEach(RecordingDeviceCatalog.displays(), id: \.displayID) { display in
                 Button(display.name) {
                     model.onPicked()
@@ -111,19 +111,22 @@ struct AllInOneView: View {
                 }
             }
             Divider()
-            Button("All displays") {
-                model.settings.fullscreenTarget = .allDisplays
-                model.pick(.screen)
-            }
-            Button("All displays, stitched") {
-                model.settings.fullscreenTarget = .allDisplaysStitched
-                model.pick(.screen)
-            }
+            screenTargetRow("All Displays", .allDisplays)
+            screenTargetRow("All Displays, Stitched", .allDisplaysStitched)
         } label: {
             RecordingBarIcon(symbol: AllInOneMode.screen.symbol)
         }
         .recordingBarMenu(tooltip: AllInOneMode.screen.help, key: AllInOneMode.screen.keyCaption)
         .accessibilityLabel(AllInOneMode.screen.title)
+    }
+
+    /// One capture with this target. The checkmark marks the Settings default — which is
+    /// what the Screen button does — and picking a row never changes it (T-CAP-5).
+    private func screenTargetRow(_ title: String, _ target: FullscreenTarget) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { model.settings.fullscreenTarget == target },
+            set: { _ in model.pickScreen(target) }
+        ))
     }
 
     private func modeButton(_ mode: AllInOneMode) -> some View {

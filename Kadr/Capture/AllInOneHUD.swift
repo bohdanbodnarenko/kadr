@@ -19,15 +19,23 @@ final class AllInOneHUD {
     private var panel: NonActivatingPanel?
     private var hosting: NSHostingView<AllInOneView>?
     private let model: AllInOneModel
+    private let juggler: ActivationJuggler
+    /// Kadr holds activation while the island is up, so its letters work; this gives it
+    /// back when the island goes (T-CAP-3).
+    private var activation: TemporaryActivation?
 
     init(
         settings: AppSettings,
         perform: @escaping (AllInOneMode) -> Void,
         pickDisplay: @escaping (CGDirectDisplayID) -> Void = { _ in },
         performTool: @escaping (AllInOneTool) -> Void = { _ in },
-        desktopIconsHidden: @escaping () -> Bool = { false }
+        desktopIconsHidden: @escaping () -> Bool = { false },
+        captureScreen: @escaping (FullscreenTarget) -> Void = { _ in },
+        juggler: ActivationJuggler = .shared
     ) {
+        self.juggler = juggler
         model = AllInOneModel(settings: settings, perform: perform, pickDisplay: pickDisplay)
+        model.onCaptureScreen = captureScreen
         model.onTool = performTool
         model.desktopIconsHidden = desktopIconsHidden
     }
@@ -52,17 +60,28 @@ final class AllInOneHUD {
         }
     }
 
-    var frontmostBeforePresent: AppIdentity?
+    /// The app the user was in when the island opened: activation goes back to it, and
+    /// captures are named after it. Refreshed on every present, never Kadr (T-CAP-3).
+    private(set) var returnTarget: NSRunningApplication?
+
+    /// The app to name a capture after, read once by whatever the island started.
+    func takeFrontmostBeforePresent() -> AppIdentity? {
+        defer { returnTarget = nil }
+        return returnTarget.map { AppIdentity(name: $0.localizedName, bundleIdentifier: $0.bundleIdentifier) }
+    }
 
     /// - Parameter source: the recorder's bar in screen space, when the island is coming
     ///   back from it. The island fades in on that spot rather than jumping to its own.
     func present(morphingFrom source: NSRect? = nil) {
         model.onCancel = { [weak self] in self?.dismiss() }
-        model.onPicked = { [weak self] in self?.dismiss() }
+        model.onPicked = { [weak self] in self?.close(keepingTarget: true) }
         model.onHandOff = { [weak self] in self?.handOff() }
 
-        if frontmostBeforePresent == nil {
-            frontmostBeforePresent = AreaCaptureCoordinator.currentFrontmostApp()
+        // Every present, not only the first: a stale target is how files ended up named
+        // after an app the user had left long ago. Kadr frontmost (the island re-shown)
+        // keeps the one already held.
+        if let current = ActivationJuggler.returnTarget() {
+            returnTarget = current
         }
 
         if let panel {
@@ -113,12 +132,16 @@ final class AllInOneHUD {
     ///
     /// Activate first, then take key: Kadr is an accessory app, and a borderless
     /// non-activating panel asked to become key while the app is still inactive can be
-    /// refused — after which `NSApp.activate` hands key status back to whatever window was
-    /// last key, not to the island. The explicit `makeFirstResponder` is the other half:
-    /// the island is re-shown without SwiftUI's `onAppear` running again, so the hosting
-    /// view has to be put back in the responder chain by hand or the letters stay dead.
+    /// refused — after which activation hands key status back to whatever window was
+    /// last key, not to the island. The activation is temporary: it is handed back to the
+    /// user's app when the island closes. The explicit `makeFirstResponder` is the other
+    /// half: the island is re-shown without SwiftUI's `onAppear` running again, so the
+    /// hosting view has to be put back in the responder chain by hand or the letters stay
+    /// dead.
     private func takeKeyboard(_ panel: NSPanel) {
-        NSApp.activate(ignoringOtherApps: true)
+        if activation == nil {
+            activation = juggler.beginTemporaryActivation(returningTo: returnTarget)
+        }
         panel.makeKeyAndOrderFront(nil)
         if let content = panel.contentView {
             panel.makeFirstResponder(content)
@@ -147,7 +170,23 @@ final class AllInOneHUD {
         )
     }
 
+    /// Esc, the close button or the hotkey again: nothing was started, so the user goes
+    /// straight back to the app they were in.
     func dismiss() {
+        close(keepingTarget: false)
+    }
+
+    /// Closes the island and hands activation back.
+    ///
+    /// - Parameter keepingTarget: a mode was picked, so whatever it starts still needs to
+    ///   know which app to name the capture after. The overlay that may follow is
+    ///   non-activating, so Kadr does not need to stay active for it.
+    private func close(keepingTarget: Bool) {
+        activation?.end()
+        activation = nil
+        if !keepingTarget {
+            returnTarget = nil
+        }
         guard let panel else { return }
         onClosed?()
         CaptureExclusionRegistry.shared.unregister(panel)
@@ -186,6 +225,10 @@ final class AllInOneHUD {
     /// Only for Record. Every other mode freezes the screen next, and a panel still fading
     /// while the freeze is taken would be in the picture.
     private func handOff() {
+        // The recorder's panels take the keyboard next and need Kadr active for it, so
+        // activation is passed on rather than returned here (T-REC-6 owns that path).
+        activation?.abandon()
+        activation = nil
         guard let panel else { return }
         onClosed?()
         handOffFrame = Self.barFrame(inPanel: panel.frame)
@@ -214,9 +257,7 @@ final class AllInOneHUD {
 
     /// Bottom-centre of the pointer's screen, clear of the menu bar and most window chrome.
     private static func centeredFrame(for size: CGSize) -> NSRect {
-        let visible = (ActiveScreen.resolve()?.visibleFrame)
-            ?? (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
-            ?? .zero
+        let visible = ActiveScreen.resolve()?.visibleFrame ?? .zero
         let margin: CGFloat = 22
         let x = visible.midX - size.width / 2
         let y = visible.minY + margin
@@ -235,6 +276,8 @@ final class AllInOneModel {
     @ObservationIgnored var onHandOff: () -> Void = {}
     @ObservationIgnored var onPickDisplay: (CGDirectDisplayID) -> Void = { _ in }
     @ObservationIgnored var onTool: (AllInOneTool) -> Void = { _ in }
+    /// The Screen menu's rows: this capture's target, without touching Settings (T-CAP-5).
+    @ObservationIgnored var onCaptureScreen: (FullscreenTarget) -> Void = { _ in }
     @ObservationIgnored var desktopIconsHidden: () -> Bool = { false }
 
     init(
@@ -265,6 +308,13 @@ final class AllInOneModel {
     func use(_ tool: AllInOneTool) {
         onPicked()
         onTool(tool)
+    }
+
+    /// Captures the screen with an explicit target, for this capture only.
+    func pickScreen(_ target: FullscreenTarget) {
+        settings.lastAllInOneMode = AllInOneMode.screen.rawValue
+        onPicked()
+        onCaptureScreen(target)
     }
 
     func pickLast() {

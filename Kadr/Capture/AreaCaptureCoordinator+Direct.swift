@@ -17,8 +17,11 @@ extension AreaCaptureCoordinator {
     }
 
     /// Honours Settings → Capture → Fullscreen captures (docs/16 CAP-3).
-    func captureFullscreen() {
-        switch settings.fullscreenTarget {
+    ///
+    /// - Parameter target: this capture's target; nil follows the setting. The island's
+    ///   Screen menu passes one so a single capture never rewrites Settings (T-CAP-5).
+    func captureFullscreen(target: FullscreenTarget? = nil) {
+        switch target ?? settings.fullscreenTarget {
         case .activeDisplay:
             if let displayID = ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID {
                 captureDisplay(displayID)

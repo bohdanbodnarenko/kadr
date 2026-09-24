@@ -143,8 +143,7 @@ extension AppDelegate {
 
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
-        let frontmost = allInOne.frontmostBeforePresent
-        allInOne.frontmostBeforePresent = nil
+        let frontmost = allInOne.takeFrontmostBeforePresent()
         switch mode {
         case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
         case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
