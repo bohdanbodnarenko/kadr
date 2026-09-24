@@ -87,7 +87,15 @@ public struct SecretScanner: Sendable {
     )
 
     /// 13–19 digits, optional space or dash between them (how cards are printed).
-    private static let card = regex(#"\b(?:\d[ \-]?){13,19}\b"#, options: [])
+    ///
+    /// Bounded by "not a digit" rather than `\b` (docs/17 T-REL-8): OCR routinely hangs a
+    /// stray glyph on the end of a line — `5500000000000004ÍšÍš` — and a letter there is a
+    /// word character, so `\b` found no boundary and the card went unredacted.
+    private static let card = regex(#"(?<!\d)(?:\d[ \-]?){12,18}\d(?!\d)"#, options: [])
+
+    /// A run that could be a number read by OCR: digits, the glyphs OCR confuses with
+    /// them, and the separators cards are printed with.
+    private static let digitLikeRun = regex(#"[0-9OoDQIl|!ZzSsB][0-9OoDQIl|!ZzSsB \-]{11,}[0-9OoDQIl|!ZzSsB]"#, options: [])
 
     /// Country code + check digits + BBAN, optional spaces every four characters.
     private static let iban = regex(#"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b"#, options: [])
@@ -96,8 +104,11 @@ public struct SecretScanner: Sendable {
     /// `eyJ`. Character class is deliberately loose (`[^\s.]`) because screenshot OCR
     /// routinely substitutes lookalikes (`I`/`l`, Latin/`Cyrillic`) and the review strip
     /// is where the user confirms, not the detector.
+    ///
+    /// A single space inside a segment is tolerated too: OCR breaks long tokens at
+    /// lookalike glyphs (`IUz|1 Nils`), and the transform strips it again.
     private static let jwt = regex(
-        #"eyJ[^\s.]{8,}\.[^\s.]{8,}\.[^\s.]{8,}"#,
+        #"eyJ(?:[^\s.]| (?=[^\s.])){8,}\.(?:[^\s.]| (?=[^\s.])){8,}\.[^\s.]{8,}"#,
         options: []
     )
 
@@ -127,6 +138,15 @@ public struct SecretScanner: Sendable {
             + #"|github_pat_[A-Za-z0-9_]{20,}"#
             + #"|xox[baprs]-[A-Za-z0-9-]{10,}"#
             + #"|AIza[0-9A-Za-z\-_]{35})\b"#,
+        options: []
+    )
+
+    /// A known-prefix key that OCR split with one space (`sk_live_51 FakeTest…`). Only
+    /// when the part before the space is too short to be the whole key, so a key followed
+    /// by an ordinary word is not stretched over it.
+    private static let splitAPIKeyPrefix = regex(
+        #"\b((?:sk_(?:live|test)|rk_live|pk_(?:live|test))_[0-9A-Za-z]{1,15} [0-9A-Za-z]{8,}"#
+            + #"|gh[pousr]_[A-Za-z0-9]{1,19} [A-Za-z0-9]{8,})\b"#,
         options: []
     )
 
@@ -179,7 +199,10 @@ public struct SecretScanner: Sendable {
     }
 
     private static func findCards(in text: String) -> [SecretMatch] {
-        matchResults(card, in: text).compactMap { result in
+        // Matched on a copy where OCR's digit lookalikes are read as digits. The copy is
+        // the same length in UTF-16, so every range found in it is a range in `text`.
+        let text = digitized(text)
+        return matchResults(card, in: text).compactMap { result in
             let raw = (text as NSString).substring(with: result.range)
             let digits = raw.filter(\.isNumber)
             guard digits.count >= 13, digits.count <= 19, luhnIsValid(digits) else { return nil }
@@ -190,6 +213,81 @@ public struct SecretScanner: Sendable {
                 length: result.range.length
             )
         }
+    }
+
+    /// `text` with the glyphs OCR mistakes for digits — `O` for 0, `l` `I` `|` for 1,
+    /// `Z` for 2, `S` for 5, `B` for 8 — read as digits, but only inside runs that are
+    /// mostly digits already (docs/17 T-REL-8).
+    ///
+    /// Mostly-digits is the guard against reading words as numbers. A card number that
+    /// comes out of OCR as `4111 l111 1111 1111` is still a card, and still has to be
+    /// redacted: an auto-redaction that silently misses one is a privacy defect. Luhn,
+    /// checked afterwards, is what keeps a mis-read that is not a card from being one.
+    static func digitized(_ text: String) -> String {
+        let units = Array(text.utf16)
+        var output = units
+        let map: [UInt16: UInt16] = [
+            "O", "o", "D", "Q", "I", "l", "|", "!", "Z", "z", "S", "s", "B"
+        ].reduce(into: [:]) { result, glyph in
+            let digit: Character = switch glyph {
+            case "O", "o", "D", "Q": "0"
+            case "I", "l", "|", "!": "1"
+            case "Z", "z": "2"
+            case "S", "s": "5"
+            default: "8"
+            }
+            result[glyph.utf16.first ?? 0] = digit.utf16.first ?? 0
+        }
+        for result in matchResults(digitLikeRun, in: text) {
+            let range = result.range
+            let run = units[range.location ..< range.location + range.length]
+            let digits = run.count(where: { (48 ... 57).contains($0) })
+            let glyphs = run.count(where: { map[$0] != nil })
+            // At least ten real digits, and the lookalikes a small minority of them.
+            guard digits >= 10, glyphs * 4 <= digits else { continue }
+            mapGroups(in: range, units: units, into: &output, using: map)
+        }
+        return String(decoding: output, as: UTF16.self)
+    }
+
+    /// Maps lookalikes group by group (a group is what sits between spaces and dashes).
+    ///
+    /// A group is read as digits only if it has at least as many real digits as
+    /// lookalikes, and does not run on into a word outside the run — so the `s` of
+    /// `4111… suffix` stays a letter.
+    private static func mapGroups(
+        in range: NSRange,
+        units: [UInt16],
+        into output: inout [UInt16],
+        using map: [UInt16: UInt16]
+    ) {
+        let separators: Set<UInt16> = [32, 45]
+        let end = range.location + range.length
+        var start = range.location
+        while start < end {
+            var stop = start
+            while stop < end, !separators.contains(units[stop]) {
+                stop += 1
+            }
+            let group = units[start ..< stop]
+            let digits = group.count { (48 ... 57).contains($0) }
+            let glyphs = group.count { map[$0] != nil }
+            let before = start > 0 ? units[start - 1] : 32
+            let after = stop < units.count ? units[stop] : 32
+            let touchesWord = isLetter(before) || isLetter(after)
+            if digits > 0, digits >= glyphs, !touchesWord {
+                for index in start ..< stop {
+                    if let digit = map[units[index]] {
+                        output[index] = digit
+                    }
+                }
+            }
+            start = stop + 1
+        }
+    }
+
+    private static func isLetter(_ unit: UInt16) -> Bool {
+        (65 ... 90).contains(unit) || (97 ... 122).contains(unit)
     }
 
     private static func findIBANs(in text: String) -> [SecretMatch] {
@@ -208,6 +306,7 @@ public struct SecretScanner: Sendable {
 
     private static func findAPIKeys(in text: String) -> [SecretMatch] {
         var found = find(pattern: apiKeyPrefix, kind: .apiKey, in: text)
+        found += find(pattern: splitAPIKeyPrefix, kind: .apiKey, in: text) { $0.filter { !$0.isWhitespace } }
         for result in matchResults(apiKeyEntropy, in: text) {
             let raw = (text as NSString).substring(with: result.range)
             guard looksLikeHighEntropyKey(raw) else { continue }

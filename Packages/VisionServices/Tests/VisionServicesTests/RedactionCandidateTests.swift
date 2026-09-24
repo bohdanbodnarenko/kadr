@@ -127,9 +127,16 @@ private func looselyContains(_ haystack: String, _ needle: String) -> Bool {
 
 /// JWTs are the OCR pain case: Vision substitutes lookalikes. A candidate that is still
 /// a three-segment `eyJ…` token counts as the seeded JWT at review.
+///
+/// Keys too (docs/17 T-REL-8): macOS 27's Vision reads the `7` of `AKIAIOSFODNN7EXAMPLE`
+/// as `Z`. The redaction box is what matters, and it covers the same glyphs, so a
+/// candidate of the same kind, prefix and length is the seeded key.
 private func reviewMatch(_ haystack: String, _ needle: String, kind: SecretKind) -> Bool {
     if looselyContains(haystack, needle) {
         return true
+    }
+    if kind == .apiKey {
+        return haystack.prefix(8) == needle.prefix(8) && abs(haystack.count - needle.count) <= 1
     }
     return kind == .jwt && haystack.hasPrefix("eyJ") && haystack.filter { $0 == "." }.count >= 2
 }
