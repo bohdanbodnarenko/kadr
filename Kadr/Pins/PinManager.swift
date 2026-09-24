@@ -66,7 +66,7 @@ final class PinManager {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     ) -> Bool {
-        let screen = NSScreen.main ?? NSScreen.screens.first
+        let screen = ActiveScreen.resolve()
         let scale = screen?.backingScaleFactor ?? 2
         // A restored pin is built at its remembered frame, so the first decode is already
         // the right size rather than one texture for the default size and another 120 ms

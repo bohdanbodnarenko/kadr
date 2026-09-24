@@ -65,7 +65,7 @@ final class TeleprompterComposer {
     }
 
     private func origin(for size: CGSize, above barFrame: NSRect?) -> CGPoint {
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+        let visible = ActiveScreen.resolve()?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 800, height: 600)
         let x: CGFloat
         let y: CGFloat

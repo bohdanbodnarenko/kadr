@@ -422,7 +422,7 @@ extension QuickAccessManager {
                     text: recognition.text,
                     codes: recognition.codes,
                     table: recognition.table,
-                    on: screen ?? NSScreen.main
+                    on: screen ?? ActiveScreen.resolve()
                 )
             } catch {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")

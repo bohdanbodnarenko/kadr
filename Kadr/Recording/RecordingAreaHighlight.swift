@@ -37,7 +37,7 @@ final class RecordingAreaHighlight {
     func show(region: DisplayRect, displayID: CGDirectDisplayID) {
         guard let screen = NSScreen.screens.first(where: {
             ScreenDescriptor($0)?.displayID == displayID
-        }) ?? NSScreen.main else {
+        }) ?? ActiveScreen.resolve() else {
             return
         }
         let hole = Self.holeRect(region, on: screen)

@@ -30,7 +30,7 @@ extension AreaCaptureCoordinator {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         logger.info("Picked \(pick.text, privacy: .public)")
-        toast.show(text: text, codes: [], on: NSScreen.main)
+        toast.show(text: text, codes: [], on: ActiveScreen.resolve())
         automation.report(.text(text))
     }
 }

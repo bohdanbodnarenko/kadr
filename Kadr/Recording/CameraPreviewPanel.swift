@@ -110,7 +110,7 @@ final class CameraPreviewPanel {
         )
         guard let panel else { return }
         var frame = currentFrame()
-        if let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
+        if let visible = panel.screen?.visibleFrame ?? ActiveScreen.resolve()?.visibleFrame {
             frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
             frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
             Self.savedOrigin = frame.origin
@@ -135,7 +135,7 @@ final class CameraPreviewPanel {
 
     private func currentFrame() -> CGRect {
         if Self.fillsDisplay {
-            return (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+            return ActiveScreen.resolve()?.visibleFrame
                 ?? CGRect(x: 0, y: 0, width: 800, height: 600)
         }
         let diameter = Self.savedDiameter
@@ -143,7 +143,7 @@ final class CameraPreviewPanel {
     }
 
     private func origin(for diameter: CGFloat) -> CGPoint {
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+        let visible = ActiveScreen.resolve()?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 800, height: 600)
         let fallback = CGPoint(
             x: visible.maxX - diameter - Self.margin,

@@ -74,7 +74,7 @@ enum WindowBackdropApplier {
         let screen = NSScreen.screens.first { screen in
             guard let displayID else { return false }
             return Self.displayID(of: screen) == displayID
-        } ?? NSScreen.main
+        } ?? ActiveScreen.resolve()
         guard let screen, let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }
         return url.path
     }

@@ -67,7 +67,7 @@ final class CaptureRegionStage {
         dim.show(region: region, displayID: displayID)
 
         let hole = region.inScreenSpace(GlobalCoordinateSpace.current).cgRect
-        let screen = NSScreen.screens.first { $0.frame.intersects(hole) } ?? NSScreen.main
+        let screen = NSScreen.screens.first { $0.frame.intersects(hole) } ?? ActiveScreen.resolve()
         let scale = screen?.backingScaleFactor ?? 2
         let view = CaptureRegionStageView(
             purpose: purpose,

@@ -164,7 +164,7 @@ enum RecordingCrashRecovery {
               let size = await VideoPosterFrame.pixelSize(of: session.screenURL)
         else { return false }
         let existing = SessionDocument(session: session).manifest()
-        let scale = existing?.scale ?? NSScreen.main?.backingScaleFactor ?? 2
+        let scale = existing?.scale ?? ActiveScreen.resolve()?.backingScaleFactor ?? 2
         do {
             try SessionDocument(session: session).write(CaptureManifest(
                 pixelSize: CGSize(width: size.width, height: size.height),

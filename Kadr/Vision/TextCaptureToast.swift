@@ -32,7 +32,7 @@ final class TextCaptureToast {
     ) {
         dismiss()
 
-        let screen = screen ?? NSScreen.main ?? NSScreen.screens.first
+        let screen = screen ?? ActiveScreen.resolve()
         guard let area = screen?.visibleFrame else { return }
 
         // The width is fixed on the SwiftUI view, not on the panel, so `fittingSize` is the

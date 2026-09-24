@@ -343,7 +343,7 @@ final class RecordingControlBar {
         }
 
         let frame = if model.docksToNotch {
-            notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+            notchFrame(on: RecordingNotchScreen.notchScreen ?? ActiveScreen.resolve())
         } else if let entranceOrigin {
             NSRect(origin: entranceOrigin, size: Self.panelSize)
         } else {
@@ -444,7 +444,7 @@ final class RecordingControlBar {
     }
 
     private func floatingFrame() -> NSRect {
-        let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+        let visible = ActiveScreen.resolve()?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = Self.savedOrigin ?? Self.defaultOrigin(in: visible)
         let barWidth = model.barFrameInPanel.width > 0 ? model.barFrameInPanel.width : Self.estimatedBarWidth
@@ -456,7 +456,7 @@ final class RecordingControlBar {
 
     private func placeNotchPanel() {
         guard let panel, let hosting else { return }
-        let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? NSScreen.main)
+        let frame = notchFrame(on: RecordingNotchScreen.notchScreen ?? ActiveScreen.resolve())
         // Re-setting the frame while the island is springing leaves a delayed ghost.
         guard !panel.frame.equalTo(frame) else { return }
         panel.setFrame(frame, display: false)

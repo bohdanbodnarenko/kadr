@@ -96,7 +96,7 @@ extension RecordingCoordinator {
         guard let displayID,
               let screen = screens.first(where: { $0.displayID == displayID })
         else {
-            return NSScreen.main?.backingScaleFactor ?? 2
+            return ActiveScreen.resolve()?.backingScaleFactor ?? 2
         }
         return screen.backingScaleFactor
     }

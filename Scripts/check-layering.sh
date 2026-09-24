@@ -146,6 +146,55 @@ else
     pass "all screen capture goes through ScreenCaptureKit"
 fi
 
+# ---------------------------------------------------------------- B4. one screen resolver
+#
+# `NSScreen.main` is the screen with the key window, not the one the user is looking at:
+# on a second display it puts cards, toasts and HUDs on the laptop (docs/16 X-5, docs/17
+# §5 theme 5). `ActiveScreen` is the one way the agent picks a screen; it alone may fall
+# back to `NSScreen.main`. The editor is a regular app with its own windows and is not in
+# scope.
+screen_hits=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    case "$file" in
+        Kadr/UX/ActiveScreen.swift) continue ;;
+    esac
+    hit=$(grep -nE 'NSScreen\.main\b' "$file" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*(//|\*|/\*)')
+    [ -n "$hit" ] && screen_hits="${screen_hits}${file}: ${hit}"$'\n'
+done <<< "$(find Kadr -name '*.swift' 2>/dev/null | sort)"
+
+if [ -n "$screen_hits" ]; then
+    fail "NSScreen.main outside ActiveScreen — use ActiveScreen.resolve(displayID:)"
+    printf '%s' "$screen_hits" | sed 's/^/    /'
+else
+    pass "the agent picks screens only through ActiveScreen"
+fi
+
+# ---------------------------------------------------------------- B5. one activation policy
+#
+# A bare `NSApp.activate` in the agent takes focus with nothing to give it back: the user's
+# app is left inactive and the next keystroke beeps (docs/17 T-CAP-3, §5 theme 1).
+# `ActivationJuggler` owns activation — `beginRegularWindow` for real windows,
+# `withTemporaryActivation(returningTo:)` for alerts, panels and the island.
+#
+# The files below predate the rule and belong to work still in flight (T-REC-6, T-OUT-11,
+# the shell). Remove a line when its file is converted; never add one.
+ACTIVATION_GRANDFATHERED='^(Kadr/AppDelegate\+Termination\.swift|Kadr/Capture/CaptureRegionStage\.swift|Kadr/Recording/RecordingCrashRecovery\.swift|Kadr/Recording/RecordingFailureNotice\.swift|Kadr/QuickAccess/QuickAccessManager\+Actions\.swift|Kadr/QuickAccess/QuickAccessManager\+Save\.swift|Kadr/QuickAccess/QuickLookPresenter\.swift|Kadr/Onboarding/PermissionRecovery\.swift)$'
+activation_hits=""
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    printf '%s\n' "$file" | grep -qE "$ACTIVATION_GRANDFATHERED" && continue
+    hit=$(grep -nE 'NSApp(lication\.shared)?\.activate\(' "$file" 2>/dev/null | grep -vE '^[0-9]+:[[:space:]]*(//|\*|/\*)')
+    [ -n "$hit" ] && activation_hits="${activation_hits}${file}: ${hit}"$'\n'
+done <<< "$(find Kadr -name '*.swift' 2>/dev/null | sort)"
+
+if [ -n "$activation_hits" ]; then
+    fail "bare NSApp.activate in the agent — go through ActivationJuggler"
+    printf '%s' "$activation_hits" | sed 's/^/    /'
+else
+    pass "agent activation goes through ActivationJuggler"
+fi
+
 # ---------------------------------------------------------------- B3. pure packages
 PURE_PACKAGES="Shared AnnotationModel"
 UI_FRAMEWORKS='^import (AppKit|SwiftUI|UIKit|Cocoa)$'

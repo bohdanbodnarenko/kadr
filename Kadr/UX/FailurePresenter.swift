@@ -21,7 +21,7 @@ enum FailurePresenter {
         let size = hosting.fittingSize
         hosting.frame = NSRect(origin: .zero, size: size)
 
-        let screen = ActiveScreen.resolve() ?? NSScreen.main ?? NSScreen.screens.first
+        let screen = ActiveScreen.resolve()
         let visible = screen?.visibleFrame ?? .zero
         let origin = CGPoint(
             x: visible.midX - size.width / 2,

@@ -110,7 +110,7 @@ final class TeleprompterPanel: NonActivatingPanel {
             setFrame(savedFrame, display: false)
             return
         }
-        guard let screen = ActiveScreen.resolve() ?? NSScreen.main else { return }
+        guard let screen = ActiveScreen.resolve() else { return }
         let size = NSSize(width: min(760, screen.visibleFrame.width - 80), height: 220)
         setFrame(
             NSRect(
