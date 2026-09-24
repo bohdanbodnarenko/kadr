@@ -343,7 +343,7 @@ final class RecordingCoordinator {
             recordsCamera: settings.recordingShowsWebcam && !camera.isEmpty,
             cameraDeviceID: camera,
             pointConverter: converter,
-            pointPixelScale: Self.pointPixelScale(for: target),
+            pointPixelScale: Self.pointPixelScale(for: target, windowDisplay: windowHighlightDisplayID),
             topInset: Self.topInset(for: target)
         )
         observeClock()

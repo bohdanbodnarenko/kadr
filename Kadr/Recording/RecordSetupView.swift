@@ -317,20 +317,12 @@ struct RecordSetupView: View {
                 } label: {
                     microphoneLabel("Off", selected: !model.settings.recordsMicrophone)
                 }
-                if !model.microphones.isEmpty {
-                    Divider()
-                    ForEach(model.microphones) { device in
-                        Button {
-                            model.settings.recordingMicrophoneDeviceID = device.uniqueID
-                            model.requestMicrophoneEnabled(true)
-                        } label: {
-                            microphoneLabel(
-                                device.localizedName,
-                                selected: model.settings.recordsMicrophone
-                                    && model.settings.recordingMicrophoneDeviceID == device.uniqueID
-                            )
-                        }
-                    }
+                Divider()
+                // Follows whatever macOS uses for input, including a headset plugged in
+                // later; an empty id is what the engine reads as the default (T-REC-11).
+                microphoneChoice(String(localized: "System Default"), deviceID: "")
+                ForEach(model.microphones) { device in
+                    microphoneChoice(device.localizedName, deviceID: device.uniqueID)
                 }
             } label: {
                 RecordingBarIcon(
@@ -384,5 +376,21 @@ struct RecordSetupView: View {
 
     private func timerTitle(_ seconds: Int) -> String {
         seconds == 0 ? KadrText.string("None") : KadrPlural.seconds(seconds)
+    }
+}
+
+private extension RecordSetupView {
+    /// One row of the microphone menu: picking it turns the microphone on with that input.
+    func microphoneChoice(_ title: String, deviceID: String) -> some View {
+        Button {
+            model.settings.recordingMicrophoneDeviceID = deviceID
+            model.requestMicrophoneEnabled(true)
+        } label: {
+            microphoneLabel(
+                title,
+                selected: model.settings.recordsMicrophone
+                    && model.settings.recordingMicrophoneDeviceID == deviceID
+            )
+        }
     }
 }

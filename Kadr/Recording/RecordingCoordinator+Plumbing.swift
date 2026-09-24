@@ -18,8 +18,10 @@ extension RecordingCoordinator {
     /// Counted like every other capture: two recordings stopped inside the same second
     /// used to resolve to the same name, and the second overwrote the first (docs/07 M6).
     func destinationURL() -> URL {
-        let template = FilenameTemplate("Kadr recording {date} {time}")
-        let context = FilenameContext(applicationName: "Screen", date: Date())
+        // The user's own template, as every other capture uses (docs/03 §8.3). `{app}` names
+        // what kind of capture this is: the recorded app is not known for a screen or area.
+        let template = FilenameTemplate(settings.filenameTemplate)
+        let context = FilenameContext(applicationName: "Screen Recording", date: Date())
         let folder = settings.saveFolder
 
         if let url = try? CaptureFileWriter().availableURL(

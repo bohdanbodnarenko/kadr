@@ -82,16 +82,19 @@ extension RecordingCoordinator {
         return screen.safeAreaInsets.top * screen.backingScaleFactor
     }
 
-    static func pointPixelScale(for target: RecordingTarget) -> CGFloat {
+    /// - Parameter windowDisplay: for a window, the display it was picked on.
+    static func pointPixelScale(
+        for target: RecordingTarget,
+        windowDisplay: CGDirectDisplayID? = nil
+    ) -> CGFloat {
         let screens = NSScreen.screens.compactMap(ScreenDescriptor.init)
         let displayID: CGDirectDisplayID? = switch target {
         case let .display(id): id
         case let .region(_, id): id
-        // A window recording is captured at the scale of whatever display it is on, and
-        // SCK reports that per frame; the main display is the best answer available here
-        // and is the right one whenever the window has not been dragged to a second screen
-        // with a different density.
-        case .window: CGMainDisplayID()
+        // A window recording is captured at the scale of whatever display it is on. The
+        // display it was picked on is the answer until it is dragged elsewhere; the main
+        // display was wrong for any window on a second screen of another density (REC-11).
+        case .window: windowDisplay ?? CGMainDisplayID()
         }
         guard let displayID,
               let screen = screens.first(where: { $0.displayID == displayID })

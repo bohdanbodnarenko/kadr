@@ -69,6 +69,12 @@ extension RecordingCoordinator {
         // ones the display sent.
         guard !currentOptions.recordsHDR else {
             logger.info("HDR recording: overlays are left to the studio rather than baked in")
+            if wantsAny, startNotice == nil {
+                // Said, not only logged: the user switched these on (docs/17 T-REC-11).
+                startNotice = capturesStudioSession
+                    ? String(localized: "HDR: overlays are added in the studio, not the file.")
+                    : String(localized: "HDR recordings don't include overlays.")
+            }
             Task { await engine.setOverlayProvider(nil) }
             return
         }

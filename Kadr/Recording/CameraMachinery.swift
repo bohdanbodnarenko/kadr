@@ -13,10 +13,12 @@ import Shared
 /// the picture for the rest of the recording.
 final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
-    /// OS-required handler queue (CLAUDE.md rule 5): `startRunning`/`stopRunning` block, and
-    /// AVFoundation asks for them off the main thread on one serial queue.
-    private let sessionQueue = DispatchQueue(label: "app.kadr.recording.camera-session")
     /// OS-required handler queue (CLAUDE.md rule 5): `setSampleBufferDelegate(_:queue:)`.
+    ///
+    /// The only queue this type has. The blocking `startRunning`/`stopRunning` run on it
+    /// too, as `WebcamCapture`'s do: a second queue just for them was one more than the
+    /// rule allows (docs/17 T-REC-11), and nothing is lost — no frame arrives before the
+    /// session runs, and one that is queued behind `stopRunning` was going to be dropped.
     ///
     /// Also the writer's queue. Every piece of writer state below is touched only here: the
     /// delegate appends synchronously on it, and the pause/resume/finish commands hop onto
@@ -80,7 +82,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         }
         session.commitConfiguration()
 
-        sessionQueue.async { [self] in
+        videoQueue.async { [self] in
             session.startRunning()
         }
         return true
@@ -116,7 +118,12 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         writer.add(video)
         guard writer.startWriting() else { return false }
 
-        videoQueue.sync {
+        lock.lock()
+        firstFrameUptime = nil
+        lock.unlock()
+        // Async, not sync: the queue may be inside a blocking `startRunning`, and the main
+        // thread must not wait that out. Every command after this one is queued behind it.
+        videoQueue.async { [self] in
             self.writer = writer
             writerInput = video
             outputURL = url
@@ -127,9 +134,6 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
             pauseOffset = .zero
             resumeNeedsOffset = false
             isWriting = true
-            lock.lock()
-            firstFrameUptime = nil
-            lock.unlock()
         }
         return true
     }
@@ -257,7 +261,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     }
 
     private func stopSessionNow() {
-        sessionQueue.async { [self] in
+        videoQueue.async { [self] in
             if session.isRunning {
                 session.stopRunning()
             }
