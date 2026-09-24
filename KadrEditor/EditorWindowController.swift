@@ -23,7 +23,11 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         }
     }
 
-    let fileURL: URL
+    /// The file this window represents. Rebinds after a save or Save As (T-ED-1).
+    var documentURL: URL
+    /// Where ⌘S writes once the user has picked a destination with Save As; until then the
+    /// targets are planned from `documentURL` and the agent's settings.
+    var chosenSaveTargets: EditorSaveTargets?
     let baseImage: CGImage
     /// The immutable capture as PNG, worked out once and off the main actor, so neither
     /// opening the window nor autosave re-encodes a 5K image (docs/10 R2.6).
@@ -62,14 +66,14 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
     var onClose: (() -> Void)?
 
-    init(fileURL: URL) throws {
-        self.fileURL = fileURL
+    init(fileURL documentURL: URL) throws {
+        self.documentURL = documentURL
 
         // `.kadr` carries its own annotations; anything else is a fresh capture.
-        if fileURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
-            let contents = try KadrDocumentFile.read(from: fileURL)
+        if documentURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+            let contents = try KadrDocumentFile.read(from: documentURL)
             guard let image = Self.decodeImage(from: contents.baseImagePNG) else {
-                throw OpenError.unreadableImage(fileURL)
+                throw OpenError.unreadableImage(documentURL)
             }
             baseImage = image
             basePNG = BaseImagePNG(image: image, png: contents.baseImagePNG)
@@ -81,11 +85,11 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             // Read once: decoded from these bytes, and kept as the base PNG when that is
             // what they already are. Kept in memory rather than mapped, because saving a
             // flattened image may overwrite this very file.
-            guard let bytes = try? Data(contentsOf: fileURL),
+            guard let bytes = try? Data(contentsOf: documentURL),
                   let source = CGImageSourceCreateWithData(bytes as CFData, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
             else {
-                throw OpenError.unreadableImage(fileURL)
+                throw OpenError.unreadableImage(documentURL)
             }
             baseImage = image
             basePNG = BaseImagePNG(image: image, png: BaseImagePNG.isPNG(source) ? bytes : nil)
@@ -170,9 +174,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             backing: .buffered,
             defer: false
         )
-        window.title = fileURL.lastPathComponent
+        window.title = documentURL.lastPathComponent
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
-        window.representedURL = fileURL
+        window.representedURL = documentURL
         window.isDocumentEdited = model.hasUnsavedChanges
         window.contentView = hosting
         window.delegate = self
@@ -208,7 +212,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         guard !isClosingConfirmed, model.hasUnsavedChanges else { return true }
 
         let alert = NSAlert()
-        alert.messageText = "Save your changes to “\(fileURL.lastPathComponent)”?"
+        alert.messageText = "Save your changes to “\(documentURL.lastPathComponent)”?"
         alert.informativeText = "Save writes the flattened image and a project file so the "
             + "annotations stay editable."
         alert.addButton(withTitle: "Save")
@@ -224,7 +228,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             case .alertFirstButtonReturn:
                 saveFlattenedAndClose(sender)
             case .alertSecondButtonReturn:
-                autosave.discard(for: fileURL)
+                autosave.discard(for: documentURL)
                 isClosingConfirmed = true
                 sender.close()
             default:
@@ -337,6 +341,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                     return
                 }
                 model.requestCopyToast()
+            case .save where editsImportedCopy:
+                presentSaveAsSheet(for: image)
+                return
             case .save:
                 try save(image)
             case .saveAs:

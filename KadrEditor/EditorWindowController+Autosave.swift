@@ -16,14 +16,14 @@ extension EditorWindowController {
 
     /// Offers work a previous session left behind — a crash, a force quit, a power cut.
     func offerRecoveryIfAny() {
-        guard let window, let recovered = autosave.read(for: fileURL) else { return }
+        guard let window, let recovered = autosave.read(for: documentURL) else { return }
         guard recovered.document.commands != model.document.commands else {
-            autosave.discard(for: fileURL)
+            autosave.discard(for: documentURL)
             return
         }
 
         let alert = NSAlert()
-        alert.messageText = "Kadr has unsaved changes to “\(fileURL.lastPathComponent)”."
+        alert.messageText = "Kadr has unsaved changes to “\(documentURL.lastPathComponent)”."
         alert.informativeText = "The editor closed before these annotations were saved."
         alert.addButton(withTitle: "Restore")
         alert.addButton(withTitle: "Discard")
@@ -40,7 +40,7 @@ extension EditorWindowController {
                 }
                 logger.info("Restored autosaved annotations")
             } else {
-                autosave.discard(for: fileURL)
+                autosave.discard(for: documentURL)
             }
         }
     }
@@ -115,7 +115,7 @@ extension EditorWindowController {
         guard unsaved else {
             autosaveTask = nil
             if autosaveMayExist {
-                autosave.discard(for: fileURL)
+                autosave.discard(for: documentURL)
                 autosaveMayExist = false
             }
             return
@@ -132,7 +132,7 @@ extension EditorWindowController {
     func writeAutosave(synchronously: Bool = false) {
         let document = model.document
         let basePNG = basePNG
-        let snapshotURL = fileURL
+        let snapshotURL = documentURL
         let snapshotAutosave = autosave
         let snapshotLogger = logger
         autosaveMayExist = true

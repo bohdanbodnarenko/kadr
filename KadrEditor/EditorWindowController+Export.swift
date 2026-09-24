@@ -16,31 +16,47 @@ extension EditorWindowController {
     /// docs/06 M24). If the agent is not running the file is still written — the save is
     /// the promise, the library entry is the convenience.
     func saveProject() {
-        let destination = fileURL
+        let destination = documentURL
             .deletingPathExtension()
             .appendingPathExtension(KadrDocumentFile.fileExtension)
         do {
-            try writeProject(to: destination, reveal: true, addToHistory: true)
+            try writeProject(to: destination, addToHistory: true)
+            rebind(to: destination)
             logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
         } catch {
+            model.failExport(.save, message: error.localizedDescription)
             logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    func writeProject(to destination: URL, reveal: Bool = true, addToHistory: Bool = true) throws {
+    /// Writes the project. Never brings Finder forward: a save is the silent write
+    /// (docs/03:171); only Show in Finder reveals (T-ED-1).
+    func writeProject(to destination: URL, addToHistory: Bool = true) throws {
         try KadrDocumentFile.write(
             basePNG.contents(for: model.document),
             to: destination
         )
-        model.markSaved()
-        autosave.discard(for: fileURL)
-        window?.isDocumentEdited = false
+        markClean()
         if addToHistory {
             addToLibrary(destination)
         }
-        if reveal {
-            NSWorkspace.shared.activateFileViewerSelecting([destination])
-        }
+    }
+
+    /// The document matches what is on disk.
+    func markClean() {
+        model.markSaved()
+        autosave.discard(for: documentURL)
+        window?.isDocumentEdited = false
+    }
+
+    /// Points the window, its title and its proxy icon at `url`, so the next ⌘S, the
+    /// title bar and a drag of the proxy icon all mean the file just written (T-ED-1).
+    func rebind(to url: URL) {
+        guard url != documentURL else { return }
+        autosave.discard(for: documentURL)
+        documentURL = url
+        window?.setTitleWithRepresentedFilename(url.path)
+        window?.representedURL = url
     }
 
     func addToLibrary(_ url: URL) {
@@ -49,7 +65,14 @@ extension EditorWindowController {
         components.host = "add-to-history"
         components.queryItems = [URLQueryItem(name: "path", value: url.path)]
         guard let target = components.url else { return }
-        NSWorkspace.shared.open(target)
+        Self.openInBackground(target)
+    }
+
+    /// Hands a `kadr://` request to the agent without bringing anything forward.
+    static func openInBackground(_ url: URL) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        NSWorkspace.shared.open(url, configuration: configuration)
     }
 
     @discardableResult
@@ -63,39 +86,57 @@ extension EditorWindowController {
         return true
     }
 
-    func save(_ image: CGImage) throws {
-        let previousHash = Self.fileHash(at: fileURL)
-        let writer = CaptureFileWriter()
-        let directory = fileURL.deletingLastPathComponent()
-        let stem = EditorCanvasPreferences.flattenedSaveStem(
-            for: fileURL,
-            keepOriginal: Self.agentKeepsOriginalWhenAnnotating
-        )
+    /// Whether this window edits a file the editor copied in from outside, which lives in
+    /// Kadr's hidden imports folder. ⌘S there goes to Save As, so the result lands
+    /// somewhere the user can find it (T-ED-9).
+    var editsImportedCopy: Bool {
+        documentURL.standardizedFileURL.deletingLastPathComponent().path
+            == CaptureImporter.importsDirectory.standardizedFileURL.path
+    }
 
-        let url: URL
-        if Self.agentKeepsOriginalWhenAnnotating {
-            url = try writer.write(
-                image,
-                to: directory,
-                template: FilenameTemplate(stem),
-                options: exportEncodingOptions
-            )
-        } else {
-            var options = exportEncodingOptions
-            options.format = ImageFormat(fileExtension: fileURL.pathExtension) ?? .png
-            url = fileURL
-            try writer.write(image, to: url, options: options)
+    /// Where ⌘S writes now.
+    var saveTargets: EditorSaveTargets {
+        chosenSaveTargets ?? EditorSaveTargets.plan(
+            document: documentURL,
+            keepOriginal: Self.agentKeepsOriginalWhenAnnotating,
+            writesProject: EditorCanvasPreferences.writesSidecarOnSave()
+        )
+    }
+
+    /// ⌘S: the flattened image and its project, the same pair every time (T-ED-1).
+    func save(_ image: CGImage) throws {
+        let targets = saveTargets
+        let original = capturedImageURL ?? targets.flattened
+        let previousHash = Self.fileHash(at: targets.flattened)
+
+        try write(image, to: targets.flattened)
+        if let project = targets.project {
+            try writeProject(to: project, addToHistory: false)
         }
-        if EditorCanvasPreferences.writesSidecarOnSave() {
-            let sidecar = url.deletingPathExtension().appendingPathExtension(KadrDocumentFile.fileExtension)
-            try writeProject(to: sidecar, reveal: false, addToHistory: false)
+        markClean()
+        rebind(to: targets.document)
+        logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .public)")
+        CaptureSavedNotice.post(.init(original: original, saved: targets.flattened, previousHash: previousHash))
+    }
+
+    /// Encodes in the format the destination's extension names.
+    func write(_ image: CGImage, to url: URL) throws {
+        var options = exportEncodingOptions
+        options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
+        try CaptureFileWriter().write(image, to: url, options: options)
+    }
+
+    /// The capture image the card and History know this document by: the file itself, or
+    /// the image beside a project.
+    var capturedImageURL: URL? {
+        guard documentURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension else {
+            return documentURL
         }
-        logger.info("Saved \(url.lastPathComponent, privacy: .public)")
-        model.markSaved()
-        autosave.discard(for: fileURL)
-        window?.isDocumentEdited = false
-        CaptureSavedNotice.post(.init(original: fileURL, saved: url, previousHash: previousHash))
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        let base = documentURL.deletingPathExtension()
+        return EditorSaveTargets.imageExtensions
+            .flatMap { [$0, $0.uppercased()] }
+            .map { base.appendingPathExtension($0) }
+            .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     static func fileHash(at url: URL) -> String? {
@@ -111,8 +152,10 @@ extension EditorWindowController {
         }
         let panel = NSSavePanel()
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = fileURL.deletingPathExtension().lastPathComponent
-        panel.directoryURL = fileURL.deletingLastPathComponent()
+        panel.nameFieldStringValue = documentURL.deletingPathExtension().lastPathComponent
+        panel.directoryURL = editsImportedCopy
+            ? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+            : documentURL.deletingLastPathComponent()
         panel.message = "Save this capture"
         var types = ImageFormat.writable.map(\.contentType)
         if let project = UTType(filenameExtension: KadrDocumentFile.fileExtension) {
@@ -124,22 +167,34 @@ extension EditorWindowController {
             defer { self.model.endExport() }
             guard response == .OK, let url = panel.url else { return }
             do {
-                if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
-                    try writeProject(to: url)
-                } else {
-                    var options = exportEncodingOptions
-                    options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
-                    try CaptureFileWriter().write(image, to: url, options: options)
-                    model.markSaved()
-                    autosave.discard(for: fileURL)
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                }
+                try saveAs(image, to: url)
                 logger.info("Saved \(url.lastPathComponent, privacy: .public)")
             } catch {
                 model.failExport(.saveAs, message: error.localizedDescription)
                 logger.error("Save As failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// Writes to a destination the user picked and rebinds the window to it, so the title,
+    /// the proxy icon and the next ⌘S all follow (T-ED-1).
+    func saveAs(_ image: CGImage, to url: URL) throws {
+        guard let targets = EditorSaveTargets.chosen(
+            url,
+            writesProject: EditorCanvasPreferences.writesSidecarOnSave()
+        ) else {
+            try writeProject(to: url)
+            chosenSaveTargets = nil
+            rebind(to: url)
+            return
+        }
+        try write(image, to: targets.flattened)
+        if let project = targets.project {
+            try writeProject(to: project, addToHistory: false)
+        }
+        markClean()
+        chosenSaveTargets = targets
+        rebind(to: targets.document)
     }
 
     func printImage(_ image: CGImage) {
@@ -220,8 +275,8 @@ extension EditorWindowController {
     }
 
     func writeExportPNG(_ image: CGImage, suffix: String) throws -> URL {
-        let directory = fileURL.deletingLastPathComponent()
-        let stem = fileURL.deletingPathExtension().lastPathComponent
+        let directory = documentURL.deletingLastPathComponent()
+        let stem = documentURL.deletingPathExtension().lastPathComponent
         let url = directory.appendingPathComponent("\(stem) \(suffix).png")
         let data = try ImageEncoder().encode(image, options: exportEncodingOptions)
         try data.write(to: url, options: .atomic)

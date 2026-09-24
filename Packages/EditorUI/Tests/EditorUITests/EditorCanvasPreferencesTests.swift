@@ -34,15 +34,10 @@ struct EditorCanvasPreferencesTests {
         }
     }
 
-    @Test("Keep original defaults on and changes the flattened save stem")
+    @Test("Keep original defaults on")
     func keepOriginal() throws {
         try withDomain { defaults, preferences in
-            let url = URL(fileURLWithPath: "/tmp/Kadr-shot.png")
             #expect(EditorCanvasPreferences.keepOriginalWhenAnnotating(preferences: preferences))
-            #expect(
-                EditorCanvasPreferences.flattenedSaveStem(for: url, keepOriginal: true) == "Kadr-shot annotated"
-            )
-            #expect(EditorCanvasPreferences.flattenedSaveStem(for: url, keepOriginal: false) == "Kadr-shot")
 
             defaults.set(false, forKey: EditorCanvasPreferences.keepOriginalWhenAnnotatingKey)
             defaults.synchronize()

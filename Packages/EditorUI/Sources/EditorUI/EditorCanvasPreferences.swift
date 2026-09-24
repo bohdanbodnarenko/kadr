@@ -32,10 +32,4 @@ public enum EditorCanvasPreferences {
     public static func convertsExportsToSRGB(preferences: SharedPreferences = SharedPreferences()) -> Bool {
         preferences.convertExportsToSRGB
     }
-
-    /// The filename stem for a flattened save next to `sourceURL`.
-    public static func flattenedSaveStem(for sourceURL: URL, keepOriginal: Bool) -> String {
-        let stem = sourceURL.deletingPathExtension().lastPathComponent
-        return keepOriginal ? "\(stem) annotated" : stem
-    }
 }

@@ -26,17 +26,17 @@ extension EditorWindowController {
 
     func trashableCapture() -> TrashableCapture {
         let files = FileManager.default
-        if fileURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
-            let base = fileURL.deletingPathExtension()
+        if documentURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+            let base = documentURL.deletingPathExtension()
             let image = Self.imageExtensions
                 .flatMap { [$0, $0.uppercased()] }
                 .map { base.appendingPathExtension($0) }
                 .first { files.fileExists(atPath: $0.path) }
-            return TrashableCapture(image: image, project: fileURL)
+            return TrashableCapture(image: image, project: documentURL)
         }
-        let project = fileURL.deletingPathExtension().appendingPathExtension(KadrDocumentFile.fileExtension)
+        let project = documentURL.deletingPathExtension().appendingPathExtension(KadrDocumentFile.fileExtension)
         return TrashableCapture(
-            image: fileURL,
+            image: documentURL,
             project: files.fileExists(atPath: project.path) ? project : nil
         )
     }
@@ -89,7 +89,7 @@ extension EditorWindowController {
         }
 
         logger.info("Moved \(capture.displayName, privacy: .public) to the Trash")
-        autosave.discard(for: fileURL)
+        autosave.discard(for: documentURL)
         // The work is in the Trash, not lost, so the unsaved-changes question does not apply.
         isClosingConfirmed = true
         window?.close()
