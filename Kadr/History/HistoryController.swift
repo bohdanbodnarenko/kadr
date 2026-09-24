@@ -27,6 +27,12 @@ final class HistoryController {
     private(set) var store: HistoryStore?
     private let settings: AppSettings
     private let launchedAt = Date()
+    /// The retention setting as this launch found it. "This session only" clears what
+    /// earlier launches kept only if it was already chosen when Kadr started — choosing it
+    /// now takes effect at the next launch, as the pane says (docs/17 T-OUT-4).
+    private let retentionAtLaunch: HistoryRetention
+    /// Warned once per launch that the size cap stopped short (docs/17 T-OUT-8).
+    private var hasWarnedAboutCap = false
     private let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
@@ -56,6 +62,7 @@ final class HistoryController {
     init(settings: AppSettings, store: HistoryStore? = nil) {
         self.settings = settings
         self.store = store
+        retentionAtLaunch = settings.historyRetention
         indexing = HistoryIndexCoordinator(settings: settings)
     }
 
@@ -65,11 +72,55 @@ final class HistoryController {
     }
 
     var policy: HistoryPolicy {
-        HistoryPolicy(
-            maxAge: settings.historyRetention.maxAge,
-            sizeCapBytes: settings.historySizeCap.bytes,
-            sessionStartedAt: settings.historyRetention == .session ? launchedAt : nil
+        policy(retention: settings.historyRetention, sizeCap: settings.historySizeCap)
+    }
+
+    /// The most captures an automatic size-cap pass removes before asking (docs/17 T-OUT-8).
+    static let automaticEvictionLimit = 25
+
+    /// The policy for a retention and cap, whether or not they are the current settings.
+    ///
+    /// Automatic passes — launch, ingest — protect what was just ingested and stop at
+    /// `automaticEvictionLimit`; a pass the user confirmed in Settings has neither limit.
+    func policy(
+        retention: HistoryRetention,
+        sizeCap: HistorySizeCap,
+        protecting protectedIDs: Set<UUID> = [],
+        confirmed: Bool = false
+    ) -> HistoryPolicy {
+        let sessionOnly = retention == .session && retentionAtLaunch == .session
+        return HistoryPolicy(
+            maxAge: retention.maxAge,
+            sizeCapBytes: sizeCap.bytes,
+            sessionStartedAt: sessionOnly ? launchedAt : nil,
+            protectedIDs: protectedIDs,
+            maxSizeCapEvictions: confirmed ? nil : Self.automaticEvictionLimit
         )
+    }
+
+    /// What a change to retention or the size cap would permanently delete, so the pane
+    /// can ask first (docs/17 T-OUT-4).
+    func retentionPreview(retention: HistoryRetention, sizeCap: HistorySizeCap) async -> HistoryStore.RetentionPlan? {
+        await openIfNeeded()
+        return try? await store?.retentionPlan(policy(retention: retention, sizeCap: sizeCap, confirmed: true))
+    }
+
+    /// Runs an automatic retention pass, and says so once if the cap had to stop short.
+    private func applyAutomaticRetention(on store: HistoryStore, protecting ids: Set<UUID> = []) async {
+        let automatic = policy(
+            retention: settings.historyRetention,
+            sizeCap: settings.historySizeCap,
+            protecting: ids
+        )
+        guard let report = try? await store.applyRetention(automatic) else { return }
+        if report.stoppedAtEvictionLimit, !hasWarnedAboutCap {
+            hasWarnedAboutCap = true
+            logger.info("History size cap stopped at the automatic eviction limit")
+            FailurePresenter.present(FeedbackStatus(
+                kind: .warning,
+                message: String(localized: "History is over its size limit. Older captures were kept.")
+            ))
+        }
     }
 
     var hasItems: Bool {
@@ -162,7 +213,9 @@ final class HistoryController {
         }
 
         do {
-            try await store.applyRetention(policy)
+            // No retention pass here: this runs on every filter change and search
+            // keystroke, and deleting permanently is not something a keystroke should do
+            // (docs/17 T-OUT-4). Launch, ingest and a confirmed Settings change run it.
             if isSearching {
                 records = try await store.search(searchText, filter: filter)
                 // A search returns its whole ranked result set, so there is no next page.
@@ -273,10 +326,19 @@ final class HistoryController {
         }
     }
 
+    /// Applies a Settings change. Retention runs without the automatic limits, because the
+    /// pane has already shown the user what it deletes and they confirmed it.
     func applySettingsChange() {
         Task {
             await openIfNeeded()
-            _ = try? await store?.applyRetention(policy)
+            let confirmed = policy(
+                retention: settings.historyRetention,
+                sizeCap: settings.historySizeCap,
+                confirmed: true
+            )
+            if await (try? store?.applyRetention(confirmed))?.deletedCount ?? 0 > 0 {
+                await reload(filter: filter)
+            }
             usage = await (try? store?.storageUsage()) ?? usage
             recent = await (try? store?.recent(limit: Self.menuStripCount)) ?? recent
 
@@ -318,7 +380,7 @@ final class HistoryController {
                 return
             }
             store = opened
-            _ = try await opened.applyRetention(policy)
+            await applyAutomaticRetention(on: opened)
             recent = try await opened.recent(limit: Self.menuStripCount)
             usage = try await opened.storageUsage()
             await drainPending()
@@ -334,14 +396,16 @@ final class HistoryController {
         guard let store, !pending.isEmpty else { return }
         let batch = pending
         pending.removeAll()
+        var ingested: Set<UUID> = []
         for draft in batch {
             do {
-                _ = try await store.ingest(draft)
+                try await ingested.insert(store.ingest(draft).id)
             } catch {
                 logger.error("History ingest failed: \(error.localizedDescription, privacy: .public)")
             }
         }
-        _ = try? await store.applyRetention(policy)
+        // What was just ingested is never what the cap evicts (docs/17 T-OUT-8).
+        await applyAutomaticRetention(on: store, protecting: ingested)
         recent = await (try? store.recent(limit: Self.menuStripCount)) ?? recent
         usage = await (try? store.storageUsage()) ?? usage
 
