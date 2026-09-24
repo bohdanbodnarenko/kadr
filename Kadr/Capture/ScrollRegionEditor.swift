@@ -184,7 +184,7 @@ final class ScrollRegionEditor {
             .escape: { [weak self] in
                 guard self?.controls != nil else { return }
                 self?.cancel()
-            },
+            }
         ])
     }
 

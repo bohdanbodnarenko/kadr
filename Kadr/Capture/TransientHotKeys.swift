@@ -25,10 +25,18 @@ final class TransientHotKeys {
         init?(event: NSEvent) {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             var modifiers: UInt32 = 0
-            if flags.contains(.option) { modifiers |= UInt32(optionKey) }
-            if flags.contains(.command) { modifiers |= UInt32(cmdKey) }
-            if flags.contains(.control) { modifiers |= UInt32(controlKey) }
-            if flags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+            if flags.contains(.option) {
+                modifiers |= UInt32(optionKey)
+            }
+            if flags.contains(.command) {
+                modifiers |= UInt32(cmdKey)
+            }
+            if flags.contains(.control) {
+                modifiers |= UInt32(controlKey)
+            }
+            if flags.contains(.shift) {
+                modifiers |= UInt32(shiftKey)
+            }
             self.init(keyCode: UInt32(event.keyCode), carbonModifiers: modifiers)
         }
 
@@ -101,7 +109,7 @@ final class TransientHotKeys {
         return true
     }
 
-    fileprivate func fire(id: UInt32) {
+    private func fire(id: UInt32) {
         actions[id]?.action()
     }
 

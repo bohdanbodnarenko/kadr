@@ -34,6 +34,7 @@ open class NonActivatingPanel: NSPanel {
     public var isHiddenFromCaptures: Bool {
         CaptureVisibility.sharingType(alwaysExcluded: alwaysHiddenFromCaptures) == .none
     }
+
     /// Without this the panel never becomes key and every keyboard interaction dies.
     override open var canBecomeKey: Bool {
         true

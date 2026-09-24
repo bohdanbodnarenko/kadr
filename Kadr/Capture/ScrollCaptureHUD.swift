@@ -59,7 +59,7 @@ final class ScrollCaptureHUD {
         keys.start([
             .escape: { [weak self] in self?.coordinator.cancel() },
             .returnKey: { [weak self] in self?.coordinator.stop() },
-            .enter: { [weak self] in self?.coordinator.stop() },
+            .enter: { [weak self] in self?.coordinator.stop() }
         ])
     }
 

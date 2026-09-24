@@ -172,11 +172,19 @@ struct SelectionMoveTests {
 struct SelectionReanchorTests {
     @Test("Releasing Space keeps the corner opposite the pointer", arguments: [
         // Dragged up-left, so the pointer is the rect's top-left and the anchor bottom-right.
-        (CGPoint(x: 300, y: 300), CGPoint(x: 100, y: 100), CGPoint(x: 350, y: 350),
-         CGRect(x: 350, y: 350, width: 50, height: 50)),
+        (
+            CGPoint(x: 300, y: 300),
+            CGPoint(x: 100, y: 100),
+            CGPoint(x: 350, y: 350),
+            CGRect(x: 350, y: 350, width: 50, height: 50)
+        ),
         // Dragged down-right: the anchor is the top-left, as before.
-        (CGPoint(x: 100, y: 100), CGPoint(x: 300, y: 300), CGPoint(x: 450, y: 450),
-         CGRect(x: 200, y: 200, width: 250, height: 250)),
+        (
+            CGPoint(x: 100, y: 100),
+            CGPoint(x: 300, y: 300),
+            CGPoint(x: 450, y: 450),
+            CGRect(x: 200, y: 200, width: 250, height: 250)
+        )
     ])
     func oppositeCorner(start: CGPoint, end: CGPoint, resizeTo: CGPoint, expected: CGRect) {
         var selection = interaction()
@@ -217,7 +225,7 @@ struct SelectionReanchorTests {
         (CGPoint(x: 0, y: 0), CGPoint(x: 20, y: 20)),
         (CGPoint(x: 20, y: 20), CGPoint(x: 10, y: 10)),
         (CGPoint(x: 20, y: 0), CGPoint(x: 10, y: 20)),
-        (CGPoint(x: 0, y: 20), CGPoint(x: 20, y: 10)),
+        (CGPoint(x: 0, y: 20), CGPoint(x: 20, y: 10))
     ])
     func corner(point: CGPoint, expected: CGPoint) {
         let rect = CGRect(x: 10, y: 10, width: 10, height: 10)

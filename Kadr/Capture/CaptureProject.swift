@@ -22,7 +22,12 @@ enum CaptureProject {
         alongside flattenedURL: URL
     ) {
         guard let document = document(for: original, beautify: beautify) else { return }
-        encodeAndWrite(document, image: original.image, scale: original.metadata.scale, to: url(alongside: flattenedURL))
+        encodeAndWrite(
+            document,
+            image: original.image,
+            scale: original.metadata.scale,
+            to: url(alongside: flattenedURL)
+        )
     }
 
     /// The same, with the PNG encode off the main actor (T-CAP-7).

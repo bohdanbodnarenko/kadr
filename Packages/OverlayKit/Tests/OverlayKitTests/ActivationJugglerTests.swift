@@ -106,7 +106,7 @@ struct ActivationJugglerTests {
         (nil, true),
         ("app.kadr.Kadr", false),
         ("app.kadr.KadrEditor", false),
-        ("app.kadr.helper", false),
+        ("app.kadr.helper", false)
     ] as [(String?, Bool)])
     func returnable(bundleIdentifier: String?, expected: Bool) {
         #expect(ActivationJuggler.isReturnable(bundleIdentifier: bundleIdentifier) == expected)
