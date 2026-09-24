@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	    Options for `xcodebuild -exportArchive` in Scripts/release.sh (docs/17 T-REL-3).
+
+	    developer-id re-signs every nested bundle inside out — the kadr CLI, the editor
+	    and its XPC helper, Sparkle's Autoupdate, Updater.app and XPC services — and keeps
+	    each target's own entitlements, which hand re-signing with codesign did not.
+
+	    __KADR_TEAM_ID__ is a placeholder. release.sh substitutes KADR_TEAM_ID into a
+	    temporary copy and refuses to run without it; do not commit a real team ID here.
+	-->
+	<key>method</key>
+	<string>developer-id</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>__KADR_TEAM_ID__</string>
+	<key>destination</key>
+	<string>export</string>
+</dict>
+</plist>

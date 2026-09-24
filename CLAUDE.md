@@ -18,6 +18,10 @@ When a task references a doc section, read it before writing code.
      and non-blocking: the studio works without it, and transcription itself
      sets `requiresOnDeviceRecognition`, so a recording is never uploaded.
    Adding a third needs the same treatment: a path in the grep and a line here.
+   Opening a user-chosen URL in the user's browser with `NSWorkspace.open` (Help ▸
+   Report a Problem…, links in recognised text) is NOT app networking and NOT a third
+   exception: Kadr sends nothing, the browser opens a page. Only non-identifying values
+   (version, build, macOS) may go in such a URL; files are attached by the user.
 2. RAM budget: agent idles <30 MB, zero timers, 0.0% CPU. The agent never
    links EditorUI, VisionServices, StudioRender or AnnotationRender. Vision/encoders
    run in HelperTools (self-terminating XPC); the editor is a separate app that

@@ -28,85 +28,98 @@ final class UpdaterManager: NSObject {
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
     @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
     @ObservationIgnored private var activity: NSBackgroundActivityScheduler?
-    @ObservationIgnored private var checkBackstopTask: Task<Void, Never>?
+    /// Whether this manager currently holds the regular activation policy for Sparkle's
+    /// window, so a session that ends twice cannot release it twice.
+    @ObservationIgnored private var holdsActivation = false
 
     /// Whether an update check can start right now — false while one is running.
     private(set) var canCheckForUpdates = false
 
-    /// How long to hold the activation policy if Sparkle never reports back.
-    private static let checkBackstopSeconds = 120
+    /// A scheduled check found this version while Kadr was in the background, and Sparkle
+    /// left it to Kadr to mention gently rather than throwing a window over whatever the
+    /// user was doing (docs/17 T-REL-4). The status menu offers it until the session ends.
+    private(set) var availableUpdateVersion: String?
+
+    /// Whether beta builds are offered too. Stored so SwiftUI tracks it; the preference is
+    /// the source of truth across launches.
+    var receivesBetaBuilds: Bool {
+        didSet {
+            channelPreference.receivesBetaBuilds = receivesBetaBuilds
+            logger.notice("Beta updates \(self.receivesBetaBuilds ? "on" : "off", privacy: .public)")
+        }
+    }
+
     /// Sparkle's record of its last check, read directly so Settings can show it without
     /// building the updater.
     private static let lastCheckTimeKey = "SULastCheckTime"
     /// Separate from Sparkle's `SUEnableAutomaticChecks` so disabling Sparkle's own timer
     /// does not forget the user's preference.
     @ObservationIgnored private let preference = UpdateCheckPreference(defaults: .standard)
+    @ObservationIgnored private let channelPreference = UpdateChannelPreference(
+        defaults: .standard,
+        build: .current
+    )
 
     override private init() {
+        receivesBetaBuilds = channelPreference.receivesBetaBuilds
+        automaticallyChecksForUpdates = UpdateCheckPreference(defaults: .standard).isEnabled
         super.init()
     }
 
-    /// Whoever is waiting for the current check to finish.
-    private var checkFinishedWaiters: [CheckedContinuation<Void, Never>] = []
-
     private func setCanCheckForUpdates(_ value: Bool) {
         canCheckForUpdates = value
-        guard value else { return }
-        releaseCheckWaiters()
     }
 
-    private func releaseCheckWaiters() {
-        checkBackstopTask?.cancel()
-        checkBackstopTask = nil
-        guard !checkFinishedWaiters.isEmpty else { return }
-        let waiting = checkFinishedWaiters
-        checkFinishedWaiters.removeAll()
-        for waiter in waiting {
-            waiter.resume()
-        }
-    }
-
-    /// Waits for the running check to finish, without asking every half second.
+    /// Raises the activation policy so Sparkle's window comes to the front.
     ///
-    /// Sparkle reports through KVO, so there is an event to wait on; polling for it was
-    /// the agent doing work on a schedule for no reason (docs/07 LOW, CLAUDE.md rule 2).
-    /// The backstop exists because the activation policy must not be stuck regular for the
-    /// rest of the session if Sparkle never reports — and because an unresumed
-    /// continuation is a leak, not a timeout.
-    private func waitForCheckToFinish() async {
-        await withCheckedContinuation { continuation in
-            checkFinishedWaiters.append(continuation)
-            checkBackstopTask?.cancel()
-            checkBackstopTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(Self.checkBackstopSeconds))
-                guard !Task.isCancelled else { return }
-                self?.releaseCheckWaiters()
-            }
-        }
+    /// An `.accessory` app's windows open behind whatever is frontmost. Held from the moment
+    /// Sparkle says it will show something until it says the session is over — its own
+    /// callbacks, rather than the 120-second guess this used to be (docs/17 T-REL-4).
+    private func holdActivation() {
+        guard !holdsActivation else { return }
+        holdsActivation = true
+        ActivationJuggler.shared.beginRegularWindow()
+    }
+
+    private func releaseActivation() {
+        guard holdsActivation else { return }
+        holdsActivation = false
+        ActivationJuggler.shared.endRegularWindow()
     }
 
     /// Whether Kadr checks for updates on its own.
+    ///
+    /// Stored, so SwiftUI observes it: it used to be computed from `UserDefaults`, which
+    /// `@Observable` cannot see, so the switch did not follow a change made elsewhere
+    /// (docs/16 APP-P1, docs/17 T-SH-8).
     var automaticallyChecksForUpdates: Bool {
-        get {
-            preference.isEnabled
-        }
-        set {
-            preference.isEnabled = newValue
-            if newValue {
-                scheduleCoalescedCheck()
-            } else {
-                activity?.invalidate()
-                activity = nil
-            }
+        didSet {
+            guard automaticallyChecksForUpdates != oldValue else { return }
+            preference.isEnabled = automaticallyChecksForUpdates
+            #if !DEBUG
+                if automaticallyChecksForUpdates {
+                    scheduleCoalescedCheck()
+                } else {
+                    activity?.invalidate()
+                    activity = nil
+                }
+            #endif
         }
     }
 
-    var currentVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    /// False in a debug build, which never talks to the feed; Settings says so rather than
+    /// showing a Check Now that silently does nothing (docs/17 T-SH-8).
+    var isUpdatingAvailable: Bool {
+        #if DEBUG
+            false
+        #else
+            true
+        #endif
     }
 
-    var buildNumber: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+    /// Which build this is, for Settings ▸ Updates and diagnostics (docs/17 T-REL-5).
+    var buildIdentity: BuildIdentity {
+        .current
     }
 
     private(set) var lastCheckDate: Date?
@@ -144,8 +157,8 @@ final class UpdaterManager: NSObject {
             }
             let created = SPUStandardUpdaterController(
                 startingUpdater: false,
-                updaterDelegate: nil,
-                userDriverDelegate: nil
+                updaterDelegate: self,
+                userDriverDelegate: self
             )
             // Before `start()`: Sparkle's repeating check is a timer in the resident
             // process, and an explicit value here also keeps it from asking the user a
@@ -165,7 +178,7 @@ final class UpdaterManager: NSObject {
             do {
                 try created.updater.start()
                 controller = created
-                logger.info("Sparkle started")
+                logger.notice("Sparkle started")
                 return created
             } catch {
                 canCheckObservation = nil
@@ -195,6 +208,7 @@ final class UpdaterManager: NSObject {
 
     private func runBackgroundCheck() {
         guard automaticallyChecksForUpdates else { return }
+        logger.notice("Scheduled update check")
         updaterController()?.updater.checkForUpdatesInBackground()
     }
 
@@ -208,18 +222,61 @@ final class UpdaterManager: NSObject {
             logger.info("Ignoring an update check in a debug build")
         #else
             guard let controller = updaterController() else { return }
-            ActivationJuggler.shared.beginRegularWindow()
+            logger.notice("Update check requested")
+            // Before the call: Sparkle's "Checking…" window appears straight away, and it
+            // should appear in front. Released in `standardUserDriverWillFinishUpdateSession`.
+            holdActivation()
             controller.checkForUpdates(nil)
-            // Sparkle's window has no close callback to hook, so the policy is released
-            // once the check can start again — which is when its UI has gone.
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    ActivationJuggler.shared.endRegularWindow()
-                    return
-                }
-                await waitForCheckToFinish()
-                ActivationJuggler.shared.endRegularWindow()
-            }
         #endif
+    }
+}
+
+// MARK: - Channels (docs/17 T-REL-4)
+
+extension UpdaterManager: SPUUpdaterDelegate {
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        channelPreference.allowedChannels
+    }
+}
+
+// MARK: - Gentle reminders for a background app
+
+/// Sparkle's guidance for apps without a Dock icon: a scheduled check that finds an update
+/// while the app is not in focus should not throw a window in front of the user's work,
+/// nor open one behind it where it is never seen. Kadr lets Sparkle show it only when the
+/// user is already looking at Kadr, and otherwise offers it in the status menu.
+extension UpdaterManager: @preconcurrency SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool {
+        true
+    }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        immediateFocus
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        if handleShowingUpdate {
+            holdActivation()
+        } else {
+            availableUpdateVersion = update.displayVersionString
+            let version = update.displayVersionString
+            logger.notice("Update \(version, privacy: .public) is available; offered in the menu")
+        }
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        availableUpdateVersion = nil
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        availableUpdateVersion = nil
+        releaseActivation()
     }
 }

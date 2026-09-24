@@ -93,7 +93,10 @@ struct SettingsWindowControllerTests {
         #expect(app.policy == .accessory)
     }
 
-    @Test("Showing twice reuses the one window rather than stacking activations")
+    /// The second show brings the window forward — activating again, which is what makes
+    /// it come in front of the app the user is in (docs/17 T-SH-5) — but does not take a
+    /// second regular-policy reference that closing once would leave behind.
+    @Test("Showing twice reuses the one window and brings it forward")
     func showIsIdempotent() async {
         let app = FakeApplication()
         let controller = makeController(app)
@@ -102,7 +105,7 @@ struct SettingsWindowControllerTests {
         controller.show()
 
         #expect(controller.window === first)
-        #expect(app.activateCount == 1)
+        #expect(app.activateCount == 2)
 
         controller.close()
         await settle()

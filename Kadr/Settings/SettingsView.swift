@@ -30,10 +30,12 @@ struct SettingsView: View {
     @State private var historyIndex = 0
     @State private var isHistoryNavigation = false
     /// Real state, not `.constant(.all)`: the system sidebar toggle writes here, and a
-    /// constant binding made it a control that did nothing (docs/14 UX-09). Width and
-    /// visibility persist through AppKit's frame autosave on the window, so there is no
-    /// `AppStorage` key to keep in step with it.
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// constant binding made it a control that did nothing (docs/14 UX-09). Width
+    /// persists through AppKit's frame autosave; whether the sidebar is shown does not,
+    /// so it is kept here (docs/17 T-SH-8).
+    @State private var columnVisibility: NavigationSplitViewVisibility =
+        UserDefaults.standard.bool(forKey: SettingsView.sidebarHiddenKey) ? .detailOnly : .all
+    static let sidebarHiddenKey = "app.kadr.settings.sidebarHidden"
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -101,6 +103,9 @@ struct SettingsView: View {
         .onChange(of: columnVisibility) { _, _ in
             publishSidebarVisibility()
         }
+        .onAppear {
+            navigation.isSidebarHidden = columnVisibility == .detailOnly
+        }
         .onReceive(NotificationCenter.default.publisher(for: .kadrToggleSettingsSidebar)) { _ in
             toggleSidebar()
         }
@@ -140,6 +145,7 @@ struct SettingsView: View {
 
     private func publishSidebarVisibility() {
         navigation.isSidebarHidden = columnVisibility == .detailOnly
+        UserDefaults.standard.set(navigation.isSidebarHidden, forKey: Self.sidebarHiddenKey)
     }
 
     private func recordNavigation() {
@@ -166,6 +172,11 @@ struct SettingsView: View {
 private struct SettingsSidebarView: View {
     @Binding var selectedTab: SettingsTab
 
+    /// Observable, so the warning appears and clears as shortcuts change (docs/17 T-SH-7).
+    private var hotkeyHealth: HotkeyHealth? {
+        AppDelegate.shared.hotkeyCenter?.health
+    }
+
     private var selection: Binding<SettingsTab?> {
         Binding(
             get: { selectedTab },
@@ -180,8 +191,17 @@ private struct SettingsSidebarView: View {
     var body: some View {
         List(selection: selection) {
             ForEach(SettingsTab.allCases) { tab in
-                Label(tab.title, systemImage: tab.systemImage)
-                    .tag(tab)
+                HStack {
+                    Label(tab.title, systemImage: tab.systemImage)
+                    if tab == .shortcuts, hotkeyHealth?.hasConflicts == true {
+                        Spacer()
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .help("A shortcut could not be registered")
+                            .accessibilityLabel("A shortcut could not be registered")
+                    }
+                }
+                .tag(tab)
             }
 
             SettingsSidebarFooter()
@@ -194,9 +214,7 @@ private struct SettingsSidebarView: View {
 
 private struct SettingsSidebarFooter: View {
     private var versionText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
-        return "Version \(version) (\(build))"
+        "Version \(BuildIdentity.current.displayString)"
     }
 
     var body: some View {
@@ -236,9 +254,9 @@ private struct SettingsDetailView: View {
             case .history:
                 HistoryPane(settings: settings, history: history)
             case .shortcuts:
-                ShortcutsPane()
+                ShortcutsPane(health: AppDelegate.shared.hotkeyCenter?.health)
             case .updates:
-                UpdatesPane(updater: .shared)
+                UpdatesPane(updater: .shared, copyDiagnosticSummary: { AppDelegate.shared.copyDiagnosticSummary() })
             case .advanced:
                 AdvancedPane(settings: settings)
             }

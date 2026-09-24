@@ -133,6 +133,16 @@ struct StatusMenuLayoutTests {
     }
 }
 
+struct RecordedShortcutCase: Sendable, CustomTestStringConvertible {
+    let command: CaptureCommand
+    let key: Int
+    let modifiers: NSEvent.ModifierFlags
+
+    var testDescription: String {
+        "\(command) key \(key) modifiers \(modifiers.rawValue)"
+    }
+}
+
 struct StatusClickCase: Sendable {
     let isRight: Bool
     let modifiers: NSEvent.ModifierFlags
@@ -181,16 +191,36 @@ struct ShortcutDefaultsMigrationTests {
         #expect(plan(newDefaults).isEmpty)
     }
 
+    /// Raw key and modifier values rather than `Shortcut`s: swift-testing describes its
+    /// arguments off the main thread, and describing a `Shortcut` asserts it is on it —
+    /// which crashed the whole runner before a single test ran (docs/17 T-REL-7).
     @Test("Shortcuts the user recorded are kept", arguments: [
-        (CaptureCommand.captureWindow, Shortcut(.w, modifiers: [.command, .option])),
-        (.captureArea, Shortcut(.x, modifiers: [.control, .command])),
-        (.allInOne, Shortcut(.space, modifiers: [.control, .option])),
-        (.openHistory, Shortcut(.h, modifiers: [.control, .option, .command]))
+        RecordedShortcutCase(
+            command: .captureWindow,
+            key: KeyboardShortcuts.Key.w.rawValue,
+            modifiers: [.command, .option]
+        ),
+        RecordedShortcutCase(
+            command: .captureArea,
+            key: KeyboardShortcuts.Key.x.rawValue,
+            modifiers: [.control, .command]
+        ),
+        RecordedShortcutCase(
+            command: .allInOne,
+            key: KeyboardShortcuts.Key.space.rawValue,
+            modifiers: [.control, .option]
+        ),
+        RecordedShortcutCase(
+            command: .openHistory,
+            key: KeyboardShortcuts.Key.h.rawValue,
+            modifiers: [.control, .option, .command]
+        )
     ])
-    func customShortcutSurvives(command: CaptureCommand, custom: Shortcut) {
+    func customShortcutSurvives(recorded: RecordedShortcutCase) {
+        let custom = Shortcut(KeyboardShortcuts.Key(rawValue: recorded.key), modifiers: recorded.modifiers)
         var current = Migration.versionOneDefaults
-        current[command] = custom
-        #expect(apply(current)[command] == custom)
+        current[recorded.command] = custom
+        #expect(apply(current)[recorded.command] == custom)
     }
 
     @Test("When the new keys are taken, a command keeps the shortcut it had")

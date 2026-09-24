@@ -712,20 +712,21 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Kadr-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Kadr needs screen recording permission to capture screenshots and recordings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
-				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr;
+				KADR_APPCAST_URL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
+				KADR_GIT_COMMIT = unknown;
+				KADR_SPARKLE_PUBLIC_ED_KEY = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -750,20 +751,21 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/Kadr-Info.plist";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSScreenCaptureUsageDescription = "Kadr needs screen recording permission to capture screenshots and recordings.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
-				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
-				INFOPLIST_KEY_SUFeedURL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr;
+				KADR_APPCAST_URL = "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml";
+				KADR_GIT_COMMIT = unknown;
+				KADR_SPARKLE_PUBLIC_ED_KEY = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -783,7 +785,7 @@
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -804,7 +806,7 @@
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -835,7 +837,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
 				PRODUCT_NAME = KadrEditor;
 				SKIP_INSTALL = YES;
@@ -865,7 +867,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
 				PRODUCT_NAME = KadrEditor;
 				SKIP_INSTALL = YES;
@@ -888,7 +890,7 @@
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
 				SKIP_INSTALL = YES;
@@ -909,7 +911,7 @@
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
 				SKIP_INSTALL = YES;
@@ -926,7 +928,7 @@
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
 				PRODUCT_MODULE_NAME = KadrCLI;
 				PRODUCT_NAME = kadr;
@@ -944,7 +946,7 @@
 				DEVELOPMENT_TEAM = TS5WNSVA7W;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
 				PRODUCT_MODULE_NAME = KadrCLI;
 				PRODUCT_NAME = kadr;

@@ -12,6 +12,8 @@
 SHELL := /bin/bash
 # Without this a failing command in the middle of a recipe is ignored and the target
 # "succeeds" — which is the one thing a build tool must never do.
+# NOTE: GNU Make 3.81, the one macOS ships, ignores .SHELLFLAGS. Any recipe that pipes a
+# command whose failure matters must say `set -o pipefail;` itself (see test-app).
 .SHELLFLAGS := -euo pipefail -c
 .DEFAULT_GOAL := help
 
@@ -29,10 +31,18 @@ PACKAGES := $(sort $(notdir $(wildcard Packages/*)))
 
 # Signing is off for plain builds so a fresh checkout compiles without a developer
 # account; `release` and `install` sign properly.
+# Build identity (docs/17 T-REL-5). The build number is the commit count, so it only ever
+# grows along main — which is what Sparkle compares — and the SHA names the exact source a
+# tester's report came from. Every build target stamps both; the project's own values
+# (1 and "unknown") are only what an Xcode-button build gets.
+BUILD_NUMBER := $(shell git rev-list --count HEAD 2>/dev/null || echo 1)
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+STAMP := CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) KADR_GIT_COMMIT=$(GIT_COMMIT)
+
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
 .PHONY: help build build-editor release install uninstall run test test-packages test-package \
-        test-app lint format format-fix check check-layering check-size size-gate perf packages packages-json \
+        test-app dmg lint format format-fix check check-layering check-size size-gate perf packages packages-json \
         all clean
 
 help: ## Show the available commands
@@ -46,15 +56,15 @@ help: ## Show the available commands
 
 build: ## Build the agent app (Debug, unsigned)
 	@xcodebuild build -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
-		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(UNSIGNED)
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP) $(UNSIGNED)
 
 build-editor: ## Build the editor app (Debug, unsigned)
 	@xcodebuild build -workspace $(WORKSPACE) -scheme $(EDITOR_SCHEME) -configuration Debug \
-		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(UNSIGNED)
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP) $(UNSIGNED)
 
 release: ## Build the agent app signed, for installing
 	@xcodebuild build -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Release \
-		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP)
 	@codesign --verify --deep --strict $(APP)
 	@printf 'Built and verified %s\n' '$(APP)'
 
@@ -78,6 +88,13 @@ uninstall: ## Remove the installed app
 run: install ## Install and launch
 	@open "$(INSTALL_DIR)/$(SCHEME).app"
 
+# The distributable: archive, export with Developer ID, notarize, DMG, appcast. One
+# definition, like every other command here (docs/17 T-REL-3). Needs the owner's
+# certificate, notary profile and Sparkle key — Scripts/release.sh says which is missing.
+dmg: ## Notarized DMG and appcast entry (VERSION=0.9.0 [CHANNEL=beta])
+	@test -n "$(VERSION)" || { printf 'Set VERSION, e.g. make dmg VERSION=0.9.0 CHANNEL=beta\n' >&2; exit 2; }
+	@Scripts/release.sh --version $(VERSION) --build $(BUILD_NUMBER) $(if $(CHANNEL),--channel $(CHANNEL))
+
 # MARK: - Testing
 
 test: test-packages test-app ## Run every test
@@ -95,11 +112,17 @@ test-package: ## Run one package's tests (PACKAGE=Shared)
 
 # Not `-quiet`: it suppresses the test summary, which is the entire output anybody wants
 # from a test run. The build targets keep it; this one cannot.
+# The filter is braced so only *its* empty-match status is forgiven: under pipefail the
+# exit status is xcodebuild's, so a failing test or a runner that crashes at bootstrap
+# fails the target. An unbraced `|| true` once kept CI green for a week in which no app
+# test ran at all (docs/17 T-REL-7). `set -o pipefail` is spelled out because macOS's
+# GNU Make 3.81 ignores .SHELLFLAGS (it arrived in 3.82), so the flag above never
+# reached this recipe.
 test-app: ## Run the agent app's tests
-	@xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
+	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
-		-only-testing:KadrTests $(UNSIGNED) \
-		| grep -E '✔|✘|Test run|error:' || true
+		-only-testing:KadrTests $(STAMP) $(UNSIGNED) \
+		| { grep -E '✔|✘|Test run|error:' || true; }
 
 # MARK: - Static checks
 

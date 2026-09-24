@@ -207,8 +207,8 @@ struct RecordingPane: View {
                 // a Focus, and a switch that did nothing was worse than saying so
                 // (docs/17 T-REC-5).
                 VStack(alignment: .leading, spacing: 4) {
+                    Text("Icons are hidden only while a recording runs, and come back when it stops.")
                     Text("Turn on Do Not Disturb in Control Center before recording.")
-                    Text("Overlays are burned into the recording, not drawn on screen.")
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)

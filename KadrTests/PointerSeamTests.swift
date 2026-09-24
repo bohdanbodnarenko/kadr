@@ -220,7 +220,13 @@ struct PointerSeamTests {
     func disabledTapDropsARung(reason: CGEventType) {
         let recorder = recorder()
         recorder.sourceForTesting = .eventTap
-        recorder.tapWentDead(reason: reason)
+        // A timeout is revived up to three times a minute when a real tap exists — which
+        // it does on a Mac that has granted Input Monitoring, and not on one that has not.
+        // A fourth notice drops the rung either way, so the test no longer depends on the
+        // grants of the machine running it (docs/17 T-REL-7).
+        for _ in 0 ..< 4 {
+            recorder.tapWentDead(reason: reason)
+        }
 
         #expect(recorder.sourceForTesting != .eventTap, "the ladder stayed on a rung that is gone")
         _ = recorder.stop()

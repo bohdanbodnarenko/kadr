@@ -12,6 +12,9 @@ extension AppDelegate {
     /// to tear the writer down and throw the take away. Captures still on a card are
     /// kept only temporarily, so those get the same "save or discard" question.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if isYieldingToAnotherInstance || isRemovingAllData {
+            return .terminateNow
+        }
         let unsaved = areaCaptureStorage?.quickAccess.unsavedItems ?? []
         if let recording = recordingStorage, recording.state.isActive {
             if recording.isCountingDown {
@@ -26,6 +29,9 @@ extension AppDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // A copy that yielded never set anything up; restoring the desktop from here
+        // would undo the running copy's hidden icons (docs/17 T-SH-3).
+        guard !isYieldingToAnotherInstance, !isRemovingAllData else { return }
         automationListener?.stop()
         statusItemController?.stopObservingMenuBarVisibility()
         // Pin moves are saved on a debounce; the last one must not be lost to ⌘Q.
@@ -85,7 +91,8 @@ extension AppDelegate {
         }
         alert.informativeText = info
         alert.alertStyle = .warning
-        // Cancel is leftmost so Return does not discard the take.
+        // Cancel is the first button, so it is the default Return answers: a stray
+        // Return must not end the take.
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Finish Recording and Quit")
         guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
@@ -112,7 +119,7 @@ extension AppDelegate {
         alert.informativeText = "Captures still on screen are kept temporarily and cleared "
             + "within a day. Saving them puts them in your capture folder."
         alert.addButton(withTitle: unsaved.count == 1 ? "Save and Quit" : "Save All and Quit")
-        alert.addButton(withTitle: "Discard and Quit")
+        alert.addButton(withTitle: "Discard and Quit").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
         NSApp.activate()

@@ -36,7 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launchStartedAt: ContinuousClock.Instant?
 
     var statusItemController: StatusItemController?
-    private var hotkeyCenter: HotkeyCenter?
+    /// Set when this copy found another already running and is quitting in its favour.
+    var isYieldingToAnotherInstance = false
+    /// Set by Remove All Kadr Data, so quitting writes nothing back.
+    var isRemovingAllData = false
+    var hotkeyCenter: HotkeyCenter?
 
     /// The capture layer. Constructing it touches no framework — ScreenCaptureKit is
     /// not messaged until the first capture, which is what keeps the idle budget
@@ -232,7 +236,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     var automationListener: AutomationListener?
 
-    private lazy var loginItem = LoginItemController()
+    lazy var loginItem = LoginItemController()
+    var loginItemState: LoginItemState {
+        loginItem.state
+    }
+
     lazy var settingsWindowController = SettingsWindowController(
         settings: settings,
         loginItem: loginItem,
@@ -247,14 +255,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model: makeOnboardingModel(),
         settings: settings
     )
-
-    private func makeOnboardingModel() -> OnboardingModel {
-        let model = OnboardingModel(permissions: permissions, settings: settings, loginItem: loginItem)
-        model.onOpenPractice = { [weak self] url in
-            self?.areaCapture.quickAccess.openInEditor(url)
-        }
-        return model
-    }
 
     #if DEBUG
         var debugCaptureMenu: DebugCaptureMenu?
@@ -313,7 +313,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
             closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
-            showOnboarding: { [weak self] in self?.showOnboarding() },
+            showOnboarding: { [weak self] in self?.finishSetup() },
             // A preflight, not a probe: it reads the grant without prompting or capturing.
             needsSetup: { [weak self] in self?.permissions.refresh().needsUserAction ?? false },
             recordingControls: { [weak self] in self?.currentRecordingControls() },
@@ -330,7 +330,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overlayCardCount: { [weak self] in self?.areaCaptureStorage?.overlayCardCount ?? 0 },
             overlaysAreHidden: { [weak self] in self?.areaCaptureStorage?.overlaysAreHidden ?? false },
             pinCount: { [weak self] in self?.areaCaptureStorage?.pinCount ?? 0 },
-            pinsAreHidden: { [weak self] in self?.areaCaptureStorage?.pinsAreHidden ?? false }
+            pinsAreHidden: { [weak self] in self?.areaCaptureStorage?.pinsAreHidden ?? false },
+            availableUpdate: { UpdaterManager.shared.availableUpdateVersion },
+            installUpdate: { UpdaterManager.shared.checkForUpdates() },
+            exportDiagnostics: { [weak self] in Task { await self?.exportDiagnostics() } },
+            reportProblem: { [weak self] in Task { await self?.reportProblem() } }
         )
         attachStatusItemDrop()
         statusItemController?.applyMenuBarVisibility(settings.showsMenuBarIcon)
@@ -345,6 +349,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if SingleInstance.yieldIfAnotherIsRunning(beforeQuitting: { isYieldingToAnotherInstance = true }) {
+            return
+        }
+        // Before anything attaches to this path: hotkeys, the CLI port, permissions
+        // (docs/17 T-SH-2).
+        let moving = MoveToApplications.offerIfNeeded { [weak self] in
+            self?.isYieldingToAnotherInstance = true
+            NSApp.terminate(nil)
+        }
+        if moving {
+            return
+        }
         NSApp.setActivationPolicy(.accessory)
         AppMenu.shared.install()
         applyOverlayCaptureVisibility()
@@ -355,21 +371,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         endLaunchInterval()
 
         updater.start()
+        recordLaunch()
+        // Crash and hang reports from macOS, delivered at most daily (docs/17 T-DIAG-2).
+        MetricKitCollector.shared.start()
 
-        // The CLI's end of the automation channel (docs/03 §8.4). A second Kadr would
-        // find the name taken, and should not pretend to own automation.
-        let listener = AutomationListener { [weak self] command, reply in
-            guard let self else {
-                reply(.failed("Kadr is shutting down."))
-                return
-            }
-            automation.perform(command, completion: reply)
-        }
-        if listener.start() {
-            automationListener = listener
-        } else {
-            logger.error("Another Kadr already owns the automation port")
-        }
+        startAutomationListener()
 
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
@@ -460,17 +466,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing Settings must not quit the agent.
         false
-    }
-
-    /// Dock / Finder "Open" while Kadr is already running (docs/16 APP-1, APP-2).
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if recordingStorage?.isRecording == true {
-            refreshRecordingControlBar()
-        } else if statusItemController?.statusItem.isVisible == true {
-            statusItemController?.popIdleMenu()
-        } else {
-            openSettings()
-        }
-        return false
     }
 }

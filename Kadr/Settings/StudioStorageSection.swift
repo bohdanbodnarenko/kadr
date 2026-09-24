@@ -16,6 +16,7 @@ struct StudioStorageSection: View {
     @State private var lastCopyCount = 0
     @State private var byteCount = 0
     @State private var showsRemoveConfirmation = false
+    @State private var failureMessage: String?
 
     var body: some View {
         Section("Recording Sessions") {
@@ -27,6 +28,12 @@ struct StudioStorageSection: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
+            if let failureMessage {
+                Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
+
             if lastCopyCount > 0 {
                 Text(warning)
                     .font(.callout)
@@ -37,7 +44,7 @@ struct StudioStorageSection: View {
                 Button("Show in Finder") { reveal() }
             }
         }
-        .task { refresh() }
+        .task { await refresh() }
         .confirmationDialog(
             // The count is in the title because it is the fact that matters, and a dialog
             // whose title is a question the user answers without reading the body is how
@@ -62,10 +69,16 @@ struct StudioStorageSection: View {
             + "came from have been moved or deleted — so they are kept until you say otherwise."
     }
 
-    private func refresh() {
-        guard let store = StudioSessionRecorder.store() else { return }
-        lastCopyCount = store.sessionsHoldingTheOnlyCopy().count
-        byteCount = store.exclusiveByteCount()
+    /// Lists and sizes every session off the main thread: with a few long recordings
+    /// that walk took long enough to stall the pane as it opened (docs/17 T-SH-8).
+    private func refresh() async {
+        let counts = await Task.detached(priority: .userInitiated) { () -> (Int, Int)? in
+            guard let store = StudioSessionRecorder.store() else { return nil }
+            return (store.sessionsHoldingTheOnlyCopy().count, store.exclusiveByteCount())
+        }.value
+        guard let counts else { return }
+        lastCopyCount = counts.0
+        byteCount = counts.1
     }
 
     private func reveal() {
@@ -73,12 +86,30 @@ struct StudioStorageSection: View {
         NSWorkspace.shared.activateFileViewerSelecting([root])
     }
 
+    /// A session that could not be deleted is said so, rather than silently staying on
+    /// disk while the pane implies it went (docs/17 T-SH-8).
     private func removeLastCopies() {
-        guard let store = StudioSessionRecorder.store() else { return }
-        for session in store.sessionsHoldingTheOnlyCopy() {
-            try? session.delete()
+        Task {
+            let failures = await Task.detached(priority: .userInitiated) { () -> Int in
+                guard let store = StudioSessionRecorder.store() else { return 0 }
+                var failures = 0
+                for session in store.sessionsHoldingTheOnlyCopy() {
+                    do {
+                        try session.delete()
+                    } catch {
+                        failures += 1
+                    }
+                }
+                return failures
+            }.value
+            failureMessage = failures == 0
+                ? nil
+                :
+                String(
+                    localized: "\(failures) session(s) could not be deleted. Show in Finder to remove them by hand."
+                )
+            await refresh()
         }
-        refresh()
     }
 
     /// Bytes as somebody reads them.

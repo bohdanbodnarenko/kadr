@@ -20,3 +20,8 @@ xcuserdata/
 *.xcresult
 
 .derived
+# Release output: archives, exports, DMGs and the kept dSYMs (Scripts/release.sh)
+dist/
+
+# Editor tooling state, machine-local
+.cursor/hooks/state/

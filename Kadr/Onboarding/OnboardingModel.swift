@@ -215,13 +215,21 @@ final class OnboardingModel {
     ///
     /// Setup is *not* marked complete: the resume flag brings the user back to
     /// Permissions so they see Allowed and can finish the last screen.
+    /// Releases what the next instance needs before it starts — the CLI's port and the
+    /// global hotkeys — so it does not find them taken (docs/17 T-SH-3).
+    @ObservationIgnored var prepareForRelaunch: () -> Void = {}
+    /// Takes them back when the new instance could not be started.
+    @ObservationIgnored var relaunchFailed: () -> Void = {}
+
     func relaunch() {
         settings.resumeOnboardingAtPermissions = true
+        prepareForRelaunch()
         Task {
             do {
                 try await relauncher.relaunchForNewGrant()
             } catch {
                 logger.error("Could not relaunch: \(error.localizedDescription, privacy: .public)")
+                relaunchFailed()
             }
         }
     }

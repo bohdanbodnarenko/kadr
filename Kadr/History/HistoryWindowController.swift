@@ -39,7 +39,9 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if let window {
-            window.makeKeyAndOrderFront(nil)
+            // Activates and deminiaturizes too: a second request for an open window used
+            // to order it front behind the app the user was in (docs/17 T-SH-5).
+            juggler.bringForward(window)
             return
         }
 

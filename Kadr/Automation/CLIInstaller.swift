@@ -76,16 +76,33 @@ struct CLIInstaller {
         return .failed("Kadr could not write to /usr/local/bin or ~/.local/bin.")
     }
 
+    /// What Remove did. A failure used to read "Nothing to remove." (docs/16 APP-7,
+    /// docs/17 T-SH-8), which sent the user looking for a link that was still there.
+    enum RemovalOutcome: Equatable {
+        case removed
+        case nothingInstalled
+        case failed(String)
+
+        var message: String {
+            switch self {
+            case .removed: String(localized: "Removed.")
+            case .nothingInstalled: String(localized: "Nothing to remove.")
+            case let .failed(reason): reason
+            }
+        }
+    }
+
     @discardableResult
-    func uninstall() -> Bool {
-        guard let installedURL else { return false }
+    func uninstall() -> RemovalOutcome {
+        guard let installedURL else { return .nothingInstalled }
         do {
             try fileManager.removeItem(at: installedURL)
             logger.info("Removed the CLI at \(installedURL.path, privacy: .public)")
-            return true
+            return .removed
         } catch {
             logger.error("Could not remove \(installedURL.path, privacy: .public)")
-            return false
+            let path = installedURL.path
+            return .failed(String(localized: "Kadr could not remove \(path). Remove it in Terminal with: rm \(path)"))
         }
     }
 

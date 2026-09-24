@@ -110,6 +110,16 @@ final class HotkeyCenter {
         logger.info("Registered \(count, privacy: .public) global hotkeys")
     }
 
+    /// Stops every global hotkey without forgetting them, for the moment a relaunch hands
+    /// over to the next instance (docs/17 T-SH-3).
+    func suspend() {
+        KeyboardShortcuts.isEnabled = false
+    }
+
+    func resume() {
+        KeyboardShortcuts.isEnabled = true
+    }
+
     /// Rejects Option-only shortcuts and shortcuts already used by another Kadr command.
     ///
     /// Option-as-the-only-modifier hotkeys do not fire reliably on macOS 15

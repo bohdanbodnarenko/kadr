@@ -116,6 +116,9 @@ extension EditorAppDelegate {
         return fileItem
     }
 
+    // Grandfathered when SwiftLint first covered KadrEditor/ (docs/17 T-REL-8); split it
+    // when the editor's menus are next reworked (T-ED-2).
+    // swiftlint:disable:next function_body_length
     private func makeEditMenuItem() -> NSMenuItem {
         let editItem = NSMenuItem()
         let editMenu = NSMenu(title: String(localized: "Edit"))

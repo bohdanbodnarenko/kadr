@@ -78,6 +78,19 @@ public final class ActivationJuggler {
         logger.debug("Activation policy raised to .regular")
     }
 
+    /// Brings a window that is already open back to the front (docs/17 T-SH-5).
+    ///
+    /// `makeKeyAndOrderFront` alone is not enough for an agent: without activating, the
+    /// window orders front behind the app the user is in, and a minimised one stays in the
+    /// Dock. Every "show" of an existing Kadr window goes through here.
+    public func bringForward(_ window: NSWindow) {
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        application.activateApp()
+        window.makeKeyAndOrderFront(nil)
+    }
+
     /// Call when that window has closed.
     ///
     /// The accessory drop is deferred by one turn so the Dock icon does not flicker as

@@ -11,6 +11,7 @@ struct AdvancedPane: View {
     @State private var cliMessage: String?
     @State private var isInstalled = false
     @State private var showsResetConfirmation = false
+    @State private var showsRemoveDataConfirmation = false
 
     var body: some View {
         Form {
@@ -23,7 +24,7 @@ struct AdvancedPane: View {
                         .disabled(installer.bundledToolURL == nil)
 
                         Button("Remove") {
-                            cliMessage = installer.uninstall() ? "Removed." : "Nothing to remove."
+                            cliMessage = installer.uninstall().message
                             refresh()
                         }
                         .disabled(installer.installedURL == nil)
@@ -39,7 +40,7 @@ struct AdvancedPane: View {
                 LabeledContent("Scheme", value: "kadr://")
                 Text("Every command the tool takes also works as a URL, so Raycast, "
                     + "Alfred and Shortcuts can drive Kadr. CleanShot's verb names are "
-                    + "accepted as aliases. See docs/AUTOMATION.md for the full list.")
+                    + "accepted as aliases. Run `kadr help` in Terminal for the full list.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -63,6 +64,24 @@ struct AdvancedPane: View {
                     + "history are left alone.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+
+                Button("Remove All Kadr Data…", role: .destructive) {
+                    showsRemoveDataConfirmation = true
+                }
+                Text("Deletes History, recording sessions, pins, diagnostics and every "
+                    + "setting, then quits. Captures you saved to your own folders are kept.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Diagnostics") {
+                Button("Export Diagnostics…") {
+                    Task { await AppDelegate.shared.exportDiagnostics() }
+                }
+                Text("Writes a zip of Kadr's log, crash reports and this Mac's setup — no "
+                    + "captures or file names — and shows it in Finder. Nothing is sent.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .settingsFormChrome()
@@ -75,8 +94,23 @@ struct AdvancedPane: View {
             Button("Reset", role: .destructive) {
                 settings.resetToDefaults()
                 HotkeyCenter.restoreAll()
+                AppDelegate.shared.reapplySettingsAfterReset()
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Remove all Kadr data and quit?",
+            isPresented: $showsRemoveDataConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove and Quit", role: .destructive) {
+                AppDelegate.shared.removeAllKadrData()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("History, pins, settings and every recording session are deleted. A session "
+                + "that holds the only copy of a recording deletes that recording too. This "
+                + "cannot be undone.")
         }
     }
 
