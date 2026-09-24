@@ -20,7 +20,7 @@ final class ScrollRegionEditor {
     private let screen: NSScreen
     private var panel: ScrollRegionPanel?
     private var controls: NonActivatingPanel?
-    private var keyMonitor: Any?
+    private let keys = TransientHotKeys()
 
     var onStart: (DisplayRect) -> Void = { _ in }
     /// Start, and let Kadr do the scrolling.
@@ -57,8 +57,9 @@ final class ScrollRegionEditor {
         InteractiveRegionTracker.shared.register(panel)
 
         showControls(for: start)
-        NSApp.activate(ignoringOtherApps: true)
-        installKeyMonitor()
+        // No activation: Kadr stays in the background so the page can be scrolled and
+        // clicked, and Return and Escape still reach the frame (T-CAP-10).
+        installKeys()
     }
 
     /// Stops editing: the frame stays, dimmed around, but nothing on it takes clicks.
@@ -165,32 +166,34 @@ final class ScrollRegionEditor {
     }
 
     private func removeControls() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-        }
-        keyMonitor = nil
+        keys.stop()
         controls?.orderOut(nil)
         controls?.contentView = nil
         controls = nil
     }
 
-    private func installKeyMonitor() {
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, controls != nil else { return event }
-            switch event.keyCode {
-            case 36, 76:
-                if event.modifierFlags.contains(.option) {
-                    startAuto()
-                } else {
-                    start()
-                }
-                return nil
-            case 53:
-                cancel()
-                return nil
-            default:
-                return event
-            }
+    /// Return starts, ⌥Return starts with Kadr scrolling, Escape cancels.
+    ///
+    /// Hot keys rather than a local monitor: a local monitor only sees keys while Kadr is
+    /// active, and the moment the user clicks into the page to line it up, it is not.
+    private func installKeys() {
+        keys.start([
+            .returnKey: { [weak self] in self?.startIfEditing(auto: false) },
+            .enter: { [weak self] in self?.startIfEditing(auto: false) },
+            .optionReturn: { [weak self] in self?.startIfEditing(auto: true) },
+            .escape: { [weak self] in
+                guard self?.controls != nil else { return }
+                self?.cancel()
+            },
+        ])
+    }
+
+    private func startIfEditing(auto: Bool) {
+        guard controls != nil else { return }
+        if auto {
+            startAuto()
+        } else {
+            start()
         }
     }
 }
@@ -274,7 +277,7 @@ final class ScrollRegionView: NSView {
 
     private func configureLayers() {
         guard let root = layer else { return }
-        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        let scale = window?.backingScaleFactor ?? ActiveScreen.resolve()?.backingScaleFactor ?? 2
         dim.fillRule = .evenOdd
         dim.fillColor = NSColor.black.withAlphaComponent(0.35).cgColor
         border.fillColor = nil

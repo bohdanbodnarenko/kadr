@@ -137,6 +137,11 @@ final class CaptureCountdown {
         // running countdown to know there is one. `cancel()` is idempotent.
         onCancel?()
         cancel()
+        // Cleared only for the call, so a re-entrant Escape cannot run it twice. The owner
+        // sets it once, and the next countdown's Escape must still reach it (T-CAP-12).
+        if self.onCancel == nil {
+            self.onCancel = onCancel
+        }
     }
 
     private func tick(_ remaining: Int) {
@@ -171,7 +176,7 @@ final class CaptureCountdown {
 @MainActor
 private final class CountdownEscape {
     /// `KDRE`, so this registration cannot collide with anything else in the process.
-    private static let signature = OSType(0x4B44_5245)
+    fileprivate static let signature = OSType(0x4B44_5245)
 
     private var hotKey: EventHotKeyRef?
     private var handler: EventHandlerRef?
@@ -219,8 +224,22 @@ private final class CountdownEscape {
         let context = Unmanaged.passUnretained(self).toOpaque()
         InstallEventHandler(
             GetEventDispatcherTarget(),
-            { _, _, userData in
-                guard let userData else { return noErr }
+            { _, event, userData in
+                guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+                var hotKeyID = EventHotKeyID()
+                let status = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+                // Another registration's key (`TransientHotKeys`): not ours to answer.
+                guard status == noErr, hotKeyID.signature == CountdownEscape.signature else {
+                    return OSStatus(eventNotHandledErr)
+                }
                 // The Carbon dispatcher runs on the main run loop, which is the main actor.
                 let escape = MainActor.assumeIsolated {
                     Unmanaged<CountdownEscape>.fromOpaque(userData).takeUnretainedValue()

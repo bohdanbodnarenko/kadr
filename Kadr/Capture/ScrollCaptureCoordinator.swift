@@ -108,7 +108,7 @@ final class ScrollCaptureCoordinator {
         automationCompletion(outcome)
     }
 
-    private var usesAutoScroll: Bool {
+    var usesAutoScroll: Bool {
         overrides.autoScroll ?? settings.scrollAutoScroll
     }
 
@@ -117,10 +117,22 @@ final class ScrollCaptureCoordinator {
     /// No freeze and no drawing: the frame opens around the window under the pointer, and
     /// the page stays live underneath so it can be scrolled into place first
     /// (`ScrollRegionEditor`).
+    ///
+    /// The command toggles: a second press while the frame is up cancels it, and while
+    /// frames are being grabbed it is Stop (T-CAP-10).
     func begin() {
+        if state == .capturing {
+            stop()
+            return
+        }
+        if stage != nil, state == .idle {
+            dismissStage()
+            finish(nil)
+            return
+        }
         guard state == .idle, stage == nil else { return }
         guard recovery.allowCapture(permissions: permissions, includePicker: false) else { return }
-        guard let screen = ActiveScreen.resolve() ?? NSScreen.main else { return }
+        guard let screen = ActiveScreen.resolve() else { return }
         Task { [weak self] in
             guard let self else { return }
             let window = await windowUnderPointer(on: screen)
@@ -176,7 +188,9 @@ final class ScrollCaptureCoordinator {
                 await strip.begin(frameSize: session.pixelSize, axis: settings.scrollAxis)
                 state = .capturing
                 showHUD(over: rect, on: display)
-                if auto || usesAutoScroll {
+                // Trust was settled before Start (`confirmAutoScrollTrust`), so an
+                // untrusted run is simply the assisted tier — no prompt over live frames.
+                if auto || usesAutoScroll, AutoScroller.isTrusted {
                     startAutoScroll(in: rect, on: display)
                 }
                 logger.info("Scrolling capture started")

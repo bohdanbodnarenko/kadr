@@ -38,7 +38,6 @@ extension ScrollCaptureCoordinator {
         guard AutoScroller.isTrusted else {
             // Asking now rather than at launch is the whole policy (docs/04 §3.2). The
             // grant only takes effect next time, so this run stays assisted.
-            AutoScroller.requestTrust()
             explainAccessibility()
             return
         }

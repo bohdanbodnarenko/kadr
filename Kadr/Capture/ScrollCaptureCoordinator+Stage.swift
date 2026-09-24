@@ -33,7 +33,17 @@ extension ScrollCaptureCoordinator {
             finish(nil)
             return
         }
+        if auto || usesAutoScroll {
+            confirmAutoScrollTrust()
+        }
         start(region: rect, display: display, auto: auto)
+    }
+
+    /// Asks about Accessibility before any frame is grabbed, once, rather than with a
+    /// system prompt and an alert stacked on a running capture (T-CAP-10).
+    private func confirmAutoScrollTrust() {
+        guard !AutoScroller.isTrusted else { return }
+        explainAccessibility()
     }
 
     func dismissStage() {

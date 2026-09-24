@@ -15,6 +15,8 @@ final class ScrollCaptureHUD {
     private let settings: AppSettings
     private let anchor: ScreenRect
     private var panel: NonActivatingPanel?
+    /// Escape cancels and Return finishes, with the page behind still in the user's hands.
+    private let keys = TransientHotKeys()
 
     private static let width: CGFloat = 240
     private static let margin: CGFloat = 16
@@ -54,6 +56,11 @@ final class ScrollCaptureHUD {
         panel.setFrame(frame(for: hosting.fittingSize), display: false)
         panel.orderFrontRegardless()
         self.panel = panel
+        keys.start([
+            .escape: { [weak self] in self?.coordinator.cancel() },
+            .returnKey: { [weak self] in self?.coordinator.stop() },
+            .enter: { [weak self] in self?.coordinator.stop() },
+        ])
     }
 
     /// Swaps the controls for a progress note while the helper works.
@@ -63,6 +70,7 @@ final class ScrollCaptureHUD {
     }
 
     func dismiss() {
+        keys.stop()
         panel?.orderOut(nil)
         panel?.contentView = nil
         panel = nil
@@ -73,7 +81,7 @@ final class ScrollCaptureHUD {
     private func frame(for size: CGSize) -> NSRect {
         let screen = NSScreen.screens.first {
             $0.frame.intersects(anchor.cgRect)
-        } ?? NSScreen.main
+        } ?? ActiveScreen.resolve()
         let visible = screen?.visibleFrame ?? .zero
 
         let toTheRight = anchor.maxX + Self.margin

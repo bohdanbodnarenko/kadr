@@ -33,9 +33,8 @@ extension ScrollCaptureCoordinator {
         alert.addButton(withTitle: "Keep Anyway")
         alert.addButton(withTitle: "Retry")
         alert.addButton(withTitle: "Export Frames")
-        NSApp.activate()
 
-        return switch alert.runModal() {
+        return switch runModal(alert) {
         case .alertSecondButtonReturn: .retry
         case .alertThirdButtonReturn: .exportFrames
         default: .keep
@@ -49,8 +48,7 @@ extension ScrollCaptureCoordinator {
             + "page together yourself."
         alert.addButton(withTitle: "Export Frames")
         alert.addButton(withTitle: "Discard")
-        NSApp.activate()
-        if alert.runModal() == .alertFirstButtonReturn {
+        if runModal(alert) == .alertFirstButtonReturn {
             exportFrames(frames)
         }
     }
@@ -64,8 +62,12 @@ extension ScrollCaptureCoordinator {
         panel.canCreateDirectories = true
         panel.prompt = "Export Here"
         panel.message = "Choose where to put the \(frames.count) captured frames."
-        NSApp.activate()
-        guard panel.runModal() == .OK, let directory = panel.url else { return }
+        let response = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) {
+            panel.runModal()
+        }
+        guard response == .OK, let directory = panel.url else { return }
 
         let folder = directory.appendingPathComponent(
             "Kadr Scrolling Capture \(Self.folderFormatter.string(from: Date()))",
@@ -101,15 +103,28 @@ extension ScrollCaptureCoordinator {
         return CGPoint(x: rect.minX + rect.width / 2, y: rect.minY + rect.height / 2)
     }
 
+    /// The one explainer for auto-scroll's permission. Shown before Start, never over a
+    /// capture that is already grabbing frames (T-CAP-10).
     func explainAccessibility() {
         let alert = NSAlert()
         alert.messageText = "Kadr needs Accessibility to scroll for you"
         alert.informativeText = "Auto-scroll works by sending scroll events to the window "
-            + "you picked, which macOS only allows with Accessibility permission. Grant it "
-            + "in System Settings and try again — this capture will carry on with you doing "
-            + "the scrolling."
-        alert.addButton(withTitle: "OK")
-        NSApp.activate()
-        alert.runModal()
+            + "you picked, which macOS only allows with Accessibility permission. This "
+            + "capture will carry on with you doing the scrolling; the permission takes "
+            + "effect from the next one."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Scroll Myself")
+        if runModal(alert) == .alertFirstButtonReturn {
+            // The system's own prompt, whose button opens the right pane.
+            AutoScroller.requestTrust()
+        }
+    }
+
+    /// An alert from an accessory app: Kadr is activated for it, and the app the user was
+    /// in gets activation back afterwards (docs/17 §5 theme 1).
+    private func runModal(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        ActivationJuggler.shared.withTemporaryActivation(returningTo: ActivationJuggler.returnTarget()) {
+            alert.runModal()
+        }
     }
 }
