@@ -238,7 +238,7 @@ private struct SettingsDetailView: View {
             case .shortcuts:
                 ShortcutsPane()
             case .updates:
-                UpdatesPane(updater: .shared)
+                UpdatesPane(updater: .shared, copyDiagnosticSummary: { AppDelegate.shared.copyDiagnosticSummary() })
             case .advanced:
                 AdvancedPane(settings: settings)
             }
