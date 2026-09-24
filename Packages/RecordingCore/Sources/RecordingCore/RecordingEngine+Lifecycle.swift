@@ -179,11 +179,10 @@ extension RecordingEngine {
         segmentStartTime = nil
         let url = sessionDirectory.appendingPathComponent("segment-\(segments.count).mp4")
         writer = try makeWriter(url, pixelSize.width, pixelSize.height, options)
+        // The held frame is not appended here. It still carries its pre-pause time, and a
+        // segment that opened on it would write the whole pause back in as a frozen frame
+        // (docs/17 T-REC-1). `consume` seeds it, re-timed, with the first live sample.
         segmentHasVideo = false
-        if let lastVideoBox {
-            _ = await writer?.append(lastVideoBox)
-            segmentHasVideo = true
-        }
     }
 
     /// - Parameter trimmingTail: only a stop passes one. A pause closes a segment too, and

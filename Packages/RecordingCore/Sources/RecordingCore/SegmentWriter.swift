@@ -32,6 +32,33 @@ public struct SampleBufferBox: @unchecked Sendable {
         self.scaleFactor = scaleFactor
     }
 
+    /// The same sample stamped at `time`, sharing its image; nil if CoreMedia refuses.
+    ///
+    /// Used to reuse a held frame after a pause without carrying its old timestamp.
+    func retimed(to time: CMTime) -> SampleBufferBox? {
+        var timing = CMSampleTimingInfo(
+            duration: .invalid,
+            presentationTimeStamp: time,
+            decodeTimeStamp: .invalid
+        )
+        var copy: CMSampleBuffer?
+        let status = CMSampleBufferCreateCopyWithNewTiming(
+            allocator: kCFAllocatorDefault,
+            sampleBuffer: buffer,
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing,
+            sampleBufferOut: &copy
+        )
+        guard status == noErr, let copy else { return nil }
+        return SampleBufferBox(
+            buffer: copy,
+            kind: kind,
+            contentRect: contentRect,
+            screenRect: screenRect,
+            scaleFactor: scaleFactor
+        )
+    }
+
     public enum Kind: Sendable {
         case video
         case systemAudio

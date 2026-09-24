@@ -195,6 +195,11 @@ public actor RecordingEngine {
             output?.finish()
         }
 
+        /// Hands a sample to the engine as the stream's consumer would.
+        func deliverForTesting(_ box: SampleBufferBox) async {
+            await consume(box)
+        }
+
         func deliverWriterFailureForTesting(_ message: String) {
             noteInterruption(.writerFailed(message))
         }
@@ -354,14 +359,13 @@ public actor RecordingEngine {
             let time = recordingTime(of: box.buffer)
             reportGeometry(of: box, at: time)
             clockObserver?(time)
-            if !segmentHasVideo, let lastVideoBox {
-                let accepted = await writer.append(lastVideoBox)
-                segmentHasVideo = accepted
-                if !accepted, let reason = await writer.failureReason {
-                    noteInterruption(.writerFailed(reason))
-                }
-            }
+            await seedHeldFrame(into: writer, at: box)
             return
+        }
+        if box.kind != .video {
+            // Audio can arrive before the first picture after a resume; the held frame
+            // opens the segment so that sound is not dropped by a session with no video.
+            await seedHeldFrame(into: writer, at: box)
         }
         if box.kind == .microphone {
             audioMeter.microphone = AudioLevel.peak(of: box.buffer)
@@ -384,6 +388,24 @@ public actor RecordingEngine {
             }
         }
         let accepted = await writer.append(box)
+        if !accepted, let reason = await writer.failureReason {
+            noteInterruption(.writerFailed(reason))
+        }
+    }
+
+    /// Opens a segment that has no picture yet with the last frame seen, re-timed to `box`.
+    ///
+    /// The frame was captured before the pause. Appended with its own time it would start
+    /// the writer's session there, and `last − first` would count the pause as footage — a
+    /// frozen stretch in the file and every later click early by its length (docs/17
+    /// T-REC-1). Stamped with the live sample's time, the segment starts where the
+    /// recording clock restarts, so the file and the telemetry agree.
+    private func seedHeldFrame(into writer: any SegmentWriting, at box: SampleBufferBox) async {
+        guard !segmentHasVideo, let lastVideoBox else { return }
+        let time = CMSampleBufferGetPresentationTimeStamp(box.buffer)
+        guard let held = lastVideoBox.retimed(to: time) else { return }
+        let accepted = await writer.append(held)
+        segmentHasVideo = accepted
         if !accepted, let reason = await writer.failureReason {
             noteInterruption(.writerFailed(reason))
         }
