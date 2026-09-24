@@ -212,6 +212,12 @@ extension SelectionOverlayView {
             sizeEntry.reset()
             redraw()
         }
+        // Nothing drawn yet: Return takes the dashed ghost, which is what its label
+        // promises (T-CAP-12).
+        if interaction.rect == nil, mode == .area, let ghost = lastRegionGhost, !ghost.isEmpty {
+            onCommit?(ghost)
+            return
+        }
         guard let rect = interaction.rect, !rect.isEmpty else { return }
         if confirmsSelection, interaction.phase != .selected {
             interaction.setRect(rect)

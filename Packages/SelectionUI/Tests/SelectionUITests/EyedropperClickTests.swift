@@ -86,6 +86,20 @@ struct EyedropperClickTests {
         #expect(picks == 1, "the release still picks, where the loupe ended up")
     }
 
+    @Test("Return with nothing drawn takes the last-area ghost (T-CAP-12)")
+    func returnTakesGhost() {
+        let view = makeView()
+        view.setEyedropperMode(false)
+        let ghost = CGRect(x: 2, y: 3, width: 10, height: 8)
+        view.lastRegionGhost = ghost
+        var committed: [CGRect] = []
+        view.onCommit = { committed.append($0) }
+
+        view.commitTypedSizeOrSelection()
+
+        #expect(committed == [ghost])
+    }
+
     @Test("Without the eyedropper, a drag commits a region as before")
     func normalDragCommits() throws {
         let view = makeView()

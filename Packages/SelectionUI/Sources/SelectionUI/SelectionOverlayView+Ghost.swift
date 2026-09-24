@@ -37,7 +37,7 @@ extension SelectionOverlayView {
         ghostLayer.isHidden = false
         let widthPx = Int((ghost.width * displayScale.factor).rounded())
         let heightPx = Int((ghost.height * displayScale.factor).rounded())
-        let text = "\(widthPx) × \(heightPx)  ·  Repeat last area"
+        let text = "\(widthPx) × \(heightPx)  ·  Return repeats last area"
         ghostLabelLayer.string = text
         let width = Self.badgeWidth(for: text)
         ghostLabelLayer.frame = CGRect(

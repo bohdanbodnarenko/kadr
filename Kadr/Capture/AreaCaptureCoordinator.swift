@@ -224,7 +224,11 @@ final class AreaCaptureCoordinator {
                 await engine.setDynamicRange(settings.captureDynamicRange)
                 await CaptureExclusionPush.into(engine)
                 let freezes = try await engine.freezeAllDisplays()
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    // Superseded after the freeze: close the interval rather than leak it.
+                    signposter.endInterval("hotkeyToOverlay", interval)
+                    return
+                }
                 permissions.noteCaptureSuccess()
 
                 let windows: [PickableWindowDescriptor] = if mode == .window {

@@ -63,7 +63,8 @@ public final class CountdownPanel {
 
         self.placement = placement
         let size = Self.size(for: placement)
-        let frame = Self.frame(size: size, placement: placement, in: screen.frame)
+        // The visible frame: the full frame put the corner badge under a notched menu bar.
+        let frame = Self.frame(size: size, placement: placement, in: screen.visibleFrame)
         present(frame: frame, size: size, scale: screen.backingScaleFactor)
         update(seconds: seconds)
     }

@@ -289,7 +289,7 @@ final class SelectionOverlayView: NSView {
 
         let point = convert(event.locationInWindow, from: nil)
         if confirmsSelection, interaction.phase == .selected, let rect = interaction.rect {
-            if let corner = handles.corner(at: point, in: rect, scale: displayScale) {
+            if let corner = handles.corner(at: point, in: rect) {
                 activeHandle = corner
                 handleAnchor = oppositePoint(for: corner, in: rect)
                 return

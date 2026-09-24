@@ -155,12 +155,13 @@ extension SelectionOverlayView {
         refreshAccessibilityElement(announcePhaseChange: true)
     }
 
+    /// What counts as a change worth announcing. Not the rect: it changes on every drag
+    /// event, and announcing each one flooded VoiceOver (T-CAP-12).
     var accessibilityPhaseToken: String {
         [
             mode == .area ? "area" : "window",
             String(describing: interaction.phase),
-            windowPick.hovered.map(\.label) ?? "",
-            interaction.rect.map { DimensionFormatter.text(for: $0, scale: displayScale) } ?? ""
+            windowPick.hovered.map(\.label) ?? ""
         ].joined(separator: "|")
     }
 

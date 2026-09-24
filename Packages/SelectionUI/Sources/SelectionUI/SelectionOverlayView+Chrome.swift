@@ -11,17 +11,22 @@ extension SelectionOverlayView {
             handles.hide()
             return
         }
-        handles.show(along: rect, scale: displayScale)
+        handles.show(along: rect)
     }
 
+    /// Runs on every mouse event, so it does as little as possible (T-CAP-12).
+    ///
+    /// The dimensions are kept current as the element's value, which VoiceOver reads when
+    /// asked; an announcement and a rebuilt action list happen only when the phase, mode
+    /// or hovered window changes — not 120 times a second while dragging.
     func refreshAccessibilityIfNeeded() {
         let rect = interaction.rect ?? .zero
-        let hovered = windowPick.hovered?.id
-        let token = accessibilityPhaseToken
-        let rectChanged = rect != lastAccessibilityRect
-        let shouldAnnounce = token != accessibilityAnnouncedPhase && (rectChanged || hovered != nil)
-        lastAccessibilityRect = rect.isEmpty ? nil : rect
-        refreshAccessibilityElement(announcePhaseChange: shouldAnnounce)
+        if rect != (lastAccessibilityRect ?? .zero) {
+            lastAccessibilityRect = rect.isEmpty ? nil : rect
+            accessibilityProxy?.setAccessibilityValue(accessibilitySummaryValue)
+        }
+        guard accessibilityPhaseToken != accessibilityAnnouncedPhase else { return }
+        refreshAccessibilityElement(announcePhaseChange: true)
     }
 
     func oppositePoint(

@@ -37,8 +37,11 @@ final class SelectionHandleLayerGroup {
         }
     )
 
-    private static let handleSize: CGFloat = 8
-    private static let hitRadius: CGFloat = 10
+    /// In points, which is what layer geometry is in: dividing by the backing scale made
+    /// these 4 pt on Retina with a 5 pt hit area (T-CAP-12).
+    static let handleSize: CGFloat = 8
+    /// 16 pt across — a comfortable target without eating the selection's own edges.
+    static let hitRadius: CGFloat = 8
 
     init() {
         for layer in handleLayers.values {
@@ -46,8 +49,8 @@ final class SelectionHandleLayerGroup {
         }
     }
 
-    func show(along rect: CGRect, scale: DisplayScale) {
-        let size = Self.handleSize / scale.factor
+    func show(along rect: CGRect) {
+        let size = Self.handleSize
         let inset = size / 2
         for (corner, layer) in handleLayers {
             let center = corner.point(in: rect)
@@ -69,8 +72,8 @@ final class SelectionHandleLayerGroup {
         container.isHidden = true
     }
 
-    func corner(at point: CGPoint, in rect: CGRect, scale: DisplayScale) -> Corner? {
-        let radius = Self.hitRadius / scale.factor
+    func corner(at point: CGPoint, in rect: CGRect) -> Corner? {
+        let radius = Self.hitRadius
         for corner in Corner.allCases where corner.point(in: rect).distance(to: point) <= radius {
             return corner
         }
