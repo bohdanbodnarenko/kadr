@@ -6,11 +6,6 @@ import SettingsKit
 /// The agent writes these keys into its own domain; the editor is another app with another
 /// domain, so every read goes through `SharedPreferences` (T-ED-3).
 public enum EditorCanvasPreferences {
-    public static let lockCanvasByDefaultKey = SettingKeys.lockCanvasByDefault.name
-    public static let objectShadowsEnabledKey = SettingKeys.objectShadowsEnabled.name
-    public static let keepOriginalWhenAnnotatingKey = SettingKeys.keepOriginalWhenAnnotating.name
-    public static let writesSidecarOnSaveKey = SettingKeys.writesSidecarOnSave.name
-
     public static func lockCanvasByDefault(preferences: SharedPreferences = SharedPreferences()) -> Bool {
         preferences.lockCanvasByDefault
     }

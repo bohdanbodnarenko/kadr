@@ -36,9 +36,23 @@ public struct SharedPreferences: Sendable {
 
     // MARK: - The agent keys other processes read
 
-    public var lockCanvasByDefault: Bool { self[SettingKeys.lockCanvasByDefault] }
-    public var objectShadowsEnabled: Bool { self[SettingKeys.objectShadowsEnabled] }
-    public var keepOriginalWhenAnnotating: Bool { self[SettingKeys.keepOriginalWhenAnnotating] }
-    public var writesSidecarOnSave: Bool { self[SettingKeys.writesSidecarOnSave] }
-    public var convertExportsToSRGB: Bool { self[SettingKeys.convertExportsToSRGB] }
+    public var lockCanvasByDefault: Bool {
+        self[SettingKeys.lockCanvasByDefault]
+    }
+
+    public var objectShadowsEnabled: Bool {
+        self[SettingKeys.objectShadowsEnabled]
+    }
+
+    public var keepOriginalWhenAnnotating: Bool {
+        self[SettingKeys.keepOriginalWhenAnnotating]
+    }
+
+    public var writesSidecarOnSave: Bool {
+        self[SettingKeys.writesSidecarOnSave]
+    }
+
+    public var convertExportsToSRGB: Bool {
+        self[SettingKeys.convertExportsToSRGB]
+    }
 }

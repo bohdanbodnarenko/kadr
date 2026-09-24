@@ -12,7 +12,9 @@ struct EditorSaveTargetsTests {
         let existing: Set<String>
         let flattened: String
         let project: String?
-        var testDescription: String { label }
+        var testDescription: String {
+            label
+        }
     }
 
     static let dir = "/Users/me/Shots/"
@@ -20,39 +22,66 @@ struct EditorSaveTargetsTests {
     static let cases: [Case] = [
         Case(
             label: "capture, keep original, sidecar",
-            document: "X.png", keepOriginal: true, writesProject: true, existing: [],
-            flattened: "X annotated.png", project: "X annotated.kadr"
+            document: "X.png",
+            keepOriginal: true,
+            writesProject: true,
+            existing: [],
+            flattened: "X annotated.png",
+            project: "X annotated.kadr"
         ),
         Case(
             label: "capture, keep original, no sidecar",
-            document: "X.png", keepOriginal: true, writesProject: false, existing: [],
-            flattened: "X annotated.png", project: nil
+            document: "X.png",
+            keepOriginal: true,
+            writesProject: false,
+            existing: [],
+            flattened: "X annotated.png",
+            project: nil
         ),
         Case(
             label: "capture, overwrite keeps the format",
-            document: "X.jpg", keepOriginal: false, writesProject: true, existing: [],
-            flattened: "X.jpg", project: "X.kadr"
+            document: "X.jpg",
+            keepOriginal: false,
+            writesProject: true,
+            existing: [],
+            flattened: "X.jpg",
+            project: "X.kadr"
         ),
         Case(
             label: "the annotated pair saves in place, not as annotated annotated",
-            document: "X annotated.kadr", keepOriginal: true, writesProject: false,
+            document: "X annotated.kadr",
+            keepOriginal: true,
+            writesProject: false,
             existing: ["X annotated.png"],
-            flattened: "X annotated.png", project: "X annotated.kadr"
+            flattened: "X annotated.png",
+            project: "X annotated.kadr"
         ),
         Case(
             label: "an agent project, overwrite: sibling image and project in place",
-            document: "X.kadr", keepOriginal: false, writesProject: false, existing: ["X.heic"],
-            flattened: "X.heic", project: "X.kadr"
+            document: "X.kadr",
+            keepOriginal: false,
+            writesProject: false,
+            existing: ["X.heic"],
+            flattened: "X.heic",
+            project: "X.kadr"
         ),
         Case(
             label: "an agent project, keep original: the capture is left alone",
-            document: "X.kadr", keepOriginal: true, writesProject: true, existing: ["X.png"],
-            flattened: "X annotated.png", project: "X annotated.kadr"
+            document: "X.kadr",
+            keepOriginal: true,
+            writesProject: true,
+            existing: ["X.png"],
+            flattened: "X annotated.png",
+            project: "X annotated.kadr"
         ),
         Case(
             label: "a project with no image beside it gets a PNG",
-            document: "Plan.kadr", keepOriginal: false, writesProject: false, existing: [],
-            flattened: "Plan.png", project: "Plan.kadr"
+            document: "Plan.kadr",
+            keepOriginal: false,
+            writesProject: false,
+            existing: [],
+            flattened: "Plan.png",
+            project: "Plan.kadr"
         )
     ]
 

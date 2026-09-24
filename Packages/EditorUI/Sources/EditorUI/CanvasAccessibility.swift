@@ -57,33 +57,30 @@ enum CanvasAccessibility {
     /// A plain colour word: enough to tell "the red arrow" from "the blue one".
     static func spokenName(of color: AnnotationColor) -> String {
         let high = max(color.red, color.green, color.blue)
-        let low = min(color.red, color.green, color.blue)
-        let chroma = high - low
-        if chroma < 0.15 {
-            if high > 0.85 { return "white" }
-            if high < 0.2 { return "black" }
-            return "gray"
+        let chroma = high - min(color.red, color.green, color.blue)
+        guard chroma >= 0.15 else {
+            return high > 0.85 ? "white" : high < 0.2 ? "black" : "gray"
         }
-        var hue: Double
-        if high == color.red {
-            hue = (color.green - color.blue) / chroma
+        let hue = hue(of: color, high: high, chroma: chroma)
+        return hueNames.first { hue < $0.upperBound }?.name ?? "red"
+    }
+
+    /// Hue names by the upper edge of their band, in degrees.
+    private static let hueNames: [(upperBound: Double, name: String)] = [
+        (15, "red"), (40, "orange"), (70, "yellow"), (170, "green"), (200, "teal"),
+        (260, "blue"), (290, "purple"), (345, "pink"), (360, "red")
+    ]
+
+    private static func hue(of color: AnnotationColor, high: Double, chroma: Double) -> Double {
+        let sector = if high == color.red {
+            (color.green - color.blue) / chroma
         } else if high == color.green {
-            hue = (color.blue - color.red) / chroma + 2
+            (color.blue - color.red) / chroma + 2
         } else {
-            hue = (color.red - color.green) / chroma + 4
+            (color.red - color.green) / chroma + 4
         }
-        hue *= 60
-        if hue < 0 { hue += 360 }
-        switch hue {
-        case ..<15, 345...: return "red"
-        case ..<40: return "orange"
-        case ..<70: return "yellow"
-        case ..<170: return "green"
-        case ..<200: return "teal"
-        case ..<260: return "blue"
-        case ..<290: return "purple"
-        default: return "pink"
-        }
+        let degrees = sector * 60
+        return degrees < 0 ? degrees + 360 : degrees
     }
 
     /// Tab and ⇧Tab: the next annotation after the current selection, wrapping round.

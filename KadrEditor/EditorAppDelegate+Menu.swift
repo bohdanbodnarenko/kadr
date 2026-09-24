@@ -4,7 +4,8 @@ extension EditorAppDelegate {
     /// A minimal menu bar: the commands a `.regular` app is expected to have.
     ///
     /// Built in code rather than in a nib. Without a nib, AppKit creates no Window or
-    /// Services menu of its own: both are built here and handed to `NSApp` (T-ED-2). Open is the one that earns it — without it,
+    /// Services menu of its own: both are built here and handed to `NSApp` (T-ED-2). Open is the one that earns it —
+    /// without it,
     /// import-from-Finder works only by dragging onto the icon (docs/09 U1.8).
     func makeMainMenu() -> NSMenu {
         let main = NSMenu()

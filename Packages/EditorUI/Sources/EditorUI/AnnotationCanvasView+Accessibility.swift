@@ -6,30 +6,30 @@ import AppKit
 /// A layout area whose children are the annotations, each with a spoken label, a frame
 /// and actions: Press selects it, Delete removes it. Tab and ⇧Tab walk the same list from
 /// the keyboard (see `applyTabKey`), so the canvas no longer needs a pointer.
-extension AnnotationCanvasView {
-    override public func isAccessibilityElement() -> Bool {
+public extension AnnotationCanvasView {
+    override func isAccessibilityElement() -> Bool {
         true
     }
 
-    override public func accessibilityRole() -> NSAccessibility.Role? {
+    override func accessibilityRole() -> NSAccessibility.Role? {
         .layoutArea
     }
 
-    override public func accessibilityLabel() -> String? {
+    override func accessibilityLabel() -> String? {
         "Canvas"
     }
 
-    override public func accessibilityHelp() -> String? {
+    override func accessibilityHelp() -> String? {
         "Tab and Shift-Tab select annotations. Arrow keys move the selection."
     }
 
-    override public func accessibilityChildren() -> [Any]? {
+    override func accessibilityChildren() -> [Any]? {
         CanvasAccessibility.items(for: model.document.commands).map { item in
             CanvasAnnotationElement(item: item, frame: viewRect(fromImage: item.frame), canvas: self)
         }
     }
 
-    override public func accessibilitySelectedChildren() -> [Any]? {
+    override func accessibilitySelectedChildren() -> [Any]? {
         accessibilityChildren()?.filter {
             guard let element = $0 as? CanvasAnnotationElement else { return false }
             return model.selection.contains(element.annotationID)
@@ -37,7 +37,7 @@ extension AnnotationCanvasView {
     }
 
     /// An image-space rectangle in this view's coordinates.
-    func viewRect(fromImage rect: CGRect) -> CGRect {
+    internal func viewRect(fromImage rect: CGRect) -> CGRect {
         let first = viewPoint(fromImage: CGPoint(x: rect.minX, y: rect.minY))
         let second = viewPoint(fromImage: CGPoint(x: rect.maxX, y: rect.maxY))
         return CGRect(
@@ -49,7 +49,7 @@ extension AnnotationCanvasView {
     }
 
     /// Selects one annotation from VoiceOver or the keyboard.
-    func selectForAccessibility(_ id: AnnotationID) {
+    internal func selectForAccessibility(_ id: AnnotationID) {
         if model.tool != .select {
             model.selectTool(.select)
         }
@@ -59,7 +59,7 @@ extension AnnotationCanvasView {
     }
 
     /// Deletes one annotation from VoiceOver.
-    func deleteForAccessibility(_ id: AnnotationID) {
+    internal func deleteForAccessibility(_ id: AnnotationID) {
         model.selection = [id]
         model.deleteSelection()
         refreshAfterEdit()
@@ -68,9 +68,9 @@ extension AnnotationCanvasView {
 
     /// Tab and ⇧Tab cycle the selection through the annotations. Returns false when there
     /// is nothing to select, so the key view loop can take focus onwards instead.
-    func applyTabKey(_ event: NSEvent) -> Bool {
+    internal func applyTabKey(_ event: NSEvent) -> Bool {
         guard event.keyCode == 48,
-              event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+              event.modifierFlags.isDisjoint(with: [.command, .control, .option])
         else {
             return false
         }
@@ -111,8 +111,8 @@ final class CanvasAnnotationElement: NSAccessibilityElement {
         ])
     }
 
-    // Accessibility calls arrive on the main thread; the element type just is not
-    // annotated as such.
+    /// Accessibility calls arrive on the main thread; the element type just is not
+    /// annotated as such.
     override func accessibilityPerformPress() -> Bool {
         let canvas = canvas
         let id = annotationID

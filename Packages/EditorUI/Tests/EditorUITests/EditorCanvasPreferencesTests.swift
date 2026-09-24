@@ -18,7 +18,7 @@ struct EditorCanvasPreferencesTests {
     func lockByDefault() throws {
         try withDomain { defaults, preferences in
             #expect(!EditorCanvasPreferences.lockCanvasByDefault(preferences: preferences))
-            defaults.set(true, forKey: EditorCanvasPreferences.lockCanvasByDefaultKey)
+            defaults.set(true, forKey: SettingKeys.lockCanvasByDefault.name)
             defaults.synchronize()
             #expect(EditorCanvasPreferences.lockCanvasByDefault(preferences: preferences))
         }
@@ -28,7 +28,7 @@ struct EditorCanvasPreferencesTests {
     func objectShadows() throws {
         try withDomain { defaults, preferences in
             #expect(EditorCanvasPreferences.objectShadowsEnabled(preferences: preferences))
-            defaults.set(false, forKey: EditorCanvasPreferences.objectShadowsEnabledKey)
+            defaults.set(false, forKey: SettingKeys.objectShadowsEnabled.name)
             defaults.synchronize()
             #expect(!EditorCanvasPreferences.objectShadowsEnabled(preferences: preferences))
         }
@@ -39,7 +39,7 @@ struct EditorCanvasPreferencesTests {
         try withDomain { defaults, preferences in
             #expect(EditorCanvasPreferences.keepOriginalWhenAnnotating(preferences: preferences))
 
-            defaults.set(false, forKey: EditorCanvasPreferences.keepOriginalWhenAnnotatingKey)
+            defaults.set(false, forKey: SettingKeys.keepOriginalWhenAnnotating.name)
             defaults.synchronize()
             #expect(!EditorCanvasPreferences.keepOriginalWhenAnnotating(preferences: preferences))
         }
@@ -50,7 +50,7 @@ struct EditorCanvasPreferencesTests {
         try withDomain { defaults, preferences in
             #expect(EditorCanvasPreferences.writesSidecarOnSave(preferences: preferences))
             #expect(!EditorCanvasPreferences.convertsExportsToSRGB(preferences: preferences))
-            defaults.set(false, forKey: EditorCanvasPreferences.writesSidecarOnSaveKey)
+            defaults.set(false, forKey: SettingKeys.writesSidecarOnSave.name)
             defaults.set(true, forKey: SettingKeys.convertExportsToSRGB.name)
             defaults.synchronize()
             #expect(!EditorCanvasPreferences.writesSidecarOnSave(preferences: preferences))

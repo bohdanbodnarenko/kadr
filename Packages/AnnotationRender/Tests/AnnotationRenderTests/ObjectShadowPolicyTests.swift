@@ -26,14 +26,14 @@ struct ObjectShadowPolicyTests {
 
     @Test("The policy reads the key the agent's Settings write")
     func keyMatchesSettings() {
-        #expect(ObjectShadowPolicy.userDefaultsKey == "annotate.objectShadowsEnabled")
+        #expect(SettingKeys.objectShadowsEnabled.name == "annotate.objectShadowsEnabled")
     }
 
     private func withDomain(enabled: Bool, _ body: (SharedPreferences) -> Void) throws {
         let domain = "ObjectShadowPolicyTests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: domain))
         defer { defaults.removePersistentDomain(forName: domain) }
-        defaults.set(enabled, forKey: ObjectShadowPolicy.userDefaultsKey)
+        defaults.set(enabled, forKey: SettingKeys.objectShadowsEnabled.name)
         defaults.synchronize()
         body(SharedPreferences(domain: domain))
     }

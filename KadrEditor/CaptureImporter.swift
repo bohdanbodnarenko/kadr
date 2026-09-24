@@ -32,7 +32,7 @@ struct CaptureImporter {
     func promptForImport() -> URL? {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = Self.readableTypes
-            + [UTType(filenameExtension: KadrDocumentFile.fileExtension)].compactMap { $0 }
+            + [UTType(filenameExtension: KadrDocumentFile.fileExtension)].compactMap(\.self)
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false

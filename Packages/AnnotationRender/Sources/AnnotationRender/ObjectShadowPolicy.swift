@@ -7,8 +7,6 @@ import SettingsKit
 /// The agent writes this key from Settings; the editor and export renderer read it from
 /// the agent's domain, never their own (T-ED-3).
 public enum ObjectShadowPolicy {
-    public static let userDefaultsKey = SettingKeys.objectShadowsEnabled.name
-
     public static func isEnabled(preferences: SharedPreferences = SharedPreferences()) -> Bool {
         preferences.objectShadowsEnabled
     }
