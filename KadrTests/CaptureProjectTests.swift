@@ -16,6 +16,24 @@ struct CaptureProjectTests {
         return url
     }
 
+    @Test("No look and no beautify means no project, decided before any encoding")
+    func nothingToKeepIsNil() {
+        #expect(CaptureProject.document(for: makeCapture(), beautify: nil, look: nil) == nil)
+        #expect(CaptureProject.document(for: makeCapture(), beautify: .cleanWhite, look: nil) != nil)
+    }
+
+    @Test("The off-main write produces the same sibling")
+    func offMainWrite() async throws {
+        let folder = scratch()
+        let png = folder.appendingPathComponent("Shot.png")
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: png)
+
+        await CaptureProject.writeOffMain(original: makeCapture(), beautify: .twitter, alongside: png)
+
+        let contents = try KadrDocumentFile.read(from: CaptureProject.url(alongside: png))
+        #expect(contents.document.beautify == .twitter)
+    }
+
     @Test("A beautify spec is written next to the flattened PNG")
     func writeCreatesSibling() throws {
         let folder = scratch()

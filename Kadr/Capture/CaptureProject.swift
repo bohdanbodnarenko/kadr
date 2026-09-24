@@ -21,9 +21,36 @@ enum CaptureProject {
         beautify: BeautifySpec?,
         alongside flattenedURL: URL
     ) {
-        let encoder = ImageEncoder()
-        let options = EncodingOptions(format: .png, scale: original.metadata.scale)
-        guard let png = try? encoder.encode(original.image, options: options) else { return }
+        guard let document = document(for: original, beautify: beautify) else { return }
+        encodeAndWrite(document, image: original.image, scale: original.metadata.scale, to: url(alongside: flattenedURL))
+    }
+
+    /// The same, with the PNG encode off the main actor (T-CAP-7).
+    ///
+    /// Most captures need no project at all, and they now return before any encoding: the
+    /// full-resolution original used to be PNG-encoded a second time on main for every
+    /// capture — hundreds of milliseconds at 5K, inside the selection→clipboard budget —
+    /// only to be thrown away when there was no look and no beautify to keep editable.
+    static func writeOffMain(
+        original: Capture,
+        beautify: BeautifySpec?,
+        alongside flattenedURL: URL
+    ) async {
+        guard let document = document(for: original, beautify: beautify) else { return }
+        let image = original.image
+        let scale = original.metadata.scale
+        let target = url(alongside: flattenedURL)
+        await Task.detached(priority: .utility) {
+            encodeAndWrite(document, image: image, scale: scale, to: target)
+        }.value
+    }
+
+    /// The project's document, or nil when there is nothing to keep editable.
+    static func document(
+        for original: Capture,
+        beautify: BeautifySpec?,
+        look: StylePreset? = DefaultCaptureLook.load()
+    ) -> AnnotationDocument? {
         let scale = original.metadata.scale.factor
         let size = CGSize(
             width: CGFloat(original.image.width) / scale,
@@ -32,16 +59,26 @@ enum CaptureProject {
         var document = AnnotationDocument(
             baseImage: BaseImageReference(size: size, scale: scale)
         )
-        if let look = DefaultCaptureLook.load() {
+        if let look {
             document.applyStylePreset(look)
         }
         if let beautify {
             document.setBeautify(beautify)
         }
-        guard !document.commands.isEmpty else { return }
+        return document.commands.isEmpty ? nil : document
+    }
+
+    private nonisolated static func encodeAndWrite(
+        _ document: AnnotationDocument,
+        image: CGImage,
+        scale: DisplayScale,
+        to target: URL
+    ) {
+        let options = EncodingOptions(format: .png, scale: scale)
+        guard let png = try? ImageEncoder().encode(image, options: options) else { return }
         try? KadrDocumentFile.write(
             KadrDocumentFile.Contents(document: document, baseImagePNG: png),
-            to: url(alongside: flattenedURL)
+            to: target
         )
     }
 
