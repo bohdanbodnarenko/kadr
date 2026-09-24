@@ -41,6 +41,15 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         KadrHelpWindowController.shared.show(topic: .gettingStarted)
     }
 
+    /// The standard panel, with the build's commit beside its number so a tester reading
+    /// it out gives us the exact source (docs/17 T-REL-5).
+    @objc func showAbout(_ sender: Any?) {
+        let identity = BuildIdentity.current
+        let version = identity.commit.map { "\(identity.build) · \($0)" } ?? identity.build
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(options: [.version: version])
+    }
+
     @objc func showWelcome(_ sender: Any?) {
         AppDelegate.shared.showOnboarding()
     }
@@ -101,7 +110,7 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         let appMenu = NSMenu()
         appMenu.addItem(
             withTitle: String(localized: "About Kadr"),
-            action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+            action: #selector(showAbout(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(
