@@ -77,6 +77,9 @@ extension AnnotationCanvasView {
     }
 
     private func handleEditingKey(_ event: NSEvent) {
+        if applyTabKey(event) {
+            return
+        }
         if applyToolSizeKey(event) || applyArrowKey(event) || applyDeleteKey(event) || applyEscapeKey(event) {
             refreshAfterEdit()
             return

@@ -9,10 +9,13 @@ import UniformTypeIdentifiers
 /// always ones the user has just taken — sitting in the Quick Access Overlay, in History,
 /// or on the Desktop — and dragging one of those onto the canvas is a single gesture.
 public extension AnnotationCanvasView {
-    /// The types worth accepting: a file the Finder or History dragged, or raw image data
-    /// from an app that promises no file.
+    /// The types worth accepting: a file the Finder or History dragged, raw image data
+    /// from an app that promises no file, and a file *promise* — which is what Kadr's own
+    /// Quick Access cards drag (T-ED-5).
     internal static var acceptedDropTypes: [NSPasteboard.PasteboardType] {
-        [.fileURL, .png, .tiff]
+        [.fileURL, .png, .tiff] + NSFilePromiseReceiver.readableDraggedTypes.map {
+            NSPasteboard.PasteboardType($0)
+        }
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
@@ -24,8 +27,14 @@ public extension AnnotationCanvasView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard let drop = Self.image(from: sender.draggingPasteboard) else { return false }
         let point = imagePoint(fromWindowPoint: sender.draggingLocation)
+        if let drop = Self.image(from: sender.draggingPasteboard) {
+            return insertDropped(drop, at: point)
+        }
+        return receivePromisedImage(from: sender.draggingPasteboard, at: point)
+    }
+
+    private func insertDropped(_ drop: (png: Data, pixelSize: CGSize), at point: CGPoint) -> Bool {
         guard model.insertImage(pngData: drop.png, pixelSize: drop.pixelSize, at: point) != nil else {
             return false
         }
@@ -36,9 +45,38 @@ public extension AnnotationCanvasView {
         return true
     }
 
+    /// Asks the source to write its promised file into a private folder, then inserts it.
+    ///
+    /// The file is read and deleted straight away: it is Kadr's copy of someone else's
+    /// capture, and the document keeps the bytes.
+    private func receivePromisedImage(from pasteboard: NSPasteboard, at point: CGPoint) -> Bool {
+        guard let receiver = (pasteboard.readObjects(forClasses: [NSFilePromiseReceiver.self])
+            as? [NSFilePromiseReceiver])?.first
+        else {
+            return false
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kadr-drops-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            return false
+        }
+        receiver.receivePromisedFiles(atDestination: directory, operationQueue: .main) { [weak self] url, error in
+            defer { try? FileManager.default.removeItem(at: directory) }
+            guard error == nil, let drop = Self.image(at: url) else { return }
+            MainActor.assumeIsolated {
+                _ = self?.insertDropped(drop, at: point)
+            }
+        }
+        return true
+    }
+
     private func canAccept(_ sender: any NSDraggingInfo) -> Bool {
-        sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: nil)
-            || sender.draggingPasteboard.availableType(from: [.png, .tiff]) != nil
+        let pasteboard = sender.draggingPasteboard
+        return pasteboard.canReadObject(forClasses: [NSURL.self], options: nil)
+            || pasteboard.availableType(from: [.png, .tiff]) != nil
+            || pasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)
     }
 
     /// Normalises whatever was dropped into PNG data plus its pixel size.
@@ -59,6 +97,16 @@ public extension AnnotationCanvasView {
             return encode(image)
         }
         return nil
+    }
+
+    /// A promised file, once it has been written.
+    internal static func image(at url: URL) -> (png: Data, pixelSize: CGSize)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            return nil
+        }
+        return encode(image)
     }
 
     /// The first readable image among the dropped files.

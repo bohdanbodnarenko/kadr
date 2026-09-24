@@ -57,6 +57,8 @@ public enum SettingKeys {
     public static let objectShadowsEnabled = SettingKey("annotate.objectShadowsEnabled", default: true)
     /// Save flattened exports beside the original instead of replacing it (CleanShot §7).
     public static let keepOriginalWhenAnnotating = SettingKey("annotate.keepOriginalWhenAnnotating", default: true)
+    /// Whether ⌘S in the editor also writes a sibling `.kadr` project (docs/16 ED-7).
+    public static let writesSidecarOnSave = SettingKey("annotate.writesSidecarOnSave", default: true)
 
     // Capture pane (docs/03 §8.3).
     public static let includesCursor = SettingKey("capture.includesCursor", default: false)

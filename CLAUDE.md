@@ -70,8 +70,8 @@ enforced by `Scripts/check-layering.sh` and by the module tests.
 | 0 | Shared | — |
 | 1 | CaptureCore, OverlayKit, AnnotationModel, MediaExport, VisionServices, AutomationKit, SettingsKit, StudioSession | Shared |
 | 1 | ControlKit (SwiftUI controls shared by Settings and the editor) | — |
-| 2 | RecordingCore (CaptureCore), SelectionUI (OverlayKit), AnnotationRender (AnnotationModel), HistoryKit (MediaExport), StudioRender (StudioSession) | Shared + the package in brackets |
-| 3 | EditorUI | Shared, AnnotationModel, AnnotationRender, MediaExport, StudioSession, StudioRender |
+| 2 | RecordingCore (CaptureCore), SelectionUI (OverlayKit), AnnotationRender (AnnotationModel, SettingsKit), HistoryKit (MediaExport), StudioRender (StudioSession) | Shared + the package in brackets |
+| 3 | EditorUI | Shared, SettingsKit, AnnotationModel, AnnotationRender, MediaExport, StudioSession, StudioRender |
 
 The agent app target links every package **except** EditorUI (editor app),
 VisionServices (XPC helper), StudioRender and AnnotationRender (editor-only,

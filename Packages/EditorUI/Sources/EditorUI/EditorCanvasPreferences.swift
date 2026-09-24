@@ -1,35 +1,30 @@
 import Foundation
+import SettingsKit
 
-/// Editor-only preferences stored in shared `UserDefaults` (CleanShot §21).
+/// The agent's Settings the editor honours (CleanShot §21).
 ///
-/// EditorUI cannot import SettingsKit (docs/04 §2), but both apps read the same keys
-/// Kadr writes from Settings.
+/// The agent writes these keys into its own domain; the editor is another app with another
+/// domain, so every read goes through `SharedPreferences` (T-ED-3).
 public enum EditorCanvasPreferences {
-    public static let lockCanvasByDefaultKey = "annotate.lockCanvasByDefault"
-    public static let objectShadowsEnabledKey = "annotate.objectShadowsEnabled"
-    public static let keepOriginalWhenAnnotatingKey = "annotate.keepOriginalWhenAnnotating"
-    public static let writesSidecarOnSaveKey = "annotate.writesSidecarOnSave"
-
-    public static func lockCanvasByDefault(defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: lockCanvasByDefaultKey) as? Bool ?? false
+    public static func lockCanvasByDefault(preferences: SharedPreferences = SharedPreferences()) -> Bool {
+        preferences.lockCanvasByDefault
     }
 
-    public static func objectShadowsEnabled(defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: objectShadowsEnabledKey) as? Bool ?? true
+    public static func objectShadowsEnabled(preferences: SharedPreferences = SharedPreferences()) -> Bool {
+        preferences.objectShadowsEnabled
     }
 
-    public static func keepOriginalWhenAnnotating(defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: keepOriginalWhenAnnotatingKey) as? Bool ?? true
+    public static func keepOriginalWhenAnnotating(preferences: SharedPreferences = SharedPreferences()) -> Bool {
+        preferences.keepOriginalWhenAnnotating
     }
 
     /// Whether ⌘S also writes a sibling `.kadr` so the capture stays re-editable (docs/16 ED-7).
-    public static func writesSidecarOnSave(defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: writesSidecarOnSaveKey) as? Bool ?? true
+    public static func writesSidecarOnSave(preferences: SharedPreferences = SharedPreferences()) -> Bool {
+        preferences.writesSidecarOnSave
     }
 
-    /// The filename stem for a flattened save next to `sourceURL`.
-    public static func flattenedSaveStem(for sourceURL: URL, keepOriginal: Bool) -> String {
-        let stem = sourceURL.deletingPathExtension().lastPathComponent
-        return keepOriginal ? "\(stem) annotated" : stem
+    /// Whether exports are converted to sRGB (the agent's General pane).
+    public static func convertsExportsToSRGB(preferences: SharedPreferences = SharedPreferences()) -> Bool {
+        preferences.convertExportsToSRGB
     }
 }

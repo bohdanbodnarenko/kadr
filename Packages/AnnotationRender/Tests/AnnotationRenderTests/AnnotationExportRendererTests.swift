@@ -6,7 +6,7 @@ import Testing
 
 /// A base image with sharp vertical stripes, so blurring is measurable: stripes have high
 /// local variance, and a blur that worked destroys it.
-private func makeStripedImage(width: Int = 200, height: Int = 200) -> CGImage {
+func makeStripedImage(width: Int = 200, height: Int = 200) -> CGImage {
     guard let context = CGContext(
         data: nil,
         width: width,
@@ -30,7 +30,7 @@ private func makeStripedImage(width: Int = 200, height: Int = 200) -> CGImage {
 }
 
 /// Reads a region's pixels back out of an image.
-private func pixels(of image: CGImage, in rect: CGRect) -> [UInt8] {
+func pixels(of image: CGImage, in rect: CGRect) -> [UInt8] {
     let width = Int(rect.width)
     let height = Int(rect.height)
     // Explicitly allocated, not `&someArray`: a `CGContext` keeps the pointer it is
@@ -59,7 +59,7 @@ private func pixels(of image: CGImage, in rect: CGRect) -> [UInt8] {
 
 /// Mean absolute difference between neighbouring pixels — high for sharp stripes, low
 /// once they have been blurred away.
-private func localContrast(_ bytes: [UInt8], width: Int) -> Double {
+func localContrast(_ bytes: [UInt8], width: Int) -> Double {
     var total = 0.0
     var samples = 0
     let height = bytes.count / (width * 4)
@@ -74,7 +74,7 @@ private func localContrast(_ bytes: [UInt8], width: Int) -> Double {
     return samples > 0 ? total / Double(samples) : 0
 }
 
-private func makeDocument(
+func makeDocument(
     size: CGSize = CGSize(width: 200, height: 200),
     scale: CGFloat = 1,
     commands: [AnnotationCommand] = []

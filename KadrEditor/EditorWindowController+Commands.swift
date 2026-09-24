@@ -101,17 +101,22 @@ extension EditorWindowController {
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if let enabled = validateDocumentCommand(menuItem.action) {
+            return enabled
+        }
         switch menuItem.action {
         case #selector(undo(_:)):
             return model.canUndo
         case #selector(redo(_:)):
             return model.canRedo
         case #selector(cut(_:)):
-            return !model.selection.isEmpty
+            // A locked object would be copied and then not deleted (T-ED-12).
+            return !model.selection.isEmpty && !model.isCanvasLocked
         case #selector(copy(_:)):
             return true
         case #selector(paste(_:)):
-            return NSPasteboard.general.data(forType: .kadrAnnotations) != nil
+            // Annotations, or an image to insert (docs/03 P2, T-ED-6).
+            return Self.pasteboardHasPasteableContent(.general)
         case #selector(selectAll(_:)):
             return model.document.commands.contains(where: \.isSelectable)
         case #selector(duplicate(_:)),
@@ -133,6 +138,12 @@ extension EditorWindowController {
 
     @objc func toggleCanvasLock(_ sender: Any?) {
         model.isCanvasLocked.toggle()
+    }
+
+    /// Whether ⌘V has something to place: Kadr annotations, or any image.
+    static func pasteboardHasPasteableContent(_ pasteboard: NSPasteboard) -> Bool {
+        pasteboard.data(forType: .kadrAnnotations) != nil
+            || pasteboard.canReadObject(forClasses: [NSImage.self], options: nil)
     }
 
     @discardableResult

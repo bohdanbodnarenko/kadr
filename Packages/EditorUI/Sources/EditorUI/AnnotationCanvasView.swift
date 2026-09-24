@@ -131,6 +131,8 @@ public final class AnnotationCanvasView: NSView {
         redactionSource = RedactionPreviewSource(image: baseImage, scale: model.document.baseImage.scale)
         super.init(frame: CGRect(origin: .zero, size: model.document.baseImage.size))
         observeRedactionPreviews()
+        // The drop methods in +Drop were never reached without this (T-ED-5).
+        registerForDraggedTypes(Self.acceptedDropTypes)
 
         wantsLayer = true
         guard let root = layer else { return }

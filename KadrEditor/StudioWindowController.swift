@@ -27,7 +27,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         }
     }
 
-    private let model: StudioDocumentModel
+    let model: StudioDocumentModel
     private let logger = KadrLog.logger(.app)
     private var window: NSWindow?
     private var hostingView: NSView?

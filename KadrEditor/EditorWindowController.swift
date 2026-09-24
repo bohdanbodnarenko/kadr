@@ -23,7 +23,11 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         }
     }
 
-    let fileURL: URL
+    /// The file this window represents. Rebinds after a save or Save As (T-ED-1).
+    var documentURL: URL
+    /// Where ⌘S writes once the user has picked a destination with Save As; until then the
+    /// targets are planned from `documentURL` and the agent's settings.
+    var chosenSaveTargets: EditorSaveTargets?
     let baseImage: CGImage
     /// The immutable capture as PNG, worked out once and off the main actor, so neither
     /// opening the window nor autosave re-encodes a 5K image (docs/10 R2.6).
@@ -62,14 +66,14 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
     var onClose: (() -> Void)?
 
-    init(fileURL: URL) throws {
-        self.fileURL = fileURL
+    init(fileURL documentURL: URL) throws {
+        self.documentURL = documentURL
 
         // `.kadr` carries its own annotations; anything else is a fresh capture.
-        if fileURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
-            let contents = try KadrDocumentFile.read(from: fileURL)
+        if documentURL.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+            let contents = try KadrDocumentFile.read(from: documentURL)
             guard let image = Self.decodeImage(from: contents.baseImagePNG) else {
-                throw OpenError.unreadableImage(fileURL)
+                throw OpenError.unreadableImage(documentURL)
             }
             baseImage = image
             basePNG = BaseImagePNG(image: image, png: contents.baseImagePNG)
@@ -81,11 +85,11 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             // Read once: decoded from these bytes, and kept as the base PNG when that is
             // what they already are. Kept in memory rather than mapped, because saving a
             // flattened image may overwrite this very file.
-            guard let bytes = try? Data(contentsOf: fileURL),
+            guard let bytes = try? Data(contentsOf: documentURL),
                   let source = CGImageSourceCreateWithData(bytes as CFData, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
             else {
-                throw OpenError.unreadableImage(fileURL)
+                throw OpenError.unreadableImage(documentURL)
             }
             baseImage = image
             basePNG = BaseImagePNG(image: image, png: BaseImagePNG.isPNG(source) ? bytes : nil)
@@ -170,9 +174,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             backing: .buffered,
             defer: false
         )
-        window.title = fileURL.lastPathComponent
+        window.title = documentURL.lastPathComponent
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
-        window.representedURL = fileURL
+        window.representedURL = documentURL
         window.isDocumentEdited = model.hasUnsavedChanges
         window.contentView = hosting
         window.delegate = self
@@ -190,6 +194,15 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 display: false
             )
         }
+        // A second capture opened while one is up cascades from it, rather than landing on
+        // the same saved frame exactly on top of it (T-ED-12). Only one window can own the
+        // autosave name, so the others simply do not remember their frames.
+        if let neighbour = NSApp.orderedWindows.first(where: {
+            $0 !== window && $0.isVisible && $0.delegate is EditorWindowController
+        }) {
+            let topLeft = CGPoint(x: neighbour.frame.minX, y: neighbour.frame.maxY)
+            window.setFrameTopLeftPoint(window.cascadeTopLeft(from: topLeft))
+        }
         window.setFrameAutosaveName(autosaveName)
 
         self.window = window
@@ -206,61 +219,84 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// Closing used to discard the annotations silently, with no prompt and no copy.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !isClosingConfirmed, model.hasUnsavedChanges else { return true }
-
-        let alert = NSAlert()
-        alert.messageText = "Save your changes to “\(fileURL.lastPathComponent)”?"
-        alert.informativeText = "Save writes the flattened image and a project file so the "
-            + "annotations stay editable."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
-        alert.addButton(withTitle: "Cancel")
-        alert.buttons.last?.keyEquivalent = "\u{1b}"
-        alert.alertStyle = .warning
-
-        let responder = FocusRestoration.capture(from: sender)
-        alert.beginSheetModal(for: sender) { [weak self] response in
-            guard let self else { return }
-            switch response {
-            case .alertFirstButtonReturn:
-                saveFlattenedAndClose(sender)
-            case .alertSecondButtonReturn:
-                autosave.discard(for: fileURL)
-                isClosingConfirmed = true
-                sender.close()
-            default:
-                FocusRestoration.restore(responder, in: sender)
-            }
+        reviewUnsavedChanges { [weak self] proceed in
+            guard proceed, let self else { return }
+            isClosingConfirmed = true
+            sender.close()
         }
         return false
     }
 
-    func saveFlattenedAndClose(_ sender: NSWindow) {
+    /// Asks Save / Don't Save / Cancel as a sheet, and reports whether the window may go:
+    /// true once the document is saved or the user chose to discard it (docs/03:171).
+    ///
+    /// Shared by closing the window and by quitting (T-ED-7).
+    func reviewUnsavedChanges(_ completion: @escaping @MainActor (Bool) -> Void) {
+        guard let window, model.hasUnsavedChanges else {
+            completion(true)
+            return
+        }
+        window.makeKeyAndOrderFront(nil)
+
+        let alert = NSAlert()
+        alert.messageText = "Save your changes to “\(documentURL.lastPathComponent)”?"
+        alert.informativeText = "Save writes the flattened image and a project file so the "
+            + "annotations stay editable."
+        alert.addButton(withTitle: "Save")
+        let dontSave = alert.addButton(withTitle: "Don't Save")
+        dontSave.hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
+        alert.alertStyle = .warning
+
+        let responder = FocusRestoration.capture(from: window)
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .alertFirstButtonReturn:
+                saveBeforeClosing(completion)
+            case .alertSecondButtonReturn:
+                autosave.discard(for: documentURL)
+                completion(true)
+            default:
+                FocusRestoration.restore(responder, in: window)
+                completion(false)
+            }
+        }
+    }
+
+    /// Renders and saves, then reports whether it worked. An imported copy asks where to
+    /// save, as ⌘S does (T-ED-9).
+    private func saveBeforeClosing(_ completion: @escaping @MainActor (Bool) -> Void) {
         let baseImage = baseImage
         let document = model.document
         let exportScale = model.exportScale
         let renderer = renderer
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result {
+                    try renderer.render(
+                        baseImage: baseImage,
+                        document: document,
+                        includeAnnotations: true,
+                        exportScale: exportScale
+                    )
+                }
+            }.value
+            guard let self else { return }
             do {
-                let image = try renderer.render(
-                    baseImage: baseImage,
-                    document: document,
-                    includeAnnotations: true,
-                    exportScale: exportScale
-                )
-                await MainActor.run {
-                    guard let self else { return }
-                    do {
-                        try self.save(image)
-                        self.isClosingConfirmed = true
-                        sender.close()
-                    } catch {
-                        self.model.failExport(.save, message: error.localizedDescription)
+                let image = try result.get()
+                if editsImportedCopy {
+                    presentSaveAsSheet(for: image) { [weak self] saved in
+                        completion(saved && self?.model.hasUnsavedChanges == false)
                     }
+                    return
                 }
+                try save(image)
+                completion(true)
             } catch {
-                await MainActor.run { [weak self] in
-                    self?.model.failExport(.save, message: error.localizedDescription)
-                }
+                model.failExport(.save, message: error.localizedDescription)
+                completion(false)
             }
         }
     }
@@ -337,6 +373,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                     return
                 }
                 model.requestCopyToast()
+            case .save where editsImportedCopy:
+                presentSaveAsSheet(for: image)
+                return
             case .save:
                 try save(image)
             case .saveAs:

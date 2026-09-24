@@ -1,6 +1,7 @@
 import AnnotationModel
 import AnnotationRender
 import MediaExport
+import SettingsKit
 import Shared
 import StudioRender
 import StudioSession
@@ -24,6 +25,7 @@ public enum EditorUIModule {
     /// declared graph and the linked graph cannot drift apart.
     public static let dependencies: [(name: String, layer: Int)] = [
         (SharedModule.identifier, SharedModule.layer),
+        (SettingsKitModule.identifier, SettingsKitModule.layer),
         (AnnotationModelModule.identifier, AnnotationModelModule.layer),
         (AnnotationRenderModule.identifier, AnnotationRenderModule.layer),
         (MediaExportModule.identifier, MediaExportModule.layer),

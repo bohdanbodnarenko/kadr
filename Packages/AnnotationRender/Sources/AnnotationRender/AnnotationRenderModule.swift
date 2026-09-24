@@ -1,4 +1,5 @@
 import AnnotationModel
+import SettingsKit
 import Shared
 
 /// Placeholder for the `AnnotationRender` package.
@@ -20,6 +21,7 @@ public enum AnnotationRenderModule {
     /// declared graph and the linked graph cannot drift apart.
     public static let dependencies: [(name: String, layer: Int)] = [
         (SharedModule.identifier, SharedModule.layer),
-        (AnnotationModelModule.identifier, AnnotationModelModule.layer)
+        (AnnotationModelModule.identifier, AnnotationModelModule.layer),
+        (SettingsKitModule.identifier, SettingsKitModule.layer)
     ]
 }
