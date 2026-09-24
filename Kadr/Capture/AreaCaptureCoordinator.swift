@@ -68,6 +68,9 @@ final class AreaCaptureCoordinator {
     var frontmostAtHotkey: AppIdentity?
     /// Internal, not private: freeze-then-fullscreen lives in `+Direct.swift`.
     var purpose: SelectionPurpose = .capture
+    /// The Self-Timer already counted down before the overlay opened, so the selection
+    /// must not count down again and throw the freeze away (T-CAP-9).
+    var timerAlreadyRan = false
     /// Whether Shift was held when this capture started, which skips auto-beautify
     /// without fighting the overlay's aspect-lock (CleanShot §9).
     var skipAutoBeautify = false
@@ -166,6 +169,7 @@ final class AreaCaptureCoordinator {
         // user is arranging — `resolveScreen` falls back to it rather than to main.
         timer.run(seconds: seconds, screen: nil, displayID: nil) { [weak self] in
             self?.beginOverlayCapture(mode: .area)
+            self?.timerAlreadyRan = true
         }
     }
 
@@ -336,6 +340,7 @@ final class AreaCaptureCoordinator {
     func cancel() {
         inFlight?.cancel()
         inFlight = nil
+        timerAlreadyRan = false
         timer.cancel()
         overlay.cancel()
         onArmedStateChanged?()
@@ -343,22 +348,29 @@ final class AreaCaptureCoordinator {
 
     // MARK: - Completion
 
+    /// The countdown this selection still owes: none if the Self-Timer already ran.
+    private func remainingTimerSeconds() -> Int {
+        defer { timerAlreadyRan = false }
+        return timerAlreadyRan ? 0 : timerSeconds
+    }
+
     private func finish(with outcome: SelectionOutcome?, freezes: [DisplayFreeze]) {
+        let seconds = remainingTimerSeconds()
         switch outcome {
         case nil:
             logger.info("Capture cancelled")
             automation.report(.cancelled)
         case let .region(result):
-            finishRegion(result, freezes: freezes)
+            finishRegion(result, freezes: freezes, timerSeconds: seconds)
         case let .window(selection):
-            finishWindow(selection)
+            finishWindow(selection, timerSeconds: seconds)
         case let .fullscreen(displayID):
-            finishFullscreen(displayID, freezes: freezes)
+            finishFullscreen(displayID, freezes: freezes, timerSeconds: seconds)
         }
     }
 
     /// `F` on the overlay: the whole frozen display, still WYSIWYG (docs/03 §1.3).
-    private func finishFullscreen(_ displayID: CGDirectDisplayID, freezes: [DisplayFreeze]) {
+    private func finishFullscreen(_ displayID: CGDirectDisplayID, freezes: [DisplayFreeze], timerSeconds: Int) {
         guard let freeze = freezes.first(where: { $0.geometry.displayID == displayID }) else {
             captureDisplay(displayID)
             return
@@ -370,13 +382,20 @@ final class AreaCaptureCoordinator {
                 display: freeze.geometry,
                 localRect: local.cgRect
             ),
-            freezes: freezes
+            freezes: freezes,
+            timerSeconds: timerSeconds
         )
     }
 
     /// Captures the picked window through SCK, so it comes out unoccluded rather than
     /// cropped out of the frozen screen (docs/03 §1.2).
-    private func finishWindow(_ selection: WindowSelection) {
+    private func finishWindow(_ selection: WindowSelection, timerSeconds: Int) {
+        // Capture Text with W: read the window's text rather than deliver an image card
+        // that overwrites the clipboard with a picture (T-CAP-8).
+        if purpose == .recognizeText {
+            recognizeText(inWindow: selection)
+            return
+        }
         let shadow = selection.togglesShadow ? !settings.windowShadow : settings.windowShadow
         let options = WindowCaptureOptions(
             includesShadow: shadow,
@@ -406,7 +425,7 @@ final class AreaCaptureCoordinator {
         }
     }
 
-    private func finishRegion(_ result: SelectionResult, freezes: [DisplayFreeze]) {
+    private func finishRegion(_ result: SelectionResult, freezes: [DisplayFreeze], timerSeconds: Int) {
         guard let freeze = freezes.first(where: { $0.geometry.displayID == result.display.displayID }) else {
             logger.error("The selected display's freeze went missing")
             return

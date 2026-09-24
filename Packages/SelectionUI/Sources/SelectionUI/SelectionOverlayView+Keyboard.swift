@@ -79,7 +79,9 @@ extension SelectionOverlayView {
     func handleModeKey(_ event: NSEvent) -> Bool {
         guard !event.modifierFlags.contains(.command) else { return false }
         switch event.charactersIgnoringModifiers?.lowercased() {
-        case "w" where mode == .area:
+        // Not while picking a colour: a window is not a colour, and W used to leave the
+        // eyedropper for a window screenshot that overwrote the clipboard (T-CAP-8).
+        case "w" where mode == .area && !isEyedropperMode:
             setMode(.window)
             onModeChanged?(.window)
         case "a" where mode == .window:

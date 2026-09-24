@@ -1,5 +1,7 @@
 import AppKit
+import CaptureCore
 import os
+import SelectionUI
 import SettingsKit
 import Shared
 
@@ -38,6 +40,26 @@ extension AreaCaptureCoordinator {
                 logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
                 FeedbackAnnouncement.post(ActionUnavailableReason.couldNotReadText.message)
                 automation.report(.failed(error.localizedDescription))
+            }
+        }
+    }
+
+    /// Capture Text on a picked window: the window, unoccluded, goes to the recogniser
+    /// (T-CAP-8).
+    func recognizeText(inWindow selection: WindowSelection) {
+        let options = WindowCaptureOptions(
+            includesShadow: false,
+            transparentBackground: false,
+            includesCursor: false
+        )
+        inFlight = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let captured = try await engine.captureWindow(selection.window.id, options: options)
+                permissions.noteCaptureSuccess()
+                recognizeText(in: captured.image, on: selection.display.displayID)
+            } catch {
+                handle(error)
             }
         }
     }
