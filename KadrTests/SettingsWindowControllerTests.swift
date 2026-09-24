@@ -24,6 +24,10 @@ private final class FakeApplication: ActivationPolicyControlling {
     func activateApp() {
         activateCount += 1
     }
+
+    var isActiveApp = false
+
+    func returnActivation(to _: NSRunningApplication) {}
 }
 
 /// Lets AppKit finish closing the window.
