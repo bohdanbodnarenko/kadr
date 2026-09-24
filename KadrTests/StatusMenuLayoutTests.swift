@@ -179,10 +179,14 @@ struct ShortcutDefaultsMigrationTests {
 
     @Test("An untouched install of either earlier version ends up with exactly the new defaults", arguments: [1, 2])
     func untouchedInstallMatchesFreshInstall(version: Int) {
-        let saved = version == 1 ? Migration.versionOneDefaults : Migration.versionTwoDefaults
+        var saved = version == 1 ? Migration.versionOneDefaults : Migration.versionTwoDefaults
+        // Commands added since then (⌘⌥L pin click-through) get their own default on first
+        // registration, so an untouched install already holds it.
+        for (command, shortcut) in newDefaults where saved[command] == nil {
+            saved[command] = shortcut
+        }
         let migrated = apply(saved)
         #expect(migrated == newDefaults)
-        #expect(migrated.count == 5)
         #expect(migrated[.allInOne] == island)
     }
 
