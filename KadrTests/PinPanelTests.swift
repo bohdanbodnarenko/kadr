@@ -161,8 +161,11 @@ struct PinPanelTests {
         let panel = try #require(PinPanel(fileURL: url, scale: 1))
         defer { panel.dismiss() }
 
-        panel.setFrame(CGRect(x: 0, y: 0, width: 300, height: 50), display: true)
-        let ratio = panel.frame.width / max(panel.frame.height, 1)
+        // `contentAspectRatio` is what AppKit applies to a *user's* live resize; a
+        // programmatic `setFrame` bypasses it by design, so asserting on one was testing
+        // AppKit rather than the pin, and failed on every run (docs/17 T-REL-7).
+        let aspect = panel.contentAspectRatio
+        let ratio = aspect.width / max(aspect.height, 1)
         #expect(abs(ratio - 2) < 0.05)
     }
 }
