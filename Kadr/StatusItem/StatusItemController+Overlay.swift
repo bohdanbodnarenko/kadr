@@ -27,8 +27,9 @@ extension StatusItemController {
             let hidden = overlaysAreHidden()
             items.append(makeCommandItem(.saveAllOverlays))
             items.append(makeCommandItem(.closeAllOverlays))
+            // The title says what the item will do; a checkmark on top of that said it
+            // twice, and contradicted it half the time (HIG › Menus, docs/17 T-SH-6).
             let hide = makeCommandItem(.hideOverlays, title: hidden ? "Show Overlays" : "Hide Overlays")
-            hide.state = hidden ? .on : .off
             items.append(hide)
         }
         if canRestore() {
@@ -46,7 +47,6 @@ extension StatusItemController {
             }
             let hidden = pinsAreHidden()
             let hide = makeCommandItem(.hidePins, title: hidden ? "Show Pins" : CaptureCommand.hidePins.title)
-            hide.state = hidden ? .on : .off
             items.append(hide)
             let close = NSMenuItem(title: "Close All Pins", action: #selector(didSelectCloseAllPins), keyEquivalent: "")
             close.target = self

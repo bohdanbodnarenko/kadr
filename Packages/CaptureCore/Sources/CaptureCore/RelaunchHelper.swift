@@ -25,6 +25,9 @@ public struct WorkspaceRelauncher: ApplicationRelaunching {
         // Without this the existing (still running) instance is simply activated.
         configuration.createsNewApplicationInstance = true
         configuration.activates = true
+        // Tells the new instance that the one still running is on its way out, so its
+        // single-instance guard does not quit in favour of it (docs/17 T-SH-3).
+        configuration.arguments = [RelaunchHelper.relaunchArgument]
         _ = try await NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration)
     }
 
@@ -37,6 +40,9 @@ public struct WorkspaceRelauncher: ApplicationRelaunching {
 
 /// Decides whether a relaunch is warranted and carries it out.
 public struct RelaunchHelper: Sendable {
+    /// The launch argument a relaunched instance receives.
+    public static let relaunchArgument = "-KadrRelaunched"
+
     private let relauncher: any ApplicationRelaunching
     private let bundleURL: URL
     private let logger = KadrLog.logger(.capture)

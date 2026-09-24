@@ -4,6 +4,12 @@ import AppKit
 ///
 /// The agent is `LSUIElement` and spends its life as `.accessory`; this menu is idle
 /// until a window brings the app forward (docs/14 UX-09, UX-28).
+///
+/// Every item whose action lives here sets `target = self`. `AppMenu` is an `NSObject`
+/// outside the responder chain, so an item with a nil target and one of these selectors
+/// found nobody to answer it: Settings…, Kadr Help and Keyboard Shortcuts were greyed out
+/// whenever a Kadr window was in front, and Help could not be opened at all (docs/17
+/// T-SH-1). `AppMenuTests` walks the finished menu and fails on any item nobody answers.
 @MainActor
 final class AppMenu: NSObject, NSMenuItemValidation {
     static let shared = AppMenu()
@@ -13,6 +19,9 @@ final class AppMenu: NSObject, NSMenuItemValidation {
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(checkForUpdates(_:)) {
+            return UpdaterManager.shared.canCheckForUpdates
+        }
         if menuItem.action == #selector(toggleSettingsSidebar(_:)) {
             let open = AppDelegate.shared.settingsWindowController.isOpen
             let hidden = AppDelegate.shared.settingsWindowController.isSidebarHidden
@@ -29,7 +38,19 @@ final class AppMenu: NSObject, NSMenuItemValidation {
     }
 
     @objc func openHelp(_ sender: Any?) {
-        KadrHelpWindowController.shared.show(topic: .shortcuts)
+        KadrHelpWindowController.shared.show(topic: .gettingStarted)
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        UpdaterManager.shared.checkForUpdates()
+    }
+
+    @objc func exportDiagnostics(_ sender: Any?) {
+        Task { await AppDelegate.shared.exportDiagnostics() }
+    }
+
+    @objc func reportProblem(_ sender: Any?) {
+        Task { await AppDelegate.shared.reportProblem() }
     }
 
     @objc func openKeyboardShortcuts(_ sender: Any?) {
@@ -40,7 +61,7 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         AppDelegate.shared.openSettings()
     }
 
-    private func makeMenu() -> NSMenu {
+    func makeMenu() -> NSMenu {
         let main = NSMenu()
         main.addItem(makeAppMenuItem())
         main.addItem(makeFileMenuItem())
@@ -79,6 +100,11 @@ final class AppMenu: NSObject, NSMenuItemValidation {
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
+        appMenu.addItem(
+            withTitle: String(localized: "Check for Updates…"),
+            action: #selector(checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
         appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: String(localized: "Settings…"),
@@ -108,6 +134,7 @@ final class AppMenu: NSObject, NSMenuItemValidation {
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
+        target(appMenu)
         appItem.submenu = appMenu
         return appItem
     }
@@ -156,6 +183,7 @@ final class AppMenu: NSObject, NSMenuItemValidation {
             keyEquivalent: "s"
         )
         sidebar.keyEquivalentModifierMask = [.command, .control]
+        target(viewMenu)
         viewItem.submenu = viewMenu
         return viewItem
     }
@@ -173,8 +201,33 @@ final class AppMenu: NSObject, NSMenuItemValidation {
             action: #selector(openKeyboardShortcuts(_:)),
             keyEquivalent: ""
         )
+        helpMenu.addItem(.separator())
+        helpMenu.addItem(
+            withTitle: String(localized: "Export Diagnostics…"),
+            action: #selector(exportDiagnostics(_:)),
+            keyEquivalent: ""
+        )
+        helpMenu.addItem(
+            withTitle: String(localized: "Report a Problem…"),
+            action: #selector(reportProblem(_:)),
+            keyEquivalent: ""
+        )
+        target(helpMenu)
         helpItem.submenu = helpMenu
+        // Registering it is what gives the Help menu its search field (docs/17 T-SH-9).
+        NSApp.helpMenu = helpMenu
         return helpItem
+    }
+
+    /// Points every item whose action is one of `AppMenu`'s own at `self`.
+    ///
+    /// Items with a standard responder action (`terminate:`, `copy:`, `performClose:`) keep
+    /// a nil target: those are meant to travel the responder chain.
+    private func target(_ menu: NSMenu) {
+        for item in menu.items {
+            guard let action = item.action, responds(to: action) else { continue }
+            item.target = self
+        }
     }
 }
 

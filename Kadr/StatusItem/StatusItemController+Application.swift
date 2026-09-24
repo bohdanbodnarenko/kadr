@@ -36,6 +36,38 @@ extension StatusItemController {
             menu.addItem(onboardingItem)
         }
 
+        if let version = availableUpdate() {
+            // A background check found this and Kadr chose not to interrupt with a window;
+            // this row is where it waits (docs/17 T-REL-4, Sparkle's gentle reminders).
+            let update = NSMenuItem(
+                title: String(localized: "Update to \(version)…"),
+                action: #selector(didSelectInstallUpdate),
+                keyEquivalent: ""
+            )
+            update.target = self
+            update.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: nil)
+            menu.addItem(update)
+        }
+
+        if showsTesterItems {
+            // Only with ⌥ held: testers are told where to find these, and nobody else
+            // needs two more rows every time they open the menu (docs/17 T-DIAG-1).
+            let export = NSMenuItem(
+                title: String(localized: "Export Diagnostics…"),
+                action: #selector(didSelectExportDiagnostics),
+                keyEquivalent: ""
+            )
+            export.target = self
+            menu.addItem(export)
+            let report = NSMenuItem(
+                title: String(localized: "Report a Problem…"),
+                action: #selector(didSelectReportProblem),
+                keyEquivalent: ""
+            )
+            report.target = self
+            menu.addItem(report)
+        }
+
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(didSelectSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
@@ -46,5 +78,20 @@ extension StatusItemController {
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
         menu.addItem(quitItem)
+    }
+
+    @objc
+    func didSelectInstallUpdate() {
+        installUpdate()
+    }
+
+    @objc
+    func didSelectExportDiagnostics() {
+        exportDiagnostics()
+    }
+
+    @objc
+    func didSelectReportProblem() {
+        reportProblem()
     }
 }

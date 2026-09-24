@@ -27,6 +27,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let recordingControls: () -> RecordingControls?
     /// Extra menu items contributed by debug builds; empty in release.
     let additionalItems: () -> [NSMenuItem]
+    /// Whether ⌥ was held as the menu opened, which adds the diagnostics rows.
+    var showsTesterItems = false
     /// Whether the status item is currently showing the recording icon (click = stop).
     var showsRecordingIcon = false
     /// KVO for the user dragging the icon out of the menu bar (docs/16 APP-2).
@@ -57,6 +59,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     let overlaysAreHidden: () -> Bool
     let pinCount: () -> Int
     let pinsAreHidden: () -> Bool
+    /// A version a background check found and left for the menu to mention (docs/17 T-REL-4).
+    let availableUpdate: () -> String?
+    let installUpdate: () -> Void
+    /// Held-⌥ rows for testers (docs/17 T-DIAG-1).
+    let exportDiagnostics: () -> Void
+    let reportProblem: () -> Void
     /// Images dropped on the menu-bar icon open in the editor (docs/03 §8.1).
     var openDroppedFile: ((URL) -> Void)?
     /// Writes the menu-bar visibility setting when the user removes the icon (docs/16 APP-2).
@@ -83,7 +91,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         overlayCardCount: @escaping () -> Int = { 0 },
         overlaysAreHidden: @escaping () -> Bool = { false },
         pinCount: @escaping () -> Int = { 0 },
-        pinsAreHidden: @escaping () -> Bool = { false }
+        pinsAreHidden: @escaping () -> Bool = { false },
+        availableUpdate: @escaping () -> String? = { nil },
+        installUpdate: @escaping () -> Void = {},
+        exportDiagnostics: @escaping () -> Void = {},
+        reportProblem: @escaping () -> Void = {}
     ) {
         self.perform = perform
         self.openSettings = openSettings
@@ -104,6 +116,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.overlaysAreHidden = overlaysAreHidden
         self.pinCount = pinCount
         self.pinsAreHidden = pinsAreHidden
+        self.availableUpdate = availableUpdate
+        self.installUpdate = installUpdate
+        self.exportDiagnostics = exportDiagnostics
+        self.reportProblem = reportProblem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
@@ -157,6 +173,12 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// past twenty rows before History. What is left is what the island cannot do, and a
     /// group whose rows could not do anything right now is absent rather than greyed.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        menuNeedsUpdate(menu, optionHeld: NSEvent.modifierFlags.contains(.option))
+    }
+
+    /// The build, with the ⌥ state passed in so a test can ask for either menu.
+    func menuNeedsUpdate(_ menu: NSMenu, optionHeld: Bool) {
+        showsTesterItems = optionHeld
         menu.removeAllItems()
         if let controls = recordingControls() {
             addRecordingItems(controls, to: menu)
@@ -235,15 +257,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(pause)
 
         let restart = NSMenuItem(
-            title: "Restart Recording",
+            title: "Restart Recording…",
             action: #selector(didSelectRestartRecording),
             keyEquivalent: ""
         )
         restart.target = self
         menu.addItem(restart)
 
+        // Its own group: the one row that throws the take away should not sit flush
+        // against Pause, one slip of the pointer from it (docs/17 T-SH-6).
+        menu.addItem(.separator())
         let cancel = NSMenuItem(
-            title: "Discard Recording",
+            title: "Discard Recording…",
             action: #selector(didSelectCancelRecording),
             keyEquivalent: ""
         )
@@ -278,12 +303,37 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc
     private func didSelectRestartRecording() {
+        guard Self.confirmDestructive(
+            title: String(localized: "Restart the recording?"),
+            detail: String(localized: "What has been recorded so far is deleted and a new take starts."),
+            action: String(localized: "Restart")
+        ) else { return }
         recordingControls()?.restart()
     }
 
     @objc
     private func didSelectCancelRecording() {
+        guard Self.confirmDestructive(
+            title: String(localized: "Discard the recording?"),
+            detail: String(localized: "The take is deleted and cannot be recovered."),
+            action: String(localized: "Discard")
+        ) else { return }
         recordingControls()?.cancel()
+    }
+
+    /// One click in a menu used to throw away a take with no way back (docs/17 T-SH-6).
+    /// Undo is impossible here — the footage is gone — so this asks, with the destructive
+    /// button marked and Cancel as the default Return answers (HIG › Alerts).
+    static func confirmDestructive(title: String, detail: String, action: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = detail
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        let destructive = alert.addButton(withTitle: action)
+        destructive.hasDestructiveAction = true
+        NSApp.activate()
+        return alert.runModal() == .alertSecondButtonReturn
     }
 
     @objc
