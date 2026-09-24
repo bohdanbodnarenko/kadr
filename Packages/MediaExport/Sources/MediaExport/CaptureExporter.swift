@@ -24,11 +24,20 @@ public struct ExportResult: Sendable, Hashable {
     /// True when that file is in the staging area rather than the save folder.
     public var isStaged: Bool
     public var copiedToClipboard: Bool
+    /// Why the save folder refused the file, when the policy asked to save there and the
+    /// capture was staged instead (docs/17 T-OUT-6). `nil` when nothing went wrong.
+    public var saveFailure: String?
 
-    public init(fileURL: URL? = nil, isStaged: Bool = false, copiedToClipboard: Bool = false) {
+    public init(
+        fileURL: URL? = nil,
+        isStaged: Bool = false,
+        copiedToClipboard: Bool = false,
+        saveFailure: String? = nil
+    ) {
         self.fileURL = fileURL
         self.isStaged = isStaged
         self.copiedToClipboard = copiedToClipboard
+        self.saveFailure = saveFailure
     }
 }
 
@@ -80,13 +89,32 @@ public struct CaptureExporter: Sendable {
             )
             result.isStaged = true
         } else if policy.savesToFolder {
-            result.fileURL = try write(
-                data,
-                to: saveFolder,
-                template: template,
-                context: context,
-                options: options
-            )
+            do {
+                result.fileURL = try write(
+                    data,
+                    to: saveFolder,
+                    template: template,
+                    context: context,
+                    options: options
+                )
+            } catch {
+                // An unmounted drive, a read-only folder or a full disk must not cost the
+                // user the capture: stage it and say why, so the card can offer another
+                // folder (docs/17 T-OUT-6). Only if staging fails too is it lost.
+                logger.error("Save folder refused the capture; staging it: \(error.localizedDescription, privacy: .public)")
+                try staging.prepare()
+                result.fileURL = try write(
+                    data,
+                    to: staging.directory,
+                    template: template,
+                    context: context,
+                    options: options
+                )
+                result.isStaged = true
+                result.saveFailure = (error as? ExportError).flatMap {
+                    if case let .writeFailed(reason) = $0 { reason } else { nil }
+                } ?? error.localizedDescription
+            }
         }
 
         return result
@@ -122,6 +150,11 @@ public struct CaptureExporter: Sendable {
     @discardableResult
     public func finalizeStaged(_ url: URL, to destination: URL) throws -> URL {
         try staging.finalize(url, to: destination)
+    }
+
+    /// Copies a file Kadr does not own into staging under `filename` (docs/17 T-OUT-5).
+    public func adoptCopy(of url: URL, named filename: String) throws -> URL {
+        try staging.adoptCopy(of: url, named: filename)
     }
 
     /// Whether this file is still sitting in staging (docs/07 M11).

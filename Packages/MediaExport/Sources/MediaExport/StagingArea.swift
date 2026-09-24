@@ -84,6 +84,42 @@ public struct StagingArea: Sendable {
         return destination
     }
 
+    /// Copies a file the user owns — or the History library does — into staging, so a
+    /// transform or an edit can work on Kadr's own copy (docs/17 T-OUT-5).
+    @discardableResult
+    public func adoptCopy(of url: URL, named filename: String) throws -> URL {
+        try prepare()
+        return try Self.copy(url, named: filename, into: directory)
+    }
+
+    /// Copies `url` into `folder` as `filename`, taking the next free "name (2)" rather than
+    /// replacing anything (docs/03 §9).
+    ///
+    /// The copy is the collision check, as in `finalize(_:into:)`: `copyItem` refuses to
+    /// replace, so a race loses a name rather than a file.
+    @discardableResult
+    public static func copy(_ url: URL, named filename: String, into folder: URL) throws -> URL {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let named = URL(fileURLWithPath: filename)
+        let ext = named.pathExtension.isEmpty ? url.pathExtension : named.pathExtension
+        let stem = named.pathExtension.isEmpty ? filename : named.deletingPathExtension().lastPathComponent
+        let base = FilenameTemplate.sanitise(stem).isEmpty ? "Capture" : FilenameTemplate.sanitise(stem)
+
+        for counter in 1 ... collisionRetries {
+            let name = counter == 1 ? base : "\(base) (\(counter))"
+            let destination = folder.appendingPathComponent(name).appendingPathExtension(ext)
+            do {
+                try FileManager.default.copyItem(at: url, to: destination)
+                return destination
+            } catch let error as CocoaError where error.code == .fileWriteFileExists {
+                continue
+            } catch {
+                throw ExportError.writeFailed(error.localizedDescription)
+            }
+        }
+        throw ExportError.writeFailed("Could not find a free name in \(folder.lastPathComponent)")
+    }
+
     /// How many names to try before giving up. Reached only if something is creating files
     /// as fast as we can name them.
     private static let collisionRetries = 32
