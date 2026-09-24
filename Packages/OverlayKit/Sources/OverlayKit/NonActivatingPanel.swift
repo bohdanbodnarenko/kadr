@@ -18,7 +18,22 @@ import Shared
 open class NonActivatingPanel: NSPanel {
     /// Selection, countdown and the scroll HUD stay out of captures even when the user
     /// opts in (docs/16 X-6).
-    public var alwaysHiddenFromCaptures = false
+    ///
+    /// Applied the moment it is set: callers set it after `init`, which is when the
+    /// sharing type used to be computed — so the opt-in never reached them (T-CAP-11).
+    public var alwaysHiddenFromCaptures = false {
+        didSet { applyCaptureVisibility() }
+    }
+
+    /// Re-reads "Include Kadr overlays in captures" for this panel.
+    public func applyCaptureVisibility() {
+        sharingType = CaptureVisibility.sharingType(alwaysExcluded: alwaysHiddenFromCaptures)
+    }
+
+    /// Whether a capture should leave this panel out, given the setting right now.
+    public var isHiddenFromCaptures: Bool {
+        CaptureVisibility.sharingType(alwaysExcluded: alwaysHiddenFromCaptures) == .none
+    }
     /// Without this the panel never becomes key and every keyboard interaction dies.
     override open var canBecomeKey: Bool {
         true
@@ -59,7 +74,7 @@ open class NonActivatingPanel: NSPanel {
         // Invisible to ScreenCaptureKit and to `screencapture`, so a freeze that
         // captures a display rect (without an excludingWindows filter) does not
         // photograph the overlay that is sitting on top of it (docs/10 R3.2).
-        sharingType = CaptureVisibility.sharingType(alwaysExcluded: alwaysHiddenFromCaptures)
+        applyCaptureVisibility()
     }
 
     /// Registers for capture exclusion the moment the overlay is on screen (docs/10 R3.2).
@@ -68,11 +83,13 @@ open class NonActivatingPanel: NSPanel {
     /// deduplicates. Unregistering on `orderOut`/`close` is what keeps a dismissed
     /// overlay from occupying a slot after it is gone.
     override open func orderFront(_ sender: Any?) {
+        applyCaptureVisibility()
         super.orderFront(sender)
         CaptureExclusionRegistry.shared.register(self)
     }
 
     override open func orderFrontRegardless() {
+        applyCaptureVisibility()
         super.orderFrontRegardless()
         CaptureExclusionRegistry.shared.register(self)
     }

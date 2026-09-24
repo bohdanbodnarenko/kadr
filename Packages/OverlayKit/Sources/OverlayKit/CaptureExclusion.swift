@@ -53,6 +53,11 @@ public final class CaptureExclusionRegistry {
         sweep()
         return Set(entries.compactMap { entry in
             guard let window = entry.window, window.windowNumber > 0 else { return nil }
+            // An overlay the user asked to see in captures (docs/16 X-6) stays out of the
+            // filter too; on macOS 14–15.1 the filter is the only thing that decides.
+            if let panel = window as? NonActivatingPanel, !panel.isHiddenFromCaptures {
+                return nil
+            }
             return CGWindowID(window.windowNumber)
         })
     }
@@ -72,9 +77,7 @@ public final class CaptureExclusionRegistry {
         sweep()
         for entry in entries {
             guard let window = entry.window else { continue }
-            if let panel = window as? NonActivatingPanel {
-                window.sharingType = CaptureVisibility.sharingType(alwaysExcluded: panel.alwaysHiddenFromCaptures)
-            }
+            (window as? NonActivatingPanel)?.applyCaptureVisibility()
         }
     }
 }

@@ -96,6 +96,31 @@ struct CaptureExclusionRegistryTests {
         #expect(registry.excludedWindowIDs.contains(CGWindowID(window.windowNumber)))
     }
 
+    @Test("Include Kadr overlays reaches panels and the filter, except always-hidden ones (T-CAP-11)")
+    func includeOverlaysSetting() {
+        let previous = CaptureVisibility.includesOverlays
+        defer { CaptureVisibility.includesOverlays = previous }
+        CaptureVisibility.includesOverlays = true
+
+        let registry = CaptureExclusionRegistry()
+        let card = NonActivatingPanel(contentRect: CGRect(x: 0, y: 0, width: 50, height: 50))
+        let selection = NonActivatingPanel(contentRect: CGRect(x: 0, y: 0, width: 50, height: 50))
+        selection.alwaysHiddenFromCaptures = true
+        card.orderFrontRegardless()
+        selection.orderFrontRegardless()
+        defer {
+            card.orderOut(nil)
+            selection.orderOut(nil)
+        }
+        registry.register(card)
+        registry.register(selection)
+
+        #expect(card.sharingType == .readOnly)
+        #expect(selection.sharingType == .none, "set after init, and still applied")
+        #expect(!registry.excludedWindowIDs.contains(CGWindowID(card.windowNumber)))
+        #expect(registry.excludedWindowIDs.contains(CGWindowID(selection.windowNumber)))
+    }
+
     @Test("Registering twice is harmless")
     func registeringTwice() {
         let registry = CaptureExclusionRegistry()
