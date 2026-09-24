@@ -84,12 +84,21 @@ fi
 # A product older than the checked-out commit measures some other tree: on 2026-09-24
 # this gate read a four-week-old archive and reported 2 MB of headroom nobody had checked
 # (docs/17 T-REL-8). A stale product fails; a missing one is still only skipped above.
-head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
-binary="$app/Contents/MacOS/Kadr"
-[ -f "$binary" ] || binary="$app"
-product_time=$(stat -f %m "$binary" 2>/dev/null || echo 0)
-if [ "$product_time" -lt "$head_time" ]; then
-    printf '\033[0;31m✘ %s is older than HEAD — build first (`make build`, or `make size-gate`\n' "$app"
+# "Stale" is read from the KadrGitCommit stamp, not the binary's mtime, which an
+# incremental build after a docs-only commit rightly leaves alone (see check-layering.sh).
+plist="$app/Contents/Info.plist"
+built_commit=$(/usr/libexec/PlistBuddy -c "Print :KadrGitCommit" "$plist" 2>/dev/null || echo "")
+head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+stale=0
+if [ -n "$built_commit" ] && [ "$built_commit" != "unknown" ]; then
+    [ "$built_commit" = "$head_commit" ] || stale=1
+else
+    head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+    product_time=$(stat -f %m "$plist" 2>/dev/null || echo 0)
+    [ "$product_time" -ge "$head_time" ] || stale=1
+fi
+if [ "$stale" -eq 1 ]; then
+    printf '\033[0;31m✘ %s is not a build of HEAD — build first (`make build`, or `make size-gate`\n' "$app"
     printf '  for the archive), or pass the path of a current product\033[0m\n'
     exit 1
 fi

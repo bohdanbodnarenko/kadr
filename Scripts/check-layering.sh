@@ -189,11 +189,28 @@ fi
 # passed on 2026-09-24 against a build three days stale (docs/17 T-REL-8), so a stale
 # product fails rather than being checked; a missing one is still only skipped, so the
 # static CI job (which has no build) keeps running. Build first: `make build`.
-head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
-if [ -n "$agent_binary" ] && [ "$agent_mtime" -lt "$head_time" ]; then
-    fail "the newest agent binary is older than HEAD — run \`make build\` first"
-    note "found $agent_binary"
-    agent_binary=""
+#
+# "Stale" means built from another commit, read from the KadrGitCommit the Makefile stamps
+# into Info.plist. The binary's own mtime is no guide: an incremental build after a
+# docs-only commit rightly leaves it untouched. A product nobody stamped falls back to the
+# Info.plist's mtime, which the build rewrites whenever the stamp changes.
+if [ -n "$agent_binary" ]; then
+    agent_plist="$(dirname "$(dirname "$agent_binary")")/Info.plist"
+    built_commit=$(/usr/libexec/PlistBuddy -c "Print :KadrGitCommit" "$agent_plist" 2>/dev/null || echo "")
+    head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+    stale=0
+    if [ -n "$built_commit" ] && [ "$built_commit" != "unknown" ]; then
+        [ "$built_commit" = "$head_commit" ] || stale=1
+    else
+        head_time=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+        plist_time=$(stat -f %m "$agent_plist" 2>/dev/null || echo 0)
+        [ "$plist_time" -ge "$head_time" ] || stale=1
+    fi
+    if [ "$stale" -eq 1 ]; then
+        fail "the newest agent build is not of HEAD — run \`make build\` first"
+        note "found $agent_binary (commit ${built_commit:-unstamped}, HEAD $head_commit)"
+        agent_binary=""
+    fi
 fi
 
 if [ -n "$agent_binary" ] && [ -f "$agent_binary" ]; then
