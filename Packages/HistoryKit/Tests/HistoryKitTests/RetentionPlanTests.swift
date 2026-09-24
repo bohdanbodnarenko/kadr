@@ -88,6 +88,29 @@ struct RetentionPlanTests {
     }
 }
 
+/// docs/17 T-OUT-13: search caps its results after the type filter, not before.
+@Suite("Search cap")
+struct SearchCapTests {
+    @Test("A filtered search finds a match that more than `limit` other hits outrank")
+    func filterBeforeCap() async throws {
+        let store = try HistoryStore.open(root: makeHistoryRoot())
+        for seed in 1 ... 3 {
+            let image = try await store.ingest(ingestDraft(seed: seed))
+            try await store.index(id: image.id, text: "invoice invoice invoice", applicationName: nil)
+        }
+        let video = try await store.ingest(ingestDraft(seed: 9, kind: .video))
+        try await store.index(
+            id: video.id,
+            text: "invoice among many other words that dilute its rank",
+            applicationName: nil
+        )
+
+        let hits = try await store.search("invoice", filter: HistoryFilter(kind: .video), limit: 2)
+
+        #expect(hits.map(\.id) == [video.id])
+    }
+}
+
 /// docs/17 T-OUT-10: a History name becomes a filename on export, drag and copy.
 @Suite("Rename sanitising")
 struct RenameSanitisingTests {
