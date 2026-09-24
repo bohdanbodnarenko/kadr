@@ -312,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             restoreRecentlyClosed: { [weak self] in self?.areaCapture.restoreRecentlyClosed() },
             closeAllPins: { [weak self] in self?.areaCapture.closeAllPins() },
-            showOnboarding: { [weak self] in self?.showOnboarding() },
+            showOnboarding: { [weak self] in self?.finishSetup() },
             // A preflight, not a probe: it reads the grant without prompting or capturing.
             needsSetup: { [weak self] in self?.permissions.refresh().needsUserAction ?? false },
             recordingControls: { [weak self] in self?.currentRecordingControls() },

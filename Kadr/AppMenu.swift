@@ -41,6 +41,10 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         KadrHelpWindowController.shared.show(topic: .gettingStarted)
     }
 
+    @objc func showWelcome(_ sender: Any?) {
+        AppDelegate.shared.showOnboarding()
+    }
+
     @objc func checkForUpdates(_ sender: Any?) {
         UpdaterManager.shared.checkForUpdates()
     }
@@ -199,6 +203,11 @@ final class AppMenu: NSObject, NSMenuItemValidation {
         helpMenu.addItem(
             withTitle: String(localized: "Keyboard Shortcuts"),
             action: #selector(openKeyboardShortcuts(_:)),
+            keyEquivalent: ""
+        )
+        helpMenu.addItem(
+            withTitle: String(localized: "Show Welcome…"),
+            action: #selector(showWelcome(_:)),
             keyEquivalent: ""
         )
         helpMenu.addItem(.separator())

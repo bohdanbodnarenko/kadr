@@ -219,3 +219,43 @@ struct PermissionCoordinatorTests {
         #expect(await access.probe() == access.preflight())
     }
 }
+
+/// Only the very first ask shows macOS's prompt, so only that one may skip Kadr's own
+/// recovery alert (docs/17 T-SH-4).
+@MainActor
+@Suite("First screen recording request")
+struct FirstScreenRecordingRequestTests {
+    @Test("The first denied ask is the system's; later ones are Kadr's")
+    func onlyTheFirstAskPrompts() throws {
+        let suite = "kadr.tests.firstRequest.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = FakeAccess()
+        let coordinator = PermissionCoordinator(access: access, defaults: defaults)
+
+        #expect(coordinator.ensureAccess() == false)
+        #expect(coordinator.lastRequestShowedSystemPrompt)
+
+        #expect(coordinator.ensureAccess() == false)
+        #expect(!coordinator.lastRequestShowedSystemPrompt)
+
+        // And across launches: a new coordinator over the same defaults remembers.
+        let relaunched = PermissionCoordinator(access: access, defaults: defaults)
+        #expect(relaunched.ensureAccess() == false)
+        #expect(!relaunched.lastRequestShowedSystemPrompt)
+    }
+
+    @Test("A grant already present never asks, so never prompts")
+    func preflightGrantDoesNotPrompt() throws {
+        let suite = "kadr.tests.firstRequest.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let access = FakeAccess()
+        access.preflightResult = true
+        let coordinator = PermissionCoordinator(access: access, defaults: defaults)
+
+        #expect(coordinator.ensureAccess())
+        #expect(!coordinator.lastRequestShowedSystemPrompt)
+        #expect(access.requestCount == 0)
+    }
+}

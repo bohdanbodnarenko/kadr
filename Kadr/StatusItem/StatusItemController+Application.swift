@@ -1,6 +1,9 @@
 import AppKit
 
 extension StatusItemController {
+    /// Shared with onboarding's "finish later" copy, which names this row (docs/17 T-SH-4).
+    static let finishSetupTitle = String(localized: "Finish Setup…")
+
     /// Settings and Quit, plus setup only while something required is missing.
     ///
     /// "Setup & Permissions…" and "Check for Updates…" used to be permanent rows. The first
@@ -24,7 +27,7 @@ extension StatusItemController {
 
         if isSetupNeeded {
             let onboardingItem = NSMenuItem(
-                title: "Finish Setup…",
+                title: Self.finishSetupTitle,
                 action: #selector(didSelectOnboarding),
                 keyEquivalent: ""
             )

@@ -47,7 +47,10 @@ extension AppDelegate {
             fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?
                 .appendingPathComponent("app.kadr.Kadr", isDirectory: true),
             library?.appendingPathComponent("Saved Application State/app.kadr.Kadr.savedState", isDirectory: true),
-            library?.appendingPathComponent("Saved Application State/app.kadr.Kadr.Editor.savedState", isDirectory: true)
+            library?.appendingPathComponent(
+                "Saved Application State/app.kadr.Kadr.Editor.savedState",
+                isDirectory: true
+            )
         ].compactMap(\.self)
         for url in owned where fileManager.fileExists(atPath: url.path) {
             do {

@@ -85,13 +85,34 @@ public final class PermissionCoordinator {
     /// running process still cannot capture until it restarts.
     public private(set) var needsRelaunchAfterGrant = false
 
+    /// Whether the last `ensureAccess()` that failed had just shown macOS's own prompt.
+    ///
+    /// macOS prompts once per app, the first time it is asked. When that is what just
+    /// happened, Kadr's recovery alert would land on top of the system's, and the user
+    /// would face two dialogs about one question (docs/17 T-SH-4). The answer is
+    /// remembered across launches because the prompt, too, is once per install.
+    public private(set) var lastRequestShowedSystemPrompt = false
+    @ObservationIgnored private let defaults: UserDefaults
+    static let hasRequestedKey = "app.kadr.hasRequestedScreenRecording"
+
     /// Whether the onboarding probe loop is running. It is the only poll in the app.
     public var isProbing: Bool {
         probeTask != nil
     }
 
-    public init(access: any ScreenRecordingAccessProviding = SystemScreenRecordingAccess()) {
+    public init(
+        access: any ScreenRecordingAccessProviding = SystemScreenRecordingAccess(),
+        defaults: UserDefaults = .standard
+    ) {
         self.access = access
+        self.defaults = defaults
+    }
+
+    /// Asks macOS, noting whether this is the ask that shows its prompt.
+    private func requestFromSystem() -> Bool {
+        lastRequestShowedSystemPrompt = !defaults.bool(forKey: Self.hasRequestedKey)
+        defaults.set(true, forKey: Self.hasRequestedKey)
+        return access.request()
     }
 
     deinit {
@@ -117,7 +138,7 @@ public final class PermissionCoordinator {
     /// is why onboarding has to deep-link into System Settings as well.
     @discardableResult
     public func requestAccess() -> Bool {
-        let granted = access.request()
+        let granted = requestFromSystem()
         if granted {
             transition(to: .granted, viaProbe: true)
         }
@@ -142,7 +163,7 @@ public final class PermissionCoordinator {
             return state.allowsCapture
         }
 
-        let granted = access.request()
+        let granted = requestFromSystem()
         if granted {
             transition(to: .granted, viaProbe: true)
             return state.allowsCapture

@@ -71,6 +71,11 @@ struct PermissionRecovery {
         if permissions.ensureAccess() {
             return true
         }
+        // macOS has just asked in its own words; a second dialog on top of it is noise.
+        // The next attempt, which no longer prompts, gets Kadr's recovery (docs/17 T-SH-4).
+        if permissions.lastRequestShowedSystemPrompt {
+            return false
+        }
         switch present(state: permissions.state, includePicker: includePicker) {
         case .openSettings:
             openSystemSettings()

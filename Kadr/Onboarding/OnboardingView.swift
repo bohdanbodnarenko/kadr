@@ -57,8 +57,8 @@ struct OnboardingView: View {
         } message: {
             Text(
                 "Screen capture is not allowed yet, so screenshots and recordings will not "
-                    + "work. Choose Setup & Permissions from the Kadr menu whenever you want "
-                    + "to pick this up again."
+                    + "work. Right-click the Kadr icon in the menu bar and choose "
+                    + "\(StatusItemController.finishSetupTitle) whenever you want to pick this up again."
             )
         }
     }

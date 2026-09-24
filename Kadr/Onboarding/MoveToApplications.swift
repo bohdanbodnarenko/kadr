@@ -66,7 +66,9 @@ enum MoveToApplications {
             logger.error("Moving to Applications failed: \(error.localizedDescription, privacy: .public)")
             let failure = NSAlert(error: error)
             failure.messageText = String(localized: "Kadr could not be moved to Applications.")
-            failure.informativeText = String(localized: "Drag Kadr into the Applications folder in Finder, then open it from there.")
+            failure
+                .informativeText =
+                String(localized: "Drag Kadr into the Applications folder in Finder, then open it from there.")
             failure.runModal()
             return false
         }
@@ -109,7 +111,8 @@ enum MoveToApplications {
         configuration.arguments = [RelaunchHelper.relaunchArgument]
         NSWorkspace.shared.openApplication(at: bundle, configuration: configuration) { _, error in
             if let error {
-                KadrLog.logger(.app).error("Opening the moved copy failed: \(error.localizedDescription, privacy: .public)")
+                KadrLog.logger(.app)
+                    .error("Opening the moved copy failed: \(error.localizedDescription, privacy: .public)")
             }
             Task { @MainActor in quit() }
         }

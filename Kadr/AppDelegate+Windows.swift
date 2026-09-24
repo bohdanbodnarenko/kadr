@@ -1,5 +1,6 @@
 import AppKit
 import AutomationKit
+import CaptureCore
 import os
 
 extension AppDelegate {
@@ -50,6 +51,19 @@ extension AppDelegate {
         automationListener?.stop()
         automationListener = nil
         hotkeyCenter?.suspend()
+    }
+
+    /// Settings ▸ Permissions ▸ Quit & Reopen Kadr (docs/17 T-SH-4).
+    func relaunchForNewGrant() {
+        releaseForRelaunch()
+        Task {
+            do {
+                try await RelaunchHelper().relaunchForNewGrant()
+            } catch {
+                logger.error("Could not relaunch: \(error.localizedDescription, privacy: .public)")
+                reclaimAfterFailedRelaunch()
+            }
+        }
     }
 
     /// The relaunch failed, so this instance is staying: take everything back.

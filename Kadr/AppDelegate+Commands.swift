@@ -257,7 +257,16 @@ extension AppDelegate {
         )
     }
 
-    /// Reopens onboarding, which is also how the user recovers a revoked grant.
+    /// Finish Setup…: straight to the grants that are missing (docs/17 T-SH-4).
+    ///
+    /// It used to replay the whole welcome and re-arm every tip, which is not what
+    /// somebody who only needs to allow Screen Recording asked for.
+    func finishSetup() {
+        onboarding.onClosed = { [weak self] in self?.scheduleMenuBarHint() }
+        onboarding.show(startingAt: .permissions)
+    }
+
+    /// Help ▸ Show Welcome…: the whole introduction again.
     func showOnboarding() {
         // Replaying the welcome re-arms every tip too. Somebody asking to be shown the
         // introduction again is asking about the whole app, and the explanations that only

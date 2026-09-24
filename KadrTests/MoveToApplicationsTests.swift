@@ -15,7 +15,7 @@ struct MoveToApplicationsTests {
     }
 
     @Test("A build run from Xcode or a test host is never offered the move")
-    func testHostIsNotOffered() {
+    func hostIsNotOffered() {
         #expect(!RunLocation.classify(bundlePath: Bundle.main.bundlePath).shouldOfferMove)
     }
 }

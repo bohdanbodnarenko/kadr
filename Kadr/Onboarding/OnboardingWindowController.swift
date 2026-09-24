@@ -35,7 +35,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         model.onFinish = { [weak self] in self?.close() }
     }
 
-    func show() {
+    /// - Parameter step: where to open when the window is not already up. `nil` resumes
+    ///   at Permissions after a relaunch and starts at Welcome otherwise.
+    func show(startingAt step: OnboardingStep? = nil) {
         if let window {
             // Activates and deminiaturizes too: a second request for an open window used
             // to order it front behind the app the user was in (docs/17 T-SH-5).
@@ -43,7 +45,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        if settings.resumeOnboardingAtPermissions {
+        if let step {
+            model.step = step
+        } else if settings.resumeOnboardingAtPermissions {
             model.step = .permissions
         } else {
             model.step = .welcome
