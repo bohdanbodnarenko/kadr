@@ -16,6 +16,13 @@ extension SelectionOverlayView {
         return ColorPick(color: colour.rgb, comparison: comparisonColor, format: colorFormat)
     }
 
+    /// A click in eyedropper mode: what the hint promises ("Click to copy", T-CAP-1).
+    func pickColor(at point: CGPoint) {
+        interaction.pointerMoved(to: point)
+        guard let pick = currentPick else { return }
+        onPickColor?(pick)
+    }
+
     /// Stores the colour under the pointer as the one to measure contrast against.
     func sampleComparisonColor() {
         guard let pointer = interaction.pointer, let colour = loupe.color(at: pointer) else { return }
