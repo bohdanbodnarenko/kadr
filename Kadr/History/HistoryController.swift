@@ -45,6 +45,14 @@ final class HistoryController {
     }
 
     private var pending: [HistoryIngest] = []
+    /// History deletes inside their Undo window (docs/17 T-OUT-7).
+    @ObservationIgnored private var pendingTrash: [UUID: PendingTrash] = [:]
+
+    private struct PendingTrash {
+        let ids: Set<UUID>
+        let commit: Task<Void, Never>
+    }
+
     /// The open in flight, shared by everyone who asks before it finishes.
     @ObservationIgnored private var openTask: Task<HistoryStore, any Error>?
 
@@ -217,16 +225,16 @@ final class HistoryController {
             // keystroke, and deleting permanently is not something a keystroke should do
             // (docs/17 T-OUT-4). Launch, ingest and a confirmed Settings change run it.
             if isSearching {
-                records = try await store.search(searchText, filter: filter)
+                records = try await visible(store.search(searchText, filter: filter))
                 // A search returns its whole ranked result set, so there is no next page.
                 hasMore = false
             } else {
                 let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
-                records = page
+                records = visible(page)
                 hasMore = page.count == Self.pageSize
             }
             usage = try await store.storageUsage()
-            recent = try await store.recent(limit: Self.menuStripCount)
+            recent = try await visible(store.recent(limit: Self.menuStripCount))
         } catch {
             loadError = error.localizedDescription
             logger.error("Could not load history: \(error.localizedDescription, privacy: .public)")
@@ -256,7 +264,7 @@ final class HistoryController {
         pageOffset += Self.pageSize
         do {
             let page = try await store.loadPage(filter: filter, offset: pageOffset, limit: Self.pageSize)
-            records.append(contentsOf: page)
+            records.append(contentsOf: visible(page))
             hasMore = page.count == Self.pageSize
             loadError = nil
         } catch {
@@ -266,20 +274,58 @@ final class HistoryController {
         }
     }
 
-    /// Moves library items to the Trash. Retention eviction stays permanent (docs/14 UX-22).
+    /// Moves library items to the Trash, with an Undo (docs/14 UX-22, docs/17 T-OUT-7).
+    ///
+    /// The rows go at once and the banner offers Undo; the delete itself waits out the
+    /// Undo window. It has to: the library's files are named by hash, so once they are in
+    /// the Trash, Finder's Put Back restores a `3fa9c1….png` and never the History row.
+    /// Retention eviction stays permanent.
     func moveToTrash(ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        let batch = UUID()
+        let hidden = Set(ids)
+        pendingTrash[batch] = PendingTrash(ids: hidden, commit: Task { [weak self] in
+            try? await Task.sleep(for: FeedbackStatus.undoWindow + .seconds(1))
+            guard !Task.isCancelled else { return }
+            await self?.commitTrash(batch)
+        })
+        records.removeAll { hidden.contains($0.id) }
+        recent.removeAll { hidden.contains($0.id) }
+        let message = ids.count == 1
+            ? String(localized: "Moved to Trash")
+            : String(localized: "Moved \(ids.count) captures to Trash")
+        FailurePresenter.present(.undoable(message) { [weak self] in
+            Task { await self?.undoTrash(batch) }
+        })
+    }
+
+    /// Puts a batch back, before its delete has run.
+    func undoTrash(_ batch: UUID) async {
+        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
+        pending.commit.cancel()
+        logger.info("Put \(pending.ids.count, privacy: .public) history item(s) back")
+        await reload(filter: filter)
+    }
+
+    /// Deletes a batch whose Undo window has passed.
+    func commitTrash(_ batch: UUID) async {
+        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
         await openIfNeeded()
-        guard let store, !ids.isEmpty else { return }
+        guard let store else { return }
         do {
-            _ = try await store.delete(ids: ids, fileDisposition: .trash)
-            records.removeAll { ids.contains($0.id) }
-            recent.removeAll { ids.contains($0.id) }
+            _ = try await store.delete(ids: Array(pending.ids), fileDisposition: .trash)
             usage = try await store.storageUsage()
             loadError = nil
         } catch {
             loadError = error.localizedDescription
             logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Records waiting out their Undo window are not shown, whatever a reload returns.
+    private func visible(_ list: [HistoryRecord]) -> [HistoryRecord] {
+        let hidden = pendingTrash.values.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
+        return hidden.isEmpty ? list : list.filter { !hidden.contains($0.id) }
     }
 
     /// Removes whatever the library holds for a file the user deleted elsewhere.
@@ -340,7 +386,7 @@ final class HistoryController {
                 await reload(filter: filter)
             }
             usage = await (try? store?.storageUsage()) ?? usage
-            recent = await (try? store?.recent(limit: Self.menuStripCount)) ?? recent
+            recent = await visible((try? store?.recent(limit: Self.menuStripCount)) ?? recent)
 
             // Opting out is not just "stop indexing": what was already read has to go, or
             // the search field would keep finding text from captures the user has since
@@ -381,7 +427,7 @@ final class HistoryController {
             }
             store = opened
             await applyAutomaticRetention(on: opened)
-            recent = try await opened.recent(limit: Self.menuStripCount)
+            recent = try await visible(opened.recent(limit: Self.menuStripCount))
             usage = try await opened.storageUsage()
             await drainPending()
             // The launch pass read pages nothing will read again soon.
@@ -406,7 +452,7 @@ final class HistoryController {
         }
         // What was just ingested is never what the cap evicts (docs/17 T-OUT-8).
         await applyAutomaticRetention(on: store, protecting: ingested)
-        recent = await (try? store.recent(limit: Self.menuStripCount)) ?? recent
+        recent = await visible((try? store.recent(limit: Self.menuStripCount)) ?? recent)
         usage = await (try? store.storageUsage()) ?? usage
 
         // A capture just landed, so the agent is awake anyway: a good moment to read it

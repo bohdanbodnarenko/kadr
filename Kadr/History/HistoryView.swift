@@ -30,7 +30,7 @@ struct HistoryView: View {
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
     private var batchDeleteMessage: String {
-        KadrPlural.files(selection.selected.count) + ". You can recover them from the Trash."
+        KadrPlural.files(selection.selected.count) + ". You can undo this right after."
     }
 
     var body: some View {
