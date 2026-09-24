@@ -117,8 +117,8 @@ extension QuickAccessManager {
         panel.setContent(QuickAccessStackView(manager: self) { [weak panel] rects in
             panel?.setInteractiveRects(rects)
         })
-        panel.onScroll = { [weak self] deltaX, deltaY in
-            self?.handleScroll(deltaX: deltaX, deltaY: deltaY)
+        panel.onSwipe = { [weak self] phase, deltaX, deltaY, isPrecise in
+            self?.handleSwipe(phase: phase, deltaX: deltaX, deltaY: deltaY, isPrecise: isPrecise)
         }
         overlayPanel = panel
         return panel
@@ -141,13 +141,26 @@ extension QuickAccessManager {
     /// scroll. When the overlay was one window per card this came for free — the card's own
     /// window got the event — so the wiring had to be rebuilt when they became one.
     func handleScroll(deltaX: CGFloat, deltaY: CGFloat) {
+        handleSwipe(phase: .began, deltaX: deltaX, deltaY: deltaY, isPrecise: true)
+        swipeTracker.reset()
+    }
+
+    /// One trackpad gesture over a card, acted on at most once (docs/17 T-OUT-13).
+    func handleSwipe(phase: OverlaySwipeTracker.Phase, deltaX: CGFloat, deltaY: CGFloat, isPrecise: Bool) {
+        let swipe = swipeTracker.feed(
+            phase: phase,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            isPrecise: isPrecise,
+            corner: settings.overlayCorner
+        )
         guard !isPeeking,
               let hoveredItemID,
               let item = items.first(where: { $0.id == hoveredItemID })
         else {
             return
         }
-        switch OverlaySwipe.from(deltaX: deltaX, deltaY: deltaY, corner: settings.overlayCorner) {
+        switch swipe {
         case .dismiss:
             dismiss(item)
         case .peek:
@@ -189,16 +202,19 @@ extension QuickAccessManager {
         return saved
     }
 
-    func copyFile(at url: URL, isVideo: Bool = false) {
+    /// Returns whether anything reached the clipboard.
+    @discardableResult
+    func copyFile(at url: URL, isVideo: Bool = false) -> Bool {
         guard !isVideo else {
+            guard FileManager.default.fileExists(atPath: url.path) else { return false }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.writeObjects([url as NSURL])
-            return
+            return pasteboard.writeObjects([url as NSURL])
         }
-        guard let data = try? Data(contentsOf: url) else { return }
+        guard let data = try? Data(contentsOf: url) else { return false }
         let format = ImageFormat(fileExtension: url.pathExtension) ?? .png
         ClipboardWriter.shared.write(data: data, format: format, fileURL: url)
+        return true
     }
 
     func revealInFinder(_ url: URL) {
@@ -293,6 +309,7 @@ extension QuickAccessManager {
         if lastHoveredItemID == item.id {
             lastHoveredItemID = nil
         }
+        studioSessionCache.removeValue(forKey: item.id)
     }
 
     func finishRemoval() {

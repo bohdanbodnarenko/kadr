@@ -67,11 +67,10 @@ extension QuickAccessManager {
         actions.scaleRetina = { [weak self] in self?.scaleRetina(item) }
         actions.trimAvailable = item.isVideo && editor.isAvailable
         actions.studio = { [weak self] in self?.openStudio(item) }
-        // Asked once, when the card is built, rather than on every redraw: it is a
-        // directory scan, and a card redraws whenever anything on screen moves.
-        actions.studioAvailable = item.isVideo
-            && editor.isAvailable
-            && StudioSessionRecorder.session(forRecordingAt: item.fileURL) != nil
+        // Asked once per card rather than on every redraw: it is a directory scan, and the
+        // stack rebuilds every card's actions whenever anything on screen moves
+        // (docs/17 T-OUT-13).
+        actions.studioAvailable = item.isVideo && editor.isAvailable && hasStudioSession(item)
         actions.unavailableReason = { [weak self] cardAction in
             guard let self else { return nil }
             switch cardAction {
@@ -87,6 +86,16 @@ extension QuickAccessManager {
         return actions
     }
 
+    /// Whether a recording still has its studio session, scanned once per card.
+    func hasStudioSession(_ item: QuickAccessItem) -> Bool {
+        if let known = studioSessionCache[item.id] {
+            return known
+        }
+        let found = StudioSessionRecorder.session(forRecordingAt: item.fileURL) != nil
+        studioSessionCache[item.id] = found
+        return found
+    }
+
     /// Opens a recording's studio session (docs/09 U3).
     ///
     /// The session rather than the movie: the movie alone opens for trimming, which is the
@@ -96,74 +105,6 @@ extension QuickAccessManager {
     func openStudio(_ item: QuickAccessItem) {
         guard let session = StudioSessionRecorder.session(forRecordingAt: item.fileURL) else { return }
         openInEditor(session.directory, retiring: item)
-    }
-
-    func exportGIF(_ item: QuickAccessItem) {
-        exportGIF(item, confirm: true)
-    }
-
-    /// Turns a recording into a GIF. Dedicated GIF capture skips the confirm unless
-    /// the encoder had to clip the take (docs/03 §1.8, CleanShot §13.6).
-    ///
-    /// The encode happens in the helper process, so the agent never holds a single frame
-    /// of it (docs/04 §1).
-    func exportGIF(_ item: QuickAccessItem, confirm: Bool) {
-        let destination = item.fileURL.deletingPathExtension().appendingPathExtension("gif")
-        Task { [weak self] in
-            guard let self else { return }
-            defer { vision.disconnect() }
-
-            do {
-                let estimate = try await vision.encodeGIF(GIFRequest(
-                    sourcePath: item.fileURL.path,
-                    destinationPath: destination.path,
-                    estimateOnly: true
-                ))
-                if confirm || estimate.isClipped {
-                    guard confirmExport(estimate) else { return }
-                }
-
-                let result = try await vision.encodeGIF(GIFRequest(
-                    sourcePath: item.fileURL.path,
-                    destinationPath: destination.path
-                ))
-                guard let path = result.path else { return }
-                let gifURL = URL(fileURLWithPath: path)
-                logger.info("Exported \(gifURL.lastPathComponent, privacy: .public)")
-                presentExternalFile(at: gifURL, origin: .capture)
-                NSWorkspace.shared.activateFileViewerSelecting([gifURL])
-            } catch {
-                logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
-                presentFeedback(.failure(
-                    String(localized: "GIF export failed"),
-                    retryTitle: String(localized: "Retry"),
-                    retry: { [weak self] in self?.exportGIF(item, confirm: confirm) }
-                ))
-            }
-        }
-    }
-
-    /// Shows the estimate before committing, because a large GIF takes real time to make.
-    ///
-    /// The estimate carries the plan the encoder settled on, so a recording too long to
-    /// hold in memory says so here rather than silently producing a shorter GIF than the
-    /// user expected (docs/07 M10).
-    func confirmExport(_ estimate: GIFResponse) -> Bool {
-        let size = ByteCountFormatter.string(fromByteCount: Int64(estimate.byteCount), countStyle: .file)
-        let alert = NSAlert()
-        alert.messageText = "Export this recording as a GIF?"
-        var detail = "The GIF will be roughly \(size). GIFs are much larger than "
-            + "video, so long recordings get big quickly."
-        if estimate.isClipped {
-            let seconds = Int(estimate.encodedSeconds.rounded())
-            detail += "\n\nThis recording is too long to turn into one GIF, so the export "
-                + "will cover the first \(seconds) seconds. Trim it first to choose which part."
-        }
-        alert.informativeText = detail
-        alert.addButton(withTitle: "Export")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        return alert.runModal() == .alertFirstButtonReturn
     }
 
     func copy(_ item: QuickAccessItem) {
@@ -176,7 +117,13 @@ extension QuickAccessManager {
     func copy(_ item: QuickAccessItem, keepOverlay: Bool) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        copyFile(at: url, isVideo: item.isVideo)
+        // Copy is otherwise invisible: say it happened, or say why it did not
+        // (docs/17 T-OUT-13).
+        if copyFile(at: url, isVideo: item.isVideo) {
+            presentFeedback(.done(String(localized: "Copied")))
+        } else {
+            presentFeedback(.unavailable(.missingFile))
+        }
         if keepOverlay {
             noteEngagement(with: item)
         }
@@ -234,7 +181,14 @@ extension QuickAccessManager {
             noteEngagement(with: subject)
         }
         editor.open(CaptureProject.editorURL(for: url)) { [weak self] opened in
-            guard let self, opened else { return }
+            guard let self else { return }
+            guard opened else {
+                // A launch that did nothing used to be silent (docs/17 T-OUT-13).
+                presentFeedback(editor.isAvailable
+                    ? .failure(String(localized: "Couldn't open the editor"))
+                    : .unavailable(.editorNotInstalled))
+                return
+            }
             retireCard(subject)
         }
     }
@@ -398,21 +352,38 @@ extension QuickAccessManager {
     func recognizeText(_ item: QuickAccessItem) {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
-        recognizeText(at: url, on: overlayPanel?.screen)
+        recognizeText(at: url, on: overlayPanel?.screen, card: item)
     }
 
     /// Recognises the text in a file, copies it, and shows what was found.
     ///
     /// Shared by cards, pins and `kadr` automation. Both card and pin offered this command
     /// with nothing behind it before (docs/07 M8).
-    func recognizeText(at url: URL, on screen: NSScreen? = nil) {
+    ///
+    /// With a `card`, the card is busy while this runs, so auto-dismiss cannot take it
+    /// mid-task (docs/16 OUT-16).
+    func recognizeText(at url: URL, on screen: NSScreen? = nil, card: QuickAccessItem? = nil) {
+        if let card {
+            setActivity(.recognizingText, on: card)
+        }
         Task { [weak self] in
             guard let self else { return }
+            defer {
+                if let card {
+                    setActivity(nil, on: card)
+                }
+            }
             do {
                 let recognition = try await textRecognizer.recognize(
                     fileAt: url,
                     preservingLineBreaks: settings.ocrPreservesLineBreaks
                 )
+                // Nothing to copy is a finding, not a toast of "0 characters"
+                // (docs/17 T-OUT-13). The clipboard keeps what it had.
+                guard !recognition.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    presentFeedback(.unavailable(.other(String(localized: "No text found"))))
+                    return
+                }
                 textRecognizer.copyToClipboard(recognition)
                 let characters = recognition.text.count
                 logger.info("Recognised \(characters, privacy: .public) characters from a card")

@@ -81,7 +81,7 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     private let hostingView: OverlayHostingView
     /// Trackpad flicks over a card (docs/03 §2). Set by the manager, which knows which card
     /// the pointer is on.
-    var onScroll: ((CGFloat, CGFloat) -> Void)?
+    var onSwipe: ((OverlaySwipeTracker.Phase, CGFloat, CGFloat, Bool) -> Void)?
 
     init(content: some View) {
         hostingView = OverlayHostingView(rootView: content)
@@ -162,11 +162,18 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     /// over a card — `hitTest` saw to that.
     override func scrollWheel(with event: NSEvent) {
         guard event.momentumPhase.isEmpty else { return }
-        guard let onScroll else {
+        guard let onSwipe else {
             super.scrollWheel(with: event)
             return
         }
-        onScroll(event.scrollingDeltaX, event.scrollingDeltaY)
+        let phase: OverlaySwipeTracker.Phase = if event.phase.contains(.began) || event.phase.contains(.mayBegin) {
+            .began
+        } else if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            .ended
+        } else {
+            .changed
+        }
+        onSwipe(phase, event.scrollingDeltaX, event.scrollingDeltaY, event.hasPreciseScrollingDeltas)
     }
 
     func dismiss() {

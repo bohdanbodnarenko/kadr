@@ -70,8 +70,11 @@ extension QuickAccessManager {
     func setActivity(_ activity: CardActivity?, on item: QuickAccessItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index].activity = activity
-        if activity != nil {
-            presentFeedback(FeedbackStatus(kind: .progress, message: String(localized: "Compressing…")))
+        if let activity {
+            presentFeedback(FeedbackStatus(kind: .progress, message: activity.progressMessage))
+        } else if feedbackStatus?.kind == .progress {
+            // Work that ends without a message of its own must not leave "…" up forever.
+            dismissFeedback()
         }
     }
 

@@ -47,12 +47,47 @@ struct OverlaySwipeTests {
 
         // Through the panel's own closure, which is the part that broke: the handler kept
         // working after the per-card panels went away, and nothing was calling it.
-        let onScroll = try #require(
-            harness.manager.overlayPanel?.onScroll,
+        let onSwipe = try #require(
+            harness.manager.overlayPanel?.onSwipe,
             "the panel must be wired to the swipe handler"
         )
-        onScroll(20, 0)
+        onSwipe(.began, 20, 0, true)
         #expect(harness.manager.items.isEmpty, "an outward flick hides the hovered card")
+    }
+
+    @Test("One long swipe hides one card, not every card that slides under the pointer")
+    func oneSwipeOneCard() throws {
+        let harness = makeHarness()
+        harness.settings.overlayCorner = .bottomRight
+        _ = try showCard(harness)
+        let second = try showCard(harness)
+        harness.manager.setHovered(second, hovering: true)
+        let onSwipe = try #require(harness.manager.overlayPanel?.onSwipe)
+
+        onSwipe(.began, 20, 0, true)
+        if let next = harness.manager.items.first {
+            harness.manager.setHovered(next, hovering: true)
+        }
+        onSwipe(.changed, 20, 0, true)
+        onSwipe(.changed, 20, 0, true)
+
+        #expect(harness.manager.items.count == 1)
+        harness.manager.dismissAll()
+    }
+
+    @Test("A mouse-wheel notch does not collapse the stack")
+    func wheelIsIgnored() throws {
+        let harness = makeHarness()
+        harness.settings.overlayCorner = .bottomRight
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+        let onSwipe = try #require(harness.manager.overlayPanel?.onSwipe)
+
+        onSwipe(.changed, 0, 40, false)
+
+        #expect(!harness.manager.isPeeking)
+        #expect(harness.manager.items.count == 1)
+        harness.manager.dismissAll()
     }
 
     @Test("A flick toward the screen edge tucks the stack away")

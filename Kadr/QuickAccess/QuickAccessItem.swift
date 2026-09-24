@@ -10,6 +10,14 @@ enum CardActivity: Equatable, Sendable {
     case compressing
     case recognizingText
     case exportingGIF
+
+    var progressMessage: String {
+        switch self {
+        case .compressing: String(localized: "Compressing…")
+        case .recognizingText: String(localized: "Reading text…")
+        case .exportingGIF: String(localized: "Making a GIF…")
+        }
+    }
 }
 
 /// Whose file a card is showing, which decides what Save, transforms and Trash may do

@@ -6,8 +6,11 @@ import Foundation
 ///
 /// Thin wrappers over the same `AppCommand` values the URL scheme and the CLI produce, so
 /// a Shortcuts action cannot drift from its command-line twin. They run in the agent
-/// process — `openAppWhenRun` — because that is where the Screen Recording grant lives
-/// (docs/04 §1).
+/// process, because that is where the Screen Recording grant lives (docs/04 §1). The
+/// agent is always running, so the capture actions do not ask Shortcuts to *open* it:
+/// activating Kadr first would change which app is frontmost, and with it what a window
+/// or area capture sees (docs/17 T-OUT-13). Only the actions that show Kadr's own
+/// windows open the app.
 enum KadrIntentError: Error, CustomLocalizedStringResourceConvertible {
     case cancelled
     case failed(String)
@@ -46,7 +49,7 @@ private func file(from response: AutomationResponse) throws -> IntentFile {
 struct CaptureAreaIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Area"
     static let description = IntentDescription("Select an area of the screen and capture it.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -57,7 +60,7 @@ struct CaptureAreaIntent: AppIntent {
 struct CaptureWindowIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Window"
     static let description = IntentDescription("Pick a window and capture it.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -68,7 +71,7 @@ struct CaptureWindowIntent: AppIntent {
 struct CaptureFullscreenIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Screen"
     static let description = IntentDescription("Capture the whole screen.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -79,7 +82,7 @@ struct CaptureFullscreenIntent: AppIntent {
 struct CapturePreviousAreaIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Previous Area"
     static let description = IntentDescription("Re-capture the last selected area.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -90,7 +93,7 @@ struct CapturePreviousAreaIntent: AppIntent {
 struct CaptureScrollingIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Scrolling Area"
     static let description = IntentDescription("Capture a scrolling region and stitch it.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -101,7 +104,7 @@ struct CaptureScrollingIntent: AppIntent {
 struct RecordRegionIntent: AppIntent {
     static let title: LocalizedStringResource = "Record Region"
     static let description = IntentDescription("Select a region and start recording it.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -113,7 +116,7 @@ struct RecordRegionIntent: AppIntent {
 struct CaptureTextIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Text"
     static let description = IntentDescription("Select an area and read the text in it.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
@@ -124,7 +127,7 @@ struct CaptureTextIntent: AppIntent {
 struct StartRecordingIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Recording"
     static let description = IntentDescription("Start recording the screen.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @Parameter(title: "Frames per Second")
     var frameRate: Int?
@@ -139,7 +142,7 @@ struct StartRecordingIntent: AppIntent {
 struct StopRecordingIntent: AppIntent {
     static let title: LocalizedStringResource = "Stop Recording"
     static let description = IntentDescription("Stop the recording and return the file.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
@@ -166,7 +169,7 @@ struct ToggleRecordingIntent: AppIntent {
 struct PinImageIntent: AppIntent {
     static let title: LocalizedStringResource = "Pin Image"
     static let description = IntentDescription("Show an image on top of every window.")
-    static let openAppWhenRun = true
+    static let openAppWhenRun = false
 
     /// No `supportedContentTypes:` — that initialiser is macOS 15+, and Kadr ships to 14.
     /// A file that is not an image simply fails to pin, with a message that says so.
