@@ -1,4 +1,5 @@
 import AnnotationModel
+import AppKit
 import Foundation
 import os
 import Shared
@@ -230,6 +231,8 @@ public final class StudioDocumentModel {
     /// Unstructured on purpose: an export outlives the save panel's completion handler, and
     /// nothing on the way in owns a scope that lasts as long as the render does.
     @ObservationIgnored var exportTask: Task<Void, Never>?
+    /// The Share button, so the share picker can hang off it (docs/17 T-STU-4).
+    @ObservationIgnored weak var shareAnchorView: NSView?
     /// Validating and loading the persisted transcript; cancelled on close.
     @ObservationIgnored var transcriptLoadTask: Task<Void, Never>?
     /// The last integer percent published to `exportProgress`, so a render's per-frame
@@ -492,6 +495,7 @@ public final class StudioDocumentModel {
         } catch {
             logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
         }
+        purgeStagedRenders()
         let path = session.screenURL.path
         Task.detached(priority: .utility) {
             await StudioThumbnailStore.shared.purge(path: path)

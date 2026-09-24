@@ -339,6 +339,7 @@ public struct StudioRootView: View {
             }
         }
         .fixedSize()
+        .background(StudioShareAnchor(model: model))
         .help("Share the edited recording shown in the preview")
         .accessibilityLabel("Share")
         .disabled(model.exportProgress != nil)
@@ -481,5 +482,21 @@ private final class DockProgressView: NSView {
         filled.size.width = inset.width * min(max(progress, 0), 1)
         NSColor.controlAccentColor.setFill()
         filled.fill()
+    }
+}
+
+/// Hands the Share button's view to the model, so the share picker opens from the button
+/// and not from whichever window is key when the render finishes (docs/17 T-STU-4).
+private struct StudioShareAnchor: NSViewRepresentable {
+    let model: StudioDocumentModel
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        model.shareAnchorView = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        model.shareAnchorView = nsView
     }
 }

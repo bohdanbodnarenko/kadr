@@ -28,44 +28,115 @@ public extension StudioDocumentModel {
     }
 
     /// Renders the current edit, or reuses a stamped render, then copies it (docs/14 UX-31).
+    ///
+    /// Tracked as the export (docs/17 T-STU-4), so Cancel stops it, closing the window or
+    /// quitting asks first, and a second ⌘C while it runs does not start another render.
     func copyEditedToClipboard() async {
-        guard exportTask == nil else { return }
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-copy-\(UUID().uuidString)")
-            .appendingPathExtension(exportSettings.filenameExtension)
-        do {
-            try await writeEditedRecording(to: destination)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.writeObjects([destination as NSURL])
-            notice = "Copied the edit to the clipboard."
-        } catch is CancellationError {
-            return
-        } catch {
-            failure = .copyEditedFailed(error.localizedDescription)
+        await runTrackedRender { model in
+            do {
+                let destination = try model.stagedRenderURL()
+                try await model.writeEditedRecording(to: destination)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.writeObjects([destination as NSURL])
+                model.notice = "Copied the edit to the clipboard."
+            } catch where Self.isCancellation(error) {
+                return
+            } catch {
+                model.failure = .copyEditedFailed(error.localizedDescription)
+            }
         }
     }
 
-    /// Renders the current edit for sharing (docs/14 UX-31).
+    /// Renders the current edit for sharing (docs/14 UX-31), tracked like Copy.
+    ///
+    /// The picker hangs off the Share button when it is on screen, and off the studio
+    /// window otherwise — never off whatever window happens to be key, which quietly
+    /// dropped the result when the user had clicked elsewhere during the render.
     func shareEdited() async {
-        guard exportTask == nil else { return }
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-share-\(UUID().uuidString)")
-            .appendingPathExtension(exportSettings.filenameExtension)
-        do {
-            try await writeEditedRecording(to: destination)
-            guard let window = NSApp.keyWindow, let view = window.contentView else { return }
-            let picker = NSSharingServicePicker(items: [destination])
-            let anchor = NSRect(x: view.bounds.midX, y: view.bounds.maxY - 12, width: 1, height: 1)
-            picker.show(relativeTo: anchor, of: view, preferredEdge: .minY)
-        } catch is CancellationError {
-            return
-        } catch {
-            failure = .shareEditedFailed(error.localizedDescription)
+        await runTrackedRender { model in
+            do {
+                let destination = try model.stagedRenderURL()
+                try await model.writeEditedRecording(to: destination)
+                guard let view = model.shareAnchorView?.window != nil
+                    ? model.shareAnchorView
+                    : model.studioWindowContentView
+                else { return }
+                let picker = NSSharingServicePicker(items: [destination])
+                picker.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+            } catch where Self.isCancellation(error) {
+                return
+            } catch {
+                model.failure = .shareEditedFailed(error.localizedDescription)
+            }
         }
+    }
+
+    /// The studio's own window, found through the share anchor or a window titled for
+    /// this recording.
+    private var studioWindowContentView: NSView? {
+        if let window = shareAnchorView?.window {
+            return window.contentView
+        }
+        return NSApp?.windows.first { $0.title == session.displayName && $0.isVisible }?.contentView
+    }
+
+    /// Runs `work` as the one render this window has, so everything that guards an export
+    /// guards it too.
+    private func runTrackedRender(_ work: @escaping @MainActor (StudioDocumentModel) async -> Void) async {
+        guard exportTask == nil else { return }
+        let task = Task { [self] in await work(self) }
+        exportTask = task
+        await task.value
+        exportTask = nil
+    }
+
+    internal nonisolated static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let error = error as? StudioRenderer.RenderError, error == .cancelled {
+            return true
+        }
+        return false
+    }
+
+    /// Where Copy and Share render to: `<project>.<ext>` in a folder of this session's own,
+    /// removed when the window closes (docs/17 T-STU-4).
+    ///
+    /// Named for the project because the recipient sees the name — `kadr-copy-<UUID>.mov`
+    /// is what used to land in their Downloads — and kept in one folder so it can be
+    /// cleaned up rather than accumulating a movie per ⌘C in the temporary directory.
+    internal func stagedRenderURL() throws -> URL {
+        let folder = stagingDirectory
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+            .appendingPathComponent(Self.safeFileName(session.displayName))
+            .appendingPathExtension(exportSettings.filenameExtension)
+    }
+
+    /// This session's staging folder for Copy and Share.
+    internal var stagingDirectory: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kadr Studio Staging", isDirectory: true)
+            .appendingPathComponent(session.directory.deletingPathExtension().lastPathComponent, isDirectory: true)
+    }
+
+    /// Deletes what Copy and Share left behind. Called when the window closes.
+    func purgeStagedRenders() {
+        try? FileManager.default.removeItem(at: stagingDirectory)
+    }
+
+    /// A project name as a file name: no path separators, no colon (Finder's slash).
+    internal nonisolated static func safeFileName(_ name: String) -> String {
+        let cleaned = name
+            .components(separatedBy: CharacterSet(charactersIn: "/:\\").union(.newlines).union(.controlCharacters))
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: ".")))
+        return cleaned.isEmpty ? "Recording" : String(cleaned.prefix(200))
     }
 
     /// Writes the current edit to `destination`, reusing a stamped render when possible.
-    private func writeEditedRecording(to destination: URL) async throws {
+    fileprivate func writeEditedRecording(to destination: URL) async throws {
         let snapshot = exportSnapshot()
         if reuseRenderedFile(for: snapshot, at: destination) {
             return
@@ -83,11 +154,9 @@ public extension StudioDocumentModel {
     /// The edit is committed first, so a finished export is also the point the draft is
     /// measured against: reopening after exporting shows what was exported.
     func export(to destination: URL) async {
-        guard exportTask == nil else { return }
-        let task = Task { await performExport(to: destination) }
-        exportTask = task
-        await task.value
-        exportTask = nil
+        await runTrackedRender { model in
+            await model.performExport(to: destination)
+        }
     }
 
     /// Whether a render is running.
@@ -170,7 +239,7 @@ public extension StudioDocumentModel {
         }
     }
 
-    private func performExport(to destination: URL) async {
+    fileprivate func performExport(to destination: URL) async {
         // The stamp is finally read (docs/11 S2).
         //
         // `renderStamp()` and `matches(editDigest:pixelSize:)` were written, tested and had

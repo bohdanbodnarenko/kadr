@@ -208,4 +208,50 @@ struct StudioExportStateTests {
         #expect(stamp.editDigest == exported)
         #expect(stamp.editDigest != edited)
     }
+
+    // MARK: - docs/17 T-STU-4: Copy and Share are tracked renders
+
+    @Test("Copy renders into a per-session staging folder, named for the project, removed on close")
+    func copyIsStagedAndPurged() async throws {
+        let folder = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 1)
+        try studio.session.setDisplayName("Demo: take 2")
+
+        await studio.copyEditedToClipboard()
+        let staged = try studio.stagedRenderURL()
+        #expect(staged.deletingPathExtension().lastPathComponent == "Demo- take 2")
+        #expect(FileManager.default.fileExists(atPath: staged.path))
+
+        studio.commitOnClose()
+        #expect(!FileManager.default.fileExists(atPath: studio.stagingDirectory.path))
+    }
+
+    @Test("Copy counts as an export, and Cancel stops it")
+    func copyIsCancellable() async throws {
+        let folder = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 4)
+        NSPasteboard.general.clearContents()
+
+        let copy = Task { await studio.copyEditedToClipboard() }
+        try await StudioPlaybackFixtures.wait { studio.isExporting }
+        #expect(studio.isExporting, "the close and quit guards read this")
+        await studio.cancelExport()
+        await copy.value
+
+        #expect(!studio.isExporting)
+        #expect(studio.failure == nil)
+        #expect(studio.notice?.contains("Copied") != true)
+    }
+
+    @Test("File names drop path separators", arguments: [
+        ("Demo", "Demo"),
+        ("a/b:c", "a-b-c"),
+        ("  ..  ", "Recording"),
+        ("", "Recording")
+    ])
+    func safeFileNames(input: String, expected: String) {
+        #expect(StudioDocumentModel.safeFileName(input) == expected)
+    }
 }
