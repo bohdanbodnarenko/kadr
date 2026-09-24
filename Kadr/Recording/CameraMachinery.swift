@@ -123,9 +123,12 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
         lock.unlock()
         // Async, not sync: the queue may be inside a blocking `startRunning`, and the main
         // thread must not wait that out. Every command after this one is queued behind it.
+        // Ownership moves to the queue here: nothing on this side touches either object again.
+        nonisolated(unsafe) let handedWriter = writer
+        nonisolated(unsafe) let handedInput = video
         videoQueue.async { [self] in
-            self.writer = writer
-            writerInput = video
+            self.writer = handedWriter
+            writerInput = handedInput
             outputURL = url
             sessionStart = nil
             latestSample = nil
