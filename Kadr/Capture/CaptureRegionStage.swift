@@ -88,7 +88,13 @@ final class CaptureRegionStage {
             display: false
         )
         panel.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // A recording must not start with Kadr frontmost: the app being recorded would
+        // begin the take inactive, grey traffic lights and all, and the first click spent
+        // taking focus back would be in the file (docs/17 T-REC-6). The non-activating
+        // panel takes the keyboard without activating the app, so Return and Esc still work.
+        if purpose != .recording {
+            NSApp.activate(ignoringOtherApps: true)
+        }
         controls = panel
         installKeyMonitor()
     }
