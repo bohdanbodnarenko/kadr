@@ -187,10 +187,15 @@ public extension StudioDocumentModel {
         chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
         try? document.write(processed)
 
-        let planner = TranscriptCutPlanner()
-        let cuts = planner.cuts(for: processed, duration: manifest.duration)
+        let planner = tidyPlanner
+        // Tidy only runs on an uncut recording, so the telemetry's time is the edit's.
+        let cuts = planner.cuts(
+            for: processed,
+            duration: manifest.duration,
+            protecting: TranscriptCutPlanner.activityRanges(in: telemetry)
+        )
         guard !cuts.isEmpty else {
-            notice = "There were no filler words or long pauses to remove."
+            notice = tidyNothingFoundNotice
             pendingCuts = []
             selectedCutIDs = []
             requiresCutConfirmation = false
@@ -241,6 +246,19 @@ public extension StudioDocumentModel {
         pendingCuts = []
         selectedCutIDs = []
         requiresCutConfirmation = false
+    }
+
+    /// The planner for what the user chose to tidy (docs/17 T-STU-6).
+    internal var tidyPlanner: TranscriptCutPlanner {
+        TranscriptCutPlanner(removesFillers: tidyRemovesFillers, removesSilences: tidyShortensPauses)
+    }
+
+    private var tidyNothingFoundNotice: String {
+        switch (tidyRemovesFillers, tidyShortensPauses) {
+        case (true, false): "There were no filler words to remove."
+        case (false, true): "There were no long pauses to shorten."
+        default: "There were no filler words or long pauses to tidy."
+        }
     }
 
     func toggleCut(_ id: UUID) {

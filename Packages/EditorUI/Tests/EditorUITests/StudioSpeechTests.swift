@@ -223,6 +223,30 @@ struct StudioSpeechTests {
         #expect(studio.transcript != nil)
     }
 
+    /// docs/17 T-STU-6, through the model: the telemetry it loaded from disk protects the
+    /// silent demonstration, and switching pauses off leaves only the fillers.
+    @Test("Tidy leaves silent on-screen work alone and honours its toggles")
+    func tidyProtectsDemonstrations() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let words = Transcript(words: [
+            TranscriptWord(text: "um", start: 0, end: 0.3),
+            TranscriptWord(text: "Watch", start: 0.4, end: 1),
+            TranscriptWord(text: "this", start: 8, end: 9)
+        ])
+        let telemetry = InputTelemetry(clicks: (2 ... 7).map { ClickEvent(time: Double($0), position: .zero) })
+        let studio = try model(in: folder, duration: 9, telemetry: telemetry, transcriber: StubTranscriber(transcript: words))
+
+        await studio.tidySpeech()
+        #expect(studio.pendingCuts.allSatisfy { $0.reason == .fillerWord || $0.end <= 1.7 || $0.start >= 7.3 })
+
+        studio.discardPendingCuts()
+        studio.tidyShortensPauses = false
+        await studio.tidySpeech()
+        #expect(!studio.pendingCuts.isEmpty)
+        #expect(studio.pendingCuts.allSatisfy { $0.reason == .fillerWord })
+    }
+
     @Test("Zero timestamps refuse rather than collapse the timeline (T-C3)")
     func tidySpeechRefusesCollapsedTimestamps() async throws {
         let folder = scratch()

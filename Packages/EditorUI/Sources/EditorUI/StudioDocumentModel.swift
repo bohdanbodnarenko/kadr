@@ -203,6 +203,10 @@ public final class StudioDocumentModel {
 
     /// Cuts waiting for the user to review (docs/13 T0.4).
     public var pendingCuts: [ProposedCut] = []
+    /// What Tidy looks for (docs/17 T-STU-6). Two choices because they are different
+    /// decisions: an "um" is never content, a silent stretch sometimes is.
+    public var tidyRemovesFillers = true
+    public var tidyShortensPauses = true
 
     /// Which pending cuts are selected to apply. All on by default.
     public var selectedCutIDs: Set<UUID> = []
