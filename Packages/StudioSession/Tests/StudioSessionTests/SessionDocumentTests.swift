@@ -188,6 +188,31 @@ struct SessionDocumentTests {
         ))
     }
 
+    /// docs/17 T-STU-1: an app update, a wallpaper swap or a re-transcription changes the
+    /// pixels without changing the edit, so the stamp carries a digest of those too.
+    @Test("A stamp with inputs does not match other inputs, and one without inputs is stale")
+    func stampInputsDigest() throws {
+        let scratch = try scratch()
+        let root = scratch.root
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let output = root.appendingPathComponent("out.mov")
+        try Data("movie".utf8).write(to: output)
+        let size = CGSize(width: 1920, height: 1080)
+        let stamped = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size, inputsDigest: "build-1")
+        let legacy = RenderStamp(editDigest: "abc", outputPath: output.path, pixelSize: size)
+
+        let cases: [(RenderStamp, String?, Bool)] = [
+            (stamped, "build-1", true),
+            (stamped, "build-2", false),
+            (legacy, "build-1", false),
+            (legacy, nil, true)
+        ]
+        for (stamp, inputs, expected) in cases {
+            #expect(stamp.matches(editDigest: "abc", pixelSize: size, inputsDigest: inputs) == expected)
+        }
+    }
+
     @Test("An empty digest is a miss, even against another empty digest")
     func emptyDigestNeverMatches() {
         let stamp = RenderStamp(editDigest: "", outputPath: "/tmp/out.mp4", pixelSize: .zero)

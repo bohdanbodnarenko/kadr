@@ -67,7 +67,7 @@ struct RecordingSessionTests {
         try Data("audio".utf8).write(to: source)
 
         let name = try session.replaceSoundtrack(copying: source)
-        #expect(name == "soundtrack.wav")
+        #expect(name.hasPrefix("soundtrack-") && name.hasSuffix(".wav"))
         #expect(session.soundtrackURLs.count == 1)
         #expect(FileManager.default.fileExists(atPath: session.soundtrackURLs[0].path))
 
@@ -89,7 +89,7 @@ struct RecordingSessionTests {
         try Data("image".utf8).write(to: source)
 
         let name = try session.replaceWallpaper(copying: source)
-        #expect(name == "wallpaper.png")
+        #expect(name.hasPrefix("wallpaper-") && name.hasSuffix(".png"))
         #expect(session.wallpaperURLs.count == 1)
 
         var edit = StudioEdit.untouched(duration: 1)
@@ -99,6 +99,33 @@ struct RecordingSessionTests {
         try session.removeWallpapers()
         #expect(session.wallpaperURLs.isEmpty)
         #expect(session.wallpaperURL(for: edit) == nil)
+    }
+
+    /// docs/17 T-STU-1: a different file is a different name, so the edit — and the
+    /// render stamp's digest of it — changes when the wallpaper or soundtrack is swapped.
+    @Test("Imports are content-addressed and unused ones are purged on commit")
+    func importsAreContentAddressed() throws {
+        let root = scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = try makeSession(in: root)
+        let first = root.appendingPathComponent("a.png")
+        let second = root.appendingPathComponent("b.png")
+        try Data("one".utf8).write(to: first)
+        try Data("two".utf8).write(to: second)
+
+        let firstName = try session.replaceWallpaper(copying: first)
+        let again = try session.replaceWallpaper(copying: first)
+        let secondName = try session.replaceWallpaper(copying: second)
+        #expect(firstName == again)
+        #expect(firstName != secondName)
+        // The replaced file stays until commit, so undo still finds it (T-STU-9).
+        #expect(session.wallpaperURLs.count == 2)
+
+        var edit = StudioEdit.untouched(duration: 1)
+        edit.canvas.wallpaperFileName = secondName
+        session.purgeUnusedImports(keeping: edit)
+        #expect(session.wallpaperURLs.count == 1)
+        #expect(session.wallpaperURL(for: edit) != nil)
     }
 
     @Test("A session is named for its folder until it is renamed")

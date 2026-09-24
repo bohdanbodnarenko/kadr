@@ -486,6 +486,9 @@ public final class StudioDocumentModel {
         flushDraft()
         do {
             try document.commit(edit)
+            // Only once the edit is on disk: until then undo can still reach a replaced
+            // or removed import, and after it nothing can.
+            session.purgeUnusedImports(keeping: edit)
         } catch {
             logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
         }

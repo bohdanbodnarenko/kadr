@@ -32,8 +32,9 @@ public extension StudioDocumentModel {
         }
     }
 
+    /// Forgets the wallpaper. The file stays until the edit is committed on close, so
+    /// undoing this still finds it (docs/17 T-STU-9).
     func removeWallpaper() {
-        try? session.removeWallpapers()
         change {
             $0.canvas.wallpaperFileName = nil
             if case .wallpaper = $0.canvas.background {

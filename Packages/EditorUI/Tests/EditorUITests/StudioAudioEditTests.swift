@@ -68,7 +68,7 @@ struct StudioAudioEditTests {
         try writeSilentWav(seconds: 1, to: wav)
 
         await studio.importSoundtrack(from: wav)
-        #expect(studio.edit.soundtrackFileName == "soundtrack.wav")
+        #expect(studio.edit.soundtrackFileName?.hasPrefix("soundtrack-") == true)
         #expect(studio.edit.soundtrackDisplayName == "Voice Over")
         #expect(studio.hasImportedSoundtrack)
         #expect(studio.session.soundtrackURLs.count == 1)
@@ -99,8 +99,14 @@ struct StudioAudioEditTests {
 
         studio.removeSoundtrack()
         #expect(studio.edit.soundtrackFileName == nil)
-        #expect(studio.session.soundtrackURLs.isEmpty)
         #expect(!studio.hasImportedSoundtrack)
+
+        // Undo finds the file again (docs/17 T-STU-9); committing clears it for good.
+        studio.undo()
+        #expect(studio.hasImportedSoundtrack)
+        studio.redo()
+        studio.commitOnClose()
+        #expect(studio.session.soundtrackURLs.isEmpty)
     }
 
     @Test("Mute is off until the user asks")

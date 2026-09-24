@@ -105,17 +105,24 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// A digest of the export settings this file was encoded with. Optional so stamps
     /// written before the options popover existed still decode.
     public var settingsDigest: String?
+    /// A digest of everything outside the edit that changes the pixels (docs/17 T-STU-1):
+    /// the app build, the renderer's version, the transcript and the imported wallpaper
+    /// and soundtrack. Optional so older stamps still decode — and a caller that asks
+    /// for a match with inputs never matches a stamp without them.
+    public var inputsDigest: String?
 
     public init(
         editDigest: String,
         outputPath: String,
         pixelSize: CGSize,
-        settingsDigest: String? = nil
+        settingsDigest: String? = nil,
+        inputsDigest: String? = nil
     ) {
         self.editDigest = editDigest
         self.outputPath = outputPath
         self.pixelSize = pixelSize
         self.settingsDigest = settingsDigest
+        self.inputsDigest = inputsDigest
     }
 
     /// Whether a cached render can be handed over instead of doing the work again.
@@ -123,9 +130,20 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// The file has to still be there: a stamp naming a file the user has since moved is a
     /// stamp for nothing. An empty digest is never a hit — two failed encodes used to
     /// collide into shipping the wrong file (docs/10 R3.5).
-    public func matches(editDigest: String, pixelSize: CGSize, settingsDigest: String? = nil) -> Bool {
+    ///
+    /// When `inputsDigest` is given it has to be equal, and a stamp written before inputs
+    /// were recorded is stale: it may predate a render fix, which is the whole point.
+    public func matches(
+        editDigest: String,
+        pixelSize: CGSize,
+        settingsDigest: String? = nil,
+        inputsDigest: String? = nil
+    ) -> Bool {
         guard !editDigest.isEmpty, !self.editDigest.isEmpty else { return false }
         if let stored = self.settingsDigest, stored != settingsDigest {
+            return false
+        }
+        if let inputsDigest, self.inputsDigest != inputsDigest {
             return false
         }
         return self.editDigest == editDigest

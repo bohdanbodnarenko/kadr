@@ -66,15 +66,16 @@ public extension StudioDocumentModel {
 
     /// Writes the current edit to `destination`, reusing a stamped render when possible.
     private func writeEditedRecording(to destination: URL) async throws {
-        if reuseRenderedFile(at: destination) {
+        let snapshot = exportSnapshot()
+        if reuseRenderedFile(for: snapshot, at: destination) {
             return
         }
         exportProgress = 0
         flushDraft()
-        try? document.commit(edit)
+        try? document.commit(snapshot.edit)
         defer { exportProgress = nil }
-        let output = try await exportMedia(to: destination)
-        recordStamp(output, at: destination)
+        let output = try await exportMedia(snapshot, to: destination)
+        recordStamp(output, for: snapshot, at: destination)
     }
 
     /// Renders the edit to `destination`.
@@ -107,18 +108,48 @@ public extension StudioDocumentModel {
         await exportTask.value
     }
 
+    /// What an export renders, taken once when it starts (docs/17 T-STU-2).
+    ///
+    /// The inspector, the timeline and ⌘Z all stay live while a render runs. Reading
+    /// `edit` again after the `await` stamped the render with whatever the user had
+    /// changed in the meantime — so the next export of the *new* edit reused the old
+    /// file — and timed the captions against clips the movie does not have.
+    internal func exportSnapshot() -> StudioExportSnapshot {
+        StudioExportSnapshot(
+            edit: edit,
+            transcript: transcript,
+            settings: exportSettings,
+            inputsDigest: renderInputsDigest(edit: edit, transcript: transcript)
+        )
+    }
+
+    /// Everything outside the edit that changes the pixels (docs/17 T-STU-1).
+    internal func renderInputsDigest(edit: StudioEdit, transcript: Transcript?) -> String? {
+        let info = Bundle.main.infoDictionary
+        return RenderStamp.digest(of: StudioRenderInputs(
+            appVersion: info?["CFBundleShortVersionString"] as? String ?? "",
+            appBuild: info?["CFBundleVersion"] as? String ?? "",
+            rendererVersion: StudioRenderer.version,
+            transcriptDigest: transcript.flatMap { RenderStamp.digest(of: $0) },
+            wallpaper: session.wallpaperURL(for: edit).flatMap(RecordingSession.contentIdentity(of:)),
+            soundtrack: session.soundtrackURL(for: edit).flatMap(RecordingSession.contentIdentity(of:))
+        ))
+    }
+
     /// Copies a previous render of this exact edit, if there is one and it is still there.
-    private func reuseRenderedFile(at destination: URL) -> Bool {
+    private func reuseRenderedFile(for snapshot: StudioExportSnapshot, at destination: URL) -> Bool {
         guard let stamp = document.renderStamp(),
-              let digest = RenderStamp.digest(of: edit),
+              let digest = RenderStamp.digest(of: snapshot.edit),
+              let inputs = snapshot.inputsDigest,
               stamp.matches(
                   editDigest: digest,
                   pixelSize: StudioRenderPlan.outputSize(
-                      edit: edit,
+                      edit: snapshot.edit,
                       sourceSize: manifest.pixelSize,
-                      maxLongestEdge: exportSettings.maxLongestEdge
+                      maxLongestEdge: snapshot.settings.maxLongestEdge
                   ),
-                  settingsDigest: RenderStamp.digest(of: exportSettings)
+                  settingsDigest: RenderStamp.digest(of: snapshot.settings),
+                  inputsDigest: inputs
               )
         else {
             return false
@@ -150,11 +181,10 @@ public extension StudioDocumentModel {
         // Copying rather than handing over the old path: the user picked *this*
         // destination, and telling them the export succeeded while pointing at a file
         // somewhere else is not the same thing as exporting.
-        if reuseRenderedFile(at: destination) {
+        let snapshot = exportSnapshot()
+        if reuseRenderedFile(for: snapshot, at: destination) {
             notice = "That edit was already exported, so Kadr copied the finished file."
-            if let transcript {
-                writeCaptions(transcript, beside: destination)
-            }
+            writeCaptions(for: snapshot, beside: destination)
             return
         }
 
@@ -162,14 +192,12 @@ public extension StudioDocumentModel {
         // Any debounced draft write lands before the commit, so the two cannot disagree
         // about what was exported.
         flushDraft()
-        try? document.commit(edit)
+        try? document.commit(snapshot.edit)
 
         do {
-            let output = try await exportMedia(to: destination)
-            recordStamp(output, at: destination)
-            if let transcript {
-                writeCaptions(transcript, beside: destination)
-            }
+            let output = try await exportMedia(snapshot, to: destination)
+            recordStamp(output, for: snapshot, at: destination)
+            writeCaptions(for: snapshot, beside: destination)
             exportProgress = nil
             notifyExportFinished(at: destination)
         } catch is CancellationError {
@@ -185,19 +213,26 @@ public extension StudioDocumentModel {
         }
     }
 
-    private func exportMedia(to destination: URL) async throws -> StudioRenderer.Output {
-        if exportSettings.container == .gif {
-            return try await exportGIF(to: destination)
+    private func exportMedia(
+        _ snapshot: StudioExportSnapshot,
+        to destination: URL
+    ) async throws -> StudioRenderer.Output {
+        if snapshot.settings.container == .gif {
+            return try await exportGIF(snapshot, to: destination)
         }
-        return try await renderMovie(to: destination)
+        return try await renderMovie(snapshot, to: destination)
     }
 
-    private func renderMovie(to destination: URL) async throws -> StudioRenderer.Output {
+    private func renderMovie(
+        _ snapshot: StudioExportSnapshot,
+        to destination: URL
+    ) async throws -> StudioRenderer.Output {
         try await StudioRenderer().render(
             session: session,
-            edit: edit,
+            edit: snapshot.edit,
             to: destination,
-            options: exportSettings.rendererOptions(manifestFrameRate: manifest.frameRate),
+            options: snapshot.settings.rendererOptions(manifestFrameRate: manifest.frameRate),
+            transcript: snapshot.transcript,
             progress: progressPublisher()
         )
     }
@@ -250,7 +285,8 @@ public extension StudioDocumentModel {
     /// granted, because `UNNotificationRequest` is not `Sendable` and capturing a finished
     /// one in the authorization callback handed a non-Sendable object across threads.
     private func notifyExportFinished(at destination: URL) {
-        guard !NSApp.isActive else { return }
+        // No app (a test host) is not "in the background": there is nobody to notify.
+        guard NSApp?.isActive == false else { return }
         let fileName = destination.lastPathComponent
         Task {
             let center = UNUserNotificationCenter.current()
@@ -269,17 +305,20 @@ public extension StudioDocumentModel {
 
     /// Movie first, then ImageIO (docs/03 §1.8). GIF is not a video container, so the
     /// renderer writes a throwaway MOV and the encoder samples it.
-    private func exportGIF(to destination: URL) async throws -> StudioRenderer.Output {
+    private func exportGIF(
+        _ snapshot: StudioExportSnapshot,
+        to destination: URL
+    ) async throws -> StudioRenderer.Output {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-gif-\(UUID().uuidString)")
             .appendingPathExtension("mov")
         defer { try? FileManager.default.removeItem(at: temp) }
-        let movie = try await renderMovie(to: temp)
+        let movie = try await renderMovie(snapshot, to: temp)
         try Task.checkCancellation()
         _ = try await ImageIOGIFEncoder().encode(
             movieAt: temp,
             to: destination,
-            options: exportSettings.gifOptions
+            options: snapshot.settings.gifOptions
         )
         return StudioRenderer.Output(
             fileURL: destination,
@@ -289,22 +328,28 @@ public extension StudioDocumentModel {
         )
     }
 
-    private func recordStamp(_ output: StudioRenderer.Output, at destination: URL) {
-        guard let digest = RenderStamp.digest(of: edit) else { return }
+    private func recordStamp(
+        _ output: StudioRenderer.Output,
+        for snapshot: StudioExportSnapshot,
+        at destination: URL
+    ) {
+        guard let digest = RenderStamp.digest(of: snapshot.edit) else { return }
         try? document.write(RenderStamp(
             editDigest: digest,
             outputPath: destination.path,
             pixelSize: output.pixelSize,
-            settingsDigest: RenderStamp.digest(of: exportSettings)
+            settingsDigest: RenderStamp.digest(of: snapshot.settings),
+            inputsDigest: snapshot.inputsDigest
         ))
     }
 
     /// SRT and VTT beside the movie (docs/13 T2.2). Tiny, and the reason the transcript
-    /// was persisted.
-    private func writeCaptions(_ transcript: Transcript, beside destination: URL) {
+    /// was persisted. Timed against the snapshot's clips, which are the movie's.
+    private func writeCaptions(for snapshot: StudioExportSnapshot, beside destination: URL) {
+        guard let transcript = snapshot.transcript else { return }
         let base = destination.deletingPathExtension()
-        let srt = CaptionExport.srt(from: transcript, timeline: edit.clips)
-        let vtt = CaptionExport.vtt(from: transcript, timeline: edit.clips)
+        let srt = CaptionExport.srt(from: transcript, timeline: snapshot.edit.clips)
+        let vtt = CaptionExport.vtt(from: transcript, timeline: snapshot.edit.clips)
         try? srt.data(using: .utf8)?.write(to: base.appendingPathExtension("srt"), options: .atomic)
         try? vtt.data(using: .utf8)?.write(to: base.appendingPathExtension("vtt"), options: .atomic)
     }

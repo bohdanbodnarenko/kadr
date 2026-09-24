@@ -56,7 +56,8 @@ struct StudioExportStateTests {
         try SessionDocument(session: studio.session).write(RenderStamp(
             editDigest: digest,
             outputPath: rendered.path,
-            pixelSize: size
+            pixelSize: size,
+            inputsDigest: studio.exportSnapshot().inputsDigest
         ))
 
         let destination = folder.appendingPathComponent("out.mov")
@@ -109,12 +110,102 @@ struct StudioExportStateTests {
         try SessionDocument(session: studio.session).write(RenderStamp(
             editDigest: digest,
             outputPath: rendered.path,
-            pixelSize: size
+            pixelSize: size,
+            inputsDigest: studio.exportSnapshot().inputsDigest
         ))
 
         await studio.copyEditedToClipboard()
         let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self]) as? [URL]
         #expect(urls?.isEmpty == false)
         #expect(studio.notice?.contains("Copied") == true)
+    }
+
+    // MARK: - docs/17 T-STU-1: what else a render depends on
+
+    private func stampFinishedRender(for studio: StudioDocumentModel, in folder: URL) throws {
+        let rendered = folder.appendingPathComponent("already.mov")
+        try Data("a finished export".utf8).write(to: rendered)
+        let snapshot = studio.exportSnapshot()
+        try SessionDocument(session: studio.session).write(RenderStamp(
+            editDigest: try #require(RenderStamp.digest(of: snapshot.edit)),
+            outputPath: rendered.path,
+            pixelSize: StudioRenderPlan(edit: snapshot.edit, sourceSize: studio.manifest.pixelSize).outputSize,
+            settingsDigest: RenderStamp.digest(of: snapshot.settings),
+            inputsDigest: snapshot.inputsDigest
+        ))
+    }
+
+    @Test("A stamp from before inputs were recorded is not reused")
+    func legacyStampIsStale() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        let digest = try #require(RenderStamp.digest(of: studio.edit))
+        let size = StudioRenderPlan(edit: studio.edit, sourceSize: studio.manifest.pixelSize).outputSize
+        let rendered = folder.appendingPathComponent("already.mov")
+        try Data("old build".utf8).write(to: rendered)
+        let legacy = RenderStamp(editDigest: digest, outputPath: rendered.path, pixelSize: size)
+        let inputs = try #require(studio.exportSnapshot().inputsDigest)
+        #expect(!legacy.matches(editDigest: digest, pixelSize: size, inputsDigest: inputs))
+    }
+
+    @Test("A new transcript changes the render inputs")
+    func transcriptChangesTheInputs() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        let before = studio.renderInputsDigest(edit: studio.edit, transcript: nil)
+        let words = Transcript(words: [.init(text: "hello", start: 0, end: 0.5)])
+        let after = studio.renderInputsDigest(edit: studio.edit, transcript: words)
+        #expect(before != nil)
+        #expect(before != after)
+    }
+
+    @Test("Swapping the wallpaper file changes the edit, so the stamp misses")
+    func wallpaperSwapIsAMiss() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        let first = folder.appendingPathComponent("a.png")
+        let second = folder.appendingPathComponent("b.png")
+        try Data("one".utf8).write(to: first)
+        try Data("two".utf8).write(to: second)
+        studio.importWallpaper(from: first)
+        try stampFinishedRender(for: studio, in: folder)
+        let stamp = try #require(SessionDocument(session: studio.session).renderStamp())
+
+        studio.importWallpaper(from: second)
+        let snapshot = studio.exportSnapshot()
+        let digest = try #require(RenderStamp.digest(of: snapshot.edit))
+        #expect(!stamp.matches(
+            editDigest: digest,
+            pixelSize: stamp.pixelSize,
+            settingsDigest: RenderStamp.digest(of: snapshot.settings),
+            inputsDigest: snapshot.inputsDigest
+        ))
+    }
+
+    // MARK: - docs/17 T-STU-2: editing while an export runs
+
+    /// Through a real render: the edit changes while the movie is being written, and the
+    /// stamp must still describe the movie, not the edit on screen.
+    @Test("Editing during an export stamps the edit that was exported")
+    func editDuringExportStampsTheSnapshot() async throws {
+        let folder = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 4)
+        let exported = try #require(RenderStamp.digest(of: studio.edit))
+        let destination = folder.appendingPathComponent("out.mov")
+
+        let export = Task { await studio.export(to: destination) }
+        try await StudioPlaybackFixtures.wait { studio.exportProgress != nil }
+        studio.change { $0.showsClicks.toggle() }
+        #expect(studio.isExporting, "the edit landed after the render, so this proves nothing")
+        let edited = try #require(RenderStamp.digest(of: studio.edit))
+        await export.value
+
+        let stamp = try #require(SessionDocument(session: studio.session).renderStamp())
+        #expect(stamp.editDigest == exported)
+        #expect(stamp.editDigest != edited)
     }
 }

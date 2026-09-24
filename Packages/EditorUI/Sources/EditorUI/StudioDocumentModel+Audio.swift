@@ -48,7 +48,8 @@ public extension StudioDocumentModel {
 
     func removeSoundtrack() {
         guard hasImportedSoundtrack || edit.soundtrackFileName != nil else { return }
-        try? session.removeSoundtracks()
+        // The file stays until the edit is committed on close, so undoing this still
+        // finds it (docs/17 T-STU-9).
         change {
             $0.soundtrackFileName = nil
             $0.soundtrackDisplayName = nil
