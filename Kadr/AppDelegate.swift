@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItemController: StatusItemController?
     /// Set when this copy found another already running and is quitting in its favour.
     var isYieldingToAnotherInstance = false
+    /// Set by Remove All Kadr Data, so quitting writes nothing back.
+    var isRemovingAllData = false
     var hotkeyCenter: HotkeyCenter?
 
     /// The capture layer. Constructing it touches no framework — ScreenCaptureKit is

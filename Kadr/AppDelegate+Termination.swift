@@ -12,7 +12,7 @@ extension AppDelegate {
     /// to tear the writer down and throw the take away. Captures still on a card are
     /// kept only temporarily, so those get the same "save or discard" question.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if isYieldingToAnotherInstance {
+        if isYieldingToAnotherInstance || isRemovingAllData {
             return .terminateNow
         }
         let unsaved = areaCaptureStorage?.quickAccess.unsavedItems ?? []
@@ -31,7 +31,7 @@ extension AppDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // A copy that yielded never set anything up; restoring the desktop from here
         // would undo the running copy's hidden icons (docs/17 T-SH-3).
-        guard !isYieldingToAnotherInstance else { return }
+        guard !isYieldingToAnotherInstance, !isRemovingAllData else { return }
         automationListener?.stop()
         statusItemController?.stopObservingMenuBarVisibility()
         // Pin moves are saved on a debounce; the last one must not be lost to ⌘Q.
