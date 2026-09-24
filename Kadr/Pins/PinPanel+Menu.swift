@@ -28,6 +28,19 @@ extension PinContentView {
 
         menu.addItem(.separator())
 
+        // Opacity from the menu too (docs/03 §4), so it never depends on a scroll gesture.
+        let opacity = NSMenuItem(title: "Opacity", action: nil, keyEquivalent: "")
+        let levels = NSMenu()
+        for percent in Self.opacityLevels {
+            let item = NSMenuItem(title: "\(percent)%", action: #selector(setPinOpacity(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = percent
+            item.state = Int((panel.alphaValue * 100).rounded()) == percent ? .on : .off
+            levels.addItem(item)
+        }
+        opacity.submenu = levels
+        menu.addItem(opacity)
+
         let clickThrough = NSMenuItem(
             title: panel.clickThroughEnabled ? "Stop Click-Through" : "Click-Through",
             action: #selector(toggleClickThrough),
@@ -72,5 +85,11 @@ extension PinContentView {
 
     @objc func toggleClickThrough() {
         panel?.toggleClickThrough()
+    }
+
+    static let opacityLevels = [100, 75, 50, 25]
+
+    @objc func setPinOpacity(_ sender: NSMenuItem) {
+        panel?.setOpacity(CGFloat(sender.tag) / 100)
     }
 }

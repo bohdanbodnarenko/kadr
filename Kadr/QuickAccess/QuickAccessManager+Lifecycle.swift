@@ -117,8 +117,8 @@ extension QuickAccessManager {
         panel.setContent(QuickAccessStackView(manager: self) { [weak panel] rects in
             panel?.setInteractiveRects(rects)
         })
-        panel.onScroll = { [weak self] deltaX, deltaY in
-            self?.handleScroll(deltaX: deltaX, deltaY: deltaY)
+        panel.onSwipe = { [weak self] phase, deltaX, deltaY, isPrecise in
+            self?.handleSwipe(phase: phase, deltaX: deltaX, deltaY: deltaY, isPrecise: isPrecise)
         }
         overlayPanel = panel
         return panel
@@ -127,6 +127,11 @@ extension QuickAccessManager {
     func teardownOverlay() {
         overlayPanel?.dismiss()
         overlayPanel = nil
+        stopHoverKeyMonitor()
+        lastHoveredItemID = nil
+        // A banner belongs to the stack it was shown over; a stale error must not come back
+        // with the next capture (docs/17 T-OUT-2).
+        feedbackStatus = nil
     }
 
     /// A trackpad flick over a card: outward hides it, toward the screen edge tucks the
@@ -136,13 +141,26 @@ extension QuickAccessManager {
     /// scroll. When the overlay was one window per card this came for free — the card's own
     /// window got the event — so the wiring had to be rebuilt when they became one.
     func handleScroll(deltaX: CGFloat, deltaY: CGFloat) {
+        handleSwipe(phase: .began, deltaX: deltaX, deltaY: deltaY, isPrecise: true)
+        swipeTracker.reset()
+    }
+
+    /// One trackpad gesture over a card, acted on at most once (docs/17 T-OUT-13).
+    func handleSwipe(phase: OverlaySwipeTracker.Phase, deltaX: CGFloat, deltaY: CGFloat, isPrecise: Bool) {
+        let swipe = swipeTracker.feed(
+            phase: phase,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            isPrecise: isPrecise,
+            corner: settings.overlayCorner
+        )
         guard !isPeeking,
               let hoveredItemID,
               let item = items.first(where: { $0.id == hoveredItemID })
         else {
             return
         }
-        switch OverlaySwipe.from(deltaX: deltaX, deltaY: deltaY, corner: settings.overlayCorner) {
+        switch swipe {
         case .dismiss:
             dismiss(item)
         case .peek:
@@ -184,16 +202,19 @@ extension QuickAccessManager {
         return saved
     }
 
-    func copyFile(at url: URL, isVideo: Bool = false) {
+    /// Returns whether anything reached the clipboard.
+    @discardableResult
+    func copyFile(at url: URL, isVideo: Bool = false) -> Bool {
         guard !isVideo else {
+            guard FileManager.default.fileExists(atPath: url.path) else { return false }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.writeObjects([url as NSURL])
-            return
+            return pasteboard.writeObjects([url as NSURL])
         }
-        guard let data = try? Data(contentsOf: url) else { return }
+        guard let data = try? Data(contentsOf: url) else { return false }
         let format = ImageFormat(fileExtension: url.pathExtension) ?? .png
         ClipboardWriter.shared.write(data: data, format: format, fileURL: url)
+        return true
     }
 
     func revealInFinder(_ url: URL) {
@@ -228,10 +249,16 @@ extension QuickAccessManager {
     /// copy of the item still holds the path it had before the move.
     func resolveForDrag(_ item: QuickAccessItem) -> URL? {
         finalizeIfStaged(item)
-        let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
+        let live = items.first { $0.id == item.id } ?? item
+        let url = live.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
             logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .public)")
             return nil
+        }
+        // A History card's file is named by its hash; the receiver gets the name the card
+        // shows (docs/03 §2 "drag-out delivers a correctly named file", docs/17 T-OUT-10).
+        if live.origin == .library, live.filename != url.lastPathComponent {
+            return (try? LaunchScratch.current.link(url, named: Self.saveFilename(for: live))) ?? url
         }
         return url
     }
@@ -268,24 +295,6 @@ extension QuickAccessManager {
         finishRemoval()
     }
 
-    /// Deletes the capture as well as the card.
-    func delete(_ item: QuickAccessItem) {
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        dismissCoachTip(for: item)
-        let removed = items.remove(at: index)
-        forgetTransientState(for: item)
-        // The library keeps its own content-addressed copy, so trashing the file alone
-        // left a "deleted" capture sitting in App Support until retention expired — which
-        // for a sensitive screenshot is the whole problem (docs/07 H5). Hashed before the
-        // trash, because afterwards there is nothing to hash.
-        history?.deleteFromLibrary(matching: removed.fileURL)
-        // Deleted means gone, so it is not offered for restore.
-        CaptureProject.trash(alongside: removed.fileURL)
-        try? FileManager.default.trashItem(at: removed.fileURL, resultingItemURL: nil)
-        logger.info("Deleted \(removed.filename, privacy: .public)")
-        finishRemoval()
-    }
-
     func forgetTransientState(for item: QuickAccessItem) {
         dismissTasks.removeValue(forKey: item.id)?.cancel()
         dismissDeadlines.removeValue(forKey: item.id)
@@ -297,6 +306,10 @@ extension QuickAccessManager {
         if draggingItemID == item.id {
             draggingItemID = nil
         }
+        if lastHoveredItemID == item.id {
+            lastHoveredItemID = nil
+        }
+        studioSessionCache.removeValue(forKey: item.id)
     }
 
     func finishRemoval() {

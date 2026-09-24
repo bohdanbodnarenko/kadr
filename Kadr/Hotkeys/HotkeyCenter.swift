@@ -43,6 +43,12 @@ extension KeyboardShortcuts.Name {
     static let hideOverlays = Self("hideOverlays")
     static let hidePins = Self("hidePins")
     static let pinClipboard = Self("pinClipboard")
+    /// ⌘⌥L, the key a click-through pin's badge promises. Registered only while some pin
+    /// is click-through (`PinManager`), so Finder keeps ⌥⌘L the rest of the time.
+    static let togglePinClickThrough = Self(
+        "togglePinClickThrough",
+        initial: .init(.l, modifiers: [.command, .option])
+    )
     static let openHistory = Self("openHistory")
     static let openSaveFolder = Self("openSaveFolder")
 }
@@ -72,6 +78,7 @@ extension CaptureCommand {
         case .hideOverlays: .hideOverlays
         case .hidePins: .hidePins
         case .pinClipboard: .pinClipboard
+        case .togglePinClickThrough: .togglePinClickThrough
         case .openHistory: .openHistory
         case .openSaveFolder: .openSaveFolder
         }
@@ -106,6 +113,8 @@ final class HotkeyCenter {
                 perform(command)
             }
         }
+        // Claimed only while a pin needs it (docs/17 T-OUT-9).
+        PinManager.applyClickThroughHotkey()
         let count = CaptureCommand.allCases.count
         logger.info("Registered \(count, privacy: .public) global hotkeys")
     }

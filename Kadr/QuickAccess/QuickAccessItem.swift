@@ -10,6 +10,33 @@ enum CardActivity: Equatable, Sendable {
     case compressing
     case recognizingText
     case exportingGIF
+
+    var progressMessage: String {
+        switch self {
+        case .compressing: String(localized: "Compressing…")
+        case .recognizingText: String(localized: "Reading text…")
+        case .exportingGIF: String(localized: "Making a GIF…")
+        }
+    }
+}
+
+/// Whose file a card is showing, which decides what Save, transforms and Trash may do
+/// with it (docs/17 T-OUT-5).
+enum QuickAccessOrigin: Equatable, Sendable {
+    /// A capture Kadr wrote: staged, or already in the save folder. Kadr may move,
+    /// rewrite and trash it.
+    case capture
+    /// The History library's content-addressed copy. Moving or rewriting it breaks the
+    /// History row, so every change works on a copy.
+    case library
+    /// A file the user already had: `add-quick-access-overlay`, Open from Clipboard. It is
+    /// theirs; Kadr copies it and never trashes it.
+    case external
+
+    /// Whether Kadr may move, rewrite or trash the file in place.
+    var ownsFile: Bool {
+        self == .capture
+    }
 }
 
 /// One capture, as the overlay knows it (docs/03 §2).
@@ -56,6 +83,8 @@ struct QuickAccessItem: Identifiable, Sendable {
     var displayName: String?
     /// App that was in front when the capture was taken, stored with the history record.
     var applicationName: String?
+    /// Whose file this is (docs/17 T-OUT-5).
+    var origin: QuickAccessOrigin = .capture
 
     var filename: String {
         displayName ?? fileURL.lastPathComponent

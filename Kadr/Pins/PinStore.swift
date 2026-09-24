@@ -30,6 +30,31 @@ nonisolated struct PinRecord: Codable, Equatable, Sendable {
     var frame: CGRect {
         CGRect(x: x, y: y, width: width, height: height)
     }
+
+    /// This record with its frame moved onto a connected screen (docs/17 T-OUT-13).
+    ///
+    /// A pin remembered on a display that is no longer attached came back off-screen,
+    /// where nothing could reach it. At least `minimumVisible` points of the pin must
+    /// show on some screen; otherwise it moves inside the first one's visible frame. All
+    /// frames are in AppKit's global space, bottom-left origin, so no flip is involved.
+    func clamped(to visibleFrames: [CGRect], minimumVisible: CGFloat = 40) -> PinRecord {
+        guard let target = visibleFrames.first else { return self }
+        let current = frame
+        let reachable = visibleFrames.contains { screen in
+            let overlap = screen.intersection(current)
+            return !overlap.isNull && overlap.width >= min(minimumVisible, current.width)
+                && overlap.height >= min(minimumVisible, current.height)
+        }
+        guard !reachable else { return self }
+        let width = min(current.width, target.width)
+        let height = min(current.height, target.height)
+        var moved = self
+        moved.width = width
+        moved.height = height
+        moved.x = min(max(current.minX, target.minX), target.maxX - width)
+        moved.y = min(max(current.minY, target.minY), target.maxY - height)
+        return moved
+    }
 }
 
 /// JSON list of open pins in Application Support.
@@ -40,6 +65,20 @@ nonisolated struct PinStore: Sendable {
         guard let root = try? HistoryLayout.applicationSupport().root else { return nil }
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return PinStore(fileURL: root.appendingPathComponent("pins.json"))
+    }
+
+    /// Where a pin of something that was only ever on the clipboard keeps its bytes.
+    ///
+    /// Next to `pins.json`, because a pin is restored at the next launch and the clipboard
+    /// import it came from lives in scratch, which that launch sweeps. They used to live in
+    /// `$TMPDIR` and vanish (docs/17 T-OUT-13). Removed when the pin closes.
+    var clipboardDirectory: URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("Pinned Clipboard", isDirectory: true)
+    }
+
+    /// Whether `url` is a clipboard pin's own copy, which goes when the pin does.
+    func ownsClipboardCopy(_ url: URL) -> Bool {
+        url.standardizedFileURL.deletingLastPathComponent().path == clipboardDirectory.standardizedFileURL.path
     }
 
     var hasRecords: Bool {

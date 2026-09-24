@@ -14,6 +14,8 @@ struct QuickAccessCardActions {
     var pin: () -> Void = {}
     var recognizeText: () -> Void = {}
     var delete: () -> Void = {}
+    /// False for files Kadr did not create, which are only ever hidden (docs/17 T-OUT-5).
+    var deleteAvailable = true
     var dismiss: () -> Void = {}
     /// Resolves the file to hand to a receiver, finalising a staged capture on the way.
     /// Called when the drop asks for the bytes, never when the drag starts (docs/07 C1).

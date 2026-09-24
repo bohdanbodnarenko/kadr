@@ -68,16 +68,23 @@ struct QuickAccessStackView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            stackBody
-            if let status = manager.feedbackStatus {
-                FeedbackBanner(status: status) {
-                    manager.dismissFeedback()
-                }
-                .padding(.top, 12)
-                .padding(.horizontal, QuickAccessManager.screenMargin)
-                .frame(maxWidth: CGFloat(manager.settings.overlayCardWidth))
+        stackBody
+    }
+
+    /// Status for work on a card, at the far end of the column from the docked corner
+    /// (docs/14 UX-24, docs/17 T-OUT-2).
+    ///
+    /// Inside the column rather than floating top-centre of the panel: the column is what
+    /// reports its frame as clickable, so this is what makes Retry / Save As… / Dismiss
+    /// reachable. A banner outside every interactive rect could not be clicked and still
+    /// ate the clicks meant for the app beneath it.
+    @ViewBuilder
+    private var banner: some View {
+        if let status = manager.feedbackStatus {
+            FeedbackBanner(status: status) {
+                manager.dismissFeedback()
             }
+            .transition(.opacity)
         }
     }
 
@@ -106,6 +113,7 @@ struct QuickAccessStackView: View {
             // left. Removing a card behind the peek tab should be invisible.
             .animation(manager.isPeeking ? nil : motion, value: manager.itemIDs)
             .animation(motion, value: manager.isPeeking)
+            .animation(motion, value: manager.feedbackStatus?.id)
             .onChange(of: manager.itemIDs) { _, _ in
                 guard !manager.isPeeking else { return }
                 suppressHoverThroughReflow()
@@ -123,7 +131,8 @@ struct QuickAccessStackView: View {
 
     private func column(availableHeight: CGFloat) -> some View {
         let capacity = QuickAccessStackLayout.capacity(
-            height: availableHeight,
+            // A banner takes about a card's worth of room at the far end of the column.
+            height: availableHeight - (manager.feedbackStatus == nil ? 0 : Self.bannerAllowance),
             cardHeight: QuickAccessCardView.height(forWidth: CGFloat(manager.settings.overlayCardWidth)),
             spacing: QuickAccessManager.cardSpacing,
             margin: QuickAccessManager.screenMargin
@@ -135,11 +144,13 @@ struct QuickAccessStackView: View {
 
         return VStack(spacing: QuickAccessManager.cardSpacing) {
             if corner.isBottom {
+                banner
                 slivers(overflow)
                 cards(visible)
             } else {
                 cards(visible)
                 slivers(overflow)
+                banner
             }
         }
         .frame(width: CGFloat(manager.settings.overlayCardWidth))
@@ -208,6 +219,7 @@ struct QuickAccessStackView: View {
     }
 
     private static let maxSlivers = 3
+    private static let bannerAllowance: CGFloat = 64
 
     // MARK: - The peek tab
 

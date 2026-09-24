@@ -46,10 +46,14 @@ public extension HistoryStore {
         limit: Int,
         db: Database
     ) throws -> [HistoryRecord] {
+        // Every hit, not the first `limit`: the type and date filter runs after, and
+        // capping first meant a search for a recording found nothing once two hundred
+        // screenshots matched the same words (docs/17 T-OUT-13). The cap applies to the
+        // merged, filtered result below. Ids only, so this stays cheap.
         let ids = try String.fetchAll(
             db,
-            sql: "SELECT id FROM capture_fts WHERE capture_fts MATCH ? ORDER BY rank LIMIT ?",
-            arguments: [expression, limit]
+            sql: "SELECT id FROM capture_fts WHERE capture_fts MATCH ? ORDER BY rank",
+            arguments: [expression]
         )
         var ftsRecords: [HistoryRecord] = []
         if !ids.isEmpty {

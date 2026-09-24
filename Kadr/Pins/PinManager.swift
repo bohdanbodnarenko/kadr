@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import os
 import OverlayKit
 import Shared
@@ -131,7 +132,7 @@ final class PinManager {
         for record in store.load() {
             let url = URL(fileURLWithPath: record.path)
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            pendingRestore = record
+            pendingRestore = record.clamped(to: NSScreen.screens.map(\.visibleFrame))
             _ = pin(
                 url,
                 copy: copy,
@@ -163,10 +164,12 @@ final class PinManager {
 
     /// The "Close all pins" global command (docs/03 §4).
     func closeAll() {
+        let urls = pins.map(\.fileURL)
         for pin in pins {
             pin.dismiss()
         }
         pins.removeAll()
+        urls.forEach(discardClipboardCopy(of:))
         cascadeStep = 0
         areHidden = false
         persist()
@@ -174,12 +177,61 @@ final class PinManager {
 
     private func close(_ panel: PinPanel) {
         guard let index = pins.firstIndex(where: { $0 === panel }) else { return }
-        pins.remove(at: index).dismiss()
+        let closed = pins.remove(at: index)
+        closed.dismiss()
+        discardClipboardCopy(of: closed.fileURL)
         persist()
+    }
+
+    /// Where a pin of clipboard-only content should keep its bytes, or nil without a store.
+    var clipboardDirectory: URL? {
+        store?.clipboardDirectory
+    }
+
+    /// Deletes a clipboard pin's private copy once no pin shows it.
+    private func discardClipboardCopy(of url: URL) {
+        guard let store, store.ownsClipboardCopy(url), !pins.contains(where: { $0.fileURL == url }) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    // MARK: - Click-through (docs/17 T-OUT-9)
+
+    /// Whether any pin is click-through right now, which is when ⌘⌥L is claimed.
+    private(set) static var clickThroughHotkeyActive = false
+
+    /// Toggles click-through on the pin under the pointer; failing that, the newest
+    /// click-through pin; failing that, the newest pin.
+    ///
+    /// The pin's badge and VoiceOver hint promise ⌘⌥L, but the key used to live only in
+    /// the pin's own menu — which a pin that ignores the mouse cannot open. The only way
+    /// out was Close All Pins, and the state survived relaunch.
+    func toggleClickThroughUnderPointer() {
+        let pointer = NSEvent.mouseLocation
+        let target = pins.last { $0.frame.contains(pointer) }
+            ?? pins.last { $0.clickThroughEnabled }
+            ?? pins.last
+        target?.toggleClickThrough()
+    }
+
+    /// Claims ⌘⌥L while a pin is click-through, and gives it back when none is.
+    static func applyClickThroughHotkey() {
+        if clickThroughHotkeyActive {
+            KeyboardShortcuts.enable(.togglePinClickThrough)
+        } else {
+            KeyboardShortcuts.disable(.togglePinClickThrough)
+        }
+    }
+
+    private func updateClickThroughHotkey() {
+        let active = pins.contains { $0.clickThroughEnabled }
+        guard active != Self.clickThroughHotkeyActive else { return }
+        Self.clickThroughHotkeyActive = active
+        Self.applyClickThroughHotkey()
     }
 
     /// Asks for a save once the pins have been still for `saveDebounce`.
     private func persist() {
+        updateClickThroughHotkey()
         guard !isRestoring, store != nil else { return }
         saveTask?.cancel()
         saveTask = Task { [weak self] in

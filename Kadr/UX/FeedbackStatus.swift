@@ -19,6 +19,15 @@ struct FeedbackStatus: Equatable, Identifiable {
     var progress: Double?
     var recoveryTitle: String?
     var recovery: (() -> Void)?
+    /// How long a completion stays up. Longer for one that carries an Undo, so there is
+    /// time to reach it (docs/17 §5 theme 3).
+    var lingers: Duration = .seconds(3)
+
+    /// When the banner should take itself away, or nil if it stays until dismissed.
+    /// Failures and warnings stay; progress is replaced by its outcome.
+    var autoDismissDelay: Duration? {
+        kind == .completion ? lingers : nil
+    }
 
     init(
         id: UUID = UUID(),
@@ -42,6 +51,7 @@ struct FeedbackStatus: Equatable, Identifiable {
             && lhs.message == rhs.message
             && lhs.progress == rhs.progress
             && lhs.recoveryTitle == rhs.recoveryTitle
+            && lhs.lingers == rhs.lingers
     }
 }
 
@@ -65,6 +75,24 @@ extension FeedbackStatus {
             recovery: recovery
         )
     }
+
+    /// A destructive action that already happened, with a way back (docs/17 §5 theme 3).
+    ///
+    /// The HIG prefers undo to a confirmation for frequent destructive actions: the action
+    /// runs at once and this offers to reverse it for a few seconds.
+    static func undoable(_ message: String, undo: @escaping () -> Void) -> FeedbackStatus {
+        var status = FeedbackStatus(
+            kind: .completion,
+            message: message,
+            recoveryTitle: String(localized: "Undo"),
+            recovery: undo
+        )
+        status.lingers = undoWindow
+        return status
+    }
+
+    /// How long an Undo stays on offer.
+    static let undoWindow: Duration = .seconds(8)
 
     /// Something the user asked for went wrong, with a way to try again.
     static func failure(
@@ -225,9 +253,13 @@ struct FeedbackBanner: View {
         .accessibilityAddTraits(status.kind == .error ? .isStaticText : [])
         .accessibilityLabel(status.message)
         .task(id: status.id) {
-            guard status.kind == .completion else { return }
-            try? await Task.sleep(for: .seconds(3))
-            if !isHovered, !Task.isCancelled {
+            guard let delay = status.autoDismissDelay else { return }
+            try? await Task.sleep(for: delay)
+            // Never take a banner out from under the pointer: wait for it to leave.
+            while isHovered, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            if !Task.isCancelled {
                 onDismiss()
             }
         }

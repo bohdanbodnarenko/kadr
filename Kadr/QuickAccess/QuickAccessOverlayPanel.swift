@@ -81,7 +81,7 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     private let hostingView: OverlayHostingView
     /// Trackpad flicks over a card (docs/03 §2). Set by the manager, which knows which card
     /// the pointer is on.
-    var onScroll: ((CGFloat, CGFloat) -> Void)?
+    var onSwipe: ((OverlaySwipeTracker.Phase, CGFloat, CGFloat, Bool) -> Void)?
 
     init(content: some View) {
         hostingView = OverlayHostingView(rootView: content)
@@ -142,6 +142,19 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
         hostingView.interactiveRects?.first
     }
 
+    /// A click on a card hands it the keyboard (docs/17 T-OUT-1).
+    ///
+    /// Card keys act only while this panel is key, so the panel has to become key on the
+    /// click itself — SwiftUI's hit views do not ask for it, and `becomesKeyOnlyIfNeeded`
+    /// would otherwise leave the keys with the app underneath. Only clicks that land on a
+    /// card get here: `hitTest` passes every other click through.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown || event.type == .rightMouseDown, !isKeyWindow {
+            makeKey()
+        }
+        super.sendEvent(event)
+    }
+
     /// A flick over a card dismisses it or tucks the stack away (docs/03 §2).
     ///
     /// On the panel rather than in SwiftUI: this has to reach the card under the pointer,
@@ -149,11 +162,18 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     /// over a card — `hitTest` saw to that.
     override func scrollWheel(with event: NSEvent) {
         guard event.momentumPhase.isEmpty else { return }
-        guard let onScroll else {
+        guard let onSwipe else {
             super.scrollWheel(with: event)
             return
         }
-        onScroll(event.scrollingDeltaX, event.scrollingDeltaY)
+        let phase: OverlaySwipeTracker.Phase = if event.phase.contains(.began) || event.phase.contains(.mayBegin) {
+            .began
+        } else if event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+            .ended
+        } else {
+            .changed
+        }
+        onSwipe(phase, event.scrollingDeltaX, event.scrollingDeltaY, event.hasPreciseScrollingDeltas)
     }
 
     func dismiss() {

@@ -103,8 +103,17 @@ enum CaptureProject {
     }
 
     static func trash(alongside imageURL: URL) {
+        trashReturningURL(alongside: imageURL)
+    }
+
+    /// Trashes the project beside `imageURL` and says where it went, so an Undo can put
+    /// it back (docs/17 T-OUT-1).
+    @discardableResult
+    static func trashReturningURL(alongside imageURL: URL) -> URL? {
         let project = url(alongside: imageURL)
-        guard FileManager.default.fileExists(atPath: project.path) else { return }
-        try? FileManager.default.trashItem(at: project, resultingItemURL: nil)
+        guard FileManager.default.fileExists(atPath: project.path) else { return nil }
+        var trashed: NSURL?
+        try? FileManager.default.trashItem(at: project, resultingItemURL: &trashed)
+        return trashed as URL?
     }
 }

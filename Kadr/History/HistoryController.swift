@@ -27,6 +27,12 @@ final class HistoryController {
     private(set) var store: HistoryStore?
     private let settings: AppSettings
     private let launchedAt = Date()
+    /// The retention setting as this launch found it. "This session only" clears what
+    /// earlier launches kept only if it was already chosen when Kadr started — choosing it
+    /// now takes effect at the next launch, as the pane says (docs/17 T-OUT-4).
+    private let retentionAtLaunch: HistoryRetention
+    /// Warned once per launch that the size cap stopped short (docs/17 T-OUT-8).
+    private var hasWarnedAboutCap = false
     private let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
@@ -39,6 +45,14 @@ final class HistoryController {
     }
 
     private var pending: [HistoryIngest] = []
+    /// History deletes inside their Undo window (docs/17 T-OUT-7).
+    @ObservationIgnored private var pendingTrash: [UUID: PendingTrash] = [:]
+
+    private struct PendingTrash {
+        let ids: Set<UUID>
+        let commit: Task<Void, Never>
+    }
+
     /// The open in flight, shared by everyone who asks before it finishes.
     @ObservationIgnored private var openTask: Task<HistoryStore, any Error>?
 
@@ -56,6 +70,7 @@ final class HistoryController {
     init(settings: AppSettings, store: HistoryStore? = nil) {
         self.settings = settings
         self.store = store
+        retentionAtLaunch = settings.historyRetention
         indexing = HistoryIndexCoordinator(settings: settings)
     }
 
@@ -65,11 +80,55 @@ final class HistoryController {
     }
 
     var policy: HistoryPolicy {
-        HistoryPolicy(
-            maxAge: settings.historyRetention.maxAge,
-            sizeCapBytes: settings.historySizeCap.bytes,
-            sessionStartedAt: settings.historyRetention == .session ? launchedAt : nil
+        policy(retention: settings.historyRetention, sizeCap: settings.historySizeCap)
+    }
+
+    /// The most captures an automatic size-cap pass removes before asking (docs/17 T-OUT-8).
+    static let automaticEvictionLimit = 25
+
+    /// The policy for a retention and cap, whether or not they are the current settings.
+    ///
+    /// Automatic passes — launch, ingest — protect what was just ingested and stop at
+    /// `automaticEvictionLimit`; a pass the user confirmed in Settings has neither limit.
+    func policy(
+        retention: HistoryRetention,
+        sizeCap: HistorySizeCap,
+        protecting protectedIDs: Set<UUID> = [],
+        confirmed: Bool = false
+    ) -> HistoryPolicy {
+        let sessionOnly = retention == .session && retentionAtLaunch == .session
+        return HistoryPolicy(
+            maxAge: retention.maxAge,
+            sizeCapBytes: sizeCap.bytes,
+            sessionStartedAt: sessionOnly ? launchedAt : nil,
+            protectedIDs: protectedIDs,
+            maxSizeCapEvictions: confirmed ? nil : Self.automaticEvictionLimit
         )
+    }
+
+    /// What a change to retention or the size cap would permanently delete, so the pane
+    /// can ask first (docs/17 T-OUT-4).
+    func retentionPreview(retention: HistoryRetention, sizeCap: HistorySizeCap) async -> HistoryStore.RetentionPlan? {
+        await openIfNeeded()
+        return try? await store?.retentionPlan(policy(retention: retention, sizeCap: sizeCap, confirmed: true))
+    }
+
+    /// Runs an automatic retention pass, and says so once if the cap had to stop short.
+    private func applyAutomaticRetention(on store: HistoryStore, protecting ids: Set<UUID> = []) async {
+        let automatic = policy(
+            retention: settings.historyRetention,
+            sizeCap: settings.historySizeCap,
+            protecting: ids
+        )
+        guard let report = try? await store.applyRetention(automatic) else { return }
+        if report.stoppedAtEvictionLimit, !hasWarnedAboutCap {
+            hasWarnedAboutCap = true
+            logger.info("History size cap stopped at the automatic eviction limit")
+            FailurePresenter.present(FeedbackStatus(
+                kind: .warning,
+                message: String(localized: "History is over its size limit. Older captures were kept.")
+            ))
+        }
     }
 
     var hasItems: Bool {
@@ -162,18 +221,20 @@ final class HistoryController {
         }
 
         do {
-            try await store.applyRetention(policy)
+            // No retention pass here: this runs on every filter change and search
+            // keystroke, and deleting permanently is not something a keystroke should do
+            // (docs/17 T-OUT-4). Launch, ingest and a confirmed Settings change run it.
             if isSearching {
-                records = try await store.search(searchText, filter: filter)
+                records = try await visible(store.search(searchText, filter: filter))
                 // A search returns its whole ranked result set, so there is no next page.
                 hasMore = false
             } else {
                 let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
-                records = page
+                records = visible(page)
                 hasMore = page.count == Self.pageSize
             }
             usage = try await store.storageUsage()
-            recent = try await store.recent(limit: Self.menuStripCount)
+            recent = try await visible(store.recent(limit: Self.menuStripCount))
         } catch {
             loadError = error.localizedDescription
             logger.error("Could not load history: \(error.localizedDescription, privacy: .public)")
@@ -203,7 +264,7 @@ final class HistoryController {
         pageOffset += Self.pageSize
         do {
             let page = try await store.loadPage(filter: filter, offset: pageOffset, limit: Self.pageSize)
-            records.append(contentsOf: page)
+            records.append(contentsOf: visible(page))
             hasMore = page.count == Self.pageSize
             loadError = nil
         } catch {
@@ -213,20 +274,58 @@ final class HistoryController {
         }
     }
 
-    /// Moves library items to the Trash. Retention eviction stays permanent (docs/14 UX-22).
+    /// Moves library items to the Trash, with an Undo (docs/14 UX-22, docs/17 T-OUT-7).
+    ///
+    /// The rows go at once and the banner offers Undo; the delete itself waits out the
+    /// Undo window. It has to: the library's files are named by hash, so once they are in
+    /// the Trash, Finder's Put Back restores a `3fa9c1….png` and never the History row.
+    /// Retention eviction stays permanent.
     func moveToTrash(ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        let batch = UUID()
+        let hidden = Set(ids)
+        pendingTrash[batch] = PendingTrash(ids: hidden, commit: Task { [weak self] in
+            try? await Task.sleep(for: FeedbackStatus.undoWindow + .seconds(1))
+            guard !Task.isCancelled else { return }
+            await self?.commitTrash(batch)
+        })
+        records.removeAll { hidden.contains($0.id) }
+        recent.removeAll { hidden.contains($0.id) }
+        let message = ids.count == 1
+            ? String(localized: "Moved to Trash")
+            : String(localized: "Moved \(ids.count) captures to Trash")
+        FailurePresenter.present(.undoable(message) { [weak self] in
+            Task { await self?.undoTrash(batch) }
+        })
+    }
+
+    /// Puts a batch back, before its delete has run.
+    func undoTrash(_ batch: UUID) async {
+        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
+        pending.commit.cancel()
+        logger.info("Put \(pending.ids.count, privacy: .public) history item(s) back")
+        await reload(filter: filter)
+    }
+
+    /// Deletes a batch whose Undo window has passed.
+    func commitTrash(_ batch: UUID) async {
+        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
         await openIfNeeded()
-        guard let store, !ids.isEmpty else { return }
+        guard let store else { return }
         do {
-            _ = try await store.delete(ids: ids, fileDisposition: .trash)
-            records.removeAll { ids.contains($0.id) }
-            recent.removeAll { ids.contains($0.id) }
+            _ = try await store.delete(ids: Array(pending.ids), fileDisposition: .trash)
             usage = try await store.storageUsage()
             loadError = nil
         } catch {
             loadError = error.localizedDescription
             logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Records waiting out their Undo window are not shown, whatever a reload returns.
+    private func visible(_ list: [HistoryRecord]) -> [HistoryRecord] {
+        let hidden = pendingTrash.values.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
+        return hidden.isEmpty ? list : list.filter { !hidden.contains($0.id) }
     }
 
     /// Removes whatever the library holds for a file the user deleted elsewhere.
@@ -273,12 +372,21 @@ final class HistoryController {
         }
     }
 
+    /// Applies a Settings change. Retention runs without the automatic limits, because the
+    /// pane has already shown the user what it deletes and they confirmed it.
     func applySettingsChange() {
         Task {
             await openIfNeeded()
-            _ = try? await store?.applyRetention(policy)
+            let confirmed = policy(
+                retention: settings.historyRetention,
+                sizeCap: settings.historySizeCap,
+                confirmed: true
+            )
+            if await (try? store?.applyRetention(confirmed))?.deletedCount ?? 0 > 0 {
+                await reload(filter: filter)
+            }
             usage = await (try? store?.storageUsage()) ?? usage
-            recent = await (try? store?.recent(limit: Self.menuStripCount)) ?? recent
+            recent = await visible((try? store?.recent(limit: Self.menuStripCount)) ?? recent)
 
             // Opting out is not just "stop indexing": what was already read has to go, or
             // the search field would keep finding text from captures the user has since
@@ -318,8 +426,8 @@ final class HistoryController {
                 return
             }
             store = opened
-            _ = try await opened.applyRetention(policy)
-            recent = try await opened.recent(limit: Self.menuStripCount)
+            await applyAutomaticRetention(on: opened)
+            recent = try await visible(opened.recent(limit: Self.menuStripCount))
             usage = try await opened.storageUsage()
             await drainPending()
             // The launch pass read pages nothing will read again soon.
@@ -334,15 +442,17 @@ final class HistoryController {
         guard let store, !pending.isEmpty else { return }
         let batch = pending
         pending.removeAll()
+        var ingested: Set<UUID> = []
         for draft in batch {
             do {
-                _ = try await store.ingest(draft)
+                try await ingested.insert(store.ingest(draft).id)
             } catch {
                 logger.error("History ingest failed: \(error.localizedDescription, privacy: .public)")
             }
         }
-        _ = try? await store.applyRetention(policy)
-        recent = await (try? store.recent(limit: Self.menuStripCount)) ?? recent
+        // What was just ingested is never what the cap evicts (docs/17 T-OUT-8).
+        await applyAutomaticRetention(on: store, protecting: ingested)
+        recent = await visible((try? store.recent(limit: Self.menuStripCount)) ?? recent)
         usage = await (try? store.storageUsage()) ?? usage
 
         // A capture just landed, so the agent is awake anyway: a good moment to read it

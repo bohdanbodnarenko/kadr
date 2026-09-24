@@ -265,7 +265,7 @@ struct AutomationParserTests {
             ? [.path: "/tmp/a.png"]
             : [:]
         let command = try AutomationParser.command(verb: verb, values: values)
-        let envelope = AutomationEnvelope(command: command, replyPortName: "reply")
+        let envelope = AutomationEnvelope(command: command)
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(AutomationEnvelope.self, from: data)
         #expect(decoded == envelope)

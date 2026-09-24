@@ -1,15 +1,24 @@
 import AppKit
 import Foundation
+import Shared
 import UniformTypeIdentifiers
 
 /// Reads a still or a movie off a pasteboard (CleanShot `open-from-clipboard`, 4.6).
 enum ClipboardMedia {
     /// A PNG on disk for an image or a block of text on the pasteboard.
-    static func stillPNGFile(from pasteboard: NSPasteboard) -> URL? {
+    ///
+    /// In this launch's scratch folder unless `directory` says otherwise — a pin, which
+    /// outlives the launch, passes its own.
+    static func stillPNGFile(from pasteboard: NSPasteboard, in directory: URL? = nil) -> URL? {
         guard let png = stillPNG(from: pasteboard) else { return nil }
-        let destination = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr-clipboard-\(UUID().uuidString).png")
         do {
+            let destination: URL
+            if let directory {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                destination = directory.appendingPathComponent("Clipboard \(UUID().uuidString.prefix(8)).png")
+            } else {
+                destination = try LaunchScratch.current.url(named: "Clipboard.png")
+            }
             try png.write(to: destination, options: .atomic)
             return destination
         } catch {
@@ -106,9 +115,8 @@ enum ClipboardMedia {
     static func movieFile(from pasteboard: NSPasteboard) -> URL? {
         for candidate in movieTypes {
             guard let data = pasteboard.data(forType: candidate.type), !data.isEmpty else { continue }
-            let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("Kadr-clipboard-\(UUID().uuidString).\(candidate.fileExtension)")
             do {
+                let destination = try LaunchScratch.current.url(named: "Clipboard.\(candidate.fileExtension)")
                 try data.write(to: destination, options: .atomic)
                 return destination
             } catch {

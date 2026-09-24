@@ -171,11 +171,27 @@ public struct HistoryPolicy: Sendable, Hashable {
     public var sizeCapBytes: Int64?
     /// When set, anything captured before this instant is treated as a previous session.
     public var sessionStartedAt: Date?
+    /// Records the size cap must never evict — the capture that was just ingested, above
+    /// all: a recording bigger than the cap used to push itself straight back out, along
+    /// with everything else (docs/17 T-OUT-8).
+    public var protectedIDs: Set<UUID>
+    /// The most records one size-cap pass may evict without the user hearing about it.
+    /// Past this the pass stops and reports `stoppedAtEvictionLimit`, so a single long
+    /// recording cannot silently empty the library (docs/17 T-OUT-8). `nil` means no limit.
+    public var maxSizeCapEvictions: Int?
 
-    public init(maxAge: TimeInterval? = nil, sizeCapBytes: Int64? = nil, sessionStartedAt: Date? = nil) {
+    public init(
+        maxAge: TimeInterval? = nil,
+        sizeCapBytes: Int64? = nil,
+        sessionStartedAt: Date? = nil,
+        protectedIDs: Set<UUID> = [],
+        maxSizeCapEvictions: Int? = nil
+    ) {
         self.maxAge = maxAge
         self.sizeCapBytes = sizeCapBytes
         self.sessionStartedAt = sessionStartedAt
+        self.protectedIDs = protectedIDs
+        self.maxSizeCapEvictions = maxSizeCapEvictions
     }
 }
 
@@ -196,10 +212,13 @@ public struct HistoryStorageUsage: Sendable, Hashable {
 public struct EvictionReport: Sendable, Hashable {
     public var deletedCount: Int
     public var freedBytes: Int64
+    /// The size-cap pass hit `maxSizeCapEvictions` with the library still over the cap.
+    public var stoppedAtEvictionLimit: Bool
 
-    public init(deletedCount: Int = 0, freedBytes: Int64 = 0) {
+    public init(deletedCount: Int = 0, freedBytes: Int64 = 0, stoppedAtEvictionLimit: Bool = false) {
         self.deletedCount = deletedCount
         self.freedBytes = freedBytes
+        self.stoppedAtEvictionLimit = stoppedAtEvictionLimit
     }
 
     public static let empty = EvictionReport()

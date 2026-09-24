@@ -43,7 +43,7 @@ struct AutomationDocumentationTests {
         #expect(text.contains(parameter.rawValue), "docs/AUTOMATION.md does not mention \(parameter.rawValue)")
     }
 
-    @Test("Every exit code is documented", arguments: [0, 1, 2, 3, 64])
+    @Test("Every exit code is documented", arguments: [0, 1, 2, 3, 4, 64, 77])
     func everyExitCodeIsDocumented(code: Int) throws {
         let text = try documentation()
         #expect(text.contains("| \(code) |"), "docs/AUTOMATION.md does not list exit code \(code)")

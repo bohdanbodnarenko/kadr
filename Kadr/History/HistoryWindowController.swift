@@ -96,7 +96,8 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
             quickLook.dismiss()
             return
         }
-        guard let url = controller.fileURL(for: record) else { return }
+        // The named link, so Quick Look's title is the capture's name (docs/17 T-OUT-10).
+        guard let url = controller.namedURL(for: record) else { return }
         controller.markAccessed(record)
         quickLook.show(url)
     }

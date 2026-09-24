@@ -13,7 +13,10 @@ extension QuickAccessManager {
         finalizeIfStaged(item)
         let url = items.first { $0.id == item.id }?.fileURL ?? item.fileURL
         let format = settings.compressionFormat
-        let destination = FileManager.default.temporaryDirectory
+        // Scratch: the helper writes here and the result is copied beside the original,
+        // so nothing needs this once the launch is over (docs/17 §5 theme 7).
+        let destination = (try? LaunchScratch.current.url(named: "compressed.\(format.fileExtension)"))
+            ?? FileManager.default.temporaryDirectory
             .appendingPathComponent("kadr-compressed-\(UUID().uuidString)")
             .appendingPathExtension(format.fileExtension)
 
@@ -67,8 +70,11 @@ extension QuickAccessManager {
     func setActivity(_ activity: CardActivity?, on item: QuickAccessItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index].activity = activity
-        if activity != nil {
-            presentFeedback(FeedbackStatus(kind: .progress, message: String(localized: "Compressing…")))
+        if let activity {
+            presentFeedback(FeedbackStatus(kind: .progress, message: activity.progressMessage))
+        } else if feedbackStatus?.kind == .progress {
+            // Work that ends without a message of its own must not leave "…" up forever.
+            dismissFeedback()
         }
     }
 

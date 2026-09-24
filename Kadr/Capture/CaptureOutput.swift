@@ -152,6 +152,17 @@ struct CaptureOutput {
         }
     }
 
+    /// Copies a file Kadr does not own into staging, for a card that is about to change
+    /// it (docs/17 T-OUT-5).
+    func adoptCopy(of url: URL, named filename: String) -> URL? {
+        do {
+            return try exporter.adoptCopy(of: url, named: filename)
+        } catch {
+            logger.error("Could not copy into staging: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Whether this path is a staged capture, which the 24-hour sweep will delete.
     func isStaged(_ url: URL) -> Bool {
         exporter.isStaged(url)
@@ -207,8 +218,15 @@ struct CaptureOutput {
     }
 
     /// Clears stale staged files. Called once at launch (docs/03 §2).
+    ///
+    /// Also sweeps the previous launch's scratch folder: clipboard imports, posters and
+    /// drag links nothing needs once that process is gone (docs/17 §5 theme 7).
     func sweepStaging() {
         exporter.sweepStaging()
+        let swept = LaunchScratch.current.sweepPreviousLaunches()
+        if swept > 0 {
+            logger.info("Swept \(swept, privacy: .public) earlier scratch folder(s)")
+        }
     }
 
     // MARK: - Policy

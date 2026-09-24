@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import GRDB
+import MediaExport
 import os
 import Shared
 
@@ -127,8 +128,11 @@ public actor HistoryStore {
 
     /// Updates the name shown in History. The capture file itself is content-addressed
     /// and is not renamed.
+    ///
+    /// The name is sanitised: it becomes a real filename the moment an item is exported,
+    /// dragged or copied out, and a `/` in it escaped the export folder (docs/17 T-OUT-10).
     public func rename(id: UUID, to filename: String) async throws {
-        let trimmed = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = Self.sanitisedFilename(filename)
         guard !trimmed.isEmpty, let existing = try await record(id: id) else { return }
         var copy = existing
         copy.originalFilename = trimmed
@@ -268,6 +272,12 @@ public actor HistoryStore {
         return try await delete(ids: ids)
     }
 
+    /// A display name made safe to use as a filename: no path separators or characters
+    /// macOS refuses, no leading dot, and short enough for APFS.
+    public nonisolated static func sanitisedFilename(_ name: String) -> String {
+        FilenameTemplate.truncated(FilenameTemplate.sanitise(name))
+    }
+
     /// The library's address for the file at `url`.
     ///
     /// Exposed because content addressing is the library's own scheme and a caller that
@@ -296,28 +306,12 @@ public actor HistoryStore {
     /// Time-based + LRU size-cap eviction (docs/03 §5).
     @discardableResult
     public func applyRetention(_ policy: HistoryPolicy, now: Date = Date()) async throws -> EvictionReport {
-        var report = EvictionReport()
-        var doomed: [UUID] = []
-
-        if let sessionStart = policy.sessionStartedAt {
-            try await doomed.append(contentsOf: idsCaptured(before: sessionStart))
+        let plan = try await retentionPlan(policy, now: now)
+        guard !plan.ids.isEmpty else {
+            return EvictionReport(stoppedAtEvictionLimit: plan.stoppedAtEvictionLimit)
         }
-        if let maxAge = policy.maxAge {
-            try await doomed.append(contentsOf: idsCaptured(before: now.addingTimeInterval(-maxAge)))
-        }
-
-        let unique = Array(Set(doomed))
-        if !unique.isEmpty {
-            let timeReport = try await delete(ids: unique)
-            report.deletedCount += timeReport.deletedCount
-            report.freedBytes += timeReport.freedBytes
-        }
-
-        if let cap = policy.sizeCapBytes {
-            let lru = try await evictLeastRecentlyUsed(downTo: cap)
-            report.deletedCount += lru.deletedCount
-            report.freedBytes += lru.freedBytes
-        }
+        var report = try await delete(ids: plan.ids)
+        report.stoppedAtEvictionLimit = plan.stoppedAtEvictionLimit
         return report
     }
 
@@ -373,25 +367,6 @@ public actor HistoryStore {
         }
     }
 
-    private func evictLeastRecentlyUsed(downTo cap: Int64) async throws -> EvictionReport {
-        var report = EvictionReport()
-        while true {
-            let usage = try await storageUsage()
-            guard usage.byteCount > cap, usage.itemCount > 0 else { break }
-            let oldest: String? = try await dbPool.read { db in
-                try String.fetchOne(
-                    db,
-                    sql: "SELECT id FROM capture_records ORDER BY last_accessed_at ASC, captured_at ASC LIMIT 1"
-                )
-            }
-            guard let oldest, let id = UUID(uuidString: oldest) else { break }
-            let piece = try await deleteOne(id: id)
-            report.deletedCount += piece.deletedCount
-            report.freedBytes += piece.freedBytes
-        }
-        return report
-    }
-
     private func deleteOne(
         id: UUID,
         fileDisposition: FileDisposition = .permanent
@@ -435,5 +410,74 @@ public actor HistoryStore {
     private func fileSize(_ url: URL) -> Int64 {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         return Int64(values?.fileSize ?? 0)
+    }
+}
+
+/// Split from the actor body for length; in this file because it reads `dbPool`.
+public extension HistoryStore {
+    /// What a retention pass would delete, without deleting anything (docs/17 T-OUT-4).
+    ///
+    /// The count and bytes a confirmation needs: "Permanently delete 312 captures
+    /// (1.4 GB)?" has to be asked *before* the pass, and has to agree with it — so the pass
+    /// runs this same plan.
+    struct RetentionPlan: Sendable, Hashable {
+        /// Older than the retention window, or from a previous session.
+        public var expired: [UUID]
+        /// Least recently used, evicted to bring the library under the cap.
+        public var overCap: [UUID]
+        /// Bytes those records account for.
+        public var bytes: Int64
+        public var stoppedAtEvictionLimit: Bool
+
+        public var ids: [UUID] {
+            expired + overCap
+        }
+
+        public var count: Int {
+            expired.count + overCap.count
+        }
+    }
+
+    func retentionPlan(_ policy: HistoryPolicy, now: Date = Date()) async throws -> RetentionPlan {
+        var expired: Set<UUID> = []
+        if let sessionStart = policy.sessionStartedAt {
+            try await expired.formUnion(idsCaptured(before: sessionStart))
+        }
+        if let maxAge = policy.maxAge {
+            try await expired.formUnion(idsCaptured(before: now.addingTimeInterval(-maxAge)))
+        }
+
+        // Oldest access first, which is the order the cap evicts in.
+        let rows: [(id: UUID, bytes: Int64)] = try await dbPool.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT id, byte_size FROM capture_records ORDER BY last_accessed_at ASC, captured_at ASC"
+            )
+            .compactMap { row in
+                guard let id = UUID(uuidString: row["id"]) else { return nil }
+                return (id, row["byte_size"] ?? 0)
+            }
+        }
+        let expiredBytes = rows.filter { expired.contains($0.id) }.reduce(Int64(0)) { $0 + $1.bytes }
+        var plan = RetentionPlan(
+            expired: rows.map(\.id).filter { expired.contains($0) },
+            overCap: [],
+            bytes: expiredBytes,
+            stoppedAtEvictionLimit: false
+        )
+
+        guard let cap = policy.sizeCapBytes else { return plan }
+        var total = rows.reduce(Int64(0)) { $0 + $1.bytes } - expiredBytes
+        for row in rows where total > cap {
+            guard !expired.contains(row.id), !policy.protectedIDs.contains(row.id) else { continue }
+            if let limit = policy.maxSizeCapEvictions, plan.overCap.count >= limit {
+                plan.stoppedAtEvictionLimit = true
+                break
+            }
+            plan.overCap.append(row.id)
+            plan.bytes += row.bytes
+            total -= row.bytes
+        }
+        return plan
     }
 }

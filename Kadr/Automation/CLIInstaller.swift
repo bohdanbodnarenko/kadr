@@ -37,10 +37,23 @@ struct CLIInstaller {
     ]
 
     /// The link this install would create or replace, if one is already there.
+    ///
+    /// Only a link into a Kadr bundle counts. Another tool called `kadr` belongs to
+    /// someone else, and Install and Remove used to replace or delete it (docs/17 T-OUT-13).
     var installedURL: URL? {
         Self.candidateDirectories
             .map { $0.appendingPathComponent("kadr") }
-            .first { exists($0) }
+            .first { exists($0) && isKadrLink($0) }
+    }
+
+    /// Whether a symlink points at the tool inside some Kadr app bundle.
+    nonisolated static func isKadrToolLink(destination: String?) -> Bool {
+        guard let destination else { return false }
+        return destination.hasSuffix(".app/Contents/Helpers/kadr")
+    }
+
+    private func isKadrLink(_ url: URL) -> Bool {
+        Self.isKadrToolLink(destination: try? fileManager.destinationOfSymbolicLink(atPath: url.path))
     }
 
     /// Whether the link that exists points at *this* build.
@@ -60,9 +73,14 @@ struct CLIInstaller {
             guard prepare(directory) else { continue }
             let link = directory.appendingPathComponent("kadr")
             do {
-                // Replacing rather than refusing: re-running Install after an update is
-                // the obvious thing to do, and it should just work.
+                // Replacing our own link rather than refusing: re-running Install after an
+                // update is the obvious thing to do, and it should just work. Anything else
+                // with the name is left alone and the next directory is tried.
                 if exists(link) {
+                    guard isKadrLink(link) else {
+                        logger.info("A different kadr is in \(directory.path, privacy: .public); leaving it")
+                        continue
+                    }
                     try fileManager.removeItem(at: link)
                 }
                 try fileManager.createSymbolicLink(at: link, withDestinationURL: tool)

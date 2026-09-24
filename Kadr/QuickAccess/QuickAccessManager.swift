@@ -61,6 +61,8 @@ final class QuickAccessManager {
     @ObservationIgnored var engagedItems: Set<UUID> = []
     /// Hears about captures the editor moved to the Trash, for the agent's whole life.
     @ObservationIgnored var editorDeletionObserver: (any NSObjectProtocol)?
+    /// Hears about display changes, to keep the stack on a screen that exists.
+    @ObservationIgnored var screenObserver: (any NSObjectProtocol)?
     /// Hears about captures the editor saved, so the card and History stay current.
     @ObservationIgnored var editorSaveObserver: (any NSObjectProtocol)?
     @ObservationIgnored var dismissTasks: [UUID: Task<Void, Never>] = [:]
@@ -77,8 +79,17 @@ final class QuickAccessManager {
     @ObservationIgnored var hoveredItemID: UUID?
     /// The card currently being dragged out.
     @ObservationIgnored var draggingItemID: UUID?
-    @ObservationIgnored var hoverKeyMonitor: Any?
+    /// The card the pointer last rested on, so a clicked card keeps the keyboard after the
+    /// pointer moves off it (docs/17 T-OUT-1).
+    @ObservationIgnored var lastHoveredItemID: UUID?
     @ObservationIgnored var localKeyMonitor: Any?
+    /// Whether each recording card still has a studio session, so the stack does not
+    /// rescan the disk on every render (docs/17 T-OUT-13).
+    @ObservationIgnored var studioSessionCache: [UUID: Bool] = [:]
+    /// The trackpad gesture in progress over the stack (docs/17 T-OUT-13).
+    @ObservationIgnored var swipeTracker = OverlaySwipeTracker()
+    /// Cards deleted inside their Undo window (docs/17 T-OUT-1).
+    @ObservationIgnored var pendingDeletions: [UUID: PendingCardDeletion] = [:]
     /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
     @ObservationIgnored var recentlyClosed: [QuickAccessItem] = []
 
@@ -101,6 +112,25 @@ final class QuickAccessManager {
         self.history = history
         watchForEditorDeletions()
         watchForEditorSaves()
+        watchForScreenChanges()
+    }
+
+    /// Re-lays the stack out when a display comes or goes, or the Dock moves
+    /// (docs/17 T-OUT-13).
+    ///
+    /// The panel covers one screen's visible frame, measured when it was shown; after an
+    /// unplug or a Dock resize, cards could sit off-screen until the next capture. A
+    /// notification, not a timer, so the idle budget is untouched.
+    private func watchForScreenChanges() {
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.restack()
+            }
+        }
     }
 
     var hasRecentlyClosed: Bool {
@@ -244,7 +274,8 @@ final class QuickAccessManager {
             isVideo: record.kind == .video,
             historyKind: record.kind,
             displayName: record.originalFilename,
-            applicationName: record.applicationName
+            applicationName: record.applicationName,
+            origin: .library
         ))
     }
 }

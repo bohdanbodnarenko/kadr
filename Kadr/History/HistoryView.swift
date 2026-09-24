@@ -30,7 +30,7 @@ struct HistoryView: View {
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
 
     private var batchDeleteMessage: String {
-        KadrPlural.files(selection.selected.count) + ". You can recover them from the Trash."
+        KadrPlural.files(selection.selected.count) + ". You can undo this right after."
     }
 
     var body: some View {
@@ -178,11 +178,13 @@ struct HistoryView: View {
                                                 suggestedName: record.originalFilename,
                                                 contentType: UTType(filenameExtension:
                                                     (record.originalFilename as NSString).pathExtension) ?? .png,
+                                                // Under its real name, never the library's
+                                                // hash (docs/17 T-OUT-10).
                                                 resolve: {
                                                     controller.markAccessed(record)
-                                                    return controller.fileURL(for: record)
+                                                    return controller.namedURL(for: record)
                                                 },
-                                                stableFileURL: controller.fileURL(for: record)
+                                                stableFileURL: controller.namedURL(for: record)
                                             )
                                         },
                                         dragImage: {
@@ -281,7 +283,7 @@ struct HistoryView: View {
             selection.focused = record.id
             revealSelected()
         }
-        if let url = controller.fileURL(for: record) {
+        if let url = controller.namedURL(for: record) {
             ShareLink(item: url) {
                 Text("Share…")
             }

@@ -4,7 +4,7 @@ Kadr exposes one command vocabulary through three frontends (docs/03 §8.4):
 
 | Frontend | How | Gets a result back |
 |---|---|---|
-| URL scheme | `open "kadr://capture-area?action=copy"` | no |
+| URL scheme | `open "kadr://capture-area?action=copy"` — only after you allow it, see [Who may control Kadr](#who-may-control-kadr) | no |
 | CLI | `kadr capture-area --action copy` | yes — stdout + exit code |
 | Shortcuts | the actions under *Kadr* in Shortcuts.app | yes — a file or text |
 
@@ -12,8 +12,33 @@ All three parse the same verbs and the same parameters through
 `Packages/AutomationKit`, so anything documented here works in all of them.
 
 Nothing about automation talks to a network. The CLI reaches the agent over a local
-Mach port (`CFMessagePort`), and every ScreenCaptureKit call stays in the agent, which
-is the process the Screen Recording grant belongs to (docs/04 §1).
+Mach port, and every ScreenCaptureKit call stays in the agent, which is the process the
+Screen Recording grant belongs to (docs/04 §1).
+
+---
+
+## Who may control Kadr
+
+Kadr holds your Screen Recording permission, so anything that can drive Kadr can take
+screenshots and recordings with it. Each frontend is guarded accordingly (docs/17
+T-OUT-12):
+
+| Frontend | Who is allowed |
+|---|---|
+| URL scheme | **Off by default.** Turn on **Settings → Advanced → Allow other apps to control Kadr**, and each app is asked once — "Allow “Raycast” to control Kadr?" — with the answer remembered for that app. A request Kadr cannot attribute to an app (for example `open kadr://…` in a script) is asked every time. Kadr's own editor is always allowed. |
+| CLI | The bundled `kadr` tool. The agent checks the code signature of every process that talks to its Mach port, from the audit token the kernel attaches to the message; anything not signed by Kadr's own team is refused with exit code 77. Development builds signed ad hoc accept only code inside the Kadr app bundle. |
+| Shortcuts | The actions run inside Kadr, from a shortcut you built. |
+
+- A refused URL does nothing, and Kadr shows "Kadr blocked a request from …" with a
+  button to Settings.
+- Remembered apps are listed under the switch, each with **Forget**, so it is asked
+  again. An answer is remembered per bundle identifier *and* signing team, so an app
+  cannot borrow another app's permission by copying its bundle identifier.
+- There is no "allow everything" switch. Silent captures (`action=copy`), recordings
+  (`record-*`) and reading files (`capture-text path=`, `pin`, `annotate`,
+  `add-to-history`) never run for an app you have not allowed.
+
+If you script Kadr, prefer the CLI: it needs no prompt, and it gets a result back.
 
 ---
 
@@ -40,6 +65,7 @@ kadr capture-area --json  # {"paths":["/…/Kadr-2026-08-28-14-02-11.png"],"stat
 | 3 | the verb is understood but unavailable in this build |
 | 4 | Capture Text found no text (`status: noText`) |
 | 64 | the command line did not parse (`EX_USAGE`) |
+| 77 | the sender is not allowed to control Kadr (`status: denied`, `EX_NOPERM`) |
 
 Cancel is deliberately not 1: a script wants to tell "the user changed their mind"
 apart from "something broke".
@@ -104,7 +130,7 @@ that misspells `action` is told so rather than quietly capturing with the wrong 
 | `record-region` | `fps`, `x`,`y`,`w`,`h`, `microphone`, `system-audio`, `display` | Select a region, then record it. With a region, starts immediately. |
 | `record-gif` | `fps`, `x`,`y`,`w`,`h`, `microphone`, `system-audio`, `display` | Record a region, then encode a GIF when the recording stops. |
 | `stop-recording` | — | Stop and finalise. Returns the `.mp4` path. |
-| `toggle-recording` | `fps`, `microphone`, `system-audio`, `display` | Start a screen recording if idle, or stop the one in progress. |
+| `toggle-recording` | — | Start a screen recording if idle, or stop the one in progress. It uses the Recording settings; for a frame rate, microphone or display, use `record-screen` and `stop-recording`. |
 
 - `fps` — 1–120 (`framerate`, `frame-rate`). Rounded to the nearest encoder preset
   (24 / 30 / 60).
@@ -129,7 +155,9 @@ user stops. `stop-recording` is what hands back the path.
 | `restore-recently-closed` | — | Bring back the last dismissed overlay card. |
 | `hide-overlays` | — | Hide overlay cards so they do not appear in the next capture. |
 
-`path` may be spelled `filepath` or `file`, and `~` is expanded.
+`path` may be spelled `filepath` or `file`, and `~` is expanded. The CLI resolves a
+relative path against the directory you ran it in, so `kadr pin shot.png` pins the
+`shot.png` next to you.
 
 ### The rest
 
@@ -232,7 +260,8 @@ fi
 ## Shortcuts
 
 The Shortcuts actions wrap the same commands: **Capture Area**, **Capture Window**,
-**Capture Screen**, **Capture Text**, **All-in-One**, **Start Recording**, **Stop Recording**,
-**Pin Image**, **Set Desktop Icons** and **Open History**. The capture actions return a
+**Capture Screen**, **Capture Previous Area**, **Capture Scrolling Area**, **Capture Text**,
+**All-in-One**, **Start Recording**, **Record Region**, **Stop Recording**,
+**Toggle Recording**, **Pin Image**, **Set Desktop Icons** and **Open History**. The capture actions return a
 file the next action can consume; **Capture Text** returns a string. Cancelling a
 capture fails the shortcut, so an "if" block can handle it.

@@ -69,8 +69,29 @@ public struct FilenameTemplate: Sendable, Hashable {
             result += "{" + token
         }
 
-        let sanitised = Self.sanitise(result)
-        return sanitised.isEmpty ? Self.sanitise(Self.default.expand(context)) : sanitised
+        let sanitised = Self.truncated(Self.sanitise(result))
+        return sanitised.isEmpty ? Self.truncated(Self.sanitise(Self.default.expand(context))) : sanitised
+    }
+
+    /// The most UTF-8 bytes an expanded name may use (docs/17 T-OUT-6).
+    ///
+    /// APFS allows 255 bytes per name. The rest is headroom for a " (32)" collision
+    /// suffix and an extension, so a long window title never makes the write fail.
+    public static let maxNameBytes = 200
+
+    /// Cuts `name` to `maxBytes` of UTF-8 on a character boundary, so an emoji or an
+    /// accented letter is never split into invalid bytes.
+    public static func truncated(_ name: String, maxBytes: Int = maxNameBytes) -> String {
+        guard name.utf8.count > maxBytes else { return name }
+        var result = ""
+        var used = 0
+        for character in name {
+            let size = character.utf8.count
+            guard used + size <= maxBytes else { break }
+            result.append(character)
+            used += size
+        }
+        return result.trimmingCharacters(in: .whitespaces)
     }
 
     private func value(for token: String, context: FilenameContext) -> String? {
@@ -88,12 +109,12 @@ public struct FilenameTemplate: Sendable, Hashable {
 
     /// Strips characters that are illegal or awkward in a filename, and trims the
     /// leading dot that would otherwise hide the file.
-    static func sanitise(_ value: String) -> String {
+    public static func sanitise(_ value: String) -> String {
         let cleaned = value
             .components(separatedBy: illegal)
             .joined()
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.hasPrefix(".") ? String(cleaned.dropFirst()) : cleaned
+        return String(cleaned.drop { $0 == "." })
     }
 
     /// Fixed formats, not localised: a filename with a locale-dependent date sorts

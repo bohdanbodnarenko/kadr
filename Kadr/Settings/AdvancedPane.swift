@@ -36,15 +36,7 @@ struct AdvancedPane: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("URL Scheme") {
-                LabeledContent("Scheme", value: "kadr://")
-                Text("Every command the tool takes also works as a URL, so Raycast, "
-                    + "Alfred and Shortcuts can drive Kadr. CleanShot's verb names are "
-                    + "accepted as aliases. Run `kadr help` in Terminal for the full list.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            AutomationConsentSection()
 
             StudioStorageSection()
 

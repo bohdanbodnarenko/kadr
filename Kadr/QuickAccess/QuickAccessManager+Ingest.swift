@@ -4,7 +4,20 @@ import os
 import Shared
 
 extension QuickAccessManager {
+    /// Shows status for work on a card: over the stack when it is up, otherwise through
+    /// `FailurePresenter` (docs/17 T-OUT-2).
+    ///
+    /// With no card on screen — the last one was just deleted, or the stack is tucked
+    /// into the peek tab — a banner in the stack would be invisible, and a failure nobody
+    /// sees is the silent failure this exists to prevent.
     func presentFeedback(_ status: FeedbackStatus) {
+        guard overlayPanel != nil, !items.isEmpty, !isPeeking, !isExiting else {
+            feedbackStatus = nil
+            if status.kind != .progress {
+                FailurePresenter.present(status)
+            }
+            return
+        }
         feedbackStatus = status
         if status.kind == .completion || status.kind == .warning || status.kind == .error {
             FeedbackAnnouncement.post(status.message)
@@ -29,9 +42,8 @@ extension QuickAccessManager {
             of: video,
             maxPixelSize: HistoryThumbnailWriter.maxPixelSize
         ) else { return nil }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kadr-poster-\(UUID().uuidString).jpg")
         do {
+            let url = try LaunchScratch.current.url(named: "poster.jpg")
             try HistoryThumbnailWriter.write(image, to: url)
             return url
         } catch {
