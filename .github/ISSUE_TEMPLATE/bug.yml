@@ -1,0 +1,75 @@
+# Bug report form (docs/17 §7.2). Help ▸ Report a Problem… in Kadr opens this form with
+# ?template=bug.yml&version=…&build=…&os=… so the ids below must keep those names.
+# Only non-identifying values are prefilled; the diagnostics zip is attached by hand.
+name: Bug report
+description: Something in Kadr did not work the way it should.
+labels: ["dogfood"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Kadr. **Help ▸ Report a Problem…** fills in the version fields
+        and puts a diagnostics zip in Finder — please drag that zip into the box at the
+        bottom. It holds Kadr's logs, crash reports and settings, never your captures.
+  - type: input
+    id: version
+    attributes:
+      label: Kadr version
+      placeholder: "0.9.0"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The number and commit shown in Settings ▸ Updates, for example "512 · abc1234".
+      placeholder: "512 · abc1234"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: macOS version
+      placeholder: "15.3 (24D60)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The steps, in order, starting from something we can start from too.
+      placeholder: |
+        1. Pressed ⇧⌘2 with Safari in front
+        2. Chose Window and clicked the Safari window
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: recording
+    attributes:
+      label: Screen recording
+      description: A short recording of it happening (Kadr can make one). Drag the file here.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Drag the Kadr-Diagnostics zip from Help ▸ Report a Problem… here.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Anything unusual about your setup
+      description: Several displays, a display above the main one, an Intel Mac, VoiceOver, another screenshot tool running…
