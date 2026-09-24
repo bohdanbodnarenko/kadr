@@ -30,7 +30,7 @@ private func run(_ command: AppCommand) async throws -> AutomationResponse {
     case .ok: return response
     case .cancelled: throw KadrIntentError.cancelled
     case .noText: throw KadrIntentError.failed("No text found")
-    case .failed, .unsupported: throw KadrIntentError.failed(response.message ?? "Kadr could not do that.")
+    case .failed, .unsupported, .denied: throw KadrIntentError.failed(response.message ?? "Kadr could not do that.")
     }
 }
 

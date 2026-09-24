@@ -35,15 +35,26 @@ extension AppDelegate {
 
     /// Handles `kadr://…`. The answer is dropped: a URL has nowhere to send one, which is
     /// exactly why the CLI exists.
+    ///
+    /// Every URL passes the consent gate first (docs/17 T-OUT-12): any app can open one,
+    /// and without the gate any app could take screenshots through Kadr's grant.
     func application(_ application: NSApplication, open urls: [URL]) {
+        let sender = AutomationConsentGate.currentSender()
         for url in urls {
             do {
                 let command = try AutomationParser.command(from: url)
-                automation.perform(command) { [weak self] response in
-                    guard response.status != .ok else { return }
-                    let message = response.message ?? response.status.rawValue
-                    self?.logger.error("URL command failed: \(message, privacy: .public)")
-                }
+                AutomationConsentGate.shared.authorize(
+                    command,
+                    from: sender,
+                    openSettings: { [weak self] in self?.settingsWindowController.show(tab: .advanced) },
+                    run: {
+                        automation.perform(command) { [weak self] response in
+                            guard response.status != .ok else { return }
+                            let message = response.message ?? response.status.rawValue
+                            self?.logger.error("URL command failed: \(message, privacy: .public)")
+                        }
+                    }
+                )
             } catch {
                 let message = (error as? AutomationError)?.localizedDescription ?? error.localizedDescription
                 logger.error("Could not run \(url.absoluteString, privacy: .public): \(message, privacy: .public)")
