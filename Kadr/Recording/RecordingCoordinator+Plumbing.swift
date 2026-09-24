@@ -48,6 +48,9 @@ extension RecordingCoordinator {
             await teleprompter.start(
                 microphone: options.recordsMicrophone ? engine.microphoneTap : nil
             )
+            // The prompter's panel exists only now, after the stream's filter was fixed;
+            // hand the live stream the new list or the script is in the file (T-REC-7).
+            await engine.updateExcludedWindowIDs(CaptureExclusionPush.ids)
             // Still ours to claim (docs/11 S0.3).
             //
             // Everything above suspends, and Stop and Cancel both run to completion

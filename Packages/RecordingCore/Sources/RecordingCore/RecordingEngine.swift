@@ -89,6 +89,8 @@ public actor RecordingEngine {
     /// Last complete video frame, so a resume on a static screen still starts the writer
     /// and a static tail survives Stop (docs/16 REC-5).
     var lastVideoBox: SampleBufferBox?
+    /// What the running stream records, so its filter can be rebuilt mid-take.
+    var liveTarget: RecordingTarget?
     var segmentHasVideo = false
 
     /// Supplies click halos, keystrokes and the webcam picture, frame by frame.
@@ -149,6 +151,29 @@ public actor RecordingEngine {
 
     public func setExcludedWindowIDs(_ ids: Set<CGWindowID>) {
         excludedWindowIDs = ids
+    }
+
+    /// Changes which of Kadr's windows are left out of a recording that is already running.
+    ///
+    /// The filter used to be fixed when the stream started, so a panel created after that —
+    /// the teleprompter is the one that matters — was recorded into the file (docs/17
+    /// T-REC-7). A window recording is untouched: it never contained Kadr's windows.
+    public func updateExcludedWindowIDs(_ ids: Set<CGWindowID>) async {
+        guard ids != excludedWindowIDs else { return }
+        excludedWindowIDs = ids
+        guard let stream, let liveTarget else { return }
+        if case .window = liveTarget {
+            return
+        }
+        do {
+            let content = try await shareableContent()
+            // The recording may have ended while ScreenCaptureKit answered.
+            guard self.stream === stream else { return }
+            let setup = try makeFilter(for: liveTarget, in: content)
+            try await stream.updateContentFilter(setup.filter)
+        } catch {
+            logger.error("Could not update the recording's exclusions: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     #if DEBUG

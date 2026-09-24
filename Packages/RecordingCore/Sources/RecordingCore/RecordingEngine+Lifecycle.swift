@@ -40,6 +40,7 @@ extension RecordingEngine {
             try checkAlive(token)
             let capture = try makeFilter(for: target, in: content)
             pixelSize = capture.pixelSize
+            liveTarget = target
 
             // Everything for this recording lives in one directory, so a crash leaves an
             // obvious place to recover segments from.
@@ -233,6 +234,7 @@ extension RecordingEngine {
         segments = []
         interruptionReason = nil
         lastVideoBox = nil
+        liveTarget = nil
         segmentHasVideo = false
         endActivity()
         if deletingFiles, let sessionDirectory {
