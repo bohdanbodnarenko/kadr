@@ -178,7 +178,7 @@ Opens in **its own process** (see doc 04) as a normal resizable window; multiple
 
 Any capture (from overlay, editor, or history) can be **pinned**: a borderless always-on-top window showing the image at captured size (drag corners to scale, keeping the capture's aspect ratio; ⌥-scroll zoom; double-click = 100%).
 
-- Opacity slider (⌥-scroll or menu, 20–100%); **click-through mode** (⌘⌥L) making it a pure reference layer; arrow-key positioning; appears on all Spaces; multiple pins.
+- Opacity (⌘-scroll or the pin's Opacity menu, 20–100%; a plain scroll does nothing, so scrolling the page under a pin never fades it); **click-through mode** (⌘⌥L) making it a pure reference layer — ⌘⌥L is also a global command, Toggle Pin Click-Through, that acts on the pin under the pointer (or the newest click-through pin) and is claimed only while some pin is click-through, since a click-through pin cannot open its own menu (docs/17 T-OUT-9); arrow-key positioning; appears on all Spaces; multiple pins.
 - Pin menu (right-click): copy, save, reveal, annotate, OCR, close. Hover shows Close / Copy / Save. Pins have a window shadow. "Close all pins" global command. **Pin Clipboard** (menu + hotkey) pins an image on the pasteboard, or draws plain/RTF/HTML text as a card and pins that.
 - Pins persist across app restarts (P2, from history).
 

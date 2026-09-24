@@ -39,6 +39,10 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case hidePins
     /// Pin whatever is on the clipboard — an image, or text drawn as a card (docs/03 §4).
     case pinClipboard
+    /// Turns click-through off (or on) for the pin under the pointer, or the newest one
+    /// (docs/17 T-OUT-9). The way back out of a click-through pin, which cannot open its
+    /// own menu.
+    case togglePinClickThrough
     /// Opens the History window (docs/16 X-7).
     case openHistory
     /// Reveals the capture save folder in Finder (docs/16 X-7).
@@ -69,6 +73,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .hideOverlays: String(localized: "Hide Overlays")
         case .hidePins: String(localized: "Hide Pins")
         case .pinClipboard: String(localized: "Pin Clipboard")
+        case .togglePinClickThrough: String(localized: "Toggle Pin Click-Through")
         case .openHistory: String(localized: "History…")
         case .openSaveFolder: String(localized: "Open Capture Folder")
         }
@@ -125,7 +130,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
             ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording]),
             ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
             ("Overlays and Pins", [
-                .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins
+                .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
+                .togglePinClickThrough
             ]),
             ("Library", [.openHistory, .openSaveFolder])
         ]

@@ -249,15 +249,25 @@ final class PinPanel: NonActivatingPanel {
 
     // MARK: - Zoom and opacity (docs/03 §4)
 
-    /// ⌥-scroll zooms; plain scroll adjusts opacity between 20% and 100%.
+    /// ⌥-scroll zooms; ⌘-scroll adjusts opacity between 20% and 100%; a plain scroll
+    /// does nothing.
+    ///
+    /// Plain scroll used to fade the pin, so scrolling the page underneath with the
+    /// pointer drifting over a pin faded it away (docs/17 T-OUT-13). Opacity is also in
+    /// the pin's menu.
     func handleScroll(_ event: NSEvent) {
-        if event.modifierFlags.contains(.option) {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers.contains(.option) {
             setZoom(zoom * (1 + event.scrollingDeltaY / 200))
-        } else {
-            alphaValue = min(max(alphaValue + event.scrollingDeltaY / 200, 0.2), 1)
-            updateAccessibilityDescription()
-            onGeometryChanged?()
+        } else if modifiers.contains(.command) {
+            setOpacity(alphaValue + event.scrollingDeltaY / 200)
         }
+    }
+
+    func setOpacity(_ value: CGFloat) {
+        alphaValue = min(max(value, 0.2), 1)
+        updateAccessibilityDescription()
+        onGeometryChanged?()
     }
 
     /// Starts a file-promise drag of the pinned capture (docs/03 §6).

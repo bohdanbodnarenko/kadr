@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import os
 import OverlayKit
 import Shared
@@ -193,8 +194,44 @@ final class PinManager {
         try? FileManager.default.removeItem(at: url)
     }
 
+    // MARK: - Click-through (docs/17 T-OUT-9)
+
+    /// Whether any pin is click-through right now, which is when ⌘⌥L is claimed.
+    private(set) static var clickThroughHotkeyActive = false
+
+    /// Toggles click-through on the pin under the pointer; failing that, the newest
+    /// click-through pin; failing that, the newest pin.
+    ///
+    /// The pin's badge and VoiceOver hint promise ⌘⌥L, but the key used to live only in
+    /// the pin's own menu — which a pin that ignores the mouse cannot open. The only way
+    /// out was Close All Pins, and the state survived relaunch.
+    func toggleClickThroughUnderPointer() {
+        let pointer = NSEvent.mouseLocation
+        let target = pins.last { $0.frame.contains(pointer) }
+            ?? pins.last { $0.clickThroughEnabled }
+            ?? pins.last
+        target?.toggleClickThrough()
+    }
+
+    /// Claims ⌘⌥L while a pin is click-through, and gives it back when none is.
+    static func applyClickThroughHotkey() {
+        if clickThroughHotkeyActive {
+            KeyboardShortcuts.enable(.togglePinClickThrough)
+        } else {
+            KeyboardShortcuts.disable(.togglePinClickThrough)
+        }
+    }
+
+    private func updateClickThroughHotkey() {
+        let active = pins.contains { $0.clickThroughEnabled }
+        guard active != Self.clickThroughHotkeyActive else { return }
+        Self.clickThroughHotkeyActive = active
+        Self.applyClickThroughHotkey()
+    }
+
     /// Asks for a save once the pins have been still for `saveDebounce`.
     private func persist() {
+        updateClickThroughHotkey()
         guard !isRestoring, store != nil else { return }
         saveTask?.cancel()
         saveTask = Task { [weak self] in

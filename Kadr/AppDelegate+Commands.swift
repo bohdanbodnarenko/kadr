@@ -35,7 +35,7 @@ extension AppDelegate {
         case .allInOne, .captureArea, .captureWindow, .captureFullscreen, .captureText,
              .pickColor, .capturePreviousArea, .captureAreaAndCopy, .captureAreaAndSave,
              .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
-             .hidePins, .pinClipboard:
+             .hidePins, .pinClipboard, .togglePinClickThrough:
             break
         case .openHistory:
             openHistory()
@@ -120,6 +120,8 @@ extension AppDelegate {
             areaCapture.togglePinsHidden()
         case .pinClipboard:
             areaCapture.pinClipboard()
+        case .togglePinClickThrough:
+            areaCapture.pins.toggleClickThroughUnderPointer()
         default:
             return false
         }
