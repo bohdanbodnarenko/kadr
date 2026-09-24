@@ -32,7 +32,8 @@ public struct AnnotationExportRenderer: Sendable {
     ///   - baseImage: the capture, at pixel resolution.
     ///   - document: the annotations.
     ///   - includeAnnotations: false produces "Copy without annotations" (docs/03 §3),
-    ///     which still honours the crop but draws nothing on top.
+    ///     which still honours the crop and burns in redactions (T-ED-12) but draws
+    ///     nothing else on top.
     ///   - applyOrientation: false skips rotate/flip, for the in-editor flatten that
     ///     already sits inside the canvas's oriented layer host.
     ///   - exportScale: 1 is native pixels; smaller values downscale Copy/Save
@@ -79,8 +80,10 @@ public struct AnnotationExportRenderer: Sendable {
         let canvas = document.canvasRect
 
         // Redactions are burned into the image before anything is drawn over it, so the
-        // exported file carries no removable overlay (docs/03 §3).
-        let redactions = includeAnnotations ? document.commands.compactMap(\.redaction) : []
+        // exported file carries no removable overlay (docs/03 §3). They stay even in "copy
+        // without annotations": a redaction is a promise about what leaves the Mac, not a
+        // drawing on top, and dropping it leaked the blurred secret in one click (T-ED-12).
+        let redactions = document.commands.compactMap(\.redaction)
         let redacted = rasterizer.apply(redactions, to: baseImage, scale: scale, randomSeed: randomSeed)
 
         // Background removal is part of what the base image *is*, like a crop — so it
