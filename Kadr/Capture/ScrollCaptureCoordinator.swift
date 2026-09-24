@@ -199,6 +199,9 @@ final class ScrollCaptureCoordinator {
                 logger.error("Scrolling capture failed to start: \(error.localizedDescription, privacy: .public)")
                 dismissStage()
                 presentPermissionRecoveryIfNeeded(error)
+                if !CaptureError.mapping(error).indicatesPermissionLoss {
+                    FailurePresenter.present(message: "Kadr could not start the scrolling capture.")
+                }
                 report(.failed(error.localizedDescription))
             }
         }
@@ -314,10 +317,16 @@ final class ScrollCaptureCoordinator {
         Task { [weak self] in
             guard let self else { return }
             let frames = await session.stop()
+            if frames.count == 1, let only = frames.first {
+                // Nothing scrolled: the one frame is still a capture, not a failure (T-CAP-6).
+                await deliverSingleFrame(only)
+                return
+            }
             guard frames.count >= 2 else {
-                logger.info("Scrolling capture ended with too few frames to stitch")
+                logger.info("Scrolling capture ended with no frames")
                 await session.discard()
                 finish(nil)
+                FailurePresenter.present(message: "The scrolling capture ended before any frame was taken.")
                 return
             }
             await stitch(frames: frames, excluding: [])
@@ -336,6 +345,35 @@ final class ScrollCaptureCoordinator {
             await self?.session.discard()
             self?.finish(nil)
         }
+    }
+
+    /// A capture where the page never moved: its one frame is delivered as it is.
+    private func deliverSingleFrame(_ frame: URL) async {
+        let token = sessionToken
+        let size = await session.pixelSize
+        guard let staged = output.stagingURL(pixelSize: size) else {
+            await session.discard()
+            finish(nil)
+            return
+        }
+        // The frame is a PNG; keep the extension honest whatever the export format.
+        let destination = staged.deletingPathExtension().appendingPathExtension("png")
+        do {
+            try FileManager.default.copyItem(at: frame, to: destination)
+        } catch {
+            logger.error("Could not keep the single frame: \(error.localizedDescription, privacy: .public)")
+            await session.discard()
+            finish(nil)
+            FailurePresenter.present(message: "Kadr could not save the scrolling capture.")
+            return
+        }
+        await session.discard()
+        guard token == sessionToken else {
+            try? FileManager.default.removeItem(at: destination)
+            return
+        }
+        logger.info("Scrolling capture had one frame; delivering it as an ordinary capture")
+        finish(destination, size: size)
     }
 
     private func stitch(frames: [URL], excluding excluded: [Int]) async {

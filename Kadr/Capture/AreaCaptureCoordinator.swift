@@ -315,7 +315,11 @@ final class AreaCaptureCoordinator {
             return
         }
         guard let lastRegion else {
+            // Nothing to repeat is not a failure worth a banner, but it must not be
+            // silence either: the system's "can't do that" sound (T-CAP-6).
             logger.info("No previous area to capture yet")
+            NSSound.beep()
+            automation.report(.failed("There is no previous area to capture yet."))
             return
         }
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in

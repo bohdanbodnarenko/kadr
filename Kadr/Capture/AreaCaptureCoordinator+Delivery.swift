@@ -24,10 +24,19 @@ extension AreaCaptureCoordinator {
         let spec = autoBeautifySpec()
         for entry in delivered {
             presentCapture(entry.result, capture: entry.capture)
-            writeBeautifyProject(alongside: entry.result.fileURL, original: entry.capture, beautify: spec)
         }
-        let first = delivered.first?.result.fileURL
-        automation.report(first.map(CaptureOutcome.file) ?? .failed("Kadr could not write the capture."))
+        guard let first = delivered.first else {
+            reportDeliveryFailure()
+            return
+        }
+        // One sound for one action, however many displays it took (T-CAP-4).
+        playCaptureSound()
+        for entry in delivered {
+            await writeBeautifyProject(alongside: entry.result.fileURL, original: entry.capture, beautify: spec)
+        }
+        // The captures arrive active display first (`ordered(_:preferringActive:)`), so the
+        // after-capture actions follow the display the user is on, once.
+        finishDelivery(of: first.result.fileURL)
     }
 
     /// Exports a capture and puts a card up for it (docs/03 §2).
@@ -46,20 +55,36 @@ extension AreaCaptureCoordinator {
         let prepared = FullscreenNotchCropper.apply(capture, settings: settings)
         let preparedOriginal = editableOriginal.map { FullscreenNotchCropper.apply($0, settings: settings) }
         guard let result = await output.deliverOffMain(prepared, overrides: automation.overrides) else {
-            automation.report(.failed("Kadr could not write the capture."))
+            reportDeliveryFailure()
             return
         }
         presentCapture(result, capture: prepared)
-        if settings.playsCaptureSound, automation.overrides.isEmpty {
-            CaptureSound.play()
-        }
-        writeBeautifyProject(
+        playCaptureSound()
+        await writeBeautifyProject(
             alongside: result.fileURL,
             original: preparedOriginal ?? prepared,
             beautify: beautify ?? autoBeautifySpec()
         )
+        finishDelivery(of: result.fileURL)
+    }
 
-        if let fileURL = result.fileURL {
+    private func playCaptureSound() {
+        if settings.playsCaptureSound, automation.overrides.isEmpty {
+            CaptureSound.play()
+        }
+    }
+
+    /// The export or the disk failed: say so, not only in the log (T-CAP-6).
+    func reportDeliveryFailure() {
+        let message = "Kadr could not write the capture."
+        automation.report(.failed(message))
+        FailurePresenter.present(message: "\(message) Check that the save folder exists and the disk has room.")
+    }
+
+    /// What every delivery does once its file exists: the automation action or the
+    /// after-capture actions, then the reply.
+    private func finishDelivery(of fileURL: URL?) {
+        if let fileURL {
             // `action=annotate|pin` says what to do with the file once it exists
             // (docs/03 §8.4). An automated request overrides the setting for this capture
             // only, so the matrix is consulted just when nobody asked for anything.
@@ -75,7 +100,7 @@ extension AreaCaptureCoordinator {
             case .none: applyAfterCaptureActions(to: fileURL)
             }
         }
-        let outcome = result.fileURL.map(CaptureOutcome.file)
+        let outcome = fileURL.map(CaptureOutcome.file)
         automation.report(outcome ?? .failed("Kadr could not write the capture."))
     }
 
@@ -92,9 +117,9 @@ extension AreaCaptureCoordinator {
         skipAutoBeautify ? nil : AutoBeautify.spec(for: settings.autoBeautifyPreset)
     }
 
-    func writeBeautifyProject(alongside fileURL: URL?, original: Capture, beautify: BeautifySpec?) {
+    func writeBeautifyProject(alongside fileURL: URL?, original: Capture, beautify: BeautifySpec?) async {
         guard let fileURL else { return }
-        CaptureProject.write(original: original, beautify: beautify, alongside: fileURL)
+        await CaptureProject.writeOffMain(original: original, beautify: beautify, alongside: fileURL)
     }
 
     /// Runs the after-capture actions the settings ask for (docs/09 U2.2).
@@ -130,8 +155,13 @@ extension AreaCaptureCoordinator {
         logger.error("Capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
 
         // A lost grant is the one failure worth interrupting the user over: every capture
-        // will keep failing until they act (docs/03 §9).
-        guard mapped.indicatesPermissionLoss else { return }
+        // will keep failing until they act (docs/03 §9). Everything else — a window closed
+        // during the countdown, a display gone, an SCK error — gets a banner rather than
+        // only a log line (T-CAP-6).
+        guard mapped.indicatesPermissionLoss else {
+            FailurePresenter.present(message: mapped.errorDescription ?? "The capture failed.")
+            return
+        }
         switch recovery.present(state: permissions.state) {
         case .openSettings:
             recovery.openSystemSettings()

@@ -33,6 +33,9 @@ extension AreaCaptureCoordinator {
             } catch {
                 let mapped = CaptureError.mapping(error)
                 logger.error("Picker capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
+                let message = mapped.errorDescription ?? "The capture failed."
+                automation.report(.failed(message))
+                FailurePresenter.present(message: message)
             }
         }
     }
