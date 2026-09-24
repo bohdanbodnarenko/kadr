@@ -2,8 +2,25 @@ import AppKit
 import AutomationKit
 import CaptureCore
 import os
+import OverlayKit
 
 extension AppDelegate {
+    /// Dock / Finder "Open" while Kadr is already running (docs/16 APP-1, APP-2).
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if recordingStorage?.isRecording == true {
+            refreshRecordingControlBar()
+        } else if flag, let window = reopenableWindow() {
+            // History, Settings or Help is open: a Dock click means "show me that", not
+            // the status menu on top of it (docs/17 T-SH-5).
+            ActivationJuggler.shared.bringForward(window)
+        } else if statusItemController?.statusItem.isVisible == true {
+            statusItemController?.popIdleMenu()
+        } else {
+            openSettings()
+        }
+        return false
+    }
+
     /// The regular window a reopen should bring back: the frontmost titled Kadr window.
     /// Panels — cards, pins, the island — are not "windows" to the user and are left
     /// alone (docs/17 T-SH-5).

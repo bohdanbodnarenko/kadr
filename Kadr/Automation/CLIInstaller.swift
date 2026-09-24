@@ -101,9 +101,8 @@ struct CLIInstaller {
             return .removed
         } catch {
             logger.error("Could not remove \(installedURL.path, privacy: .public)")
-            return .failed(String(
-                localized: "Kadr could not remove \(installedURL.path). Remove it in Terminal with: rm \(installedURL.path)"
-            ))
+            let path = installedURL.path
+            return .failed(String(localized: "Kadr could not remove \(path). Remove it in Terminal with: rm \(path)"))
         }
     }
 

@@ -466,20 +466,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Closing Settings must not quit the agent.
         false
     }
-
-    /// Dock / Finder "Open" while Kadr is already running (docs/16 APP-1, APP-2).
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if recordingStorage?.isRecording == true {
-            refreshRecordingControlBar()
-        } else if flag, let window = reopenableWindow() {
-            // History, Settings or Help is open: a Dock click means "show me that", not
-            // the status menu on top of it (docs/17 T-SH-5).
-            ActivationJuggler.shared.bringForward(window)
-        } else if statusItemController?.statusItem.isVisible == true {
-            statusItemController?.popIdleMenu()
-        } else {
-            openSettings()
-        }
-        return false
-    }
 }
