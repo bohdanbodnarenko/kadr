@@ -332,6 +332,24 @@ struct StudioDocumentModelTests {
         #expect(studio.edit.duration < 10)
     }
 
+    /// docs/17 T-STU-8: the clip the user named goes, not the one under the playhead.
+    @Test("Removing a clip by id removes that clip, wherever the playhead is")
+    func removeNamedClip() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.playhead = 4
+        studio.splitAtPlayhead()
+        let second = studio.edit.clips.clips[1].id
+        let first = studio.edit.clips.clips[0].id
+        studio.selectedClip = second
+        studio.playhead = 1
+        studio.removeClip(id: second)
+        #expect(studio.edit.clips.clips.map(\.id) == [first])
+        #expect(studio.selectedClip == nil)
+        #expect(studio.clipID(at: 1) == first)
+    }
+
     /// A timeline with nothing in it is not an edit, it is a deleted recording — and
     /// deleting a recording is not something a trim button should be able to do.
     @Test("The last clip cannot be removed")

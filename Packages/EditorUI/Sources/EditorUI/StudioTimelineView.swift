@@ -128,10 +128,14 @@ struct StudioTimelineView: View {
                 return .ignored
             }
             .onDeleteCommand {
+                // Delete acts on a selection, never on whatever the playhead is over
+                // (docs/17 T-STU-8).
                 if model.selectedZoom != nil {
                     model.removeSelectedZoom()
+                } else if let clip = model.selectedClip {
+                    model.removeClip(id: clip)
                 } else {
-                    model.removeClipAtPlayhead()
+                    NSSound.beep()
                 }
             }
             zoomControls(viewportWidth: viewportWidth)
@@ -233,13 +237,18 @@ struct StudioTimelineView: View {
             }
         }
         .contextMenu {
+            // Built when the menu opens, so this is the clip that was right-clicked.
+            let time = hoverTime ?? model.playhead
+            let clip = model.clipID(at: time)
             Button("Split Clip Here") {
-                model.split(at: hoverTime ?? model.playhead)
+                model.split(at: time)
             }
             Button("Delete Clip", role: .destructive) {
-                model.removeClipAtPlayhead()
+                if let clip {
+                    model.removeClip(id: clip)
+                }
             }
-            .disabled(model.edit.clips.clips.count < 2)
+            .disabled(model.edit.clips.clips.count < 2 || clip == nil)
         }
     }
 
