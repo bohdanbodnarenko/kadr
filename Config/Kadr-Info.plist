@@ -22,5 +22,26 @@
 			</array>
 		</dict>
 	</array>
+	<!--
+	    Sparkle's keys live here, not in INFOPLIST_KEY_ build settings: the generator only
+	    emits the keys Xcode recognises and silently dropped these, so no build ever had a
+	    feed URL (docs/17 T-REL-2). The values come from build settings so a release can
+	    supply them without editing this file:
+
+	    KADR_APPCAST_URL            the appcast. PLACEHOLDER HOST until the public feed is
+	                                chosen (docs/17 T-REL-4); release.sh refuses to ship
+	                                if it does not answer.
+	    KADR_SPARKLE_PUBLIC_ED_KEY  the EdDSA public key from Sparkle's generate_keys.
+	                                Empty in the project on purpose — only the owner has
+	                                it — and release.sh fails loudly when it is empty.
+	    KADR_GIT_COMMIT             the short SHA this build came from, so a report names
+	                                its source exactly (docs/17 T-REL-5).
+	-->
+	<key>SUFeedURL</key>
+	<string>$(KADR_APPCAST_URL)</string>
+	<key>SUPublicEDKey</key>
+	<string>$(KADR_SPARKLE_PUBLIC_ED_KEY)</string>
+	<key>KadrGitCommit</key>
+	<string>$(KADR_GIT_COMMIT)</string>
 </dict>
 </plist>

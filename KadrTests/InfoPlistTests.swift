@@ -13,7 +13,7 @@ struct InfoPlistTests {
             .deletingLastPathComponent()
     }
 
-    @Test("The agent declares camera, microphone, screen capture and speech usage")
+    @Test("The agent declares camera, microphone and speech usage")
     func agentUsageDescriptions() throws {
         let pbx = try String(
             contentsOf: repoRoot.appendingPathComponent("Kadr.xcodeproj/project.pbxproj"),
@@ -22,7 +22,6 @@ struct InfoPlistTests {
         for key in [
             "INFOPLIST_KEY_NSCameraUsageDescription",
             "INFOPLIST_KEY_NSMicrophoneUsageDescription",
-            "INFOPLIST_KEY_NSScreenCaptureUsageDescription",
             "INFOPLIST_KEY_NSSpeechRecognitionUsageDescription"
         ] {
             #expect(pbx.contains(key), "\(key) is missing from the agent target")
@@ -30,13 +29,10 @@ struct InfoPlistTests {
 
         let info = Bundle.main.infoDictionary ?? [:]
         if info["CFBundleIdentifier"] as? String == "app.kadr.Kadr" {
-            // Screen capture is not in this list, and cannot be. macOS has no
-            // app-supplied usage string for Screen Recording — the system writes its own
-            // prompt and sends the user to System Settings — so Xcode does not recognise
-            // `INFOPLIST_KEY_NSScreenCaptureUsageDescription` and silently drops it rather
-            // than synthesising a key. The build setting is still asserted above, because
-            // its presence is what a reader checks for, but asserting a *runtime* value
-            // macOS never populates failed every run for a permission that works fine.
+            // Screen capture is not in this list, and cannot be: macOS has no app-supplied
+            // usage string for Screen Recording. The system writes its own prompt, and
+            // Xcode silently dropped the build setting that pretended otherwise, so it
+            // is gone (docs/17 T-REL-8).
             for key in [
                 "NSCameraUsageDescription",
                 "NSMicrophoneUsageDescription",
@@ -46,6 +42,33 @@ struct InfoPlistTests {
                 #expect(!value.isEmpty, "\(key) is empty in the running agent")
             }
         }
+    }
+
+    /// Sparkle's keys were once `INFOPLIST_KEY_` build settings, which the generator
+    /// dropped without a word: no build ever had a feed URL (docs/17 T-REL-2). This reads
+    /// the *built* bundle, which is the only place that failure was visible.
+    @Test("The built agent carries Sparkle's feed and key, and its build identity")
+    func agentUpdateKeys() throws {
+        let info = Bundle.main.infoDictionary ?? [:]
+        guard info["CFBundleIdentifier"] as? String == "app.kadr.Kadr" else { return }
+
+        let feed = try #require(info["SUFeedURL"] as? String)
+        let url = try #require(URL(string: feed))
+        #expect(url.scheme == "https", "Sparkle refuses a feed that is not https")
+        #expect(!(url.host ?? "").isEmpty)
+
+        // Present always; empty in development, because only the owner holds the key.
+        // Scripts/release.sh refuses to ship a build where it is still empty, and here
+        // a non-empty value must at least be a 32-byte Ed25519 key in base64.
+        let key = try #require(info["SUPublicEDKey"] as? String)
+        if !key.isEmpty {
+            #expect(Data(base64Encoded: key)?.count == 32, "SUPublicEDKey is not an Ed25519 public key")
+        }
+
+        let commit = try #require(info["KadrGitCommit"] as? String)
+        #expect(!commit.isEmpty && !commit.contains("$("), "the build setting was not expanded")
+        #expect(info["LSApplicationCategoryType"] as? String == "public.app-category.productivity")
+        #expect(info["SUEnableInstallerLauncherService"] == nil, "only a sandboxed app needs it")
     }
 
     @Test("The editor declares speech, document types and the portable-preset UTI")

@@ -138,7 +138,9 @@ struct RecordedShortcutCase: Sendable, CustomTestStringConvertible {
     let key: Int
     let modifiers: NSEvent.ModifierFlags
 
-    var testDescription: String { "\(command) key \(key) modifiers \(modifiers.rawValue)" }
+    var testDescription: String {
+        "\(command) key \(key) modifiers \(modifiers.rawValue)"
+    }
 }
 
 struct StatusClickCase: Sendable {
@@ -193,9 +195,21 @@ struct ShortcutDefaultsMigrationTests {
     /// arguments off the main thread, and describing a `Shortcut` asserts it is on it —
     /// which crashed the whole runner before a single test ran (docs/17 T-REL-7).
     @Test("Shortcuts the user recorded are kept", arguments: [
-        RecordedShortcutCase(command: .captureWindow, key: KeyboardShortcuts.Key.w.rawValue, modifiers: [.command, .option]),
-        RecordedShortcutCase(command: .captureArea, key: KeyboardShortcuts.Key.x.rawValue, modifiers: [.control, .command]),
-        RecordedShortcutCase(command: .allInOne, key: KeyboardShortcuts.Key.space.rawValue, modifiers: [.control, .option]),
+        RecordedShortcutCase(
+            command: .captureWindow,
+            key: KeyboardShortcuts.Key.w.rawValue,
+            modifiers: [.command, .option]
+        ),
+        RecordedShortcutCase(
+            command: .captureArea,
+            key: KeyboardShortcuts.Key.x.rawValue,
+            modifiers: [.control, .command]
+        ),
+        RecordedShortcutCase(
+            command: .allInOne,
+            key: KeyboardShortcuts.Key.space.rawValue,
+            modifiers: [.control, .option]
+        ),
         RecordedShortcutCase(
             command: .openHistory,
             key: KeyboardShortcuts.Key.h.rawValue,
