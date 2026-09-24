@@ -43,7 +43,7 @@ struct StudioCropOverlay: View {
             .gesture(dragGesture(handle: handle))
             .onHover { hovering in
                 if hovering {
-                    NSCursor.resizeLeftRight.set()
+                    Self.cursor(for: handle).set()
                 } else {
                     NSCursor.arrow.set()
                 }
@@ -112,6 +112,36 @@ private extension CropHandle {
         case .bottomLeading: "Crop bottom left"
         case .bottom: "Crop bottom edge"
         case .bottomTrailing: "Crop bottom right"
+        }
+    }
+}
+
+extension StudioCropOverlay {
+    /// The resize cursor that matches the handle (docs/17 T-STU-12): every handle used to
+    /// show left-right, including the top, the bottom and the corners.
+    static func cursor(for handle: CropHandle) -> NSCursor {
+        if #available(macOS 15, *) {
+            let position: NSCursor.FrameResizePosition? = switch handle {
+            case .topLeading: .topLeft
+            case .top: .top
+            case .topTrailing: .topRight
+            case .leading: .left
+            case .trailing: .right
+            case .bottomLeading: .bottomLeft
+            case .bottom: .bottom
+            case .bottomTrailing: .bottomRight
+            case .body: nil
+            }
+            if let position {
+                return .frameResize(position: position, directions: .all)
+            }
+            return .openHand
+        }
+        return switch handle {
+        case .top, .bottom: .resizeUpDown
+        case .leading, .trailing: .resizeLeftRight
+        case .body: .openHand
+        default: .crosshair
         }
     }
 }

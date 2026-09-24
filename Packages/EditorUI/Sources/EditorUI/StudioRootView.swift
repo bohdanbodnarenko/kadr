@@ -127,10 +127,6 @@ public struct StudioRootView: View {
         }
         .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
         .onAppear { model.applyDefaultPresetIfFresh() }
-        .onChange(of: model.exportProgress) { _, progress in
-            Self.updateDockProgress(progress)
-        }
-        .onDisappear { Self.updateDockProgress(nil) }
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.
@@ -433,7 +429,6 @@ enum StudioDockProgress {
             view = nil
             shownPercent = nil
             tile.contentView = nil
-            tile.badgeLabel = nil
             tile.display()
             return
         }
@@ -453,7 +448,7 @@ enum StudioDockProgress {
             tile.contentView = bar
         }
         bar.needsDisplay = true
-        tile.badgeLabel = "\(percent)"
+        // No badge (docs/17 T-STU-12): a red number on the Dock reads as unread items.
         tile.display()
     }
 }
@@ -472,16 +467,19 @@ private final class DockProgressView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// The app's own icon with a thin bar along the bottom, the way Finder shows a copy
+    /// (docs/17 T-STU-12). It used to cover the icon with a dark overlay.
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.35).setFill()
-        dirtyRect.fill()
-        let inset = dirtyRect.insetBy(dx: 16, dy: 56)
-        NSColor.white.withAlphaComponent(0.25).setFill()
-        inset.fill()
-        var filled = inset
-        filled.size.width = inset.width * min(max(progress, 0), 1)
-        NSColor.controlAccentColor.setFill()
-        filled.fill()
+        let bounds = self.bounds
+        NSApp.applicationIconImage?.draw(in: bounds)
+        let track = NSRect(x: bounds.minX + 14, y: bounds.minY + 10, width: bounds.width - 28, height: 12)
+        let radius = track.height / 2
+        NSColor.black.withAlphaComponent(0.45).setFill()
+        NSBezierPath(roundedRect: track, xRadius: radius, yRadius: radius).fill()
+        var filled = track.insetBy(dx: 2, dy: 2)
+        filled.size.width = max(filled.height, filled.width * min(max(progress, 0), 1))
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: filled, xRadius: filled.height / 2, yRadius: filled.height / 2).fill()
     }
 }
 

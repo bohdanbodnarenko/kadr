@@ -60,4 +60,23 @@ struct FrameRateOptionTests {
         #expect(StudioRenderer.capped(options, toSourceFrameRate: nil).frameRate == 24)
         #expect(StudioRenderer.capped(options, toSourceFrameRate: 0).frameRate == 24)
     }
+
+    /// docs/17 T-STU-12: an untagged export is a guess for every player that opens it.
+    @Test("The export is tagged BT.709")
+    func exportIsColourTagged() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await Media.makeMovie(seconds: 0.5, in: folder)
+        let destination = folder.appendingPathComponent("out.mov")
+        try await StudioRenderer().render(
+            StudioRenderer.Source(screen: movie, edit: Media.edit(duration: 0.5), pixelSize: CGSize(width: 320, height: 180)),
+            to: destination,
+            options: .init(codec: .h264, frameRate: 30)
+        )
+        let tracks = try await AVURLAsset(url: destination).loadTracks(withMediaType: .video)
+        let track = try #require(tracks.first)
+        let format = try #require(try await track.load(.formatDescriptions).first)
+        let primaries = CMFormatDescriptionGetExtension(format, extensionKey: kCMFormatDescriptionExtension_ColorPrimaries)
+        #expect(primaries as? String == kCMFormatDescriptionColorPrimaries_ITU_R_709_2 as String)
+    }
 }

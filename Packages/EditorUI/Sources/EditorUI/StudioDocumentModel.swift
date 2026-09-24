@@ -159,7 +159,15 @@ public final class StudioDocumentModel {
     }
 
     /// Whether an export is running, and how far along.
-    public internal(set) var exportProgress: Double?
+    /// Drives the Dock tile from here rather than from a view (docs/17 T-STU-12): the view
+    /// that used to do it lives in the inspector, and hiding the inspector froze the bar.
+    public internal(set) var exportProgress: Double? {
+        didSet {
+            if NSApp != nil {
+                StudioDockProgress.update(exportProgress)
+            }
+        }
+    }
 
     /// Whether the inspector column is open, and whether the export sheet is up.
     ///

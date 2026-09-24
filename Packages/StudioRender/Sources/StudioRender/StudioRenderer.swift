@@ -28,7 +28,7 @@ public struct StudioRenderer: Sendable {
     /// cursor, a new spring, a colour tag. A finished export is only reused while this
     /// matches, so without a bump a tester who updates to a build with a render fix is
     /// handed the old, buggy movie and cannot verify the fix.
-    public static let version = 2
+    public static let version = 3
 
     public enum RenderError: Error, Equatable, Sendable {
         case noVideoTrack

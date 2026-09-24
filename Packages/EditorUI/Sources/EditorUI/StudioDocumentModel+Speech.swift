@@ -60,9 +60,14 @@ public extension StudioDocumentModel {
         }
     }
 
+    /// Starts the speech helper early, but only for a recording with sound in it
+    /// (docs/17 T-STU-12): warming a model for a silent recording is memory and CPU for
+    /// a button that can do nothing.
     func warmUpSpeech() {
         let locale = SpeechLanguage.currentIdentifier(speechLocaleIdentifier)
+        let screen = session.screenURL
         Task { @MainActor [weak self] in
+            guard await StudioAudioExporter.durationIfAudio(at: screen) != nil else { return }
             try? await VisionClient().warmUpSpeech(SpeechStatusRequest(localeIdentifier: locale))
             await self?.refreshSpeechStatus()
         }

@@ -215,16 +215,25 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     private func presentExportPanel(for model: StudioDocumentModel) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [model.exportSettings.utType]
-        panel.nameFieldStringValue = "\(window?.title ?? "Recording").\(model.exportSettings.filenameExtension)"
+        // The project's name, not the window's (docs/17 T-STU-12): they differ once the
+        // title carries anything else, and the timestamped folder name is nobody's choice.
+        panel.nameFieldStringValue = "\(model.session.displayName).\(model.exportSettings.filenameExtension)"
         panel.canCreateDirectories = true
         panel.message = "Export the edited recording."
 
-        panel.begin { [weak self] response in
+        let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in
                 await model.export(to: url)
                 self?.reveal(url)
             }
+        }
+        // A sheet on the studio window (docs/17 T-STU-12), so it is plainly attached to
+        // this recording rather than floating free of it.
+        if let window {
+            panel.beginSheetModal(for: window, completionHandler: completion)
+        } else {
+            panel.begin(completionHandler: completion)
         }
     }
 
