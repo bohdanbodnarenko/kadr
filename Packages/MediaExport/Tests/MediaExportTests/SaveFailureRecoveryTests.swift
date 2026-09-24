@@ -70,7 +70,7 @@ struct SaveFailureRecoveryTests {
         let expanded = FilenameTemplate(input).expand(FilenameContext())
         #expect(expanded.utf8.count == expectedBytes)
         // Still valid text: nothing split mid-scalar.
-        #expect(String(decoding: Array(expanded.utf8), as: UTF8.self) == expanded)
+        #expect(String(bytes: Array(expanded.utf8), encoding: .utf8) == expanded)
     }
 
     @Test("A 255-byte window title still writes")

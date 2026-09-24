@@ -114,7 +114,7 @@ public struct FilenameTemplate: Sendable, Hashable {
             .components(separatedBy: illegal)
             .joined()
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.hasPrefix(".") ? String(cleaned.dropFirst()) : cleaned
+        return String(cleaned.drop { $0 == "." })
     }
 
     /// Fixed formats, not localised: a filename with a locale-dependent date sorts

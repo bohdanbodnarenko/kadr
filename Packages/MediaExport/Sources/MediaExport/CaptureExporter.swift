@@ -101,7 +101,8 @@ public struct CaptureExporter: Sendable {
                 // An unmounted drive, a read-only folder or a full disk must not cost the
                 // user the capture: stage it and say why, so the card can offer another
                 // folder (docs/17 T-OUT-6). Only if staging fails too is it lost.
-                logger.error("Save folder refused the capture; staging it: \(error.localizedDescription, privacy: .public)")
+                let reason = error.localizedDescription
+                logger.error("Save folder refused the capture; staging it: \(reason, privacy: .public)")
                 try staging.prepare()
                 result.fileURL = try write(
                     data,
@@ -112,7 +113,11 @@ public struct CaptureExporter: Sendable {
                 )
                 result.isStaged = true
                 result.saveFailure = (error as? ExportError).flatMap {
-                    if case let .writeFailed(reason) = $0 { reason } else { nil }
+                    if case let .writeFailed(reason) = $0 {
+                        reason
+                    } else {
+                        nil
+                    }
                 } ?? error.localizedDescription
             }
         }
