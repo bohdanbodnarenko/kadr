@@ -2,6 +2,7 @@ import AppKit
 import HistoryKit
 import KeyboardShortcuts
 import os
+import OverlayKit
 import Shared
 
 /// The menu bar item and its menu (docs/03 §8.1, docs/04 §3.1).
@@ -335,8 +336,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         alert.addButton(withTitle: String(localized: "Cancel"))
         let destructive = alert.addButton(withTitle: action)
         destructive.hasDestructiveAction = true
-        NSApp.activate()
-        return alert.runModal() == .alertSecondButtonReturn
+        let answer = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) { alert.runModal() }
+        return answer == .alertSecondButtonReturn
     }
 
     @objc

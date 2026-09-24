@@ -109,9 +109,6 @@ extension EditorWindowController {
             return model.canUndo
         case #selector(redo(_:)):
             return model.canRedo
-        case #selector(cut(_:)):
-            // A locked object would be copied and then not deleted (T-ED-12).
-            return !model.selection.isEmpty && !model.isCanvasLocked
         case #selector(copy(_:)):
             return true
         case #selector(paste(_:)):
@@ -119,7 +116,9 @@ extension EditorWindowController {
             return Self.pasteboardHasPasteableContent(.general)
         case #selector(selectAll(_:)):
             return model.document.commands.contains(where: \.isSelectable)
-        case #selector(duplicate(_:)),
+        // Cut included: a locked object would be copied and then not deleted (T-ED-12).
+        case #selector(cut(_:)),
+             #selector(duplicate(_:)),
              #selector(bringToFront(_:)),
              #selector(bringForward(_:)),
              #selector(sendBackward(_:)),

@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import OverlayKit
 import Shared
 
 /// Offers to move Kadr into Applications when it is running from the disk image or from
@@ -51,8 +52,9 @@ enum MoveToApplications {
         alert.addButton(withTitle: String(localized: "Do Not Move"))
         alert.showsSuppressionButton = true
         alert.suppressionButton?.title = String(localized: "Don’t ask again")
-        NSApp.activate()
-        let answer = alert.runModal()
+        let answer = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) { alert.runModal() }
         if alert.suppressionButton?.state == .on, answer != .alertFirstButtonReturn {
             defaults.set(true, forKey: declinedKey)
         }

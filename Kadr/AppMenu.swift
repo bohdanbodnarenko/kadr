@@ -1,4 +1,5 @@
 import AppKit
+import OverlayKit
 
 /// Standard macOS menu bar for regular windows (Settings, History, Help, onboarding).
 ///
@@ -46,7 +47,8 @@ final class AppMenu: NSObject, NSMenuItemValidation {
     @objc func showAbout(_ sender: Any?) {
         let identity = BuildIdentity.current
         let version = identity.commit.map { "\(identity.build) · \($0)" } ?? identity.build
-        NSApp.activate()
+        // The panel stays up after this returns, so the lease is not handed back here.
+        ActivationJuggler.shared.beginTemporaryActivation(returningTo: nil).abandon()
         NSApp.orderFrontStandardAboutPanel(options: [.version: version])
     }
 
