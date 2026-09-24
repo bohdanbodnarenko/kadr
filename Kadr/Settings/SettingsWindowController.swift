@@ -94,7 +94,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        let navigation = SettingsNavigation(selectedTab: tab ?? .general)
+        // The pane the user was last in, as HIG › Settings asks; a `tab` from automation
+        // or a deep link still wins (docs/17 T-SH-8).
+        let navigation = SettingsNavigation(selectedTab: tab ?? Self.lastTab(in: .standard))
         self.navigation = navigation
 
         let hosting = NSHostingController(
@@ -141,8 +143,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
+    static let lastTabKey = "app.kadr.settings.lastTab"
+
+    static func lastTab(in defaults: UserDefaults) -> SettingsTab {
+        defaults.string(forKey: lastTabKey).flatMap(SettingsTab.init(rawValue:)) ?? .general
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let window else { return }
+        if let tab = navigation?.selectedTab {
+            UserDefaults.standard.set(tab.rawValue, forKey: Self.lastTabKey)
+        }
 
         window.delegate = nil
         // Drop the SwiftUI tree before the window goes, so nothing outlives the close.

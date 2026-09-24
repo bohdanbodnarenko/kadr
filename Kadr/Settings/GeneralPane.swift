@@ -98,16 +98,18 @@ struct GeneralPane: View {
                 }
 
                 Toggle("Save Retina captures at 1×", isOn: $settings.downscaleRetinaCaptures)
+                // The caption sits under the toggle it explains; it used to follow the sound
+                // toggle and read as being about that (docs/17 T-SH-8).
                 Toggle("Convert to sRGB when saving", isOn: $settings.convertExportsToSRGB)
+                Text("Off keeps a wide-gamut capture in Display P3. On converts so "
+                    + "browsers and Windows apps show the same colors as this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Toggle("Play a sound when capturing", isOn: $settings.playsCaptureSound)
                 if settings.imageFormat != .png {
                     KadrSlider(title: "Quality", value: $settings.lossyQuality, range: 0.1 ... 1)
                 }
-                Text("Off keeps a wide-gamut capture in Display P3. On converts so "
-                    + "browsers and Windows apps show the same colours as this Mac.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section("Annotate") {

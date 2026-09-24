@@ -30,10 +30,12 @@ struct SettingsView: View {
     @State private var historyIndex = 0
     @State private var isHistoryNavigation = false
     /// Real state, not `.constant(.all)`: the system sidebar toggle writes here, and a
-    /// constant binding made it a control that did nothing (docs/14 UX-09). Width and
-    /// visibility persist through AppKit's frame autosave on the window, so there is no
-    /// `AppStorage` key to keep in step with it.
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// constant binding made it a control that did nothing (docs/14 UX-09). Width
+    /// persists through AppKit's frame autosave; whether the sidebar is shown does not,
+    /// so it is kept here (docs/17 T-SH-8).
+    @State private var columnVisibility: NavigationSplitViewVisibility =
+        UserDefaults.standard.bool(forKey: SettingsView.sidebarHiddenKey) ? .detailOnly : .all
+    static let sidebarHiddenKey = "app.kadr.settings.sidebarHidden"
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -101,6 +103,9 @@ struct SettingsView: View {
         .onChange(of: columnVisibility) { _, _ in
             publishSidebarVisibility()
         }
+        .onAppear {
+            navigation.isSidebarHidden = columnVisibility == .detailOnly
+        }
         .onReceive(NotificationCenter.default.publisher(for: .kadrToggleSettingsSidebar)) { _ in
             toggleSidebar()
         }
@@ -140,6 +145,7 @@ struct SettingsView: View {
 
     private func publishSidebarVisibility() {
         navigation.isSidebarHidden = columnVisibility == .detailOnly
+        UserDefaults.standard.set(navigation.isSidebarHidden, forKey: Self.sidebarHiddenKey)
     }
 
     private func recordNavigation() {

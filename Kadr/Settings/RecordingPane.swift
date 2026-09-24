@@ -206,7 +206,7 @@ struct RecordingPane: View {
                     "Hide desktop icons while recording", isOn: $settings.hideDesktopDuringRecording
                 )
             } footer: {
-                Text("Overlays are burned into the recording, not drawn on screen.")
+                Text("Both apply only while a recording runs, and are undone when it stops.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
