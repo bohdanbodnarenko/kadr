@@ -351,6 +351,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SingleInstance.yieldIfAnotherIsRunning(beforeQuitting: { isYieldingToAnotherInstance = true }) {
             return
         }
+        // Before anything attaches to this path: hotkeys, the CLI port, permissions
+        // (docs/17 T-SH-2).
+        let moving = MoveToApplications.offerIfNeeded { [weak self] in
+            self?.isYieldingToAnotherInstance = true
+            NSApp.terminate(nil)
+        }
+        if moving {
+            return
+        }
         NSApp.setActivationPolicy(.accessory)
         AppMenu.shared.install()
         applyOverlayCaptureVisibility()
