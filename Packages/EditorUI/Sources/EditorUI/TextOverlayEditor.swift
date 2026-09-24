@@ -24,10 +24,8 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
 
     /// Called on every keystroke with the current string, so the document can follow.
     var onChange: ((AnnotationID, String) -> Void)?
-    /// Called when editing ends, whether committed or abandoned.
+    /// Called when editing ends. Editing always commits; Undo is the way back (T-ED-4).
     var onFinish: ((AnnotationID) -> Void)?
-    private var originalString = ""
-    private var abandoned = false
 
     var isEditing: Bool {
         editingID != nil
@@ -37,8 +35,9 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
     func begin(editing spec: TextSpec, in container: NSView) {
         finish()
 
-        let view = NSTextView(frame: frame(for: spec))
+        let view = CommittingTextView(frame: frame(for: spec))
         view.delegate = self
+        view.onCommit = { [weak self] in self?.finish() }
         view.isRichText = false
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
@@ -54,8 +53,6 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         view.insertionPointColor = NSColor(spec.style.color)
         view.alignment = Self.alignment(for: spec.style)
         view.string = spec.string
-        originalString = spec.string
-        abandoned = false
         view.wantsLayer = true
         view.layer?.cornerRadius = spec.style.backgroundColor == nil
             ? 0
@@ -78,8 +75,6 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         let view = textView
         let host = scrollHost
         let restore = responderBeforeEditing
-        let wasAbandoned = abandoned
-        let hadSpec = spec != nil
 
         // State goes first, because tearing the field down ends editing, and ending editing
         // calls straight back in here through `textDidEndEditing`.
@@ -88,10 +83,6 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         textView = nil
         scrollHost = nil
         responderBeforeEditing = nil
-
-        if wasAbandoned, hadSpec {
-            onChange?(editingID, originalString)
-        }
 
         let window = view?.window ?? host?.window
         view?.removeFromSuperview()
@@ -133,15 +124,15 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         onChange?(editingID, spec.string)
     }
 
-    /// Escape abandons; ⌘Return and clicking away commit. Return inserts a newline, because
-    /// a text annotation is often two lines and there is no other way to type one.
+    /// Escape, ⌘Return, Enter and clicking away all commit. Return inserts a newline,
+    /// because a text annotation is often two lines and there is no other way to type one.
+    ///
+    /// Escape used to revert to the original string, which deleted a caption the user had
+    /// just typed. Keynote, Preview and Figma commit on Escape and leave the rest to Undo,
+    /// and so does this (T-ED-4).
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.cancelOperation(_:)):
-            abandoned = true
-            finish()
-            return true
-        case Selector(("insertNewlineIgnoringLineBreaks:")):
             finish()
             return true
         default:
@@ -165,6 +156,44 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         case .leading: .left
         case .center: .center
         case .trailing: .right
+        }
+    }
+}
+
+/// The field itself, which commits on ⌘Return and on the keypad's Enter (T-ED-4).
+///
+/// Handled as a key equivalent: no key binding sends a selector for ⌘Return, so a
+/// `doCommandBy` match on one never fired.
+final class CommittingTextView: NSTextView {
+    var onCommit: (() -> Void)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if window?.firstResponder === self,
+           Self.isCommitKey(keyCode: event.keyCode, modifiers: event.modifierFlags) {
+            onCommit?()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if Self.isCommitKey(keyCode: event.keyCode, modifiers: event.modifierFlags) {
+            onCommit?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    static let returnKeyCode: UInt16 = 36
+    static let keypadEnterKeyCode: UInt16 = 76
+
+    /// ⌘Return, or Enter on the keypad. A plain Return is a newline.
+    static func isCommitKey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
+        let relevant = modifiers.intersection([.command, .option, .control, .shift])
+        switch keyCode {
+        case returnKeyCode: return relevant == .command
+        case keypadEnterKeyCode: return relevant.isEmpty
+        default: return false
         }
     }
 }
