@@ -238,33 +238,12 @@ extension EditorWindowController {
         )
     }
 
-    /// `CFPreferences` rather than a suite name: `UserDefaults(suiteName:)` would
-    /// create a new suite, not read the agent's standard domain.
+    /// The agent owns this setting; `EditorCanvasPreferences` reads its domain (T-ED-3).
     static var agentConvertsExportsToSRGB: Bool {
-        let raw = CFPreferencesCopyAppValue(
-            "general.convertExportsToSRGB" as CFString,
-            "app.kadr.Kadr" as CFString
-        )
-        if let flag = raw as? Bool {
-            return flag
-        }
-        if let number = raw as? NSNumber {
-            return number.boolValue
-        }
-        return false
+        EditorCanvasPreferences.convertsExportsToSRGB()
     }
 
     static var agentKeepsOriginalWhenAnnotating: Bool {
-        let raw = CFPreferencesCopyAppValue(
-            EditorCanvasPreferences.keepOriginalWhenAnnotatingKey as CFString,
-            "app.kadr.Kadr" as CFString
-        )
-        if let flag = raw as? Bool {
-            return flag
-        }
-        if let number = raw as? NSNumber {
-            return number.boolValue
-        }
-        return true
+        EditorCanvasPreferences.keepOriginalWhenAnnotating()
     }
 }

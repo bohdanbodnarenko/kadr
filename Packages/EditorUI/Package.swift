@@ -15,6 +15,7 @@ let package = Package(
     dependencies: [
         .package(path: "../Shared"),
         .package(path: "../ControlKit"),
+        .package(path: "../SettingsKit"),
         .package(path: "../AnnotationModel"),
         .package(path: "../AnnotationRender"),
         .package(path: "../MediaExport"),
@@ -27,6 +28,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Shared", package: "Shared"),
                 .product(name: "ControlKit", package: "ControlKit"),
+                .product(name: "SettingsKit", package: "SettingsKit"),
                 .product(name: "AnnotationModel", package: "AnnotationModel"),
                 .product(name: "AnnotationRender", package: "AnnotationRender"),
                 .product(name: "MediaExport", package: "MediaExport"),
@@ -41,7 +43,8 @@ let package = Package(
                 "EditorUI",
                 .product(name: "StudioSession", package: "StudioSession"),
                 .product(name: "StudioRender", package: "StudioRender"),
-                .product(name: "MediaExport", package: "MediaExport")
+                .product(name: "MediaExport", package: "MediaExport"),
+                .product(name: "SettingsKit", package: "SettingsKit")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )

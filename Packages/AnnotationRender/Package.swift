@@ -14,20 +14,22 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Shared"),
-        .package(path: "../AnnotationModel")
+        .package(path: "../AnnotationModel"),
+        .package(path: "../SettingsKit")
     ],
     targets: [
         .target(
             name: "AnnotationRender",
             dependencies: [
                 .product(name: "Shared", package: "Shared"),
-                .product(name: "AnnotationModel", package: "AnnotationModel")
+                .product(name: "AnnotationModel", package: "AnnotationModel"),
+                .product(name: "SettingsKit", package: "SettingsKit")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "AnnotationRenderTests",
-            dependencies: ["AnnotationRender"],
+            dependencies: ["AnnotationRender", .product(name: "SettingsKit", package: "SettingsKit")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
