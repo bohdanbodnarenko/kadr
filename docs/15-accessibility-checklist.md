@@ -17,10 +17,11 @@ and a keyboard-only pass for each flow.
 | Window selection | code | code | GUI | ⌘ child windows |
 | Countdown | code | code | GUI | Escape cancels; ticks announced |
 | Recording setup / pre-roll / notch | code | code | GUI | More menu; Allow / Open Settings / Use Without; Reduce Motion |
-| Annotation editor | code | code | GUI | Menus, inspector, export progress, local Help |
+| Annotation editor | code | partial | GUI | Menus, inspector, export progress, local Help. Canvas: annotations are `layoutItem` children with labels, Press/Delete actions and Tab/⇧Tab selection (T-ED-11); the label wording and the element tree are unit-tested, but no end-to-end VoiceOver pass has been recorded, and the text overlay and orientation-aware frames are unverified |
 | Studio | code | code | GUI | Copy/Share is the edit; transcript words; timeline snap |
 
 `code` means labels, hits, and keyboard actions are covered by package/app tests.
+`partial` means some of the surface is covered and the gaps are listed in Notes.
 `GUI` means Accessibility Inspector recordings still belong with release evidence.
 
 ## Keyboard flows that must complete
