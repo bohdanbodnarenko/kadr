@@ -30,6 +30,18 @@ final class HotkeyHealth {
         conflicts = next
     }
 
+    /// Probes again after the user changes a shortcut (docs/17 T-SH-7).
+    ///
+    /// Kadr's own registrations would show up as conflicts, so they are switched off for
+    /// the length of the probe — a few Carbon calls, synchronously on the main thread, so
+    /// no key press can fall into the gap.
+    func reprobe() {
+        let wasEnabled = KeyboardShortcuts.isEnabled
+        KeyboardShortcuts.isEnabled = false
+        probeAll()
+        KeyboardShortcuts.isEnabled = wasEnabled
+    }
+
     var hasConflicts: Bool {
         !conflicts.isEmpty
     }
