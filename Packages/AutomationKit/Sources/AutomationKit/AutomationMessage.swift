@@ -10,6 +10,8 @@ public enum AutomationStatus: String, Codable, Sendable, Hashable {
     case unsupported
     /// Capture Text found nothing to copy (docs/16 X-4).
     case noText
+    /// The sender is not allowed to control Kadr (docs/17 T-OUT-12).
+    case denied
 }
 
 /// What the agent sends back to a CLI invocation or a Shortcuts action.
@@ -36,6 +38,10 @@ public struct AutomationResponse: Codable, Hashable, Sendable {
 
     public static let ok = AutomationResponse(status: .ok)
     public static let cancelled = AutomationResponse(status: .cancelled, message: "Cancelled.")
+    public static let denied = AutomationResponse(
+        status: .denied,
+        message: "This app is not allowed to control Kadr. Allow it in Settings → Advanced."
+    )
 
     public static func file(_ path: String) -> AutomationResponse {
         AutomationResponse(status: .ok, paths: [path])
@@ -56,6 +62,8 @@ public struct AutomationResponse: Codable, Hashable, Sendable {
         case .cancelled: 2
         case .unsupported: 3
         case .noText: 4
+        // `sysexits.h` EX_NOPERM.
+        case .denied: 77
         }
     }
 
@@ -83,33 +91,26 @@ public struct AutomationResponse: Codable, Hashable, Sendable {
     }
 }
 
-/// A command on its way to the agent, and where to send the answer.
+/// A command on its way to the agent.
 ///
-/// The reply port is named rather than connected: the CLI creates its own local port,
-/// tells the agent its name, and waits. That is what lets a capture take as long as the
-/// user needs to drag a selection without the request itself timing out.
+/// Where to answer is not part of it: the request carries a send-once right for the
+/// reply, which the kernel delivers with the message. That is what lets a capture take as
+/// long as the user needs to drag a selection without the request itself timing out.
 public struct AutomationEnvelope: Codable, Hashable, Sendable {
     public var command: AppCommand
-    public var replyPortName: String?
 
-    public init(command: AppCommand, replyPortName: String? = nil) {
+    public init(command: AppCommand) {
         self.command = command
-        self.replyPortName = replyPortName
     }
 }
 
 /// The Mach port names the agent and the CLI meet on.
 ///
-/// A CFMessagePort, not a socket: this is local IPC between two processes owned by the
-/// same user, and Kadr links no networking (CLAUDE.md rule 1). It also needs no launchd
+/// A Mach port, not a socket: this is local IPC between two processes owned by the same
+/// user, and Kadr links no networking (CLAUDE.md rule 1). It also needs no launchd
 /// registration, which an `NSXPCListener(machServiceName:)` would.
 public enum AutomationPort {
     public static let agent = "app.kadr.Kadr.automation"
-
-    /// A one-shot reply port, unique per invocation.
-    public static func reply(id: UUID = UUID()) -> String {
-        "\(agent).reply.\(id.uuidString)"
-    }
 
     /// Message IDs on the wire. One for the request, one for the answer.
     public enum MessageID {

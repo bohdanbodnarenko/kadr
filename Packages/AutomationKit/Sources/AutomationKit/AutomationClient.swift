@@ -1,4 +1,4 @@
-import CoreFoundation
+import Darwin
 import Foundation
 
 /// Sends a command to the running agent and waits for the answer (docs/06 M19).
@@ -22,96 +22,68 @@ public enum AutomationClient {
         portName: String = AutomationPort.agent,
         timeout: TimeInterval = AutomationParser.Invocation.defaultTimeout
     ) throws -> AutomationResponse {
-        guard let remote = CFMessagePortCreateRemote(nil, portName as CFString) else {
+        guard let remote = MachChannel.lookUp(portName) else {
             throw AutomationError.agentNotRunning
         }
-        defer { CFMessagePortInvalidate(remote) }
+        defer { MachChannel.release(remote) }
+        let payload = try JSONEncoder().encode(AutomationEnvelope(command: command))
 
         guard waitsForResult else {
-            try deliver(AutomationEnvelope(command: command), to: remote)
+            try check(MachChannel.send(
+                payload,
+                id: AutomationPort.MessageID.request,
+                to: remote,
+                timeout: deliveryTimeout
+            ))
             return .ok
         }
 
-        let inbox = ResponseInbox()
-        let portName = AutomationPort.reply()
-        guard let replyPort = inbox.makePort(named: portName) else {
+        // A private receive right for the answer. The agent gets a send-once right to it
+        // inside the request, so the reply cannot be addressed anywhere else, and no
+        // named port is left behind if this process exits early.
+        guard let replyPort = MachChannel.makeReceivePort() else {
             throw AutomationError.agentNotRunning
         }
-        defer { CFMessagePortInvalidate(replyPort) }
+        defer { MachChannel.destroy(replyPort) }
 
-        guard let source = CFMessagePortCreateRunLoopSource(nil, replyPort, 0) else {
+        try check(MachChannel.send(
+            payload,
+            id: AutomationPort.MessageID.request,
+            to: remote,
+            replyPort: replyPort,
+            timeout: deliveryTimeout
+        ))
+
+        switch MachChannel.receive(on: replyPort, timeout: timeout) {
+        case let .success(received):
+            // The agent dropped the request without answering: the kernel says so with a
+            // send-once notification rather than a reply.
+            guard received.id == AutomationPort.MessageID.response else {
+                return .failed("Kadr did not answer.")
+            }
+            return (try? JSONDecoder().decode(AutomationResponse.self, from: received.payload))
+                ?? .failed("Kadr sent a reply that could not be read.")
+        case .failure(.timedOut):
+            throw AutomationError.timedOut
+        case .failure(.malformed):
+            return .failed("Kadr did not answer.")
+        case .failure(.kernel):
             throw AutomationError.agentNotRunning
         }
-        let runLoop = CFRunLoopGetCurrent()
-        CFRunLoopAddSource(runLoop, source, .defaultMode)
-        defer { CFRunLoopRemoveSource(runLoop, source, .defaultMode) }
-
-        try deliver(AutomationEnvelope(command: command, replyPortName: portName), to: remote)
-
-        let deadline = Date().addingTimeInterval(timeout)
-        while inbox.response == nil {
-            let remaining = deadline.timeIntervalSinceNow
-            guard remaining > 0 else { throw AutomationError.timedOut }
-            // Returns as soon as the reply arrives, so this is a wait and not a poll.
-            CFRunLoopRunInMode(.defaultMode, remaining, true)
-        }
-        guard let response = inbox.response else { throw AutomationError.timedOut }
-        return response
     }
 
     /// How long the agent gets to accept the message itself. Not the capture's budget —
     /// that is `timeout` — just the handoff.
-    private static let deliveryTimeout: CFTimeInterval = 5
+    private static let deliveryTimeout: TimeInterval = 5
 
-    private static func deliver(_ envelope: AutomationEnvelope, to remote: CFMessagePort) throws {
-        let data = try JSONEncoder().encode(envelope)
-        let status = CFMessagePortSendRequest(
-            remote,
-            AutomationPort.MessageID.request,
-            data as CFData,
-            deliveryTimeout,
-            0,
-            nil,
-            nil
-        )
-        guard status == kCFMessagePortSuccess else {
-            throw status == kCFMessagePortSendTimeout
-                ? AutomationError.timedOut
-                : AutomationError.agentNotRunning
+    private static func check(_ status: kern_return_t) throws {
+        switch status {
+        case KERN_SUCCESS:
+            return
+        case MACH_SEND_TIMED_OUT:
+            throw AutomationError.timedOut
+        default:
+            throw AutomationError.agentNotRunning
         }
-    }
-}
-
-/// Holds the reply until the run loop hands control back.
-///
-/// A class, not a captured local, because the CFMessagePort callback is a C function
-/// pointer: the only thing it can carry is one opaque pointer, and this is what that
-/// pointer points at. Confined to the thread running the loop, which is the thread that
-/// created it — `@unchecked Sendable` records that invariant rather than hiding it.
-private final class ResponseInbox: @unchecked Sendable {
-    var response: AutomationResponse?
-
-    func makePort(named name: String) -> CFMessagePort? {
-        var context = CFMessagePortContext(
-            version: 0,
-            info: Unmanaged.passUnretained(self).toOpaque(),
-            retain: nil,
-            release: nil,
-            copyDescription: nil
-        )
-        return CFMessagePortCreateLocal(
-            nil,
-            name as CFString,
-            { _, _, data, info in
-                guard let info, let data else { return nil }
-                let inbox = Unmanaged<ResponseInbox>.fromOpaque(info).takeUnretainedValue()
-                inbox.response = (try? JSONDecoder().decode(AutomationResponse.self, from: data as Data))
-                    ?? .failed("Kadr sent a reply that could not be read.")
-                CFRunLoopStop(CFRunLoopGetCurrent())
-                return nil
-            },
-            &context,
-            nil
-        )
     }
 }

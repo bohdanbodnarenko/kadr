@@ -34,7 +34,7 @@ func usage() -> String {
         "Options are documented per command in docs/AUTOMATION.md.",
         "CleanShot verb names are accepted as aliases, so existing scripts keep working.",
         "",
-        "Exit codes: 0 done · 1 failed · 2 cancelled · 3 unsupported · 64 usage."
+        "Exit codes: 0 done · 1 failed · 2 cancelled · 3 unsupported · 4 no text · 64 usage · 77 not allowed."
     ])
     return lines.joined(separator: "\n")
 }
@@ -55,8 +55,10 @@ do {
 }
 
 do {
+    // Paths are resolved here, in the shell's directory: the agent's is `/`.
+    let workingDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     let response = try AutomationClient.send(
-        invocation.command,
+        invocation.command.resolvingPaths(against: workingDirectory),
         waitsForResult: invocation.waitsForResult,
         timeout: invocation.timeout
     )
