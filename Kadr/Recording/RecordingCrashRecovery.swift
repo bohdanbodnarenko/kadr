@@ -71,6 +71,13 @@ enum RecordingCrashRecovery {
         present: (URL) -> Void
     ) async -> Bool {
         let segments = InterruptedRecordingStore.segmentFiles(in: directory)
+        // A folder left by a quit during setup holds nothing that was ever recorded: no
+        // segment, or only an empty one. Recovery used to skip it and keep it forever
+        // (docs/12 §2, docs/17 T-REC-10). Non-empty but unreadable segments are still kept.
+        if segments.allSatisfy(isEmptyFile) {
+            try? FileManager.default.removeItem(at: directory)
+            return false
+        }
         let playable = await playableSegments(segments)
         guard !playable.isEmpty else { return false }
 
@@ -90,6 +97,11 @@ enum RecordingCrashRecovery {
         ) else { return false }
         try? FileManager.default.removeItem(at: directory)
         return true
+    }
+
+    private static func isEmptyFile(_ url: URL) -> Bool {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+        return size == 0
     }
 
     private static func playableSegments(_ segments: [URL]) async -> [URL] {

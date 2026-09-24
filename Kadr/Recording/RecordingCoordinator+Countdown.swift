@@ -46,6 +46,16 @@ extension RecordingCoordinator {
             abandonUnstartedRecording(reason: "Kadr needs Screen Recording permission to record.")
             return
         }
+        if let shortage = RecordingDiskSpace.shortage(
+            in: [InterruptedRecordingStore.inProgressRoot(), settings.saveFolder]
+        ) {
+            let scripted = startedByAutomation
+            abandonUnstartedRecording(reason: shortage.localizedDescription)
+            if !scripted {
+                RecordingFailureNotice.presentStartFailure(shortage)
+            }
+            return
+        }
         let seconds = startedByAutomation ? 0 : settings.recordingCountdownSeconds
         state = .starting
         pendingTarget = target

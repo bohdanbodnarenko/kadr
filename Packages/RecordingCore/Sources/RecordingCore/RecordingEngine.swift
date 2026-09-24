@@ -413,6 +413,12 @@ public actor RecordingEngine {
             }
         }
         let accepted = await writer.append(box)
+        if !accepted, box.kind == .video {
+            // A frame the encoder refused, usually back-pressure. Visible in Instruments
+            // next to the pool's queue depth, which is what tuning it needs (rule 8,
+            // docs/17 T-REC-10).
+            signposter.emitEvent("Dropped frame")
+        }
         if !accepted, let reason = await writer.failureReason {
             noteInterruption(.writerFailed(reason))
         }
