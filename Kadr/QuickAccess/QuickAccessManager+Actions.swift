@@ -45,6 +45,7 @@ extension QuickAccessManager {
         actions.save = { [weak self] in self?.save(item) }
         actions.saveAs = { [weak self] in self?.saveAs(item) }
         actions.delete = { [weak self] in self?.delete(item) }
+        actions.deleteAvailable = canDelete(item)
         actions.dismiss = { [weak self] in self?.dismiss(item) }
         actions.resolveForDrag = { [weak self] in self?.resolveForDrag(item) }
         actions.dragCompleted = { [weak self] accepted in self?.dragCompleted(item, accepted: accepted) }
@@ -129,7 +130,7 @@ extension QuickAccessManager {
                 guard let path = result.path else { return }
                 let gifURL = URL(fileURLWithPath: path)
                 logger.info("Exported \(gifURL.lastPathComponent, privacy: .public)")
-                presentExternalFile(at: gifURL)
+                presentExternalFile(at: gifURL, origin: .capture)
                 NSWorkspace.shared.activateFileViewerSelecting([gifURL])
             } catch {
                 logger.error("GIF export failed: \(error.localizedDescription, privacy: .public)")
@@ -296,7 +297,7 @@ extension QuickAccessManager {
 
     /// Puts an existing file on the overlay, for `add-quick-access-overlay` (CleanShot §20.7).
     @discardableResult
-    func presentExternalFile(at url: URL) -> Bool {
+    func presentExternalFile(at url: URL, origin: QuickAccessOrigin = .external) -> Bool {
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         let isVideo = UTType(filenameExtension: url.pathExtension)?.conforms(to: .movie) == true
         present(QuickAccessItem(
@@ -308,7 +309,8 @@ extension QuickAccessManager {
             displayID: nil,
             isVideo: isVideo,
             historyKind: isVideo ? .video : .image,
-            displayName: url.lastPathComponent
+            displayName: url.lastPathComponent,
+            origin: origin
         ))
         return true
     }

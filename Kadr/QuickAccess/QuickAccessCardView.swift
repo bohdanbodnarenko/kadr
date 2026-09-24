@@ -148,9 +148,10 @@ struct QuickAccessCardView: View {
 
     private var accessibilityHint: String {
         if showsChrome {
-            return "Actions shown. Double-tap to open, or drag to another app."
+            return "Actions shown. Open it to annotate, or drag it to another app."
         }
-        return "Single-tap to show actions, double-tap to open, or drag to another app."
+        // macOS wording: VoiceOver on the Mac has no taps (docs/17 T-OUT-13).
+        return "Click to show actions and give the card the keyboard, or drag it to another app."
     }
 
     @ViewBuilder
@@ -184,7 +185,9 @@ struct QuickAccessCardView: View {
         }
         Divider()
         Button("Hide", action: actions.dismiss)
-        Button("Delete", role: .destructive, action: actions.delete)
+        if actions.deleteAvailable {
+            Button("Move to Trash", role: .destructive, action: actions.delete)
+        }
     }
 
     @ViewBuilder
@@ -195,7 +198,9 @@ struct QuickAccessCardView: View {
             }
         }
         Button("Hide", action: actions.dismiss)
-        Button("Delete", action: actions.delete)
+        if actions.deleteAvailable {
+            Button("Move to Trash", action: actions.delete)
+        }
     }
 
     /// The capture, the chrome over it, and the border and shadow around the pair.

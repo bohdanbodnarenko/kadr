@@ -142,6 +142,19 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
         hostingView.interactiveRects?.first
     }
 
+    /// A click on a card hands it the keyboard (docs/17 T-OUT-1).
+    ///
+    /// Card keys act only while this panel is key, so the panel has to become key on the
+    /// click itself — SwiftUI's hit views do not ask for it, and `becomesKeyOnlyIfNeeded`
+    /// would otherwise leave the keys with the app underneath. Only clicks that land on a
+    /// card get here: `hitTest` passes every other click through.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown || event.type == .rightMouseDown, !isKeyWindow {
+            makeKey()
+        }
+        super.sendEvent(event)
+    }
+
     /// A flick over a card dismisses it or tucks the stack away (docs/03 §2).
     ///
     /// On the panel rather than in SwiftUI: this has to reach the card under the pointer,

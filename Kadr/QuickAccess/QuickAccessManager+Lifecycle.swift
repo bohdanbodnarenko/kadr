@@ -127,6 +127,11 @@ extension QuickAccessManager {
     func teardownOverlay() {
         overlayPanel?.dismiss()
         overlayPanel = nil
+        stopHoverKeyMonitor()
+        lastHoveredItemID = nil
+        // A banner belongs to the stack it was shown over; a stale error must not come back
+        // with the next capture (docs/17 T-OUT-2).
+        feedbackStatus = nil
     }
 
     /// A trackpad flick over a card: outward hides it, toward the screen edge tucks the
@@ -268,24 +273,6 @@ extension QuickAccessManager {
         finishRemoval()
     }
 
-    /// Deletes the capture as well as the card.
-    func delete(_ item: QuickAccessItem) {
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        dismissCoachTip(for: item)
-        let removed = items.remove(at: index)
-        forgetTransientState(for: item)
-        // The library keeps its own content-addressed copy, so trashing the file alone
-        // left a "deleted" capture sitting in App Support until retention expired — which
-        // for a sensitive screenshot is the whole problem (docs/07 H5). Hashed before the
-        // trash, because afterwards there is nothing to hash.
-        history?.deleteFromLibrary(matching: removed.fileURL)
-        // Deleted means gone, so it is not offered for restore.
-        CaptureProject.trash(alongside: removed.fileURL)
-        try? FileManager.default.trashItem(at: removed.fileURL, resultingItemURL: nil)
-        logger.info("Deleted \(removed.filename, privacy: .public)")
-        finishRemoval()
-    }
-
     func forgetTransientState(for item: QuickAccessItem) {
         dismissTasks.removeValue(forKey: item.id)?.cancel()
         dismissDeadlines.removeValue(forKey: item.id)
@@ -296,6 +283,9 @@ extension QuickAccessManager {
         }
         if draggingItemID == item.id {
             draggingItemID = nil
+        }
+        if lastHoveredItemID == item.id {
+            lastHoveredItemID = nil
         }
     }
 

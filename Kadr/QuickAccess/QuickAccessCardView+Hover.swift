@@ -24,14 +24,16 @@ extension QuickAccessCardView {
             VStack(spacing: 0) {
                 HStack(alignment: .top, spacing: 5) {
                     corner(.topLeading)
-                    details
-                    Spacer(minLength: 0)
-                    corner(.topTrailing)
+                    // Trash sits at the opposite corner from Hide. Five points apart, a
+                    // slightly-off click on Hide threw the capture away (docs/17 T-OUT-7).
                     if showsTrashButton {
-                        circleButton("Move to Trash", systemImage: "trash", label: "Delete capture") {
+                        circleButton("Move to Trash", systemImage: "trash", label: "Move capture to Trash") {
                             actions.delete()
                         }
                     }
+                    details
+                    Spacer(minLength: 0)
+                    corner(.topTrailing)
                     // Hide, not delete. The file stays where the save policy put it (docs/03 §2).
                     circleButton("Hide — the file stays", systemImage: "xmark", label: "Hide card") {
                         actions.dismiss()

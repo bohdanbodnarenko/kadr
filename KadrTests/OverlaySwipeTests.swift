@@ -200,7 +200,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(53), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(53)))
         #expect(harness.manager.items.isEmpty)
         #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
     }
@@ -211,7 +211,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(36), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(36)))
         #expect(harness.manager.items.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
     }
@@ -223,7 +223,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try !harness.manager.handleHoverKey(keyDown(36), canStealCommandKeys: true))
+        #expect(try !harness.manager.handleCardKey(keyDown(36)))
         #expect(harness.manager.items.contains { $0.id == item.id })
         harness.manager.dismissAll()
     }
@@ -234,20 +234,9 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(1, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(1, modifiers: .command)))
         #expect(harness.manager.items.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: harness.settings.saveFolder.path).count == 1)
-    }
-
-    @Test("⌘S from the global monitor is ignored so the front app keeps it")
-    func hoverCommandSIsLocalOnly() throws {
-        let harness = makeHarness()
-        let item = try showCard(harness)
-        harness.manager.setHovered(item, hovering: true)
-
-        #expect(try !harness.manager.handleHoverKey(keyDown(1, modifiers: .command), canStealCommandKeys: false))
-        #expect(harness.manager.items.contains { $0.id == item.id })
-        harness.manager.dismissAll()
     }
 
     @Test("⌘C from the local monitor copies")
@@ -256,7 +245,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(8, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(8, modifiers: .command)))
         #expect(harness.manager.items.first?.isStaged == false)
         harness.manager.dismissAll()
     }
@@ -267,7 +256,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(35, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(35, modifiers: .command)))
         #expect(harness.manager.pins.count == 1)
         harness.manager.pins.closeAll()
         harness.manager.dismissAll()
@@ -280,7 +269,7 @@ struct OverlaySwipeTests {
         harness.manager.editor = EditorLauncher(editorURL: nil)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(14, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(14, modifiers: .command)))
         #expect(harness.manager.isEngaged(item))
         harness.manager.dismissAll()
     }
@@ -291,7 +280,7 @@ struct OverlaySwipeTests {
         let item = try showCard(harness)
         harness.manager.setHovered(item, hovering: true)
 
-        #expect(try harness.manager.handleHoverKey(keyDown(13, modifiers: .command), canStealCommandKeys: true))
+        #expect(try harness.manager.handleCardKey(keyDown(13, modifiers: .command)))
         #expect(harness.manager.items.isEmpty)
         #expect(FileManager.default.fileExists(atPath: item.fileURL.path))
     }

@@ -27,7 +27,19 @@ extension AreaCaptureCoordinator {
             writeBeautifyProject(alongside: entry.result.fileURL, original: entry.capture, beautify: spec)
         }
         let first = delivered.first?.result.fileURL
+        if delivered.count < prepared.count {
+            reportExportFailure(missing: prepared.count - delivered.count)
+        }
         automation.report(first.map(CaptureOutcome.file) ?? .failed("Kadr could not write the capture."))
+    }
+
+    /// A capture that could not be written anywhere — not the save folder, not staging —
+    /// is the one failure that must never be silent (docs/17 T-OUT-6).
+    func reportExportFailure(missing count: Int = 1) {
+        let message = count == 1
+            ? String(localized: "Couldn't save the capture")
+            : String(localized: "Couldn't save \(count) captures")
+        FailurePresenter.report(message, detail: "export returned no file", logger: logger)
     }
 
     /// Exports a capture and puts a card up for it (docs/03 §2).
@@ -46,6 +58,7 @@ extension AreaCaptureCoordinator {
         let prepared = FullscreenNotchCropper.apply(capture, settings: settings)
         let preparedOriginal = editableOriginal.map { FullscreenNotchCropper.apply($0, settings: settings) }
         guard let result = await output.deliverOffMain(prepared, overrides: automation.overrides) else {
+            reportExportFailure()
             automation.report(.failed("Kadr could not write the capture."))
             return
         }
@@ -80,7 +93,18 @@ extension AreaCaptureCoordinator {
     }
 
     /// Puts a card up when the matrix asks for one; otherwise History still gets the file.
+    ///
+    /// A save folder that refused the file (unmounted drive, read-only, full) still gets a
+    /// card, whatever the matrix says: the capture was staged instead, and the card is
+    /// where "Couldn't save to X — Save As…" can be answered (docs/17 T-OUT-6).
     func presentCapture(_ result: ExportResult, capture: Capture) {
+        if let reason = result.saveFailure {
+            quickAccess.show(result, capture: capture)
+            if let fileURL = result.fileURL, let item = quickAccess.item(matching: fileURL) {
+                quickAccess.presentSaveFailure(for: item, reason: reason)
+            }
+            return
+        }
         if settings.afterCaptureActions(for: .screenshot).contains(.overlay) {
             quickAccess.show(result, capture: capture)
         } else {
@@ -105,9 +129,9 @@ extension AreaCaptureCoordinator {
     func applyAfterCaptureActions(to fileURL: URL) {
         let actions = settings.afterCaptureActions(for: .screenshot)
         if actions.contains(.promptSave) {
-            if let item = quickAccess.item(matching: fileURL) {
-                quickAccess.promptSave(item)
-            }
+            // From the file, not the card: with "Show a card" off there is no card, and
+            // waiting for one lost the capture (docs/17 T-OUT-3).
+            quickAccess.promptSave(fileAt: fileURL)
         }
         if actions.contains(.annotate) {
             quickAccess.annotateFile(at: fileURL)

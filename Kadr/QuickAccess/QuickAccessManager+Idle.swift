@@ -110,6 +110,7 @@ extension QuickAccessManager {
         if hovering {
             let previous = hoveredItemID
             hoveredItemID = item.id
+            lastHoveredItemID = item.id
             startHoverKeyMonitorIfNeeded()
             pauseAutoDismiss(for: item)
             // The pointer moved straight from one card to another without an exit event.
@@ -135,116 +136,98 @@ extension QuickAccessManager {
         }
     }
 
+    /// Card keys, from Kadr's own event stream only (docs/17 T-OUT-1).
+    ///
+    /// There used to be a *global* monitor here too, so ⌫ typed into Slack with the
+    /// pointer parked over a card deleted the capture. Keys now act only when the overlay
+    /// panel is key — after the user clicked a card — which is how macOS's own screenshot
+    /// thumbnail behaves. Checking `keyWindow` in the monitor also keeps the History search
+    /// field, the rename alert and Settings fields from losing keys to a hovered card.
     func startHoverKeyMonitorIfNeeded() {
-        guard hoverKeyMonitor == nil else { return }
-        hoverKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            MainActor.assumeIsolated {
-                _ = self?.handleHoverKey(event, canStealCommandKeys: false)
-            }
-        }
+        guard localKeyMonitor == nil else { return }
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let consumed = MainActor.assumeIsolated {
-                self?.handleHoverKey(event, canStealCommandKeys: true) ?? false
+                self?.handleMonitoredKey(event) ?? false
             }
             return consumed ? nil : event
         }
     }
 
+    /// Only while the overlay panel is key — or Quick Look, Kadr's too, is up for Esc.
+    private func handleMonitoredKey(_ event: NSEvent) -> Bool {
+        let panelIsKey = overlayPanel.map { NSApp.keyWindow === $0 } ?? false
+        guard panelIsKey || QuickLookPresenter.isShowing else { return false }
+        return handleCardKey(event)
+    }
+
     func stopHoverKeyMonitorIfIdle() {
-        guard hoveredItemID == nil else { return }
+        guard hoveredItemID == nil, !(overlayPanel?.isKeyWindow ?? false) else { return }
         stopHoverKeyMonitor()
     }
 
     func stopHoverKeyMonitor() {
-        if let hoverKeyMonitor {
-            NSEvent.removeMonitor(hoverKeyMonitor)
-            self.hoverKeyMonitor = nil
-        }
         if let localKeyMonitor {
             NSEvent.removeMonitor(localKeyMonitor)
             self.localKeyMonitor = nil
         }
     }
 
-    /// ⌫ deletes, Esc hides, Space looks. ⌘C / ⌘S / ⌘E / ⌘P / ⌘W copy, save, annotate,
-    /// pin, and close, but only from the local monitor — a global one cannot swallow those
-    /// keys, and doing the action *and* letting the front app handle them would be two
-    /// saves for one press (docs/03 §2, CleanShot §6.2 / §22.2).
-    func handleHoverKey(_ event: NSEvent, canStealCommandKeys: Bool) -> Bool {
-        let keyCode = event.keyCode
+    /// The card the keyboard talks to: the one under the pointer, or the one last clicked.
+    var keyTargetItem: QuickAccessItem? {
+        let id = hoveredItemID ?? lastHoveredItemID
+        return id.flatMap { id in items.first { $0.id == id } }
+    }
+
+    /// ⌫ deletes (undoably), Esc hides, Space looks, Return saves; ⌘C / ⌘S / ⌘E / ⌘P / ⌘W
+    /// copy, save, annotate, pin and close (docs/03 §2, CleanShot §6.2 / §22.2).
+    ///
+    /// Callers have already established that the overlay panel is key; this only maps the
+    /// key to the card.
+    func handleCardKey(_ event: NSEvent) -> Bool {
+        let command = CardKeyCommand.resolve(keyCode: event.keyCode, modifiers: event.modifierFlags)
         // Esc closes Quick Look before it closes anything else — the panel is what the user
         // is looking at, so it is what "escape" means while it is up. Handled before the
-        // hover lookup, because opening Quick Look tucks the cards away and nothing is
-        // hovered any more.
-        if keyCode == 53, quickLook.dismiss() {
+        // target lookup, because opening Quick Look tucks the cards away.
+        if event.keyCode == 53, command == .dismiss, quickLook.dismiss() {
             return true
         }
-        guard let hoveredItemID,
-              let item = items.first(where: { $0.id == hoveredItemID })
-        else {
+        guard let command, let item = keyTargetItem else { return false }
+        // Return is gated by its setting and left to Quick Look while that is up; ⌘S
+        // always saves.
+        let isReturn = event.keyCode == 36 || event.keyCode == 76
+        if command == .save, isReturn, !settings.overlayReturnSaves || QuickLookPresenter.isShowing {
             return false
         }
-        if canStealCommandKeys, handleHoverCommandKey(event, item: item) {
-            return true
+        if command == .pin, item.isVideo {
+            return false
         }
-        switch keyCode {
-        case 51, 117:
+        perform(command, on: item)
+        return true
+    }
+
+    private func perform(_ command: CardKeyCommand, on item: QuickAccessItem) {
+        switch command {
+        case .delete:
             delete(item)
-            return true
-        case 53:
+        case .dismiss:
             dismiss(item)
-            return true
-        case 49:
+        case .quickLook:
             // Looking at a capture is the user working with it, so the card stops being
             // disposable — the same rule as opening the editor.
             noteEngagement(with: item)
             quickLook.show(item.fileURL)
-            return true
-        case 36, 76:
-            // Return / keypad Enter — save and close (CleanShot §6.2). Quick Look keeps
-            // Return for itself while the panel is up.
-            guard settings.overlayReturnSaves, !QuickLookPresenter.isShowing else { return false }
+        case .save:
             save(item)
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Overlay action keys that would steal from the front app if a global monitor ran them.
-    ///
-    /// CleanShot §22.2: ⌘C copy, ⌘S save, ⌘E annotate (trim, for a recording), ⌘P pin,
-    /// ⌘W close. Upload is out of scope.
-    func handleHoverCommandKey(_ event: NSEvent, item: QuickAccessItem) -> Bool {
-        guard event.modifierFlags.contains(.command),
-              !event.modifierFlags.contains(.shift),
-              !event.modifierFlags.contains(.option)
-        else {
-            return false
-        }
-        switch event.keyCode {
-        case 8:
+        case .copy:
             copy(item)
-            return true
-        case 1:
-            save(item)
-            return true
-        case 14:
+        case .annotate:
             if item.isVideo {
                 trim(item)
             } else {
                 annotate(item)
             }
-            return true
-        case 35:
-            guard !item.isVideo else { return false }
+        case .pin:
             pin(item)
-            return true
-        case 13:
-            dismiss(item)
-            return true
-        default:
-            return false
         }
     }
 }

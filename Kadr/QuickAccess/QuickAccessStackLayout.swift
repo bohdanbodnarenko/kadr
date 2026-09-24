@@ -76,6 +76,6 @@ enum QuickAccessStackLayout {
     /// Auto-saved captures are already on disk, so hiding the card is not enough — the user
     /// needs a one-click way to throw the file away.
     static func showsTrashButton(for item: QuickAccessItem) -> Bool {
-        !item.isStaged
+        !item.isStaged && item.origin.ownsFile
     }
 }

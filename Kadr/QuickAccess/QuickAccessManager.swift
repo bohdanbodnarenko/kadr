@@ -77,8 +77,12 @@ final class QuickAccessManager {
     @ObservationIgnored var hoveredItemID: UUID?
     /// The card currently being dragged out.
     @ObservationIgnored var draggingItemID: UUID?
-    @ObservationIgnored var hoverKeyMonitor: Any?
+    /// The card the pointer last rested on, so a clicked card keeps the keyboard after the
+    /// pointer moves off it (docs/17 T-OUT-1).
+    @ObservationIgnored var lastHoveredItemID: UUID?
     @ObservationIgnored var localKeyMonitor: Any?
+    /// Cards deleted inside their Undo window (docs/17 T-OUT-1).
+    @ObservationIgnored var pendingDeletions: [UUID: PendingCardDeletion] = [:]
     /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
     @ObservationIgnored var recentlyClosed: [QuickAccessItem] = []
 
@@ -244,7 +248,8 @@ final class QuickAccessManager {
             isVideo: record.kind == .video,
             historyKind: record.kind,
             displayName: record.originalFilename,
-            applicationName: record.applicationName
+            applicationName: record.applicationName,
+            origin: .library
         ))
     }
 }

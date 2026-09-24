@@ -152,6 +152,17 @@ struct CaptureOutput {
         }
     }
 
+    /// Copies a file Kadr does not own into staging, for a card that is about to change
+    /// it (docs/17 T-OUT-5).
+    func adoptCopy(of url: URL, named filename: String) -> URL? {
+        do {
+            return try exporter.adoptCopy(of: url, named: filename)
+        } catch {
+            logger.error("Could not copy into staging: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// Whether this path is a staged capture, which the 24-hour sweep will delete.
     func isStaged(_ url: URL) -> Bool {
         exporter.isStaged(url)
