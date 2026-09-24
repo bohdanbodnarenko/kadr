@@ -210,61 +210,84 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// Closing used to discard the annotations silently, with no prompt and no copy.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !isClosingConfirmed, model.hasUnsavedChanges else { return true }
+        reviewUnsavedChanges { [weak self] proceed in
+            guard proceed, let self else { return }
+            isClosingConfirmed = true
+            sender.close()
+        }
+        return false
+    }
+
+    /// Asks Save / Don't Save / Cancel as a sheet, and reports whether the window may go:
+    /// true once the document is saved or the user chose to discard it (docs/03:171).
+    ///
+    /// Shared by closing the window and by quitting (T-ED-7).
+    func reviewUnsavedChanges(_ completion: @escaping @MainActor (Bool) -> Void) {
+        guard let window, model.hasUnsavedChanges else {
+            completion(true)
+            return
+        }
+        window.makeKeyAndOrderFront(nil)
 
         let alert = NSAlert()
         alert.messageText = "Save your changes to “\(documentURL.lastPathComponent)”?"
         alert.informativeText = "Save writes the flattened image and a project file so the "
             + "annotations stay editable."
         alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
+        let dontSave = alert.addButton(withTitle: "Don't Save")
+        dontSave.hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         alert.buttons.last?.keyEquivalent = "\u{1b}"
         alert.alertStyle = .warning
 
-        let responder = FocusRestoration.capture(from: sender)
-        alert.beginSheetModal(for: sender) { [weak self] response in
+        let responder = FocusRestoration.capture(from: window)
+        alert.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             switch response {
             case .alertFirstButtonReturn:
-                saveFlattenedAndClose(sender)
+                saveBeforeClosing(completion)
             case .alertSecondButtonReturn:
                 autosave.discard(for: documentURL)
-                isClosingConfirmed = true
-                sender.close()
+                completion(true)
             default:
-                FocusRestoration.restore(responder, in: sender)
+                FocusRestoration.restore(responder, in: window)
+                completion(false)
             }
         }
-        return false
     }
 
-    func saveFlattenedAndClose(_ sender: NSWindow) {
+    /// Renders and saves, then reports whether it worked. An imported copy asks where to
+    /// save, as ⌘S does (T-ED-9).
+    private func saveBeforeClosing(_ completion: @escaping @MainActor (Bool) -> Void) {
         let baseImage = baseImage
         let document = model.document
         let exportScale = model.exportScale
         let renderer = renderer
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result {
+                    try renderer.render(
+                        baseImage: baseImage,
+                        document: document,
+                        includeAnnotations: true,
+                        exportScale: exportScale
+                    )
+                }
+            }.value
+            guard let self else { return }
             do {
-                let image = try renderer.render(
-                    baseImage: baseImage,
-                    document: document,
-                    includeAnnotations: true,
-                    exportScale: exportScale
-                )
-                await MainActor.run {
-                    guard let self else { return }
-                    do {
-                        try self.save(image)
-                        self.isClosingConfirmed = true
-                        sender.close()
-                    } catch {
-                        self.model.failExport(.save, message: error.localizedDescription)
+                let image = try result.get()
+                if editsImportedCopy {
+                    presentSaveAsSheet(for: image) { [weak self] saved in
+                        completion(saved && self?.model.hasUnsavedChanges == false)
                     }
+                    return
                 }
+                try save(image)
+                completion(true)
             } catch {
-                await MainActor.run { [weak self] in
-                    self?.model.failExport(.save, message: error.localizedDescription)
-                }
+                model.failExport(.save, message: error.localizedDescription)
+                completion(false)
             }
         }
     }

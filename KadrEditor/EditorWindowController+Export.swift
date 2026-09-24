@@ -145,9 +145,10 @@ extension EditorWindowController {
     }
 
     /// Flattened image (or a `.kadr`) to a path the user picks (CleanShot §8.5).
-    func presentSaveAsSheet(for image: CGImage) {
+    func presentSaveAsSheet(for image: CGImage, completion: (@MainActor (Bool) -> Void)? = nil) {
         guard let window else {
             model.endExport()
+            completion?(false)
             return
         }
         let panel = NSSavePanel()
@@ -165,11 +166,16 @@ extension EditorWindowController {
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             defer { self.model.endExport() }
-            guard response == .OK, let url = panel.url else { return }
+            guard response == .OK, let url = panel.url else {
+                completion?(false)
+                return
+            }
             do {
                 try saveAs(image, to: url)
                 logger.info("Saved \(url.lastPathComponent, privacy: .public)")
+                completion?(true)
             } catch {
+                completion?(false)
                 model.failExport(.saveAs, message: error.localizedDescription)
                 logger.error("Save As failed: \(error.localizedDescription, privacy: .public)")
             }

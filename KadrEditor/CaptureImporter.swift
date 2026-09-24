@@ -1,3 +1,4 @@
+import AnnotationModel
 import AppKit
 import Foundation
 import os
@@ -26,16 +27,21 @@ struct CaptureImporter {
         return support.appendingPathComponent("Kadr/Imported", isDirectory: true)
     }
 
-    /// Asks for a file and returns Kadr's own copy of it.
+    /// Asks for a file and returns Kadr's own copy of it — or, for a `.kadr` project, the
+    /// project itself, which is edited in place (T-ED-9).
     func promptForImport() -> URL? {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = Self.readableTypes
+            + [UTType(filenameExtension: KadrDocumentFile.fileExtension)].compactMap { $0 }
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Open"
-        panel.message = "Kadr copies the image and edits the copy; the original is left alone."
+        panel.message = "Kadr copies an image and edits the copy; the original is left alone."
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+            return url
+        }
         return copyIntoLibrary(url)
     }
 

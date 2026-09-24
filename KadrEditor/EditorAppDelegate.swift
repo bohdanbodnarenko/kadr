@@ -66,6 +66,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     /// copying it again would leave two of everything.
     private func imported(_ url: URL) -> URL? {
         guard url.pathExtension.lowercased() != StylePresetTransfer.pathExtension else { return nil }
+        // A project is the user's own document: edited where it is, so saving it writes
+        // back to the file they double-clicked, not to a hidden copy (T-ED-9).
+        guard url.pathExtension.lowercased() != KadrDocumentFile.fileExtension else { return nil }
         guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
         return CaptureImporter().copyIntoLibrary(url)
     }
@@ -108,39 +111,20 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         open(url)
     }
 
-    @MainActor
-    @objc func saveDocument(_ sender: Any?) {
-        keyEditor()?.export(.save)
+    /// File ▸ Open Recent: the documents opened before, most recent first (T-ED-9).
+    @objc func openRecentDocument(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        open(imported(url) ?? url)
     }
 
-    @MainActor
-    @objc func saveDocumentAs(_ sender: Any?) {
-        keyEditor()?.export(.saveAs)
+    @objc func clearRecentDocuments(_ sender: Any?) {
+        NSDocumentController.shared.clearRecentDocuments(sender)
     }
 
-    @MainActor
-    @objc func saveProjectDocument(_ sender: Any?) {
-        keyEditor()?.saveProject()
-    }
-
-    @MainActor
-    @objc func printDocument(_ sender: Any?) {
-        keyEditor()?.export(.print)
-    }
-
-    @MainActor
-    private func keyEditor() -> EditorWindowController? {
-        windows.first { $0.window?.isKeyWindow == true } ?? windows.last
-    }
-
-    @MainActor
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
-        case #selector(saveDocument(_:)),
-             #selector(saveDocumentAs(_:)),
-             #selector(saveProjectDocument(_:)),
-             #selector(printDocument(_:)):
-            keyEditor() != nil
+        case #selector(clearRecentDocuments(_:)):
+            !NSDocumentController.shared.recentDocumentURLs.isEmpty
         default:
             true
         }
@@ -152,40 +136,86 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         true
     }
 
-    /// ⌘Q during an export asks first, and then waits for the render to unwind
-    /// (docs/11 S0.4).
+    /// ⌘Q asks about unsaved edits and running exports before anything goes (T-ED-7,
+    /// docs/11 S0.4).
     ///
-    /// Without this the process died mid-write: the renderer's `defer` never ran, so the
-    /// half-finished movie survived at the path the user picked, looking for all the world
-    /// like a finished export. `.terminateLater` is the only reply that buys the time to
-    /// delete it — `false` would refuse the quit outright, and `true` would not wait.
+    /// Exports: without asking, the process died mid-write, the renderer's `defer` never
+    /// ran, and the half-finished movie survived at the path the user picked, looking like
+    /// a finished export. `.terminateLater` is the only reply that buys the time to delete it.
+    ///
+    /// Edits: each dirty window shows its Save / Don't Save / Cancel sheet in turn, and
+    /// with several a TextEdit-style Review Changes alert comes first. Cancel anywhere
+    /// keeps the app running with every window as it was.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // Flush editor autosaves so work from the last 1.5 s is not lost (docs/16 ED-7).
-        for controller in windows where controller.model.hasUnsavedChanges {
+        let dirty = windows.filter(\.model.hasUnsavedChanges)
+        let exporting = studioWindows.filter(\.isExporting)
+        guard !dirty.isEmpty || !exporting.isEmpty else { return .terminateNow }
+        // A durable copy first, in case the review is interrupted (docs/16 ED-7).
+        for controller in dirty {
             controller.flushAutosaveSynchronously()
         }
 
-        let exporting = studioWindows.filter(\.isExporting)
-        guard !exporting.isEmpty else { return .terminateNow }
+        if !exporting.isEmpty, !confirmQuittingDuringExport(count: exporting.count) {
+            return .terminateCancel
+        }
 
+        Task { @MainActor in
+            let proceed = await reviewBeforeQuitting(dirty)
+            if proceed {
+                for window in exporting {
+                    await window.cancelExport()
+                }
+            }
+            sender.reply(toApplicationShouldTerminate: proceed)
+        }
+        return .terminateLater
+    }
+
+    private func confirmQuittingDuringExport(count: Int) -> Bool {
         let alert = NSAlert()
-        alert.messageText = exporting.count == 1
+        alert.messageText = count == 1
             ? "An export is still running."
-            : "\(exporting.count) exports are still running."
+            : "\(count) exports are still running."
         alert.informativeText = "Quitting now discards the export, and the partly-written "
             + "file is deleted."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Quit Anyway")
+        let quit = alert.addButton(withTitle: "Quit Anyway")
+        quit.hasDestructiveAction = true
         alert.addButton(withTitle: "Keep Exporting")
-        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
 
-        Task { @MainActor in
-            for window in exporting {
-                await window.cancelExport()
+    /// Whether every dirty window was saved or deliberately discarded.
+    private func reviewBeforeQuitting(_ dirty: [EditorWindowController]) async -> Bool {
+        guard !dirty.isEmpty else { return true }
+        if dirty.count > 1 {
+            let alert = NSAlert()
+            alert.messageText = "You have \(dirty.count) Kadr documents with unsaved changes. "
+                + "Do you want to review these changes before quitting?"
+            alert.informativeText = "If you don’t review your documents, all your changes will be lost."
+            alert.addButton(withTitle: "Review Changes…")
+            alert.addButton(withTitle: "Cancel")
+            let discard = alert.addButton(withTitle: "Discard Changes")
+            discard.hasDestructiveAction = true
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                break
+            case .alertThirdButtonReturn:
+                for controller in dirty {
+                    controller.autosave.discard(for: controller.documentURL)
+                }
+                return true
+            default:
+                return false
             }
-            sender.reply(toApplicationShouldTerminate: true)
         }
-        return .terminateLater
+        for controller in dirty {
+            let proceed = await withCheckedContinuation { continuation in
+                controller.reviewUnsavedChanges { continuation.resume(returning: $0) }
+            }
+            guard proceed else { return false }
+        }
+        return true
     }
 
     private func open(_ url: URL) {
@@ -242,6 +272,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             }
             windows.append(controller)
             controller.show()
+            if !isKadrOwned(url) || url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
+                NSDocumentController.shared.noteNewRecentDocumentURL(url)
+            }
             logger.info("Opened \(url.lastPathComponent, privacy: .public)")
         } catch {
             logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
@@ -295,10 +328,6 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             logger.error("Could not trim \(url.lastPathComponent, privacy: .public)")
             presentOpenFailure(for: url, error: error)
         }
-    }
-
-    @objc func copyFlattenedImage(_ sender: Any?) {
-        keyEditor()?.export(.copyFlattened)
     }
 
     @objc func openHelp(_ sender: Any?) {
