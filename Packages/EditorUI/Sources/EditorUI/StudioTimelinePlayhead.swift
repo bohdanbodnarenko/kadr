@@ -54,6 +54,12 @@ struct StudioTimelinePlayhead: View {
                 )
                 .help("Drag to scrub")
                 .accessibilityLabel("Playhead")
+                // docs/17 T-STU-11: VoiceOver hears where it is and can move it.
+                .accessibilityValue(StudioClock.precise(clock.time))
+                .accessibilityAdjustableAction { direction in
+                    let step = direction == .increment ? 1.0 : -1.0
+                    onScrub(min(max(clock.time + step, 0), duration))
+                }
         }
     }
 

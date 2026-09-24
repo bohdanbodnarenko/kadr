@@ -158,7 +158,7 @@ struct StudioTransportBar: View {
 
     private func playback(compact: Bool) -> some View {
         HStack(spacing: compact ? 6 : 10) {
-            StudioPlayheadClockLabel(clock: model.playheadClock)
+            StudioPlayheadClockLabel(clock: model.playheadClock, frameRate: model.manifest.frameRate)
             HStack(spacing: 2) {
                 if !compact {
                     icon("backward.end.fill", label: "Go to start", help: "Go to start") {
@@ -184,7 +184,7 @@ struct StudioTransportBar: View {
                     }
                 }
             }
-            Text(StudioClock.precise(model.edit.duration))
+            Text(StudioClock.frames(model.edit.duration, frameRate: model.manifest.frameRate))
                 .font(.system(size: 12, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
@@ -324,9 +324,10 @@ private struct StudioSuggestedZoomsButton: View {
 /// The playhead as a clock. A leaf, so a playback tick re-renders one `Text`.
 private struct StudioPlayheadClockLabel: View {
     let clock: StudioPlayhead
+    let frameRate: Int
 
     var body: some View {
-        Text(StudioClock.precise(clock.time))
+        Text(StudioClock.frames(clock.time, frameRate: frameRate))
             .font(.system(size: 12, weight: .semibold).monospacedDigit())
     }
 }
@@ -366,6 +367,23 @@ enum StudioClock {
             return String(format: "%d:%02d:%04.1f", minutes / 60, minutes % 60, remaining)
         }
         return String(format: "%d:%04.1f", minutes, remaining)
+    }
+
+    /// `mm:ss:ff` — minutes, seconds and the frame within the second (docs/17 T-STU-11).
+    ///
+    /// Frames, not tenths, because a frame is the unit a cut is made in: two frames a
+    /// tenth apart read the same in tenths and are a visible jump in the picture.
+    static func frames(_ seconds: TimeInterval, frameRate: Int) -> String {
+        let fps = max(frameRate, 1)
+        let safe = max(0, seconds.isFinite ? seconds : 0)
+        let totalFrames = Int((safe * Double(fps)).rounded(.down))
+        let frame = totalFrames % fps
+        let wholeSeconds = totalFrames / fps
+        let minutes = wholeSeconds / 60
+        if minutes >= 60 {
+            return String(format: "%d:%02d:%02d:%02d", minutes / 60, minutes % 60, wholeSeconds % 60, frame)
+        }
+        return String(format: "%02d:%02d:%02d", minutes, wholeSeconds % 60, frame)
     }
 }
 

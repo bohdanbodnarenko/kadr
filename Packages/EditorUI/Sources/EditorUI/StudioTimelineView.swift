@@ -107,6 +107,35 @@ struct StudioTimelineView: View {
             .onKeyPress(.leftArrow, phases: .down) { press in
                 nudgePlayhead(press, frames: -1)
             }
+            // docs/17 T-STU-11: Home/End, edit points, and J/K/L shuttle.
+            .onKeyPress(.home) {
+                model.seekToStart()
+                return .handled
+            }
+            .onKeyPress(.end) {
+                model.seekToEnd()
+                return .handled
+            }
+            .onKeyPress(.upArrow) {
+                model.seekToEditPoint(forward: false)
+                return .handled
+            }
+            .onKeyPress(.downArrow) {
+                model.seekToEditPoint(forward: true)
+                return .handled
+            }
+            .onKeyPress("j") {
+                model.shuttle(.reverse)
+                return .handled
+            }
+            .onKeyPress("k") {
+                model.shuttle(.stop)
+                return .handled
+            }
+            .onKeyPress("l") {
+                model.shuttle(.forward)
+                return .handled
+            }
             .onKeyPress(.rightArrow, phases: .down) { press in
                 nudgePlayhead(press, frames: 1)
             }
@@ -356,6 +385,25 @@ struct StudioTimelineView: View {
         }
         .frame(width: width, height: clipHeight)
         .help("Drag the ends to trim. Hover and press C to split.")
+        // One element per clip (docs/17 T-STU-11): "Clip 2 of 5, 0:12 to 0:31, 2×".
+        // Adjusting it moves between clips, and its action selects this one.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Clip \(index + 1) of \(model.edit.clips.clips.count)")
+        .accessibilityValue(clipAccessibilityValue(clip, index: index))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAction(named: "Select") {
+            model.selectedClip = clip.id
+            model.playhead = model.editedStart(ofClipAt: index)
+        }
+        .accessibilityAction(named: "Delete Clip") {
+            model.removeClip(id: clip.id)
+        }
+    }
+
+    private func clipAccessibilityValue(_ clip: Clip, index: Int) -> String {
+        let start = model.editedStart(ofClipAt: index)
+        let range = "\(StudioClock.precise(start)) to \(StudioClock.precise(start + clip.editedDuration))"
+        return clip.speed == 1 ? range : "\(range), \(speedLabel(clip.speed))"
     }
 
     // MARK: - Formatting

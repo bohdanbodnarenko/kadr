@@ -171,10 +171,36 @@ public final class StudioDocumentModel {
     public var showsExportOptions = false
 
     /// Set when something went wrong that the user should see.
-    public var failure: StudioFailurePresentation?
+    public var failure: StudioFailurePresentation? {
+        didSet {
+            if let failure, failure != oldValue {
+                Self.announce(failure.title + " " + failure.message)
+            }
+        }
+    }
 
     /// Set when something worked and saying so is the whole feedback.
-    public var notice: String?
+    public var notice: String? {
+        didSet {
+            if let notice, notice != oldValue {
+                Self.announce(notice)
+            }
+        }
+    }
+
+    /// Says `text` to VoiceOver (docs/17 T-STU-11). A banner that appears is silent to
+    /// someone who cannot see it, so exports, notices and failures are announced too.
+    static func announce(_ text: String) {
+        guard let app = NSApp else { return }
+        NSAccessibility.post(
+            element: app,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: text,
+                .priority: NSAccessibilityPriorityLevel.high.rawValue
+            ]
+        )
+    }
 
     /// The look last applied from the preset bar.
     var storedAppliedPresetID: UUID?
@@ -207,6 +233,8 @@ public final class StudioDocumentModel {
     /// decisions: an "um" is never content, a silent stretch sometimes is.
     public var tidyRemovesFillers = true
     public var tidyShortensPauses = true
+    /// The J/K/L speed: −2, −1, 0, 1 or 2 (docs/17 T-STU-11).
+    @ObservationIgnored var shuttleSpeed = 0
 
     /// Which pending cuts are selected to apply. All on by default.
     public var selectedCutIDs: Set<UUID> = []
