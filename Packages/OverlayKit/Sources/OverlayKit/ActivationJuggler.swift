@@ -8,6 +8,10 @@ public protocol ActivationPolicyControlling: AnyObject {
     func currentActivationPolicy() -> NSApplication.ActivationPolicy
     @discardableResult func apply(_ policy: NSApplication.ActivationPolicy) -> Bool
     func activateApp()
+    /// Whether this app is the active one right now.
+    var isActiveApp: Bool { get }
+    /// Hands activation to `app` the cooperative macOS 14 way.
+    func returnActivation(to app: NSRunningApplication)
 }
 
 extension NSApplication: ActivationPolicyControlling {
@@ -22,6 +26,17 @@ extension NSApplication: ActivationPolicyControlling {
 
     public func activateApp() {
         activate()
+    }
+
+    public var isActiveApp: Bool {
+        isActive
+    }
+
+    /// `yieldActivation(to:)` then `activate(from:)`: the pair macOS 14 expects, so the
+    /// hand-back is honoured rather than refused as focus stealing.
+    public func returnActivation(to app: NSRunningApplication) {
+        yieldActivation(to: app)
+        app.activate(from: .current)
     }
 }
 
@@ -79,5 +94,83 @@ public final class ActivationJuggler {
             self.application.apply(self.idlePolicy)
             self.logger.debug("Activation policy returned to idle")
         }
+    }
+
+    // MARK: - Temporary activation (docs/17 §5 theme 1)
+
+    /// Whether `bundleIdentifier` is an app Kadr may hand focus back to.
+    ///
+    /// Never Kadr itself or one of its sibling processes: "return to Kadr" is exactly the
+    /// stale state that left the user's app unfocused after every island capture (T-CAP-3).
+    public nonisolated static func isReturnable(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return true }
+        return !bundleIdentifier.hasPrefix("app.kadr.")
+    }
+
+    /// The frontmost app right now, if Kadr may return focus to it.
+    public static func returnTarget(
+        _ app: NSRunningApplication? = NSWorkspace.shared.frontmostApplication
+    ) -> NSRunningApplication? {
+        guard let app, app.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              isReturnable(bundleIdentifier: app.bundleIdentifier) else { return nil }
+        return app
+    }
+
+    /// Activates Kadr until the returned lease ends, then gives activation back.
+    ///
+    /// The one sanctioned way to activate the agent: a bare `NSApp.activate` has no
+    /// matching hand-back, so the user's app is left inactive with no key window and the
+    /// next keystroke beeps.
+    public func beginTemporaryActivation(returningTo app: NSRunningApplication?) -> TemporaryActivation {
+        application.activateApp()
+        return TemporaryActivation(juggler: self, returnTo: app)
+    }
+
+    /// Activates Kadr for the duration of `body` — a modal alert or open panel — then
+    /// returns activation to `app`.
+    public func withTemporaryActivation<T>(
+        returningTo app: NSRunningApplication?,
+        _ body: () throws -> T
+    ) rethrows -> T {
+        let lease = beginTemporaryActivation(returningTo: app)
+        defer { lease.end() }
+        return try body()
+    }
+
+    /// Gives activation back to `app`, if Kadr holds it and `app` is somewhere to go.
+    ///
+    /// Does nothing while a regular window (Settings, onboarding) is open: that window is
+    /// where the user is, and yielding would push it behind their other app.
+    public func yieldActivation(to app: NSRunningApplication?) {
+        guard let app, regularWindowCount == 0, application.isActiveApp,
+              Self.isReturnable(bundleIdentifier: app.bundleIdentifier) else { return }
+        application.returnActivation(to: app)
+        logger.debug("Activation returned to the previous app")
+    }
+}
+
+/// A span during which Kadr holds activation, from `beginTemporaryActivation`.
+@MainActor
+public final class TemporaryActivation {
+    private weak var juggler: ActivationJuggler?
+    /// Where activation goes when the lease ends.
+    public let returnTo: NSRunningApplication?
+    public private(set) var hasEnded = false
+
+    init(juggler: ActivationJuggler, returnTo: NSRunningApplication?) {
+        self.juggler = juggler
+        self.returnTo = returnTo
+    }
+
+    /// Returns activation. Idempotent.
+    public func end() {
+        guard !hasEnded else { return }
+        hasEnded = true
+        juggler?.yieldActivation(to: returnTo)
+    }
+
+    /// Ends the lease without handing activation back: the caller passed focus on itself.
+    public func abandon() {
+        hasEnded = true
     }
 }
