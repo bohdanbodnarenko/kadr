@@ -37,7 +37,8 @@ extension StatusItemController {
             isTemplate: true,
             title: "",
             length: NSStatusItem.squareLength,
-            toolTip: "Kadr — capture armed"
+            toolTip: "Kadr — capture armed",
+            accessibilityHelp: "A capture is waiting for you to choose what to capture."
         ))
         attachIdleMenu()
     }
@@ -56,7 +57,12 @@ extension StatusItemController {
             isTemplate: false,
             title: " \(elapsed)",
             length: NSStatusItem.variableLength,
-            toolTip: "Click to stop · right-click for pause and discard"
+            toolTip: "Click to stop · right-click for pause and discard",
+            // A press stops the take now, and VoiceOver must not still promise the island
+            // (docs/18 SH-10).
+            accessibilityHelp: isPaused
+                ? "Paused. Press to stop and save the recording. Use the actions rotor for the menu."
+                : "Press to stop and save the recording. Use the actions rotor for the menu."
         ))
         attachRecordingClick()
     }
@@ -84,6 +90,9 @@ extension StatusItemController {
         }
         if button.toolTip != appearance.toolTip {
             button.toolTip = appearance.toolTip
+        }
+        if button.accessibilityHelp() != appearance.accessibilityHelp {
+            button.setAccessibilityHelp(appearance.accessibilityHelp)
         }
     }
 
@@ -182,7 +191,7 @@ extension StatusItemController {
             return true
         }
         button.setAccessibilityCustomActions([action])
-        button.setAccessibilityHelp("Opens the capture island. Use the actions rotor for the menu.")
+        button.setAccessibilityHelp(StatusItemAppearance.idleHelp)
     }
 
     func popIdleMenu() {
@@ -263,8 +272,12 @@ struct StatusItemAppearance: Equatable {
     let title: String
     let length: CGFloat
     let toolTip: String
+    /// What VoiceOver says a press does, per state (docs/18 SH-10).
+    var accessibilityHelp: String = Self.idleHelp
     /// A dot on the glyph: something waits in the menu (docs/18 SH-3).
     var isBadged = false
+
+    static let idleHelp = "Opens the capture island. Use the actions rotor for the menu."
 
     /// Two appearances with the same key share one image.
     var imageKey: String {
