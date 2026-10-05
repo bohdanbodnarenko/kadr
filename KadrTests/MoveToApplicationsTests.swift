@@ -19,14 +19,22 @@ struct MoveToApplicationsTests {
         #expect(!RunLocation.classify(bundlePath: Bundle.main.bundlePath).shouldOfferMove)
     }
 
+    struct Replacement: Sendable {
+        let existing: String?
+        let incoming: String?
+        let replaces: Bool
+    }
+
     @Test("Only the same or an older build in Applications is replaced", arguments: [
-        ("100", "101", true),
-        ("101", "101", true),
-        ("102", "101", false),
-        ("1.10", "1.9", false),
-        ("1.9", "1.10", true)
-    ] as [(String?, String?, Bool)] + [(nil, "5", true), ("5", nil, true)])
-    func replacement(existing: String?, incoming: String?, replaces: Bool) {
-        #expect(MoveToApplications.shouldReplace(existing: existing, with: incoming) == replaces)
+        Replacement(existing: "100", incoming: "101", replaces: true),
+        Replacement(existing: "101", incoming: "101", replaces: true),
+        Replacement(existing: "102", incoming: "101", replaces: false),
+        Replacement(existing: "1.10", incoming: "1.9", replaces: false),
+        Replacement(existing: "1.9", incoming: "1.10", replaces: true),
+        Replacement(existing: nil, incoming: "5", replaces: true),
+        Replacement(existing: "5", incoming: nil, replaces: true)
+    ])
+    func replacement(row: Replacement) {
+        #expect(MoveToApplications.shouldReplace(existing: row.existing, with: row.incoming) == row.replaces)
     }
 }

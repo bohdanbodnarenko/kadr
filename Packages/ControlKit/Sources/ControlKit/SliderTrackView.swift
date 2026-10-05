@@ -45,7 +45,8 @@ struct SliderTrackView<Trailing: View>: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            Capsule(style: .continuous).fill(SliderPalette.track(for: colorScheme, increasedContrast: increasedContrast))
+            Capsule(style: .continuous)
+                .fill(SliderPalette.track(for: colorScheme, increasedContrast: increasedContrast))
             positioned
             labels
         }

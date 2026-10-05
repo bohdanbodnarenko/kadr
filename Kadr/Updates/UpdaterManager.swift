@@ -232,9 +232,8 @@ final class UpdaterManager: NSObject {
         #else
             guard let controller = updaterController() else {
                 // Check Now must answer even when the updater never started (docs/18 SH-7).
-                FailurePresenter.present(message: String(
-                    localized: "Kadr could not check for updates. Try again later, or download the latest version from the website."
-                ))
+                FailurePresenter.present(message: String(localized: "Kadr could not check for updates.")
+                    + " " + String(localized: "Try again later, or download the latest version from the website."))
                 return
             }
             logger.notice("Update check requested")

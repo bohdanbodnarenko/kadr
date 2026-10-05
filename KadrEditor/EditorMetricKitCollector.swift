@@ -37,7 +37,7 @@ final class EditorMetricKitCollector: NSObject, MXMetricManagerSubscriber {
             let hangs = payload.hangDiagnostics?.count ?? 0
             Self.store(payload.jsonRepresentation(), kind: "diagnostics", at: payload.timeStampEnd)
             KadrLog.logger(.app).notice(
-                "Editor MetricKit diagnostics: \(crashes, privacy: .public) crash(es), \(hangs, privacy: .public) hang(s)"
+                "Editor MetricKit: \(crashes, privacy: .public) crash(es), \(hangs, privacy: .public) hang(s)"
             )
         }
     }
@@ -55,8 +55,7 @@ final class EditorMetricKitCollector: NSObject, MXMetricManagerSubscriber {
         calendar.timeZone = .gmt
         let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let values = [parts.year, parts.month, parts.day, parts.hour, parts.minute, parts.second].map { $0 ?? 0 }
-        let stamp = String(format: "%04d-%02d-%02d-%02d%02d%02d", values[0], values[1], values[2],
-                           values[3], values[4], values[5])
+        let stamp = String(format: "%04d-%02d-%02d-%02d%02d%02d", arguments: values)
         return "\(prefix)\(kind)-\(stamp).json"
     }
 
