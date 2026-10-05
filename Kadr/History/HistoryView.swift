@@ -12,6 +12,9 @@ struct HistoryView: View {
     var preview: (HistoryRecord) -> Void = { _ in }
 
     @State var selection = HistorySelection()
+    /// Type-select's prefix so far, and when its last key arrived (docs/18 OUT-8).
+    @State var typeSelectPrefix = ""
+    @State var typeSelectTypedAt = Date.distantPast
     @State var kindFilter: HistoryItemKind?
     @State var dateFilter: HistoryDateFilter = .all
     @State var sort: HistorySort = .newest
@@ -60,7 +63,7 @@ struct HistoryView: View {
         .kadrLayoutDirection()
     }
 
-    private func title(for record: HistoryRecord) -> String {
+    func title(for record: HistoryRecord) -> String {
         if let url = controller.fileURL(for: record) {
             return recordingTitles[url.standardizedFileURL.path] ?? record.originalFilename
         }
@@ -186,10 +189,16 @@ struct HistoryView: View {
                                                 .map { NSImage(cgImage: $0, size: .zero) }
                                         },
                                         onTap: { handleTap(record.id) },
-                                        onDoubleTap: { open(record) }
+                                        onDoubleTap: { openDefault(record) }
                                     )
                                 )
                                 .contextMenu { cellMenu(record) }
+                                // The drag overlay takes the pointer; VoiceOver gets the
+                                // same select and open the mouse has (docs/18 OUT-8).
+                                .accessibilityAction { handleTap(record.id) }
+                                .accessibilityAction(named: Text("Open")) { openDefault(record) }
+                                .accessibilityAction(named: Text("Quick Look")) { preview(record) }
+                                .accessibilityAddTraits(selection.contains(record.id) ? .isSelected : [])
                                 .onAppear {
                                     if record.id == controller.records.last?.id {
                                         Task { await controller.loadMore() }
@@ -242,11 +251,12 @@ struct HistoryView: View {
             return .handled
         case .return:
             if let id = selection.focused ?? selection.anchor, let record = controller.record(id: id) {
-                open(record)
+                openDefault(record)
             }
             return .handled
         default:
-            return .ignored
+            guard press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
+            return typeSelect(press.characters) ? .handled : .ignored
         }
     }
 
@@ -267,15 +277,12 @@ struct HistoryView: View {
             Button("Annotate") { controller.onAnnotate?(record) }
             Button("Pin") { controller.onPin?(record) }
         }
-        Button("Copy") {
-            controller.copy(ids: [record.id])
+        Button(targets(for: record).count > 1 ? "Copy \(targets(for: record).count) Items" : "Copy") {
+            controller.copy(ids: targets(for: record))
         }
         Button("Copy Text") { controller.onCopyText?(record) }
         Button("Reveal in Finder") {
-            selection.selected = [record.id]
-            selection.anchor = record.id
-            selection.focused = record.id
-            revealSelected()
+            controller.reveal(ids: targets(for: record))
         }
         if let url = controller.namedURL(for: record) {
             ShareLink(item: url) {
@@ -284,8 +291,9 @@ struct HistoryView: View {
             .accessibilityLabel("Share \(record.originalFilename)")
         }
         Divider()
-        Button("Delete", role: .destructive) {
-            Task { await performDelete([record.id]) }
+        Button(targets(for: record).count > 1 ? "Move \(targets(for: record).count) Items to Trash" : "Move to Trash",
+               role: .destructive) {
+            Task { await performDelete(targets(for: record)) }
         }
     }
 
