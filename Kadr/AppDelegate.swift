@@ -365,6 +365,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SingleInstance.yieldIfAnotherIsRunning(beforeQuitting: { isYieldingToAnotherInstance = true }) {
             return
         }
+        // Before the recorder or camera bubble can open, so both come back where they were.
+        RecordingPlacement.settings = settings
         // Before anything attaches to this path: hotkeys, the CLI port, permissions
         // (docs/17 T-SH-2).
         let moving = MoveToApplications.offerIfNeeded { [weak self] in

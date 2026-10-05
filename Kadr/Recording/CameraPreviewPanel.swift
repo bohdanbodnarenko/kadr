@@ -15,10 +15,22 @@ final class CameraPreviewPanel {
     private static let minDiameter: CGFloat = 96
     private static let maxDiameter: CGFloat = 420
 
-    /// Where the user last dragged it, so it comes back where they put it.
-    static var savedOrigin: CGPoint?
-    static var savedDiameter: CGFloat = CameraPreviewPanel.defaultDiameter
-    static var isCircular = true
+    /// Where the user last dragged it, so it comes back where they put it — across
+    /// launches (docs/18 REC P3).
+    static var savedOrigin: CGPoint? {
+        get { RecordingPlacement.cameraOrigin }
+        set { RecordingPlacement.cameraOrigin = newValue }
+    }
+
+    static var savedDiameter: CGFloat {
+        get { RecordingPlacement.cameraDiameter }
+        set { RecordingPlacement.cameraDiameter = newValue }
+    }
+
+    static var isCircular: Bool {
+        get { RecordingPlacement.cameraIsCircular }
+        set { RecordingPlacement.cameraIsCircular = newValue }
+    }
     static var fillsDisplay = false
 
     private var panel: NonActivatingPanel?

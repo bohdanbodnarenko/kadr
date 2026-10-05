@@ -43,7 +43,10 @@ final class RecordingControlBar {
     ///
     /// Screen-relative and re-clamped on show: a bar remembered on a display that has since
     /// been unplugged has to come back somewhere visible rather than off the desk.
-    static var savedOrigin: CGPoint?
+    static var savedOrigin: CGPoint? {
+        get { RecordingPlacement.barOrigin }
+        set { RecordingPlacement.barOrigin = newValue }
+    }
 
     /// Set only while a hand-off from the All-in-One island creates the panel.
     private var entranceOrigin: CGPoint?
