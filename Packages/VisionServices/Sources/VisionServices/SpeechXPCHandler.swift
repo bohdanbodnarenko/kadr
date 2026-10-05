@@ -1,3 +1,4 @@
+import AVFoundation
 import CryptoKit
 import Foundation
 import os
@@ -41,7 +42,13 @@ public enum SpeechXPCHandler {
         var words: [SpeechWordDTO] = []
         for (index, item) in extracted.enumerated() {
             try Task.checkCancellation()
-            let slice = try await engine.transcribe(audioAt: item.url, locale: locale)
+            // Progress from how far the engine has read, so a long recording moves instead
+            // of sitting at 18% for minutes (docs/18 STU-9).
+            let seconds = await Self.duration(of: item.url)
+            let count = extracted.count
+            let slice = try await engine.transcribe(audioAt: item.url, locale: locale) { done in
+                progress(Self.fraction(track: index, of: count, secondsDone: done, duration: seconds))
+            }
             let labelled = slice.map { word in
                 SpeechWordDTO(text: word.text, start: word.start, end: word.end, track: item.track)
             }
@@ -59,6 +66,26 @@ public enum SpeechXPCHandler {
         )
         progress(1)
         return try JSONEncoder().encode(dto)
+    }
+
+    /// Overall progress for one track's `secondsDone`: the span 0.18…0.93 split evenly
+    /// between the tracks.
+    static func fraction(
+        track index: Int,
+        of count: Int,
+        secondsDone: TimeInterval,
+        duration: TimeInterval?
+    ) -> Double {
+        let within = duration.map { $0 > 0 ? min(max(secondsDone / $0, 0), 1) : 0 } ?? 0
+        let fraction = 0.18 + 0.75 * (Double(index) + within) / Double(max(count, 1))
+        return min(fraction, 0.93)
+    }
+
+    private static func duration(of url: URL) async -> TimeInterval? {
+        guard let seconds = try? await AVURLAsset(url: url).load(.duration).seconds,
+              seconds.isFinite, seconds > 0
+        else { return nil }
+        return seconds
     }
 
     public static func status(requestData: Data) async throws -> Data {

@@ -115,7 +115,7 @@ public extension StudioDocumentModel {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
             .appendingPathComponent(Self.safeFileName(session.displayName))
-            .appendingPathExtension(exportSettings.filenameExtension)
+            .appendingPathExtension(StudioExportSettings.sharing.filenameExtension)
     }
 
     /// This session's staging folder for Copy and Share.
@@ -144,13 +144,15 @@ public extension StudioDocumentModel {
         return cleaned.isEmpty ? "Recording" : String(cleaned.prefix(200))
     }
 
-    /// Writes the current edit to `destination`, reusing a stamped render when possible.
+    /// Writes the current edit to `destination` with the sharing preset, reusing a stamped
+    /// render when possible (docs/18 STU-6).
     private func writeEditedRecording(to destination: URL) async throws {
-        let snapshot = exportSnapshot()
+        let snapshot = exportSnapshot(settings: .sharing)
         if reuseRenderedFile(for: snapshot, at: destination) {
             return
         }
         exportProgress = 0
+        exportStartedAt = Date()
         flushDraft()
         try? document.commit(snapshot.edit)
         defer { exportProgress = nil }
@@ -224,11 +226,11 @@ public extension StudioDocumentModel {
     /// `edit` again after the `await` stamped the render with whatever the user had
     /// changed in the meantime — so the next export of the *new* edit reused the old
     /// file — and timed the captions against clips the movie does not have.
-    internal func exportSnapshot() -> StudioExportSnapshot {
+    internal func exportSnapshot(settings: StudioExportSettings? = nil) -> StudioExportSnapshot {
         StudioExportSnapshot(
             edit: edit,
             transcript: transcript,
-            settings: exportSettings,
+            settings: settings ?? exportSettings,
             inputsDigest: renderInputsDigest(edit: edit, transcript: transcript)
         )
     }
@@ -293,12 +295,24 @@ public extension StudioDocumentModel {
         // somewhere else is not the same thing as exporting.
         let snapshot = exportSnapshot()
         if reuseRenderedFile(for: snapshot, at: destination) {
-            notice = "That edit was already exported, so Kadr copied the finished file."
             writeCaptions(for: snapshot, beside: destination)
+            notice = "That edit was already exported, so Kadr copied the finished file."
+            lastExportedURL = destination
+            return
+        }
+
+        // Said before minutes of rendering, not after them (docs/18 STU-5).
+        if let estimate = estimatedExportBytes(for: snapshot),
+           StudioRenderPartialFile.hasRoom(forEstimatedBytes: estimate, at: destination) == false {
+            failure = .notEnoughSpaceToExport(
+                ByteCountFormatter.string(fromByteCount: Int64(estimate), countStyle: .file),
+                to: destination
+            )
             return
         }
 
         exportProgress = 0
+        exportStartedAt = Date()
         // Any debounced draft write lands before the commit, so the two cannot disagree
         // about what was exported.
         flushDraft()
@@ -310,6 +324,7 @@ public extension StudioDocumentModel {
             writeCaptions(for: snapshot, beside: destination)
             exportProgress = nil
             notifyExportFinished(at: destination)
+            lastExportedURL = destination
         } catch is CancellationError {
             exportProgress = nil
             logger.info("Studio export cancelled")
@@ -394,32 +409,6 @@ public extension StudioDocumentModel {
     /// rest.
     internal nonisolated static let gifRenderShare = 0.7
 
-    /// A local notification when the studio window is not key (docs/16 STU-C6).
-    ///
-    /// Only the file name crosses into the task. The request is built after permission is
-    /// granted, because `UNNotificationRequest` is not `Sendable` and capturing a finished
-    /// one in the authorization callback handed a non-Sendable object across threads.
-    private func notifyExportFinished(at destination: URL) {
-        // No app (a test host) is not "in the background": there is nobody to notify.
-        guard NSApp?.isActive == false else { return }
-        // Notification Center throws for a process with no bundle, which is a test runner.
-        guard Bundle.main.bundleIdentifier != nil, Bundle.main.bundleURL.pathExtension == "app" else { return }
-        let fileName = destination.lastPathComponent
-        Task {
-            let center = UNUserNotificationCenter.current()
-            guard await (try? center.requestAuthorization(options: [.alert, .sound])) == true else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "Export finished"
-            content.body = fileName
-            content.sound = .default
-            try? await center.add(UNNotificationRequest(
-                identifier: "studio.export.\(UUID().uuidString)",
-                content: content,
-                trigger: nil
-            ))
-        }
-    }
-
     /// Movie first, then ImageIO (docs/03 §1.8). GIF is not a video container, so the
     /// renderer writes a throwaway MOV and the encoder samples it.
     private func exportGIF(
@@ -461,18 +450,8 @@ public extension StudioDocumentModel {
             outputPath: destination.path,
             pixelSize: output.pixelSize,
             settingsDigest: RenderStamp.digest(of: snapshot.settings),
-            inputsDigest: snapshot.inputsDigest
+            inputsDigest: snapshot.inputsDigest,
+            outputIdentity: .of(path: destination.path)
         ))
-    }
-
-    /// SRT and VTT beside the movie (docs/13 T2.2). Tiny, and the reason the transcript
-    /// was persisted. Timed against the snapshot's clips, which are the movie's.
-    private func writeCaptions(for snapshot: StudioExportSnapshot, beside destination: URL) {
-        guard let transcript = snapshot.transcript else { return }
-        let base = destination.deletingPathExtension()
-        let srt = CaptionExport.srt(from: transcript, timeline: snapshot.edit.clips)
-        let vtt = CaptionExport.vtt(from: transcript, timeline: snapshot.edit.clips)
-        try? srt.data(using: .utf8)?.write(to: base.appendingPathExtension("srt"), options: .atomic)
-        try? vtt.data(using: .utf8)?.write(to: base.appendingPathExtension("vtt"), options: .atomic)
     }
 }

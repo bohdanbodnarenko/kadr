@@ -102,7 +102,7 @@ struct StudioRenderPipelineTests {
     }
 
     /// Cancelled while frames are moving, over a file an earlier export left there.
-    @Test("A render cancelled midway leaves no file, even where one used to be")
+    @Test("A render cancelled midway leaves the older file as it was, and no partial")
     func cancelledMidwayOverAnOldFile() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -131,10 +131,11 @@ struct StudioRenderPipelineTests {
         do {
             _ = try await task.value
         } catch {
-            #expect(
-                !FileManager.default.fileExists(atPath: destination.path),
-                "a cancelled export left a partial movie behind"
-            )
+            // docs/18 STU-5: the render went to a sibling, so the older export survives.
+            #expect(try Data(contentsOf: destination) == Data("an older export".utf8))
+            let partials = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+                .filter { $0.contains(".partial-") }
+            #expect(partials.isEmpty, "a cancelled export left a partial movie behind")
             return
         }
         // Finished before the cancellation landed: the file must then be the whole export.

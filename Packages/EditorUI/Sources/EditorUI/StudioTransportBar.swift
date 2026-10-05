@@ -103,7 +103,7 @@ struct StudioTransportBar: View {
             icon(
                 "trash",
                 label: "Delete selection",
-                help: "Delete the selected zoom, or the clip under the playhead"
+                help: "Delete the selected zoom or clip (Delete)"
             ) {
                 model.deleteTimelineSelection()
             }

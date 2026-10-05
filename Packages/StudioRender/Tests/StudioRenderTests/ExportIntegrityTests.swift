@@ -168,4 +168,62 @@ struct ExportIntegrityTests {
         let duration = try await written.load(.duration).seconds
         #expect(duration > 0.5, "the export finished but wrote less than the recording")
     }
+
+    // MARK: - docs/18 STU-5: the destination is replaced, never deleted first
+
+    @Test("A failed export leaves the file already at the destination, and no partial")
+    func failedExportKeepsExistingFile() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await Media.makeMovie(seconds: 6, in: folder)
+        try damageMediaData(of: movie)
+        let destination = folder.appendingPathComponent("out.mov")
+        let previous = Data("the export the user already had".utf8)
+        try previous.write(to: destination)
+
+        let source = StudioRenderer.Source(
+            screen: movie,
+            telemetry: InputTelemetry(),
+            edit: Media.edit(duration: 6),
+            pixelSize: CGSize(width: 320, height: 180)
+        )
+        _ = try? await StudioRenderer().render(source, to: destination, options: options)
+
+        #expect(try Data(contentsOf: destination) == previous)
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { $0.contains(".partial-") }
+        #expect(leftovers.isEmpty)
+    }
+
+    @Test("A finished export replaces the file already at the destination")
+    func finishedExportReplacesExistingFile() async throws {
+        let folder = Media.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let movie = try await Media.makeMovie(seconds: 1, in: folder)
+        let destination = folder.appendingPathComponent("out.mov")
+        try Data("old".utf8).write(to: destination)
+
+        _ = try await StudioRenderer().render(
+            StudioRenderer.Source(
+                screen: movie,
+                telemetry: InputTelemetry(),
+                edit: Media.edit(duration: 1),
+                pixelSize: CGSize(width: 320, height: 180)
+            ),
+            to: destination,
+            options: options
+        )
+        let duration = try await AVURLAsset(url: destination).load(.duration).seconds
+        #expect(duration > 0.5)
+    }
+
+    @Test("Free space is compared with a margin", arguments: [
+        (100, Int64(200), true),
+        (100, Int64(120), true),
+        (100, Int64(119), false),
+        (1_000_000_000, Int64(500_000_000), false)
+    ])
+    func freeSpace(estimate: Int, available: Int64, fits: Bool) {
+        #expect(StudioRenderPartialFile.fits(estimatedBytes: estimate, available: available, margin: 1.2) == fits)
+    }
 }

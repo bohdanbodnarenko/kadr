@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 public struct StudioRootView: View {
     @State private var model: StudioDocumentModel
+    @State private var isHoveringNotice = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
@@ -54,6 +55,7 @@ public struct StudioRootView: View {
         .animation(motion(.easeOut(duration: 0.2)), value: model.notice)
         .overlay(alignment: .top) { banner }
         .overlay(alignment: .top) { failureBanner }
+        .studioExportedBanner(model: model, reduceMotion: reduceMotion)
         .sheet(item: sheetFailure) { failure in
             StudioFailureSheet(failure: failure) { action in
                 handleFailureAction(action)
@@ -86,6 +88,10 @@ public struct StudioRootView: View {
                     .foregroundStyle(.tint)
                 Text(notice)
                     .font(.callout)
+                if let action = model.noticeAction {
+                    Button(action.title) { model.performNoticeAction(action) }
+                        .controlSize(.small)
+                }
                 Button {
                     model.notice = nil
                 } label: {
@@ -102,9 +108,14 @@ public struct StudioRootView: View {
             .shadow(radius: 6, y: 2)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
+            .onHover { isHoveringNotice = $0 }
             .task(id: notice) {
-                // Long enough to read a sentence, and it does not block anything meanwhile.
-                try? await Task.sleep(for: .seconds(4))
+                // Long enough to read a sentence, longer when there is a button to reach,
+                // and never while the pointer is on it (docs/14 UX-36).
+                try? await Task.sleep(for: .seconds(model.noticeAction == nil ? 4 : 8))
+                while isHoveringNotice, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
                 if model.notice == notice {
                     model.notice = nil
                 }
@@ -126,7 +137,6 @@ public struct StudioRootView: View {
             }
         }
         .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
-        .onAppear { model.applyDefaultPresetIfFresh() }
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.
@@ -300,7 +310,7 @@ public struct StudioRootView: View {
 
     private func copyButton(compact: Bool) -> some View {
         Menu {
-            Button("Copy") {
+            Button("Copy (\(StudioExportSettings.sharingSummary))") {
                 Task { await model.copyEditedToClipboard() }
             }
             Button("Copy Original") {
@@ -314,14 +324,14 @@ public struct StudioRootView: View {
             }
         }
         .fixedSize()
-        .help("Copy the edited recording shown in the preview")
+        .help("Copy the edited recording as \(StudioExportSettings.sharingSummary)")
         .accessibilityLabel("Copy")
         .disabled(model.exportProgress != nil)
     }
 
     private func shareControl(compact: Bool) -> some View {
         Menu {
-            Button("Share") {
+            Button("Share (\(StudioExportSettings.sharingSummary))") {
                 Task { await model.shareEdited() }
             }
             ShareLink(item: model.session.screenURL) {
@@ -336,7 +346,7 @@ public struct StudioRootView: View {
         }
         .fixedSize()
         .background(StudioShareAnchor(model: model))
-        .help("Share the edited recording shown in the preview")
+        .help("Share the edited recording as \(StudioExportSettings.sharingSummary)")
         .accessibilityLabel("Share")
         .disabled(model.exportProgress != nil)
     }
@@ -347,6 +357,10 @@ public struct StudioRootView: View {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
                     .frame(width: compact ? 72 : 120)
+                // A percent and the time left, not a bar alone (docs/18 STU-13).
+                Text(compact ? "\(StudioDocumentModel.exportPercent(progress))%" : model.exportProgressLabel() ?? "")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 Button("Cancel") {
                     Task { await model.cancelExport() }
                 }
@@ -476,21 +490,5 @@ private final class DockProgressView: NSView {
         filled.size.width = max(filled.height, filled.width * min(max(progress, 0), 1))
         NSColor.white.setFill()
         NSBezierPath(roundedRect: filled, xRadius: filled.height / 2, yRadius: filled.height / 2).fill()
-    }
-}
-
-/// Hands the Share button's view to the model, so the share picker opens from the button
-/// and not from whichever window is key when the render finishes (docs/17 T-STU-4).
-private struct StudioShareAnchor: NSViewRepresentable {
-    let model: StudioDocumentModel
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        model.shareAnchorView = view
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        model.shareAnchorView = nsView
     }
 }

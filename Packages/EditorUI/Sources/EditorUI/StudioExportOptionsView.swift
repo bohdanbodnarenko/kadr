@@ -53,15 +53,10 @@ struct StudioExportOptionsView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Compress", isOn: $model.exportSettings.compresses)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                    Text(compressionHint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(model.exportSettings.sizePreset.hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let sizeHint {
@@ -110,13 +105,13 @@ struct StudioExportOptionsView: View {
 
     @ViewBuilder
     private var movieControls: some View {
-        labeled("Quality") {
-            Picker("Quality", selection: $model.exportSettings.quality) {
-                ForEach(StudioExportSettings.Quality.allCases) { option in
+        labeled("Size") {
+            Picker("Size", selection: $model.exportSettings.sizePreset) {
+                ForEach(StudioExportSettings.SizePreset.allCases) { option in
                     Text(option.rawValue).tag(option)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
         }
 
@@ -203,20 +198,6 @@ struct StudioExportOptionsView: View {
             "Plays on more platforms, including Windows, browsers, and Slack."
         case .gif:
             "An animated GIF of the edited recording. No audio."
-        }
-    }
-
-    private var compressionHint: String {
-        guard model.exportSettings.container != .gif else {
-            return "GIFs are sized by their own settings."
-        }
-        guard model.exportSettings.compresses else {
-            return "Smaller file, same look: the still parts of the recording stop costing space."
-        }
-        switch model.exportSettings.quality {
-        case .high: return "Looks identical. Usually about a quarter smaller, more when little moves."
-        case .medium: return "Looks the same. Usually 40% smaller or better."
-        case .low: return "About half the size. Fine text may soften slightly."
         }
     }
 

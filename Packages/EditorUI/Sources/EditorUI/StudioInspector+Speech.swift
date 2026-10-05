@@ -109,13 +109,17 @@ extension StudioInspector {
                 }
             }
         } else {
-            Toggle("Filler words", isOn: Bindable(model).tidyRemovesFillers)
+            // Filler words are known for a few languages only; elsewhere the toggle would
+            // propose nothing (docs/18 STU-10).
+            if model.fillerWordsAvailable {
+                Toggle("Filler words", isOn: Bindable(model).tidyRemovesFillers)
+            }
             Toggle("Long pauses", isOn: Bindable(model).tidyShortensPauses)
             HStack {
                 Button("Find Cuts…") {
                     Task { await model.tidySpeech() }
                 }
-                .disabled(!model.tidyRemovesFillers && !model.tidyShortensPauses)
+                .disabled(!(model.tidyRemovesFillers && model.fillerWordsAvailable) && !model.tidyShortensPauses)
                 Button("Transcribe") {
                     Task { await model.transcribeOnly() }
                 }

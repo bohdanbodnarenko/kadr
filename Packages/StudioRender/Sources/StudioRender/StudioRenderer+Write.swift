@@ -22,7 +22,10 @@ extension StudioRenderer {
         progress: (@Sendable (Double) -> Void)?
     ) async throws -> Output {
         let plan = composer.plan
-        try? FileManager.default.removeItem(at: destination)
+        // Rendered beside the destination and swapped in at the end, so a failed or
+        // cancelled export leaves the file the user already had where it was (docs/18
+        // STU-5). Same folder, so the swap is a rename on one volume.
+        let partial = StudioRenderPartialFile.url(for: destination)
 
         // Every failure out of this function has to leave nothing behind (docs/10 R0.4).
         //
@@ -42,13 +45,13 @@ extension StudioRenderer {
         defer {
             if !finished {
                 open.cancel()
-                try? FileManager.default.removeItem(at: destination)
+                try? FileManager.default.removeItem(at: partial)
             }
         }
 
         let reader = try makeReader(state, options: options)
         open.reader = reader
-        let writer = try makeWriter(destination: destination, size: plan.outputSize, options: options, state: state)
+        let writer = try makeWriter(destination: partial, size: plan.outputSize, options: options, state: state)
         open.writer = writer
 
         guard reader.reader.startReading() else {
@@ -101,6 +104,7 @@ extension StudioRenderer {
         guard frameCount > 0 else {
             throw RenderError.writingFailed("no frames were composed")
         }
+        try StudioRenderPartialFile.swapIntoPlace(partial, at: destination)
         throttle.update(1)
         // Past every throw: the file at the destination is now the whole export.
         finished = true

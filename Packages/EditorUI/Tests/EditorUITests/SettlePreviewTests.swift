@@ -25,11 +25,11 @@ struct SettlePreviewTests {
     /// dozen others, so a fixed `sleep` of four times the window is not the safety margin
     /// it looks like — this suite failed on exactly that, asserting a 30 ms timer had fired
     /// after 120 ms on a machine that had not got round to it. Polling turns "long enough,
-    /// probably" into "as long as it takes, up to a second", which is both faster in the
+    /// probably" into "as long as it takes, up to five seconds", which is both faster in the
     /// ordinary case and not a coin toss in the bad one.
     private func waitUntil(
         _ condition: () -> Bool,
-        within timeout: Duration = .seconds(1)
+        within timeout: Duration = .seconds(5)
     ) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {

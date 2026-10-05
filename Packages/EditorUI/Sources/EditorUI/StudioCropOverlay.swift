@@ -29,6 +29,40 @@ struct StudioCropOverlay: View {
             }
         }
         .contentShape(Rectangle())
+        // The keyboard can crop too (docs/14 UX-33): the arrows move the frame a point,
+        // ten with ⇧, and ⌥ resizes from the bottom-right corner instead.
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow], phases: [.down, .repeat]) { press in
+            nudge(press)
+        }
+    }
+
+    private func nudge(_ press: KeyPress) -> KeyPress.Result {
+        let step: CGFloat = press.modifiers.contains(.shift) ? 10 : 1
+        let delta: CGSize = switch press.key {
+        case .leftArrow: CGSize(width: -step, height: 0)
+        case .rightArrow: CGSize(width: step, height: 0)
+        case .upArrow: CGSize(width: 0, height: -step)
+        case .downArrow: CGSize(width: 0, height: step)
+        default: .zero
+        }
+        guard delta != .zero else { return .ignored }
+        let handle: CropHandle = press.modifiers.contains(.option) ? .bottomTrailing : .body
+        model.updateWorkingCrop(handle: handle, translation: delta, inFitted: fitted)
+        return .handled
+    }
+
+    /// One VoiceOver adjust step for a handle: two percent of the preview, outward on
+    /// increment and inward on decrement.
+    private func adjust(_ handle: CropHandle, _ direction: AccessibilityAdjustmentDirection) {
+        let sign: CGFloat = direction == .increment ? 1 : -1
+        let outward = handle.outward
+        let delta = CGSize(
+            width: outward.dx * sign * fitted.width * 0.02,
+            height: outward.dy * sign * fitted.height * 0.02
+        )
+        model.updateWorkingCrop(handle: handle, translation: delta, inFitted: fitted)
     }
 
     private func cropHandle(_ handle: CropHandle, crop: CGRect) -> some View {
@@ -48,8 +82,10 @@ struct StudioCropOverlay: View {
                     NSCursor.arrow.set()
                 }
             }
+            .accessibilityElement()
             .accessibilityLabel(handle.accessibilityTitle)
-            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Adjust to grow or shrink the crop")
+            .accessibilityAdjustableAction { direction in adjust(handle, direction) }
     }
 
     private func dimmers(around crop: CGRect) -> some View {
@@ -101,6 +137,21 @@ struct StudioCropOverlay: View {
 }
 
 private extension CropHandle {
+    /// The direction this handle moves to make the crop bigger.
+    var outward: CGVector {
+        switch self {
+        case .topLeading: CGVector(dx: -1, dy: -1)
+        case .top: CGVector(dx: 0, dy: -1)
+        case .topTrailing: CGVector(dx: 1, dy: -1)
+        case .leading: CGVector(dx: -1, dy: 0)
+        case .trailing: CGVector(dx: 1, dy: 0)
+        case .bottomLeading: CGVector(dx: -1, dy: 1)
+        case .bottom: CGVector(dx: 0, dy: 1)
+        case .bottomTrailing: CGVector(dx: 1, dy: 1)
+        case .body: CGVector(dx: 0, dy: 0)
+        }
+    }
+
     var accessibilityTitle: String {
         switch self {
         case .topLeading: "Crop top left"

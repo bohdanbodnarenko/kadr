@@ -15,6 +15,9 @@ import UniformTypeIdentifiers
 /// would keep tens of megabytes for a window nobody can see.
 @MainActor
 final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation {
+    /// One saved frame for every studio window.
+    static let frameAutosaveName = "KadrStudioWindow"
+
     enum OpenError: LocalizedError {
         case notASession(URL)
 
@@ -116,6 +119,9 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             return
         }
 
+        // From the window opening, not from a view's onAppear: a view can appear more than
+        // once, and the starting look is the document's business (docs/18 STU-14).
+        model.applyDefaultPresetIfFresh()
         let root = StudioRootView(model: model) { [weak self] model in
             self?.presentExportPanel(for: model)
         }
@@ -129,9 +135,17 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             defer: false
         )
         window.title = model.session.displayName
+        // The title-bar proxy hands out the original recording; the edit leaves through
+        // Export, Copy and Share (docs/18 STU-12).
+        window.representedURL = model.session.screenURL
         window.contentView = hosting
         window.delegate = self
-        window.center()
+        // Where the user last left a studio window, rather than centred at the factory
+        // size every time (docs/18 STU-12).
+        if !window.setFrameUsingName(Self.frameAutosaveName) {
+            window.center()
+        }
+        window.setFrameAutosaveName(Self.frameAutosaveName)
         window.isReleasedWhenClosed = false
         model.session.markOpened()
         self.window = window
@@ -175,7 +189,9 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     }
 
     @objc func exportMovie(_ sender: Any?) {
-        guard model.exportProgress == nil else { return }
+        // Not while cropping: the popover was queued and opened later, out of nowhere,
+        // when the crop ended (docs/18 STU-11).
+        guard model.exportProgress == nil, !model.isCropping else { return }
         model.showsExportOptions = true
     }
 
@@ -206,6 +222,11 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case .togglePlayback: model.togglePlayback()
         case let .step(frames): model.step(frames: frames)
         case let .skip(seconds): model.step(seconds: seconds)
+        case .shuttleReverse: model.shuttle(.reverse)
+        case .shuttleStop: model.shuttle(.stop)
+        case .shuttleForward: model.shuttle(.forward)
+        case .seekToStart: model.seekToStart()
+        case .seekToEnd: model.seekToEnd()
         }
         return true
     }
@@ -219,7 +240,8 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case #selector(copy(_:)):
             FileManager.default.fileExists(atPath: model.session.screenURL.path)
         case #selector(splitClipAtPlayhead(_:)): !model.isCropping
-        case #selector(exportMovie(_:)): model.exportProgress == nil
+        case #selector(exportMovie(_:)): model.exportProgress == nil && !model.isCropping
+        case #selector(deleteTimelineSelection(_:)): model.canDeleteTimelineSelection
         default: true
         }
     }
@@ -239,11 +261,13 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         panel.canCreateDirectories = true
         panel.message = "Export the edited recording."
 
-        let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+        let completion: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
+            // No Finder reveal: the studio says "Exported · Show in Finder" itself, with a
+            // file the user can drag straight out, instead of switching apps every time
+            // (docs/18 STU-13).
             Task { @MainActor in
                 await model.export(to: url)
-                self?.reveal(url)
             }
         }
         // A sheet on the studio window (docs/17 T-STU-12), so it is plainly attached to
@@ -253,15 +277,6 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         } else {
             panel.begin(completionHandler: completion)
         }
-    }
-
-    /// Shows the finished file, if it was written.
-    ///
-    /// Only on success: revealing after a failure opens a folder to point at nothing, and
-    /// the failure has already been reported through the model.
-    private func reveal(_ url: URL) {
-        guard model.failure == nil, FileManager.default.fileExists(atPath: url.path) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     // MARK: - Closing

@@ -169,6 +169,13 @@ public struct TranscriptionOptions: Sendable, Hashable {
         self.timeout = max(timeout, 0)
     }
 
+    /// How long to wait for a recording of `duration` seconds before calling the helper
+    /// stuck: three times real time, never under 30 minutes (docs/18 STU-9). A flat
+    /// 30 minutes failed every recording longer than about that.
+    public static func timeout(forDuration duration: TimeInterval) -> TimeInterval {
+        max(30 * 60, duration * 3)
+    }
+
     public func scoped(to engine: SpeechEngineKind) -> TranscriptionOptions {
         switch engine {
         case .appleAnalyzer, .appleLegacy:
