@@ -89,6 +89,8 @@ final class QuickAccessManager {
     @ObservationIgnored var studioSessionCache: [UUID: Bool] = [:]
     /// The trackpad gesture in progress over the stack (docs/17 T-OUT-13).
     @ObservationIgnored var swipeTracker = OverlaySwipeTracker()
+    /// Where the card under a two-finger swipe sits while the finger is down (docs/18 OUT-16).
+    var swipeOffset = SwipeOffset.zero
     /// Cards deleted inside their Undo window (docs/17 T-OUT-1).
     @ObservationIgnored var pendingDeletions: [UUID: PendingCardDeletion] = [:]
     /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
@@ -278,5 +280,17 @@ final class QuickAccessManager {
             applicationName: record.applicationName,
             origin: .library
         ))
+    }
+}
+
+/// A card's horizontal displacement during a swipe.
+struct SwipeOffset: Equatable {
+    var itemID: UUID?
+    var x: CGFloat
+
+    static let zero = SwipeOffset(itemID: nil, x: 0)
+
+    func x(for id: UUID) -> CGFloat {
+        itemID == id ? x : 0
     }
 }

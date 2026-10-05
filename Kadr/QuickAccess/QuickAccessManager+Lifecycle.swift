@@ -160,8 +160,10 @@ extension QuickAccessManager {
               let hoveredItemID,
               let item = items.first(where: { $0.id == hoveredItemID })
         else {
+            swipeOffset = .zero
             return
         }
+        swipeOffset = SwipeOffset(itemID: item.id, x: swipe == nil ? swipeTracker.liveOffsetX : 0)
         switch swipe {
         case .dismiss:
             dismiss(item)
