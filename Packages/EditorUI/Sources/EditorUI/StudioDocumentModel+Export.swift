@@ -294,9 +294,9 @@ public extension StudioDocumentModel {
         // somewhere else is not the same thing as exporting.
         let snapshot = exportSnapshot()
         if reuseRenderedFile(for: snapshot, at: destination) {
+            writeCaptions(for: snapshot, beside: destination)
             notice = "That edit was already exported, so Kadr copied the finished file."
             lastExportedURL = destination
-            writeCaptions(for: snapshot, beside: destination)
             return
         }
 
@@ -481,12 +481,23 @@ public extension StudioDocumentModel {
 
     /// SRT and VTT beside the movie (docs/13 T2.2). Tiny, and the reason the transcript
     /// was persisted. Timed against the snapshot's clips, which are the movie's.
+    ///
+    /// They share the movie's name so players pick them up, and so they replace the
+    /// captions of the movie this export just replaced. Both outcomes are said: files that
+    /// appeared unannounced beside an export, or silently failed to, were a surprise
+    /// either way (docs/18 STU P3).
     private func writeCaptions(for snapshot: StudioExportSnapshot, beside destination: URL) {
         guard let transcript = snapshot.transcript else { return }
         let base = destination.deletingPathExtension()
         let srt = CaptionExport.srt(from: transcript, timeline: snapshot.edit.clips)
         let vtt = CaptionExport.vtt(from: transcript, timeline: snapshot.edit.clips)
-        try? srt.data(using: .utf8)?.write(to: base.appendingPathExtension("srt"), options: .atomic)
-        try? vtt.data(using: .utf8)?.write(to: base.appendingPathExtension("vtt"), options: .atomic)
+        do {
+            try Data(srt.utf8).write(to: base.appendingPathExtension("srt"), options: .atomic)
+            try Data(vtt.utf8).write(to: base.appendingPathExtension("vtt"), options: .atomic)
+            notice = "Captions saved beside the movie as .srt and .vtt."
+        } catch {
+            logger.error("Could not write captions: \(error.localizedDescription, privacy: .public)")
+            notice = "The movie was exported, but its captions could not be saved."
+        }
     }
 }
