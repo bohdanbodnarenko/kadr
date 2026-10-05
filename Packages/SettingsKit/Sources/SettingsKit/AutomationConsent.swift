@@ -109,6 +109,15 @@ public final class AutomationConsent {
         persist()
     }
 
+    /// Back to first launch: other apps refused, nothing remembered. Part of Reset All
+    /// Settings, which used to leave every grant in place (docs/18 SH-5).
+    public func reset() {
+        allowsOtherApps = false
+        decisions.removeAll()
+        names.removeAll()
+        persist()
+    }
+
     /// One remembered answer, for the Settings list.
     public struct RememberedApp: Equatable, Sendable {
         public let key: String

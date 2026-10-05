@@ -38,6 +38,9 @@ extension AppDelegate {
             editor.terminate()
         }
         _ = CLIInstaller().uninstall()
+        // A login item left registered would relaunch the clean slate at the next login
+        // (docs/18 SH-5).
+        try? loginItem.setEnabled(false)
 
         let fileManager = FileManager.default
         let library = fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first

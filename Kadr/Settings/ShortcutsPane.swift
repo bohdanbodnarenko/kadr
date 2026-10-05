@@ -11,6 +11,7 @@ struct ShortcutsPane: View {
     var health: HotkeyHealth?
     /// Bumped on every change so Restore Default re-reads whether it is needed.
     @State private var revision = 0
+    @State private var showsRestoreConfirmation = false
 
     var body: some View {
         Form {
@@ -18,9 +19,21 @@ struct ShortcutsPane: View {
                 section(group.title, group.commands)
             }
             Section {
-                Button("Restore All Shortcuts") {
-                    HotkeyCenter.restoreAll()
-                    shortcutsChanged()
+                Button("Restore All Shortcuts…") {
+                    showsRestoreConfirmation = true
+                }
+                .confirmationDialog(
+                    "Restore every shortcut to its default?",
+                    isPresented: $showsRestoreConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Restore", role: .destructive) {
+                        HotkeyCenter.restoreAll()
+                        shortcutsChanged()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Shortcuts you set yourself are replaced, and ones you cleared come back.")
                 }
             } footer: {
                 Text(
