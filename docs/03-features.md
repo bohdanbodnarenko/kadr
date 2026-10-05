@@ -211,7 +211,7 @@ There is deliberately **no sharing infrastructure**: no hosting, no upload targe
 
 ## 7. Desktop hygiene & precision utilities (P2)
 
-- **Hide desktop icons** (and widgets): toggle from menu/HUD/URL scheme; auto-hide while recording (setting); temporary wallpaper override (solid color/image) during capture.
+- **Hide desktop icons** (and widgets): toggle from menu/HUD/URL scheme; auto-hide while recording (setting); temporary wallpaper override (solid color/image) during capture. Icons are hidden by a window showing each display's wallpaper just above the icon layer — never by restarting the Finder — so hiding is instant, a Finder copy in progress is untouched, and nothing is left hidden if Kadr quits or crashes. The cover shows a still frame of the wallpaper, and the same one on every Space.
 - **Crosshair precision mode:** full-screen crosshair guides + coordinates while selecting (toggle in overlay with `C`).
 - **Screen freeze** as a standalone toggle (freeze display(s) to inspect moving UI, then capture normally) — the P1 area-capture freeze exposed as its own command.
 
