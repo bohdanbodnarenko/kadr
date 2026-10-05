@@ -112,6 +112,21 @@ extension QuickAccessManager {
         }
     }
 
+    /// Whether a deletion is still waiting out its Undo window.
+    var hasPendingDeletions: Bool {
+        !pendingDeletions.isEmpty
+    }
+
+    /// Settles every pending deletion and waits for it, for quitting: the fire-and-forget
+    /// commits of `commitPendingDeletions` never run once the process exits, which left a
+    /// "deleted" capture in the library (docs/18 OUT-5).
+    func settlePendingDeletions() async {
+        for id in Array(pendingDeletions.keys) {
+            pendingDeletions[id]?.commit?.cancel()
+            await commitDeletion(id: id)
+        }
+    }
+
     /// Settles every deletion still inside its Undo window: a new delete, or quitting.
     func commitPendingDeletions() {
         for id in Array(pendingDeletions.keys) {

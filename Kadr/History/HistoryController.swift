@@ -309,6 +309,19 @@ final class HistoryController {
         await reload(filter: filter)
     }
 
+    /// Whether a History delete is still waiting out its Undo window.
+    var hasPendingTrash: Bool {
+        !pendingTrash.isEmpty
+    }
+
+    /// Runs every pending delete now, for quitting (docs/18 OUT-5).
+    func settlePendingTrash() async {
+        for batch in Array(pendingTrash.keys) {
+            pendingTrash[batch]?.commit.cancel()
+            await commitTrash(batch)
+        }
+    }
+
     /// Deletes a batch whose Undo window has passed.
     func commitTrash(_ batch: UUID) async {
         guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
