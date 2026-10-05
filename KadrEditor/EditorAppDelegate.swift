@@ -44,6 +44,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // hand-off markers mean an open that never arrived (docs/18 ED-1).
         CaptureImporter().sweepImports(keeping: Set(windows.map(\.documentURL)))
         EditorHandoff().sweepExpired()
+        // Studio Copy leaves its render behind so the clipboard outlives the window; a day
+        // later nobody is pasting it (docs/18 STU-1).
+        Task.detached(priority: .utility) { StudioDocumentModel.sweepStagedRenders() }
 
         // Opened with no document — the agent always passes one, so this is a developer
         // launching the editor directly.

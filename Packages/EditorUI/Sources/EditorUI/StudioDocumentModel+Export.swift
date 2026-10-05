@@ -100,8 +100,12 @@ public extension StudioDocumentModel {
         return false
     }
 
-    /// Where Copy and Share render to: `<project>.<ext>` in a folder of this session's own,
-    /// removed when the window closes (docs/17 T-STU-4).
+    /// Where Copy and Share render to: `<project>.<ext>` in a folder of this session's own
+    /// (docs/17 T-STU-4).
+    ///
+    /// It outlives the window: the clipboard holds only a file URL, so removing the file on
+    /// close made a copy that died before it was pasted (docs/18 STU-1). Old folders are
+    /// swept by age at the next editor launch instead.
     ///
     /// Named for the project because the recipient sees the name — `kadr-copy-<UUID>.mov`
     /// is what used to land in their Downloads — and kept in one folder so it can be
@@ -116,14 +120,42 @@ public extension StudioDocumentModel {
 
     /// This session's staging folder for Copy and Share.
     internal var stagingDirectory: URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr Studio Staging", isDirectory: true)
+        Self.stagingRoot
             .appendingPathComponent(session.directory.deletingPathExtension().lastPathComponent, isDirectory: true)
     }
 
-    /// Deletes what Copy and Share left behind. Called when the window closes.
+    /// Every session's staging folder lives here.
+    nonisolated static var stagingRoot: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("Kadr Studio Staging", isDirectory: true)
+    }
+
+    /// Deletes what Copy and Share left behind for this session.
     func purgeStagedRenders() {
         try? FileManager.default.removeItem(at: stagingDirectory)
+    }
+
+    /// Deletes staged renders older than `maximumAge`, for every session. Called at launch,
+    /// so a copy survives its window long enough to be pasted (docs/18 STU-1).
+    @discardableResult
+    nonisolated static func sweepStagedRenders(
+        olderThan maximumAge: TimeInterval = 24 * 60 * 60,
+        now: Date = Date(),
+        root: URL = stagingRoot
+    ) -> Int {
+        let manager = FileManager.default
+        guard let folders = try? manager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return 0 }
+        var removed = 0
+        for folder in folders {
+            let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            guard now.timeIntervalSince(modified) > maximumAge else { continue }
+            if (try? manager.removeItem(at: folder)) != nil { removed += 1 }
+        }
+        return removed
     }
 
     /// A project name as a file name: no path separators, no colon (Finder's slash).
@@ -309,7 +341,7 @@ public extension StudioDocumentModel {
             logger.info("Studio export cancelled")
         } catch {
             exportProgress = nil
-            failure = .exportFailed(error.localizedDescription)
+            failure = .exportFailed(error.localizedDescription, to: destination)
             logger.error("Studio export failed: \(error.localizedDescription, privacy: .public)")
         }
     }
