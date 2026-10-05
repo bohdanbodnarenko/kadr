@@ -269,6 +269,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             systemSymbolName: controls.isPaused ? "play.circle" : "pause.circle",
             accessibilityDescription: nil
         )
+        pause.setShortcut(for: CaptureCommand.pauseRecording.shortcutName)
         menu.addItem(pause)
 
         let restart = NSMenuItem(
