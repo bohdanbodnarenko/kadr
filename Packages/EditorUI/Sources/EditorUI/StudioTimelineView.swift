@@ -157,6 +157,17 @@ struct StudioTimelineView: View {
                             PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
                                 .id(Self.playheadAnchor)
                         }
+                        .background {
+                            // Inside the content, so it can read how far it has scrolled.
+                            PlayheadFollower(
+                                clock: model.playheadClock,
+                                scale: scale,
+                                viewportWidth: viewport,
+                                isFollowing: zoom > 1 && model.isPlaying
+                            ) {
+                                scroller.scrollTo(Self.playheadAnchor, anchor: PlayheadFollower.landing)
+                            }
+                        }
                         .overlay(alignment: .topLeading) {
                             Color.clear
                                 .frame(width: 1, height: 1)
@@ -164,11 +175,7 @@ struct StudioTimelineView: View {
                                 .id(Self.zoomAnchor)
                         }
                 }
-                .background {
-                    PlayheadFollower(clock: model.playheadClock, isFollowing: zoom > 1) {
-                        scroller.scrollTo(Self.playheadAnchor, anchor: .center)
-                    }
-                }
+                .coordinateSpace(name: PlayheadFollower.viewportSpace)
                 .onChange(of: zoom) {
                     if zoom <= 1 {
                         scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
@@ -450,23 +457,6 @@ private struct PlayheadScrollAnchor: View {
         Color.clear
             .frame(width: 1, height: 1)
             .offset(x: clock.time * scale)
-    }
-}
-
-/// Keeps a zoomed timeline scrolled to the playhead while it moves.
-///
-/// A leaf so the per-tick `onChange` lives in a body that has nothing else to rebuild.
-private struct PlayheadFollower: View {
-    let clock: StudioPlayhead
-    let isFollowing: Bool
-    let follow: () -> Void
-
-    var body: some View {
-        Color.clear
-            .onChange(of: clock.time) {
-                guard isFollowing else { return }
-                follow()
-            }
     }
 }
 
