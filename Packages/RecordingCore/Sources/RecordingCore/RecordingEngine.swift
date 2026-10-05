@@ -389,7 +389,9 @@ public actor RecordingEngine {
             let hadVideo = segmentHasVideo
             await seedHeldFrame(into: writer, at: box)
             // Not the tick that seeded: re-appending at its time would repeat a timestamp.
-            if hadVideo { stillTailEnd = CMSampleBufferGetPresentationTimeStamp(box.buffer) }
+            if hadVideo {
+                stillTailEnd = CMSampleBufferGetPresentationTimeStamp(box.buffer)
+            }
             return
         }
         if box.kind != .video {

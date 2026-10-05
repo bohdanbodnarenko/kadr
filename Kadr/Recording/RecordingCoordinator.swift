@@ -90,6 +90,7 @@ final class RecordingCoordinator {
     var microphoneDropped = false {
         didSet { onStateChanged?() }
     }
+
     /// A device the take had to go without, shown on the bar once it is rolling.
     @ObservationIgnored var startNotice: String?
     /// Loudest microphone sample so far this take, for the silent-mic notice.
