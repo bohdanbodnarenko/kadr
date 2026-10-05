@@ -21,14 +21,16 @@ enum RecordingCrashRecovery {
         inProgressDirectory: URL = InterruptedRecordingStore.inProgressRoot(),
         saveFolder: URL,
         sessions: RecordingSessionStore? = StudioSessionRecorder.store(),
-        present: (URL) -> Void
+        present: (URL) -> Void,
+        unrecoverable: (URL) -> Void = { _ in }
     ) async -> Int {
         var restored = 0
         restored += await recoverAbandonedSegments(
             in: [temporaryDirectory, inProgressDirectory],
             saveFolder: saveFolder,
             sessions: sessions,
-            present: present
+            present: present,
+            unrecoverable: unrecoverable
         )
         restored += await recoverSessionsMissingManifests(sessions: sessions, present: present)
         return restored
@@ -46,11 +48,39 @@ enum RecordingCrashRecovery {
         alert.runModal()
     }
 
+    /// Says once that footage could not be recovered, and where it is (docs/18 REC-4).
+    static func announceUnrecoverable(_ directories: [URL]) {
+        guard !directories.isEmpty else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = directories.count == 1
+            ? "Kadr could not recover an interrupted recording"
+            : "Kadr could not recover \(directories.count) interrupted recordings"
+        alert.informativeText = "The footage could not be opened, so it was left where it is. "
+            + "Kadr will not try again."
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Show in Finder")
+        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(directories)
+    }
+
+    /// Left in a folder whose footage could not be recovered, so launch reports it once
+    /// and stops retrying it (docs/18 REC-4).
+    static let unrecoverableMarker = ".kadr-unrecoverable"
+
+    private static func markUnrecoverable(_ directory: URL, report: (URL) -> Void) {
+        let marker = directory.appendingPathComponent(unrecoverableMarker)
+        guard FileManager.default.createFile(atPath: marker.path, contents: Data()) else { return }
+        report(directory)
+    }
+
     private static func recoverAbandonedSegments(
         in roots: [URL],
         saveFolder: URL,
         sessions: RecordingSessionStore?,
-        present: (URL) -> Void
+        present: (URL) -> Void,
+        unrecoverable: (URL) -> Void
     ) async -> Int {
         var restored = 0
         for directory in InterruptedRecordingStore.directories(in: roots) {
@@ -58,7 +88,8 @@ enum RecordingCrashRecovery {
                 directory,
                 saveFolder: saveFolder,
                 sessions: sessions,
-                present: present
+                present: present,
+                unrecoverable: unrecoverable
             ) ? 1 : 0
         }
         return restored
@@ -68,8 +99,14 @@ enum RecordingCrashRecovery {
         _ directory: URL,
         saveFolder: URL,
         sessions: RecordingSessionStore?,
-        present: (URL) -> Void
+        present: (URL) -> Void,
+        unrecoverable: (URL) -> Void
     ) async -> Bool {
+        // Already reported: the user was told where it is, and retrying unreadable
+        // footage on every launch only costs time.
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent(unrecoverableMarker).path) {
+            return false
+        }
         let segments = InterruptedRecordingStore.segmentFiles(in: directory)
         // A folder left by a quit during setup holds nothing that was ever recorded: no
         // segment, or only an empty one. Recovery used to skip it and keep it forever
@@ -79,13 +116,17 @@ enum RecordingCrashRecovery {
             return false
         }
         let playable = await playableSegments(segments)
-        guard !playable.isEmpty else { return false }
+        guard !playable.isEmpty else {
+            markUnrecoverable(directory, report: unrecoverable)
+            return false
+        }
 
         let destination = uniqueMovieURL(in: saveFolder)
         do {
             _ = try await SegmentStitcher().stitch(playable, to: destination)
         } catch {
             logger.error("Could not stitch recovered segments: \(error.localizedDescription, privacy: .public)")
+            markUnrecoverable(directory, report: unrecoverable)
             return false
         }
 
