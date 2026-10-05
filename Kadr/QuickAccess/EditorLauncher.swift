@@ -45,6 +45,13 @@ struct EditorLauncher {
             return
         }
         let logger = logger
+        // The capture is the agent's own file: tell the editor to edit it where it is
+        // rather than copy it in like a Finder open (docs/18 ED-1).
+        do {
+            try EditorHandoff().mark(fileURL)
+        } catch {
+            logger.error("Could not mark the editor hand-off: \(error.localizedDescription, privacy: .public)")
+        }
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true

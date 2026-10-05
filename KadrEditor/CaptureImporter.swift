@@ -68,6 +68,30 @@ struct CaptureImporter {
         }
     }
 
+    /// Deletes imported copies older than `maximumAge`, except the ones open now.
+    ///
+    /// A copy exists only so a Finder-opened image is never edited in place; once its window
+    /// is gone nothing reads it again, and nothing else swept the folder (docs/18 ED-1). The
+    /// age keeps a week of crash-recovery copies reachable.
+    @discardableResult
+    func sweepImports(keeping open: Set<URL>, maximumAge: TimeInterval = 7 * 24 * 60 * 60, now: Date = Date()) -> Int {
+        let manager = FileManager.default
+        let keep = Set(open.map(\.standardizedFileURL.path))
+        guard let entries = try? manager.contentsOfDirectory(
+            at: Self.importsDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return 0 }
+        var removed = 0
+        for entry in entries where !keep.contains(entry.standardizedFileURL.path) {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            guard now.timeIntervalSince(modified) > maximumAge else { continue }
+            if (try? manager.removeItem(at: entry)) != nil { removed += 1 }
+        }
+        if removed > 0 { logger.info("Swept \(removed, privacy: .public) imported copies") }
+        return removed
+    }
+
     /// A free name in `directory`, keeping the original's own name where it can.
     ///
     /// The move itself is the collision check — testing first and copying after is how two

@@ -40,6 +40,10 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Application Support, and a deleted capture should not leave its annotations
         // behind (docs/07 H5, M7).
         EditorAutosave().sweepOrphans()
+        // Copies of Finder-opened images are only for the window that edits them, and stale
+        // hand-off markers mean an open that never arrived (docs/18 ED-1).
+        CaptureImporter().sweepImports(keeping: Set(windows.map(\.documentURL)))
+        EditorHandoff().sweepExpired()
 
         // Opened with no document — the agent always passes one, so this is a developer
         // launching the editor directly.
@@ -70,6 +74,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // back to the file they double-clicked, not to a hidden copy (T-ED-9).
         guard url.pathExtension.lowercased() != KadrDocumentFile.fileExtension else { return nil }
         guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
+        // A capture the agent handed over is edited in place, so ⌘S and Move to Trash act
+        // on the file the user sees (docs/18 ED-1).
+        guard !EditorHandoff().consume(url) else { return nil }
         return CaptureImporter().copyIntoLibrary(url)
     }
 
