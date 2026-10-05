@@ -215,9 +215,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // written into the recording as something the user did (docs/09 U3.2). Asked for at
         // the moment of a click: the notch shell grows under the pointer and the floating
         // bar can be dragged, so a cached rect is the shape it had a moment ago.
-        created.studio.chromeOnScreen = { [weak self] in
+        created.studio.chromeOnScreen = { [weak self, weak created] in
             guard let self else { return [] }
-            return [recordingControlBar.screenFrame, menuBarItemFrame].compactMap(\.self)
+            // The prompter and the camera bubble are Kadr's too: dragging or nudging them is
+            // not a click in the app being demonstrated (docs/18 REC-11).
+            return [
+                recordingControlBar.screenFrame,
+                menuBarItemFrame,
+                created?.teleprompter.screenFrame,
+                cameraRecorder.previewFrame
+            ].compactMap(\.self)
         }
         recordingStorage = created
         return created

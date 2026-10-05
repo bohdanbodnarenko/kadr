@@ -18,6 +18,9 @@ import StudioSession
 @MainActor
 final class TeleprompterPanel: NonActivatingPanel {
     private let scriptView = TeleprompterScriptView()
+    /// Words to move the script by, from the scroll wheel (docs/18 REC-11). Positive is
+    /// further into the script.
+    var onNudge: ((Double) -> Void)?
 
     /// Dragging anywhere moves it. There is no title bar to grab, and a panel that can only
     /// be moved by an edge nobody can see is a panel that cannot be moved.
@@ -66,6 +69,20 @@ final class TeleprompterPanel: NonActivatingPanel {
     /// compiler is right to refuse.
     func retire() {
         CaptureExclusionRegistry.shared.unregister(self)
+    }
+
+    /// The wheel or trackpad over the script nudges it, for a reader who has drifted
+    /// ahead of or behind the scroll. The panel never becomes key; scroll events reach the
+    /// window under the pointer regardless.
+    override func scrollWheel(with event: NSEvent) {
+        guard let onNudge else { return super.scrollWheel(with: event) }
+        onNudge(Self.words(forScrollDelta: event.scrollingDeltaY, precise: event.hasPreciseScrollingDeltas))
+    }
+
+    /// About one word per wheel notch, or per 20 pt of trackpad travel. Scrolling content
+    /// up (a negative delta) reads further on, as in any document.
+    nonisolated static func words(forScrollDelta delta: CGFloat, precise: Bool) -> Double {
+        -Double(precise ? delta / 20 : delta)
     }
 
     // MARK: - Contents

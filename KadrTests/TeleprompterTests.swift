@@ -255,4 +255,15 @@ struct TeleprompterTests {
         let view = scriptView(text: "")
         #expect(view.visibleRangeForTesting.isEmpty)
     }
+
+    /// docs/18 REC-11: the wheel nudges the script, reading on as content scrolls up.
+    @Test("Scrolling nudges the script by about a word per notch", arguments: [
+        (CGFloat(-1), false, 1.0),
+        (3, false, -3.0),
+        (-40, true, 2.0),
+        (20, true, -1.0)
+    ])
+    func nudgeFromScroll(delta: CGFloat, precise: Bool, words: Double) {
+        #expect(TeleprompterPanel.words(forScrollDelta: delta, precise: precise) == words)
+    }
 }

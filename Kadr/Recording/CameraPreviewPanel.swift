@@ -29,6 +29,11 @@ final class CameraPreviewPanel {
         panel != nil
     }
 
+    /// Where the bubble is, so a click on it is kept out of the telemetry (docs/18 REC-11).
+    var screenFrame: NSRect? {
+        panel?.frame
+    }
+
     /// Puts the bubble on screen, attached to an already-running capture session.
     func show(session: AVCaptureSession) {
         if let panel {
