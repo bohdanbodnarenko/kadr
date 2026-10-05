@@ -119,8 +119,8 @@ struct StudioRenderPlanTests {
         // Late enough for the spring to have settled.
         let rect = plan.sourceRect(at: 6)
         let centre = CGPoint(x: rect.midX, y: rect.midY)
-        #expect(abs(centre.x - size.width / 2) < 20, "drifted to \(center.x)")
-        #expect(abs(centre.y - size.height / 2) < 20, "drifted to \(center.y)")
+        #expect(abs(centre.x - size.width / 2) < 20, "drifted to \(centre.x)")
+        #expect(abs(centre.y - size.height / 2) < 20, "drifted to \(centre.y)")
     }
 
     /// A 9:16 crop of a 16:9 recording is already about three times closer, so applying the

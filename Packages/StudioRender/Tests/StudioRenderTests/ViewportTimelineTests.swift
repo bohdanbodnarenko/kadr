@@ -81,7 +81,7 @@ struct ViewportTimelineTests {
         let timeline = ViewportTimeline(cues: [first, second], size: size, duration: 8)
 
         let during = timeline.viewport(at: 2.5)
-        #expect(during.centre.x > 1000, "the later cue should own this moment, got \(during.center)")
+        #expect(during.centre.x > 1000, "the later cue should own this moment, got \(during.centre)")
     }
 
     @Test("The camera never zooms out past the whole frame")

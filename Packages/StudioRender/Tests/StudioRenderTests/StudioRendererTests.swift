@@ -70,8 +70,8 @@ struct StudioRendererTests {
         )
 
         let colour = try await Media.firstFrameColour(of: destination)
-        #expect(colour.green > 150, "expected a green frame, got \(color)")
-        #expect(colour.red < 100, "expected a green frame, got \(color)")
+        #expect(colour.green > 150, "expected a green frame, got \(colour)")
+        #expect(colour.red < 100, "expected a green frame, got \(colour)")
     }
 
     // MARK: - Reframe
