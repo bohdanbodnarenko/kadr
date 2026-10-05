@@ -96,6 +96,30 @@ struct SegmentWriterPauseTests {
         #expect(abs(total - 2.0) < 0.2, "engine length \(total) s should be the 2 s actually recorded")
     }
 
+    /// docs/18 REC-6: the stream keeps running while paused, and a resume must open on
+    /// the screen as it is then, not on the picture from the moment of Pause.
+    @Test("Frames seen while paused become the held frame")
+    func heldFrameTracksPause() async throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var options = RecordingOptions()
+        options.capturesSystemAudio = false
+        options.capturesMicrophone = false
+        let factory: SegmentWriterFactory = { url, width, height, options in
+            try SegmentWriter(fileURL: url, pixelWidth: width, pixelHeight: height, options: options)
+        }
+        let engine = RecordingEngine(makeWriter: factory)
+        let first = try factory(directory.appendingPathComponent("segment-0.mp4"), 100, 100, options)
+        await engine.primeForTesting(state: .recording, segments: [], sessionDirectory: directory, writer: first)
+
+        try await engine.deliverForTesting(frame(at: 10.0))
+        try await engine.pause()
+        try await engine.deliverForTesting(frame(at: 12.0))
+
+        let held = try #require(await engine.heldFrameTimeForTesting)
+        #expect(abs(CMTimeGetSeconds(held) - 12.0) < 0.001)
+    }
+
     /// docs/18 REC-3: a still screen sends only idle ticks, which carry no picture. The
     /// file must still last until the last tick, not end at the last new frame.
     @Test("A still ending lasts until the segment closes")

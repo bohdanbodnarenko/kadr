@@ -178,67 +178,6 @@ public actor RecordingEngine {
         }
     }
 
-    #if DEBUG
-        /// Puts the engine into the state a running recording leaves it in.
-        ///
-        /// A test seam, and a deliberate one: everything upstream of `stop` needs
-        /// ScreenCaptureKit and a real display, which CI has neither of — but the state
-        /// machine `stop` drives is exactly where the review found a recording could brick
-        /// (docs/07 C3). Debug-only, so it cannot exist in a shipped build.
-        func primeForTesting(
-            state: RecordingState,
-            segments: [URL],
-            sessionDirectory: URL?,
-            writer: (any SegmentWriting)? = nil
-        ) {
-            self.state = state
-            self.segments = segments
-            self.sessionDirectory = sessionDirectory
-            self.writer = writer
-            accumulatedDuration = writer == nil ? 1 : 0
-            pixelSize = PixelSize(width: 100, height: 100)
-        }
-
-        /// What `start` claims before its first suspension.
-        func beginStartForTesting() -> Int {
-            state = .starting
-            return beginGeneration()
-        }
-
-        /// What `start` does when it resumes from that suspension.
-        ///
-        /// `start` itself cannot run in CI — it needs a display and a TCC grant — but the
-        /// race S0.3 closes is entirely about what happens on the way *back*, so this is
-        /// the resumption with the same generation check the real one performs.
-        func finishStartForTesting(token: Int) throws {
-            try checkAlive(token)
-            state = .recording
-            beginActivity()
-        }
-
-        /// Yields a stream-stopped event the way `SCStreamDelegate` would (docs/16 REC-1).
-        func deliverStreamStopForTesting(_ message: String) {
-            noteInterruption(.streamStopped(message))
-            output?.finish()
-        }
-
-        /// Hands a sample to the engine as the stream's consumer would.
-        func deliverForTesting(_ box: SampleBufferBox) async {
-            await consume(box)
-        }
-
-        func deliverWriterFailureForTesting(_ message: String) {
-            noteInterruption(.writerFailed(message))
-        }
-
-        var accumulatedDurationForTesting: TimeInterval {
-            accumulatedDuration
-        }
-
-        var segmentsForTesting: [URL] {
-            segments
-        }
-    #endif
 
     /// Watches the recording's own clock (docs/10 R0.1).
     ///
@@ -379,7 +318,13 @@ public actor RecordingEngine {
     ///
     /// The compositing happens here, between SCK and the writer, which is what puts the
     /// click halos and keystrokes in the file and nowhere else (docs/04 §4.3).
-    private func consume(_ box: SampleBufferBox) async {
+    func consume(_ box: SampleBufferBox) async {
+        // Paused, the stream still runs: keep the held frame current, so a resume opens on
+        // the screen as it is now and not as it was at Pause (docs/18 REC-6).
+        if state == .paused, box.kind == .video {
+            lastVideoBox = box
+            return
+        }
         guard state == .recording, let writer else { return }
 
         if box.kind == .clock {
