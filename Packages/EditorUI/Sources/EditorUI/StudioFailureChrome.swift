@@ -69,7 +69,7 @@ struct StudioFailureSheet: View {
             HStack {
                 Spacer()
                 if failure.secondaryAction == .dismiss {
-                    Button("Cancel") {
+                    Button(String(localized: "Cancel", bundle: .module)) {
                         onAction(.dismiss)
                         dismiss()
                     }

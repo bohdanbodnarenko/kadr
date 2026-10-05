@@ -51,7 +51,7 @@ UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=
 
 .PHONY: help build build-editor release install uninstall run test test-packages test-package \
         test-app test-editor test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
-        check-size size-gate perf packages packages-json all clean
+        check-size check-strings strings size-gate perf packages packages-json all clean
 
 help: ## Show the available commands
 	@printf 'Kadr — make <target>\n\n'
@@ -185,6 +185,14 @@ check-layering: ## Layering, zero-network and agent-linkage (docs/04 §11)
 
 check-size: ## App bundle size against the PRD §8 budget (advisory on a build product)
 	@Scripts/check-size.sh
+
+# A command-line build extracts strings but never writes them into the String Catalog;
+# only the IDE does. These run the same sync from the last builds (docs/18 X-4).
+strings: build build-editor ## Sync the String Catalogs with the source
+	@Scripts/sync-strings.sh
+
+check-strings: ## Fail if the String Catalogs are out of step with the last builds
+	@Scripts/sync-strings.sh --check
 
 # The budget is about the DMG somebody downloads, and only an archive produces those
 # bytes: a `xcodebuild build` product carries local symbols an archive strips and is

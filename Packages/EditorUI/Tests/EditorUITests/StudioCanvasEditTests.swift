@@ -25,7 +25,7 @@ struct StudioCanvasEditTests {
         return try #require(StudioDocumentModel(session: session))
     }
 
-    @Test("Choosing a canvas colour is one undo step and opens the card")
+    @Test("Choosing a canvas color is one undo step and opens the card")
     func colourFillIsUndoable() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }

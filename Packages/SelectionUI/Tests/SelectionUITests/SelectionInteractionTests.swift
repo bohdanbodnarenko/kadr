@@ -76,7 +76,7 @@ struct SelectionDragTests {
         #expect(selection.rect == CGRect(x: 400, y: 350, width: 200, height: 100))
     }
 
-    @Test("⌥⇧ together give a square centred on the anchor")
+    @Test("⌥⇧ together give a square centerd on the anchor")
     func optionShiftTogether() {
         var selection = interaction()
         selection.begin(at: CGPoint(x: 500, y: 400))

@@ -80,7 +80,7 @@ extension HistoryController {
             "Kadr could not open or rebuild your History. Captures are still saved, but History stays empty.",
             detail: error.localizedDescription,
             logger: logger,
-            retryTitle: String(localized: "Rebuild Library"),
+            retryTitle: String(localized: "Rebuild History"),
             retry: { [weak self] in
                 guard let self else { return }
                 hasReportedOpenFailure = false

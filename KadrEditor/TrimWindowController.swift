@@ -131,7 +131,7 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
 
         let destination = PassthroughVideoTrimmer.destination(trimming: fileURL)
         isExportingTrim = true
-        window?.title = "Trimming “\(fileURL.lastPathComponent)”…"
+        window?.title = String(localized: "Trimming “\(fileURL.lastPathComponent)”…")
         Task { [weak self] in
             guard let self else { return }
             defer {

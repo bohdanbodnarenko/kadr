@@ -56,10 +56,10 @@ struct StudioTranscriptPanel: View {
 
     private var header: some View {
         HStack {
-            Text("Transcript")
+            Text("Transcript", bundle: .module)
                 .font(.headline)
             Spacer()
-            TextField("Find", text: Bindable(model).transcriptQuery)
+            TextField(String(localized: "Find", bundle: .module), text: Bindable(model).transcriptQuery)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 140)
                 .onSubmit { stepMatch(by: 1) }
@@ -68,12 +68,12 @@ struct StudioTranscriptPanel: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Button { stepMatch(by: -1) } label: { Image(systemName: "chevron.up") }
-                    .help("Previous match")
-                    .accessibilityLabel("Previous match")
+                    .help(Text("Previous match", bundle: .module))
+                    .accessibilityLabel(Text("Previous match", bundle: .module))
                     .disabled(matchIDs.isEmpty)
                 Button { stepMatch(by: 1) } label: { Image(systemName: "chevron.down") }
-                    .help("Next match (Return)")
-                    .accessibilityLabel("Next match")
+                    .help(Text("Next match (Return)", bundle: .module))
+                    .accessibilityLabel(Text("Next match", bundle: .module))
                     .disabled(matchIDs.isEmpty)
             }
         }
@@ -167,7 +167,7 @@ struct StudioTranscriptPanel: View {
                 Button(cutTitle, action: cutSelection)
                     .foregroundStyle(.red)
             }
-            Button("Clear", action: clearSelection)
+            Button(String(localized: "Clear", bundle: .module), action: clearSelection)
                 .foregroundStyle(.secondary)
         }
         .controlSize(.small)
@@ -453,12 +453,12 @@ private struct TranscriptChip: View, Equatable {
         .accessibilityLabel(word.text)
         .accessibilityValue(accessibilityState)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint("Seek to this word. Shift-click to select a range.")
+        .accessibilityHint(Text("Seek to this word. Shift-click to select a range.", bundle: .module))
         .contextMenu {
             if isCut {
-                Button("Restore Word") { actions.onRestore(word) }
+                Button(String(localized: "Restore Word", bundle: .module)) { actions.onRestore(word) }
             } else {
-                Button("Cut This Sentence") { actions.onCutSentence(word) }
+                Button(String(localized: "Cut This Sentence", bundle: .module)) { actions.onCutSentence(word) }
             }
         }
     }

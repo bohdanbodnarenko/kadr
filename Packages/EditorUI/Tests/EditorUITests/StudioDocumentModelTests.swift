@@ -222,7 +222,7 @@ struct StudioDocumentModelTests {
         #expect(studio.selectedZoom == cue.id)
     }
 
-    @Test("A zoom with no pointer track falls back to the centre of the frame")
+    @Test("A zoom with no pointer track falls back to the center of the frame")
     func zoomWithoutTelemetry() throws {
         let folder = scratch()
         defer { try? FileManager.default.removeItem(at: folder) }

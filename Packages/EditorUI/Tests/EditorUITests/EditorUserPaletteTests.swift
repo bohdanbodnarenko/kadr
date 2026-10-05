@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import EditorUI
 
-@Suite("User colour palette")
+@Suite("User color palette")
 struct EditorUserPaletteTests {
     private func isolatedDefaults() throws -> UserDefaults {
         let suite = "app.kadr.tests.palette.\(UUID().uuidString)"
@@ -12,7 +12,7 @@ struct EditorUserPaletteTests {
         return defaults
     }
 
-    @Test("A custom colour is saved and reloaded")
+    @Test("A custom color is saved and reloaded")
     func persistsAcrossLoad() throws {
         let defaults = try isolatedDefaults()
         var palette = EditorUserPalette()
@@ -26,7 +26,7 @@ struct EditorUserPaletteTests {
         #expect(loaded.contains(teal))
     }
 
-    @Test("Built-in swatches are not duplicated into favourites")
+    @Test("Built-in swatches are not duplicated into favorites")
     func skipsBuiltInSwatches() {
         var palette = EditorUserPalette()
         let added = palette.add(.annotationRed)
@@ -34,7 +34,7 @@ struct EditorUserPaletteTests {
         #expect(palette.colors.isEmpty)
     }
 
-    @Test("The oldest favourite drops when the palette is full")
+    @Test("The oldest favorite drops when the palette is full")
     func evictsOldestAtCapacity() {
         var palette = EditorUserPalette()
         for index in 0 ..< EditorUserPalette.capacity + 1 {
@@ -46,7 +46,7 @@ struct EditorUserPaletteTests {
         #expect(!palette.contains(AnnotationColor(red: 0, green: 0.4, blue: 0.5)))
     }
 
-    @Test("Option-remove drops a favourite")
+    @Test("Option-remove drops a favorite")
     func removeDropsColour() {
         var palette = EditorUserPalette()
         let teal = AnnotationColor(red: 0.1, green: 0.7, blue: 0.7)

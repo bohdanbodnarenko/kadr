@@ -17,9 +17,12 @@ extension StudioInspector {
         Section {
             StudioPresetBar(model: model)
         } header: {
-            Text("Look")
+            Text("Look", bundle: .module)
         } footer: {
-            Text("A look is the canvas, camera, pointer and overlays. Cuts and zooms are never part of one.")
+            Text(
+                "A look is the canvas, camera, pointer and overlays. Cuts and zooms are never part of one.",
+                bundle: .module
+            )
         }
     }
 
@@ -27,13 +30,13 @@ extension StudioInspector {
 
     var shapeSection: some View {
         Section {
-            Picker("Aspect", selection: Binding(
+            Picker(String(localized: "Aspect", bundle: .module), selection: Binding(
                 get: { model.edit.reframe.aspect },
                 set: { value in model.change { $0.reframe.aspect = value } }
             )) {
                 ForEach(ReframeAspect.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            Picker("Fit", selection: Binding(
+            Picker(String(localized: "Fit", bundle: .module), selection: Binding(
                 get: { model.edit.reframe.fill },
                 set: { value in model.change { $0.reframe.fill = value } }
             )) {
@@ -41,10 +44,13 @@ extension StudioInspector {
             }
             .disabled(model.edit.reframe.aspect == .original)
         } header: {
-            Text("Shape")
+            Text("Shape", bundle: .module)
         } footer: {
             if model.edit.reframe.aspect == .original {
-                Text("The recording's own proportions. Pick an aspect to fit it to a square or a portrait frame.")
+                Text(
+                    "The recording's own proportions. Pick an aspect to fit it to a square or a portrait frame.",
+                    bundle: .module
+                )
             }
         }
     }
@@ -59,9 +65,9 @@ extension StudioInspector {
     /// common case — "take a bit off the left" — into arithmetic.
     var cropSection: some View {
         Section {
-            Button("Crop on Preview…") { model.beginCrop() }
+            Button(String(localized: "Crop on Preview…", bundle: .module)) { model.beginCrop() }
             if model.canTrimNotch {
-                Button("Remove Notch Strip") { model.trimNotchStrip() }
+                Button(String(localized: "Remove Notch Strip", bundle: .module)) { model.trimNotchStrip() }
             }
             DisclosureGroup("Adjust Numerically") {
                 KadrSlider(title: "Left", value: cropX, range: 0 ... 0.9, format: .percent)
@@ -74,13 +80,13 @@ extension StudioInspector {
                 KadrSlider(title: "Height", value: cropHeight, range: 0.1 ... 1, format: .percent)
             }
             if model.edit.cropRect != nil {
-                Button("Reset Crop") { model.change { $0.cropRect = nil } }
+                Button(String(localized: "Reset Crop", bundle: .module)) { model.change { $0.cropRect = nil } }
             }
         } header: {
-            Text("Crop")
+            Text("Crop", bundle: .module)
         } footer: {
             if model.canTrimNotch {
-                Text("This display has a notch, so the recording has a bite out of its top edge.")
+                Text("This display has a notch, so the recording has a bite out of its top edge.", bundle: .module)
             }
         }
     }
@@ -134,29 +140,29 @@ extension StudioInspector {
     var cameraSection: some View {
         Section {
             if model.manifest.hasCamera {
-                Toggle("Show camera", isOn: Binding(
+                Toggle(String(localized: "Show camera", bundle: .module), isOn: Binding(
                     get: { model.edit.camera.isVisible },
                     set: { value in model.change { $0.camera.isVisible = value } }
                 ))
-                Toggle("Fill the frame", isOn: Binding(
+                Toggle(String(localized: "Fill the frame", bundle: .module), isOn: Binding(
                     get: { model.edit.camera.isFullscreen },
                     set: { value in model.change { $0.camera.isFullscreen = value } }
                 ))
                 .disabled(!model.edit.camera.isVisible)
                 cameraBubbleControls
             } else {
-                LabeledContent("Camera") {
-                    Text("Not recorded")
+                LabeledContent(String(localized: "Camera", bundle: .module)) {
+                    Text("Not recorded", bundle: .module)
                         .foregroundStyle(.secondary)
                 }
             }
         } header: {
-            Text("Camera")
+            Text("Camera", bundle: .module)
         } footer: {
             if model.manifest.hasCamera {
-                Text("Drag the bubble on the preview to place it, or drag its corner to resize.")
+                Text("Drag the bubble on the preview to place it, or drag its corner to resize.", bundle: .module)
             } else {
-                Text("This recording has no camera track.")
+                Text("This recording has no camera track.", bundle: .module)
             }
         }
     }
@@ -164,7 +170,7 @@ extension StudioInspector {
     @ViewBuilder
     private var cameraBubbleControls: some View {
         let bubbled = model.edit.camera.isVisible && !model.edit.camera.isFullscreen
-        Picker("Corner", selection: Binding(
+        Picker(String(localized: "Corner", bundle: .module), selection: Binding(
             get: { model.edit.camera.placement },
             set: { value in model.snapCamera(to: value) }
         )) {

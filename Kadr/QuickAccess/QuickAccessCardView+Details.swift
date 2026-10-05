@@ -27,7 +27,7 @@ extension QuickAccessCardView {
             parts.append(size)
         }
         if item.isStaged {
-            parts.append("Staged in the overlay")
+            parts.append("Not saved yet")
         }
         if item.wasCompressed {
             parts.append("Compressed copy on the clipboard")

@@ -6,8 +6,9 @@ import SwiftUI
 /// Copy for the collapsed overlay tab (docs/03 §2).
 enum OverlayPeekCopy {
     static func title(count: Int, hasVideo: Bool) -> String {
-        let noun = hasVideo ? "Capture" : "Screenshot"
-        return count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+        hasVideo
+            ? KadrText.counted("^[\(count) Capture](inflect: true)")
+            : KadrText.counted("^[\(count) Screenshot](inflect: true)")
     }
 }
 

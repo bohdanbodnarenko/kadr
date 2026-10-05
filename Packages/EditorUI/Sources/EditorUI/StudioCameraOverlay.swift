@@ -35,7 +35,7 @@ struct StudioCameraOverlay: View {
         .frame(width: bubble.width, height: bubble.height)
         .position(x: bubble.midX, y: bubble.midY)
         .onHover { isHovering = $0 }
-        .help("Drag to move the camera. Drag the corner to resize.")
+        .help(Text("Drag to move the camera. Drag the corner to resize.", bundle: .module))
     }
 
     private var moveGesture: some Gesture {
@@ -71,7 +71,7 @@ struct StudioCameraOverlay: View {
                     NSCursor.arrow.set()
                 }
             }
-            .help("Drag to resize")
+            .help(Text("Drag to resize", bundle: .module))
     }
 
     private var resizeGesture: some Gesture {

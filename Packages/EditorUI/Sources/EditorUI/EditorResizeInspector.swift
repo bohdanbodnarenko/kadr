@@ -39,7 +39,7 @@ struct EditorResizeInspector: View {
                 }
             }
             .buttonStyle(InspectorButtonStyle())
-            .help("Scale the exported image. The canvas stays at capture resolution.")
+            .help(Text("Scale the exported image. The canvas stays at capture resolution.", bundle: .module))
 
             InspectorNote("Copy and Save write this size. The canvas stays at capture resolution.")
         }

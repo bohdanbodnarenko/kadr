@@ -21,7 +21,7 @@ nonisolated enum AllInOneMode: String, CaseIterable, Sendable {
         case .gif: KadrText.string("GIF")
         case .scrolling: KadrText.string("Scrolling")
         case .ocr: KadrText.string("Text")
-        case .color: KadrText.string("Colour")
+        case .color: KadrText.string("Color")
         }
     }
 
@@ -47,7 +47,7 @@ nonisolated enum AllInOneMode: String, CaseIterable, Sendable {
         case .gif: KadrText.string("Record a region, then export a GIF")
         case .scrolling: KadrText.string("Capture a scrolling region")
         case .ocr: KadrText.string("Select text and copy it")
-        case .color: KadrText.string("Pick a colour from the screen")
+        case .color: KadrText.string("Pick a color from the screen")
         }
     }
 

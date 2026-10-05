@@ -72,7 +72,7 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
             .buttonStyle(.plain)
             .accessibilityLabel(title)
             .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
-            .accessibilityHint("Shows or hides the \(title.lowercased()) controls")
+            .accessibilityHint(Text("Shows or hides the \(title.lowercased()) controls", bundle: .module))
             .accessibilityAddTraits(.isHeader)
 
             accessory()

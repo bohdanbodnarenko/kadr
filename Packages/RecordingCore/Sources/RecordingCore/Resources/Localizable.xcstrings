@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld fps" : {
+
+    },
+    "Bottom" : {
+
+    },
+    "Bottom Left" : {
+
+    },
+    "H.264 (most compatible)" : {
+
+    },
+    "HEVC (smaller)" : {
+
+    },
+    "Top" : {
+
+    }
+  },
+  "version" : "1.0"
+}

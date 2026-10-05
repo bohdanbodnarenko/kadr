@@ -26,7 +26,7 @@
         }
 
         func makeMenuItem() -> NSMenuItem {
-            let item = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: String(localized: "Debug"), action: nil, keyEquivalent: "")
             let submenu = NSMenu()
             submenu.autoenablesItems = false
 

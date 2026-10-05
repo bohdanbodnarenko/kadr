@@ -101,7 +101,7 @@ struct EditorArrangeGestureTests {
         #expect(!model.canUndo)
     }
 
-    @Test("Repeated pastes step away from the centre")
+    @Test("Repeated pastes step away from the center")
     func pasteCascade() {
         let model = makeModel([])
         let first = model.nextPastePoint()

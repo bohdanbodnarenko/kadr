@@ -62,7 +62,7 @@ struct EditorCameraInspector: View {
                 ... AnnotationCameraSpec.maximumFieldOfView,
             format: .degrees
         )
-        .help("A narrow lens flattens the perspective; a wide one exaggerates it.")
+        .help(Text("A narrow lens flattens the perspective; a wide one exaggerates it.", bundle: .module))
         KadrSlider(
             title: "Zoom",
             value: zoomBinding,
@@ -91,7 +91,7 @@ struct EditorCameraInspector: View {
     }
 
     private var anglePicker: some View {
-        Picker("Angle", selection: Binding(
+        Picker(String(localized: "Angle", bundle: .module), selection: Binding(
             get: { "" },
             set: { id in
                 switch id {
@@ -102,10 +102,10 @@ struct EditorCameraInspector: View {
                 }
             }
         )) {
-            Text("Preset…").tag("")
-            Text("Lean").tag("lean")
-            Text("Hero").tag("hero")
-            Text("Overhead").tag("overhead")
+            Text("Preset…", bundle: .module).tag("")
+            Text("Lean", bundle: .module).tag("lean")
+            Text("Hero", bundle: .module).tag("hero")
+            Text("Overhead", bundle: .module).tag("overhead")
         }
     }
 

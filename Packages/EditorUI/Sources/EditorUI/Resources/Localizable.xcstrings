@@ -1,0 +1,1042 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
+    "%@×" : {
+
+    },
+    "%@× zoom at %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@× zoom at %2$@"
+          }
+        }
+      }
+    },
+    "%@× zoom — drag to move, handles to resize, double-click to play" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld percent" : {
+
+    },
+    "%lld pt" : {
+
+    },
+    "%lld × %lld px" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld × %2$lld px"
+          }
+        }
+      }
+    },
+    "%lld%%" : {
+
+    },
+    "100%" : {
+
+    },
+    "1×" : {
+
+    },
+    "200%" : {
+
+    },
+    "50%" : {
+
+    },
+    "A look is the canvas, camera, pointer and overlays. Cuts and zooms are never part of one." : {
+
+    },
+    "A narrow lens flattens the perspective; a wide one exaggerates it." : {
+
+    },
+    "A repeated mark survives being cropped; a single one is a signature." : {
+
+    },
+    "Accept" : {
+
+    },
+    "Accept All" : {
+
+    },
+    "Add %lld Suggested Zooms" : {
+
+    },
+    "Add All %lld Suggested Zooms" : {
+
+    },
+    "Add All Suggested Zooms" : {
+
+    },
+    "Add Midpoint" : {
+
+    },
+    "Add Suggested Zooms" : {
+
+    },
+    "Add This Zoom" : {
+
+    },
+    "Add Zoom at Playhead" : {
+
+    },
+    "Add a zoom at the playhead (Z at the pointer)" : {
+
+    },
+    "Add a zoom at the playhead (Z at the pointer, or click the zoom lane)" : {
+
+    },
+    "Add suggested zooms" : {
+
+    },
+    "Add the %lld suggested zooms from your clicks. Your own zooms stay." : {
+
+    },
+    "Add to Palette" : {
+
+    },
+    "Add zoom" : {
+
+    },
+    "Add zoom at playhead" : {
+
+    },
+    "Adds this zoom" : {
+
+    },
+    "Adjust Numerically" : {
+
+    },
+    "Adjust to grow or shrink the crop" : {
+
+    },
+    "Aim Zoom" : {
+
+    },
+    "Aim at the Pointer" : {
+
+    },
+    "Aim on Preview…" : {
+
+    },
+    "Angle" : {
+
+    },
+    "Apply Anyway" : {
+
+    },
+    "Apply Selected" : {
+
+    },
+    "Apply a saved look. Cuts and zooms are left alone." : {
+
+    },
+    "Aspect" : {
+
+    },
+    "Aspect ratio" : {
+
+    },
+    "At the Pointer" : {
+
+    },
+    "Audio" : {
+
+    },
+    "Audio and speech" : {
+
+    },
+    "Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap." : {
+
+    },
+    "Backdrop" : {
+
+    },
+    "Badge size" : {
+
+    },
+    "Bottom" : {
+
+    },
+    "Built-in" : {
+
+    },
+    "Burn in captions" : {
+
+    },
+    "Camera" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Canvas" : {
+
+    },
+    "Caption shortcuts" : {
+
+    },
+    "Captions" : {
+
+    },
+    "Captions are drawn into the exported movie, not attached as a track." : {
+
+    },
+    "Center" : {
+
+    },
+    "Choose Another Location" : {
+
+    },
+    "Choose Image…" : {
+
+    },
+    "Choose an image" : {
+
+    },
+    "Choose which corner or edge the overlay sits on" : {
+
+    },
+    "Clear" : {
+
+    },
+    "Clear Default" : {
+
+    },
+    "Click or drag here to add a zoom" : {
+
+    },
+    "Click to add a zoom here, or drag to set its length. Z adds one at the pointer." : {
+
+    },
+    "Clicks" : {
+
+    },
+    "Clip" : {
+
+    },
+    "Clip %@" : {
+
+    },
+    "Clip %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Clip %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Clip Speed" : {
+
+    },
+    "Clip and zoom" : {
+
+    },
+    "Clip speed" : {
+
+    },
+    "Clips" : {
+
+    },
+    "Codec" : {
+
+    },
+    "Collapsed" : {
+
+    },
+    "Color" : {
+
+    },
+    "Copied" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy (%@)" : {
+
+    },
+    "Copy Flattened Image" : {
+
+    },
+    "Copy Original" : {
+
+    },
+    "Copy Without Annotations" : {
+
+    },
+    "Copy the edited recording as %@" : {
+
+    },
+    "Corner" : {
+
+    },
+    "Covers" : {
+
+    },
+    "Crop" : {
+
+    },
+    "Crop on Preview…" : {
+
+    },
+    "Crop the recording by dragging on the preview" : {
+
+    },
+    "Custom" : {
+
+    },
+    "Custom color" : {
+
+    },
+    "Cut This Sentence" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete Clip" : {
+
+    },
+    "Delete Selection" : {
+
+    },
+    "Delete this look?" : {
+
+    },
+    "Disable Zoom" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Dismiss Suggestion" : {
+
+    },
+    "Done" : {
+
+    },
+    "Downloading…" : {
+
+    },
+    "Drag the bubble on the preview to place it, or drag its corner to resize." : {
+
+    },
+    "Drag the ends to trim. Hover and press C to split." : {
+
+    },
+    "Drag the exported file anywhere" : {
+
+    },
+    "Drag the handles on the preview" : {
+
+    },
+    "Drag to aim the zoom. The outline is what stays on screen. Double-click centers it." : {
+
+    },
+    "Drag to aim this zoom. Drag a corner to change how close it goes." : {
+
+    },
+    "Drag to move the camera. Drag the corner to resize." : {
+
+    },
+    "Drag to move the target. Double-click to center." : {
+
+    },
+    "Drag to resize" : {
+
+    },
+    "Drag to scrub" : {
+
+    },
+    "Drag to share it" : {
+
+    },
+    "Draw pointer" : {
+
+    },
+    "Drop everything before or after the playhead" : {
+
+    },
+    "Edit" : {
+
+    },
+    "Effects" : {
+
+    },
+    "Enable Zoom" : {
+
+    },
+    "End" : {
+
+    },
+    "Expanded" : {
+
+    },
+    "Export" : {
+
+    },
+    "Export Audio…" : {
+
+    },
+    "Export Look…" : {
+
+    },
+    "Export Options" : {
+
+    },
+    "Export the edited recording (⌘E)" : {
+
+    },
+    "Exported" : {
+
+    },
+    "Exported %@" : {
+
+    },
+    "Exported file" : {
+
+    },
+    "Export…" : {
+
+    },
+    "Fill the frame" : {
+
+    },
+    "Filler words" : {
+
+    },
+    "Find" : {
+
+    },
+    "Find Cuts…" : {
+
+    },
+    "Finish cropping (Return)" : {
+
+    },
+    "Finish cropping (Return). The crop stays editable — reopen Crop to change it." : {
+
+    },
+    "Fit" : {
+
+    },
+    "Fit Canvas" : {
+
+    },
+    "Flip Horizontal" : {
+
+    },
+    "Flip Vertical" : {
+
+    },
+    "Focus" : {
+
+    },
+    "Focus position" : {
+
+    },
+    "Font" : {
+
+    },
+    "Format" : {
+
+    },
+    "Frame" : {
+
+    },
+    "Frame and canvas" : {
+
+    },
+    "Frame rate" : {
+
+    },
+    "From" : {
+
+    },
+    "Hero" : {
+
+    },
+    "Hidden" : {
+
+    },
+    "Hide the inspector (⌘I)" : {
+
+    },
+    "Highlight the spoken word" : {
+
+    },
+    "Images" : {
+
+    },
+    "Import Look…" : {
+
+    },
+    "Import Soundtrack…" : {
+
+    },
+    "Include audio" : {
+
+    },
+    "Insert Image…" : {
+
+    },
+    "Inspector" : {
+
+    },
+    "Install Speech Model…" : {
+
+    },
+    "Keep this aim and go back to the transport (↩)" : {
+
+    },
+    "Keys pressed during the recording appear as they are typed." : {
+
+    },
+    "Language" : {
+
+    },
+    "Lean" : {
+
+    },
+    "Lets the crop extend past the capture, adding blank space rather than cutting." : {
+
+    },
+    "Listening…" : {
+
+    },
+    "Long pauses" : {
+
+    },
+    "Look" : {
+
+    },
+    "Look actions" : {
+
+    },
+    "Looking for secrets…" : {
+
+    },
+    "Make a transcript for captions, without proposing any cuts" : {
+
+    },
+    "Middle" : {
+
+    },
+    "Mix to mono" : {
+
+    },
+    "More" : {
+
+    },
+    "More actions" : {
+
+    },
+    "More zoom actions" : {
+
+    },
+    "Motion" : {
+
+    },
+    "Move to Playhead" : {
+
+    },
+    "Mute" : {
+
+    },
+    "Muted in the preview and in the export." : {
+
+    },
+    "Name" : {
+
+    },
+    "Next Zoom  ]" : {
+
+    },
+    "Next match" : {
+
+    },
+    "Next match (Return)" : {
+
+    },
+    "Next zoom" : {
+
+    },
+    "Next zoom (])" : {
+
+    },
+    "No backdrop" : {
+
+    },
+    "No backdrop: the recording fills the frame edge to edge." : {
+
+    },
+    "No secrets found. Use the field above to redact matching text." : {
+
+    },
+    "No suggested zooms: every click cluster already has one" : {
+
+    },
+    "None" : {
+
+    },
+    "Normal" : {
+
+    },
+    "Not recorded" : {
+
+    },
+    "Numbering" : {
+
+    },
+    "Obscure Center" : {
+
+    },
+    "Open Dictation Settings" : {
+
+    },
+    "Option-click to remove" : {
+
+    },
+    "Overhead" : {
+
+    },
+    "Pause" : {
+
+    },
+    "Pause (Space)" : {
+
+    },
+    "Pin" : {
+
+    },
+    "Place this zoom's frame on the picture itself" : {
+
+    },
+    "Play" : {
+
+    },
+    "Play (Space)" : {
+
+    },
+    "Play This Zoom" : {
+
+    },
+    "Play this clip faster" : {
+
+    },
+    "Play this zoom from just before it starts (Return)" : {
+
+    },
+    "Playhead" : {
+
+    },
+    "Point it where the pointer was when this zoom starts" : {
+
+    },
+    "Point this zoom at where the pointer was at the playhead" : {
+
+    },
+    "Pointer" : {
+
+    },
+    "Pointer and overlays" : {
+
+    },
+    "Position" : {
+
+    },
+    "Preset" : {
+
+    },
+    "Preset…" : {
+
+    },
+    "Press into the screen" : {
+
+    },
+    "Preview" : {
+
+    },
+    "Previous Zoom  [" : {
+
+    },
+    "Previous match" : {
+
+    },
+    "Previous zoom" : {
+
+    },
+    "Previous zoom ([)" : {
+
+    },
+    "Print…" : {
+
+    },
+    "Put the crop back to the whole capture" : {
+
+    },
+    "Ratio" : {
+
+    },
+    "Recent" : {
+
+    },
+    "Redact all text matching…" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove Background" : {
+
+    },
+    "Remove Every Zoom" : {
+
+    },
+    "Remove Midpoint" : {
+
+    },
+    "Remove Notch Strip" : {
+
+    },
+    "Remove Zoom" : {
+
+    },
+    "Remove the current look" : {
+
+    },
+    "Remove this zoom" : {
+
+    },
+    "Remove zoom" : {
+
+    },
+    "Removes the padding on the edges the capture touches, and squares the corners there." : {
+
+    },
+    "Removing the background" : {
+
+    },
+    "Removing the background…" : {
+
+    },
+    "Replace All with Smart Zooms" : {
+
+    },
+    "Reset" : {
+
+    },
+    "Reset Clips" : {
+
+    },
+    "Reset Crop" : {
+
+    },
+    "Resolution" : {
+
+    },
+    "Restore %lld Words" : {
+
+    },
+    "Restore Background" : {
+
+    },
+    "Restore Dismissed Suggestions" : {
+
+    },
+    "Restore Word" : {
+
+    },
+    "Retry" : {
+
+    },
+    "Ripple on clicks" : {
+
+    },
+    "Rotate 90° Clockwise" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save As…" : {
+
+    },
+    "Save Look…" : {
+
+    },
+    "Save Project…" : {
+
+    },
+    "Save this color to your palette. Option-click a saved color to remove it." : {
+
+    },
+    "Save this look" : {
+
+    },
+    "Save, export or import looks" : {
+
+    },
+    "Saved" : {
+
+    },
+    "Saves the background, perspective, depth of field and watermark together." : {
+
+    },
+    "Saves the canvas, camera bubble, pointer and overlays. Cuts and zooms stay as they are." : {
+
+    },
+    "Scale the exported image. The canvas stays at capture resolution." : {
+
+    },
+    "Seek to this word. Shift-click to select a range." : {
+
+    },
+    "Select" : {
+
+    },
+    "Select a zoom on the timeline to edit it, or press Z to add one at the playhead." : {
+
+    },
+    "Shape" : {
+
+    },
+    "Share" : {
+
+    },
+    "Share (%@)" : {
+
+    },
+    "Share Original" : {
+
+    },
+    "Share the edited recording as %@" : {
+
+    },
+    "Share…" : {
+
+    },
+    "Shortcuts" : {
+
+    },
+    "Show Suggested Zooms" : {
+
+    },
+    "Show camera" : {
+
+    },
+    "Show in Finder" : {
+
+    },
+    "Show the inspector (⌘I)" : {
+
+    },
+    "Shown" : {
+
+    },
+    "Shows or hides the %@ controls" : {
+
+    },
+    "Size" : {
+
+    },
+    "Size in pixels" : {
+
+    },
+    "Skip" : {
+
+    },
+    "Soundtrack" : {
+
+    },
+    "Speech" : {
+
+    },
+    "Split Clip Here" : {
+
+    },
+    "Split Clip at Playhead" : {
+
+    },
+    "Split at Playhead" : {
+
+    },
+    "Split, trim, speed and zoom" : {
+
+    },
+    "Start" : {
+
+    },
+    "Step through" : {
+
+    },
+    "Stop the export and delete the partly-written file" : {
+
+    },
+    "Stroke width %lld points" : {
+
+    },
+    "Studio preview" : {
+
+    },
+    "Style" : {
+
+    },
+    "Suggested zoom at %@" : {
+
+    },
+    "Suggested zoom — ^[%lld click](inflect: true) here. Click to add it." : {
+
+    },
+    "Text" : {
+
+    },
+    "The camera stays on the pointer for the life of this zoom." : {
+
+    },
+    "The imported track plays instead of the recording's own audio." : {
+
+    },
+    "The recording's own audio, cut and sped with the picture." : {
+
+    },
+    "The recording's own proportions. Pick an aspect to fit it to a square or a portrait frame." : {
+
+    },
+    "Theme" : {
+
+    },
+    "This display has a notch, so the recording has a bite out of its top edge." : {
+
+    },
+    "This recording has no camera track." : {
+
+    },
+    "This removes more than 40% of the recording. Apply again to confirm." : {
+
+    },
+    "This removes more than 40% of the recording. Apply anyway to confirm." : {
+
+    },
+    "Tilt Shift" : {
+
+    },
+    "Timeline skim preview" : {
+
+    },
+    "To" : {
+
+    },
+    "Top" : {
+
+    },
+    "Transcribe" : {
+
+    },
+    "Transcribe to add captions" : {
+
+    },
+    "Transcript" : {
+
+    },
+    "Trim End to Playhead" : {
+
+    },
+    "Trim Start to Playhead" : {
+
+    },
+    "Trim clip" : {
+
+    },
+    "Trim clip end" : {
+
+    },
+    "Trim clip start" : {
+
+    },
+    "Use as Default" : {
+
+    },
+    "Use for New Captures" : {
+
+    },
+    "Use this zoom" : {
+
+    },
+    "Use zooms" : {
+
+    },
+    "Watch it from just before it starts" : {
+
+    },
+    "Where the pointer was when this zoom starts" : {
+
+    },
+    "Where the sharp area sits" : {
+
+    },
+    "Width" : {
+
+    },
+    "Zoom" : {
+
+    },
+    "Zoom %@" : {
+
+    },
+    "Zoom In" : {
+
+    },
+    "Zoom Out" : {
+
+    },
+    "Zoom end" : {
+
+    },
+    "Zoom start" : {
+
+    },
+    "Zoom target" : {
+
+    },
+    "Zoom. ⌘1 fits the capture, ⌘0 shows actual size." : {
+
+    },
+    "Zooms are placed on the timeline. This is how they travel." : {
+
+    },
+    "center" : {
+
+    },
+    "left" : {
+
+    },
+    "right" : {
+
+    },
+    "“%@” will be removed. This recording will not change." : {
+
+    }
+  },
+  "version" : "1.0"
+}

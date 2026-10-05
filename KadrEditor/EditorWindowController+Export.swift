@@ -90,11 +90,13 @@ extension EditorWindowController {
         UserDefaults.standard.set(true, forKey: Self.projectPixelsNoticeKey)
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "The project keeps the original pixels."
-        alert.informativeText = "Redactions are burned into the saved image, which is the file to share. "
+        alert.messageText = String(localized: "The project keeps the original pixels.")
+        alert.informativeText = String(
+            localized: "Redactions are burned into the saved image, which is the file to share. "
+        )
             + "The .kadr project keeps the unredacted capture so you can edit the redactions later; "
             + "don't send the project to anyone who shouldn't see what's under them."
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.beginSheetModal(for: window) { _ in }
     }
 
@@ -219,7 +221,7 @@ extension EditorWindowController {
         panel.directoryURL = editsImportedCopy
             ? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             : documentURL.deletingLastPathComponent()
-        panel.message = "Save this capture"
+        panel.message = String(localized: "Save this capture")
         let current = ImageFormat(fileExtension: (capturedImageURL ?? documentURL).pathExtension) ?? .png
         let accessory = SaveAsAccessory(panel: panel, initial: .image(current))
         panel.accessoryView = accessory.view
@@ -314,7 +316,7 @@ extension EditorWindowController {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-        panel.prompt = "Insert"
+        panel.prompt = String(localized: "Insert")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         insertImportedImage(from: url)
     }

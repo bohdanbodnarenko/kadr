@@ -64,7 +64,7 @@ enum ActionUnavailableReason: Equatable, Sendable {
         case let .permissionDenied(name):
             String(localized: "\(name) permission is required")
         case .cancelled:
-            String(localized: "Cancelled")
+            String(localized: "Canceled")
         case let .other(message):
             message
         }

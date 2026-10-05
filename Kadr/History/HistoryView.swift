@@ -267,7 +267,7 @@ struct HistoryView: View {
                 }
             }
         }
-        Button("Open in Overlay") { openAsCard(record) }
+        Button("Open as Card") { openAsCard(record) }
             .keyboardShortcut(.return, modifiers: [.option])
         if record.kind != .video {
             Button("Annotate") { controller.onAnnotate?(record) }
@@ -277,7 +277,7 @@ struct HistoryView: View {
             controller.copy(ids: targets(for: record))
         }
         Button("Copy Text") { controller.onCopyText?(record) }
-        Button("Reveal in Finder") {
+        Button("Show in Finder") {
             controller.reveal(ids: targets(for: record))
         }
         if let url = controller.namedURL(for: record) {

@@ -18,7 +18,7 @@ struct CaptionCanvasTests {
         ))
         let plain = try #require(CaptionCanvas.image(text: "Hello world", fontSize: 28, opacity: 1))
         #expect(goldPixels(in: highlighted) > 0, "the live word stayed white")
-        #expect(goldPixels(in: plain) == 0, "plain captions picked up the karaoke colour")
+        #expect(goldPixels(in: plain) == 0, "plain captions picked up the karaoke color")
     }
 
     @Test("Burned-in captions follow the transcript and karaoke can be switched off")

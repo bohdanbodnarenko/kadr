@@ -9,10 +9,10 @@ public enum HistoryRetention: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .forever: "Forever"
-        case .thirtyDays: "30 days"
-        case .sevenDays: "7 days"
-        case .session: "This session only"
+        case .forever: String(localized: "Forever", bundle: .module)
+        case .thirtyDays: String(localized: "30 days", bundle: .module)
+        case .sevenDays: String(localized: "7 days", bundle: .module)
+        case .session: String(localized: "This session only", bundle: .module)
         }
     }
 
@@ -37,11 +37,11 @@ public enum HistorySizeCap: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .unlimited: "No limit"
-        case .megabytes512: "512 MB"
-        case .gigabytes1: "1 GB"
-        case .gigabytes5: "5 GB"
-        case .gigabytes10: "10 GB"
+        case .unlimited: String(localized: "No limit", bundle: .module)
+        case .megabytes512: String(localized: "512 MB", bundle: .module)
+        case .gigabytes1: String(localized: "1 GB", bundle: .module)
+        case .gigabytes5: String(localized: "5 GB", bundle: .module)
+        case .gigabytes10: String(localized: "10 GB", bundle: .module)
         }
     }
 

@@ -17,9 +17,9 @@ public enum CursorSmoothing: String, Sendable, Hashable, Codable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .off: "Off"
-        case .natural: "Natural"
-        case .smooth: "Smooth"
+        case .off: String(localized: "Off", bundle: .module)
+        case .natural: String(localized: "Natural", bundle: .module)
+        case .smooth: String(localized: "Smooth", bundle: .module)
         }
     }
 
@@ -45,8 +45,8 @@ public enum ClickRippleStyle: String, Sendable, Hashable, Codable, CaseIterable 
 
     public var title: String {
         switch self {
-        case .outline: "Outline"
-        case .filled: "Filled"
+        case .outline: String(localized: "Outline", bundle: .module)
+        case .filled: String(localized: "Filled", bundle: .module)
         }
     }
 }
@@ -63,8 +63,8 @@ public enum ZoomAnimationStyle: String, Sendable, Hashable, Codable, CaseIterabl
 
     public var title: String {
         switch self {
-        case .smooth: "Smooth"
-        case .dynamic: "Dynamic"
+        case .smooth: String(localized: "Smooth", bundle: .module)
+        case .dynamic: String(localized: "Dynamic", bundle: .module)
         }
     }
 

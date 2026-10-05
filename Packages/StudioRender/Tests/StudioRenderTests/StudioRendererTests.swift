@@ -198,7 +198,7 @@ struct StudioRendererTests {
     /// A partial file at the path the user chose is worse than no file: one of those is
     /// obviously missing and the other plays for seven minutes of a ten-minute recording
     /// and looks finished (docs/10 R0.4).
-    @Test("A cancelled render leaves no file at the destination")
+    @Test("A canceled render leaves no file at the destination")
     func cancellationLeavesNothing() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -228,7 +228,7 @@ struct StudioRendererTests {
         } catch {
             #expect(
                 !FileManager.default.fileExists(atPath: destination.path),
-                "a cancelled export left a partial movie behind"
+                "a canceled export left a partial movie behind"
             )
         }
     }

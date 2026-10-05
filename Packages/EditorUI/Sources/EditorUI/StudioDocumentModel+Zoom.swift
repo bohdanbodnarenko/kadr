@@ -18,7 +18,7 @@ public enum StudioZoomFocus: String, CaseIterable, Sendable {
         case .fixed:
             "Fixed"
         case .centre:
-            "Centre"
+            "Center"
         }
     }
 }

@@ -16,7 +16,7 @@ struct StudioTimelinePlayheadTests {
     @Test("The pin's tail points at the frame, not beside it")
     func crownHasATail() {
         let path = PlayheadCrownShape().path(in: CGRect(x: 0, y: 0, width: 11, height: 13))
-        #expect(path.contains(CGPoint(x: 5.5, y: 12.4)), "the tail should fill the bottom centre")
+        #expect(path.contains(CGPoint(x: 5.5, y: 12.4)), "the tail should fill the bottom center")
         #expect(!path.contains(CGPoint(x: 0.4, y: 12.4)), "the tail should not fill the bottom corners")
         #expect(path.contains(CGPoint(x: 5.5, y: 2)), "the flag body is missing")
     }

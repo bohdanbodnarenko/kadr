@@ -43,8 +43,10 @@ enum RecordingCrashRecovery {
         alert.messageText = count == 1
             ? "Recovered an interrupted recording"
             : "Recovered \(count) interrupted recordings"
-        alert.informativeText = "The playable footage was preserved in History and can be opened in Studio."
-        alert.addButton(withTitle: "OK")
+        alert.informativeText = String(
+            localized: "The playable footage was preserved in History and can be opened in Studio."
+        )
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.runModal()
     }
 
@@ -57,10 +59,10 @@ enum RecordingCrashRecovery {
         alert.messageText = directories.count == 1
             ? "Kadr could not recover an interrupted recording"
             : "Kadr could not recover \(directories.count) interrupted recordings"
-        alert.informativeText = "The footage could not be opened, so it was left where it is. "
+        alert.informativeText = String(localized: "The footage could not be opened, so it was left where it is. ")
             + "Kadr will not try again."
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Show in Finder")
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.addButton(withTitle: String(localized: "Show in Finder"))
         guard alert.runModal() == .alertSecondButtonReturn else { return }
         NSWorkspace.shared.activateFileViewerSelecting(directories)
     }

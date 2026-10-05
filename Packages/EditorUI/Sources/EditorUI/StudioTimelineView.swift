@@ -246,10 +246,10 @@ struct StudioTimelineView: View {
             // Built when the menu opens, so this is the clip that was right-clicked.
             let time = hoverTime ?? model.playhead
             let clip = model.clipID(at: time)
-            Button("Split Clip Here") {
+            Button(String(localized: "Split Clip Here", bundle: .module)) {
                 model.split(at: time)
             }
-            Button("Delete Clip", role: .destructive) {
+            Button(String(localized: "Delete Clip", bundle: .module), role: .destructive) {
                 if let clip {
                     model.removeClip(id: clip)
                 }
@@ -361,11 +361,11 @@ struct StudioTimelineView: View {
             }
         }
         .frame(width: width, height: clipHeight)
-        .help("Drag the ends to trim. Hover and press C to split.")
+        .help(Text("Drag the ends to trim. Hover and press C to split.", bundle: .module))
         // One element per clip (docs/17 T-STU-11): "Clip 2 of 5, 0:12 to 0:31, 2×".
         // Adjusting it moves between clips, and its action selects this one.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Clip \(index + 1) of \(model.edit.clips.clips.count)")
+        .accessibilityLabel(Text("Clip \(index + 1) of \(model.edit.clips.clips.count)", bundle: .module))
         .accessibilityValue(clipAccessibilityValue(clip, index: index))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityAction(named: "Select") {
@@ -407,7 +407,7 @@ struct StudioTimelineView: View {
     private func speedLabel(_ speed: Double) -> String {
         speed == speed.rounded()
             ? "\(Int(speed))×"
-            : String(format: "%.1f×", speed)
+            : StudioMultiplier.text(speed)
     }
 }
 

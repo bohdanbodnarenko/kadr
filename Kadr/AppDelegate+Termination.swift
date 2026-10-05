@@ -117,7 +117,7 @@ extension AppDelegate {
     ) -> NSApplication.TerminateReply {
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "A screen recording is still in progress."
+        alert.messageText = String(localized: "A screen recording is still in progress.")
         var info = "Kadr will finish and save the recording before quitting. "
             + "This can take a moment for a long recording."
         if !unsaved.isEmpty {
@@ -134,8 +134,8 @@ extension AppDelegate {
         alert.alertStyle = .warning
         // Cancel is the first button, so it is the default Return answers: a stray
         // Return must not end the take.
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Finish Recording and Quit")
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Finish Recording and Quit"))
         guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         if alert.suppressionButton?.state == .on {
             let saved = finalizeStagedCapturesBeforeQuit(unsaved)
@@ -157,11 +157,11 @@ extension AppDelegate {
         alert.messageText = unsaved.count == 1
             ? "One capture has not been saved."
             : "\(unsaved.count) captures have not been saved."
-        alert.informativeText = "Captures still on screen are kept temporarily and cleared "
+        alert.informativeText = String(localized: "Captures still on screen are kept temporarily and cleared ")
             + "within a day. Saving them puts them in your capture folder."
         alert.addButton(withTitle: unsaved.count == 1 ? "Save and Quit" : "Save All and Quit")
-        alert.addButton(withTitle: "Discard and Quit").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Discard and Quit")).hasDestructiveAction = true
+        alert.addButton(withTitle: String(localized: "Cancel"))
         alert.alertStyle = .warning
         NSApp.activate()
 

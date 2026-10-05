@@ -70,7 +70,7 @@ extension AreaCaptureCoordinator {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-        panel.prompt = "Pin"
+        panel.prompt = String(localized: "Pin")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         return pinFile(at: url) ? url : nil
     }

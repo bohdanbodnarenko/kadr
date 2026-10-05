@@ -21,8 +21,8 @@ public struct StudioAudioExporter: Sendable {
 
         public var title: String {
             switch self {
-            case .m4a: "M4A"
-            case .wav: "WAV"
+            case .m4a: String(localized: "M4A", bundle: .module)
+            case .wav: String(localized: "WAV", bundle: .module)
             }
         }
 

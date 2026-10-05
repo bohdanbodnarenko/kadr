@@ -22,7 +22,7 @@ struct NonRGBExportTests {
         return try #require(context.makeImage())
     }
 
-    @Test("CMYK and grey images get an sRGB canvas instead of none", arguments: [
+    @Test("CMYK and gray images get an sRGB canvas instead of none", arguments: [
         (CGColorSpaceCreateDeviceCMYK(), CGImageAlphaInfo.none.rawValue),
         (CGColorSpaceCreateDeviceGray(), CGImageAlphaInfo.none.rawValue)
     ])

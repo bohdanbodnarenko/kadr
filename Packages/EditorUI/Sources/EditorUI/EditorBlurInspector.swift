@@ -41,7 +41,7 @@ struct EditorBlurInspector: View {
         InspectorSegmented(Array(ProgressiveBlurShape.allCases), selection: shapeBinding, title: \.title)
 
         InspectorRow("Covers") {
-            Picker("Covers", selection: extentBinding) {
+            Picker(String(localized: "Covers", bundle: .module), selection: extentBinding) {
                 ForEach(ProgressiveBlurExtent.allCases, id: \.self) { extent in
                     Text(extent.title).tag(extent)
                 }
@@ -64,11 +64,11 @@ struct EditorBlurInspector: View {
         InspectorRow("Focus") {
             FocusPad(point: centerBinding)
                 .frame(width: 72, height: 48)
-                .help("Where the sharp area sits")
+                .help(Text("Where the sharp area sits", bundle: .module))
         }
-        Button("Obscure Centre") { model.applyProgressiveBlur(.obscureCentre) }
+        Button(String(localized: "Obscure Center", bundle: .module)) { model.applyProgressiveBlur(.obscureCentre) }
             .buttonStyle(InspectorButtonStyle())
-        Button("Tilt Shift") { model.applyProgressiveBlur(.tiltShift) }
+        Button(String(localized: "Tilt Shift", bundle: .module)) { model.applyProgressiveBlur(.tiltShift) }
             .buttonStyle(InspectorButtonStyle())
     }
 
@@ -162,6 +162,6 @@ private struct FocusPad: View {
                 )
             })
         }
-        .accessibilityLabel("Focus position")
+        .accessibilityLabel(Text("Focus position", bundle: .module))
     }
 }

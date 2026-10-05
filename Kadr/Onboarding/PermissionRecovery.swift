@@ -31,19 +31,25 @@ struct PermissionRecovery {
             ? "macOS has asked you to re-confirm screen recording."
             : "Kadr does not have permission to record the screen."
         if state == .revoked {
-            alert.informativeText = "macOS asks about once a month, for every screen-capture app. Turn Kadr back "
+            alert.informativeText = String(
+                localized: "macOS asks about once a month, for every screen-capture app. Turn Kadr back "
+            )
                 + "on and captures will work again."
         } else if includePicker {
-            alert.informativeText = "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            alert.informativeText = String(
+                localized: "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            )
                 + "You can also capture a window through the macOS picker, which needs no permission."
         } else {
-            alert.informativeText = "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            alert.informativeText = String(
+                localized: "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            )
                 + "After turning it on, quit and reopen Kadr — macOS applies the permission on relaunch."
         }
 
-        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: String(localized: "Open System Settings"))
         if includePicker {
-            alert.addButton(withTitle: "Use the macOS Picker")
+            alert.addButton(withTitle: String(localized: "Use the macOS Picker"))
         }
         alert.addButton(withTitle: includePicker ? "Later" : "Cancel")
 

@@ -65,7 +65,7 @@ struct SelectionResizerTests {
         #expect(hit == nil)
     }
 
-    @Test("A corner grab is recognised")
+    @Test("A corner grab is recognized")
     func cornerHit() {
         let command = shape()
         let box = SelectionResizer.unionBounds(of: [command])

@@ -8,6 +8,10 @@ import PackageDescription
 
 let package = Package(
     name: "RecordingCore",
+    // Display titles are localized from this package's own catalog, through
+    // Bundle.module (docs/18 X-4). Only the agent and editor link it, so the
+    // resource bundle always ships beside the code.
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "RecordingCore", targets: ["RecordingCore"])
@@ -23,6 +27,7 @@ let package = Package(
                 .product(name: "Shared", package: "Shared"),
                 .product(name: "CaptureCore", package: "CaptureCore")
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

@@ -105,10 +105,12 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             let preset = try StylePresetTransfer.decoding(Data(contentsOf: url))
             _ = StylePresetStore().add(preset)
             let alert = NSAlert()
-            alert.messageText = "Imported “\(preset.name)”."
-            alert.informativeText = "The look is in the editor’s Look list. Open a capture to apply it."
+            alert.messageText = String(localized: "Imported “\(preset.name)”.")
+            alert.informativeText = String(
+                localized: "The look is in the editor’s Look list. Open a capture to apply it."
+            )
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: String(localized: "OK"))
             if let window = NSApp.keyWindow {
                 alert.beginSheetModal(for: window) { _ in }
             } else {
@@ -198,13 +200,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.messageText = operations.count == 1
             ? "Studio work is still running."
             : "\(operations.count) studio tasks are still running."
-        alert.informativeText = "Quitting now stops "
+        alert.informativeText = String(localized: "Quitting now stops ")
             + StudioWindowController.list(operations)
             + ", and any partly-written file is deleted."
         alert.alertStyle = .warning
         // Keep Working is the Return default; quitting is the destructive choice (T-SH-6).
-        alert.addButton(withTitle: "Keep Working")
-        let quit = alert.addButton(withTitle: "Quit Anyway")
+        alert.addButton(withTitle: String(localized: "Keep Working"))
+        let quit = alert.addButton(withTitle: String(localized: "Quit Anyway"))
         quit.hasDestructiveAction = true
         return alert.runModal() == .alertSecondButtonReturn
     }
@@ -214,12 +216,14 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard !dirty.isEmpty else { return true }
         if dirty.count > 1 {
             let alert = NSAlert()
-            alert.messageText = "You have \(dirty.count) Kadr documents with unsaved changes. "
+            alert.messageText = String(localized: "You have \(dirty.count) Kadr documents with unsaved changes. ")
                 + "Do you want to review these changes before quitting?"
-            alert.informativeText = "If you don’t review your documents, all your changes will be lost."
-            alert.addButton(withTitle: "Review Changes…")
-            alert.addButton(withTitle: "Cancel")
-            let discard = alert.addButton(withTitle: "Discard Changes")
+            alert.informativeText = String(
+                localized: "If you don’t review your documents, all your changes will be lost."
+            )
+            alert.addButton(withTitle: String(localized: "Review Changes…"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            let discard = alert.addButton(withTitle: String(localized: "Discard Changes"))
             discard.hasDestructiveAction = true
             switch alert.runModal() {
             case .alertFirstButtonReturn:
@@ -377,10 +381,10 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func presentOpenFailure(for url: URL, error: any Error) {
         let alert = NSAlert()
-        alert.messageText = "Kadr could not open “\(url.lastPathComponent)”."
+        alert.messageText = String(localized: "Kadr could not open “\(url.lastPathComponent)”.")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { _ in }
         } else {

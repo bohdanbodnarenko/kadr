@@ -32,7 +32,7 @@ struct EditorWatermarkInspector: View {
 
     @ViewBuilder
     private var controls: some View {
-        TextField("Text", text: $draftText)
+        TextField(String(localized: "Text", bundle: .module), text: $draftText)
             .inspectorTextField()
             // The field is on screen, disabled, while the mark is off; seeding the
             // draft must not quietly switch the watermark on.
@@ -47,7 +47,7 @@ struct EditorWatermarkInspector: View {
             }
 
         InspectorToggleRow("Repeat across the image", isOn: tiledBinding)
-            .help("A repeated mark survives being cropped; a single one is a signature.")
+            .help(Text("A repeated mark survives being cropped; a single one is a signature.", bundle: .module))
 
         if spec.isTiled {
             KadrSlider(
@@ -70,7 +70,7 @@ struct EditorWatermarkInspector: View {
             range: -90 ... 90,
             format: .degrees(signed: true)
         )
-        InspectorColorRow("Colour", selection: colourBinding)
+        InspectorColorRow("Color", selection: colourBinding)
     }
 
     /// What the metrics resolve against — the canvas, since a watermark covers all of it.

@@ -190,15 +190,15 @@ public enum BubblePlacement: String, Sendable, Hashable, Codable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .topLeading: "Top Left"
-        case .top: "Top"
-        case .topTrailing: "Top Right"
-        case .leading: "Left"
-        case .centre: "Centre"
-        case .trailing: "Right"
-        case .bottomLeading: "Bottom Left"
-        case .bottom: "Bottom"
-        case .bottomTrailing: "Bottom Right"
+        case .topLeading: String(localized: "Top Left", bundle: .module)
+        case .top: String(localized: "Top", bundle: .module)
+        case .topTrailing: String(localized: "Top Right", bundle: .module)
+        case .leading: String(localized: "Left", bundle: .module)
+        case .centre: String(localized: "Center", bundle: .module)
+        case .trailing: String(localized: "Right", bundle: .module)
+        case .bottomLeading: String(localized: "Bottom Left", bundle: .module)
+        case .bottom: String(localized: "Bottom", bundle: .module)
+        case .bottomTrailing: String(localized: "Bottom Right", bundle: .module)
         }
     }
 }

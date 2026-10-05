@@ -92,6 +92,7 @@ so a command that passes there is the command you ran.
 make build           # build the agent app
 make test            # every package's tests, then the app's
 make lint check      # swiftlint, swiftformat, layering, size
+make strings         # sync the String Catalogs with the source (CI runs check-strings)
 make install         # build signed and install into /Applications
 make all             # what CI runs
 ```

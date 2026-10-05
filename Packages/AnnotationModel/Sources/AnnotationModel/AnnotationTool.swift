@@ -22,23 +22,23 @@ public enum AnnotationTool: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .arrow: "Arrow"
-        case .shape: "Shape"
-        case .line: "Line"
-        case .freehand: "Pencil"
-        case .highlighter: "Highlighter"
-        case .text: "Text"
-        case .redaction: "Blur"
-        case .spotlight: "Spotlight"
-        case .counter: "Counter"
-        case .crop: "Crop"
-        case .beautify: "Beautify"
-        case .camera: "Perspective"
-        case .progressiveBlur: "Progressive Blur"
-        case .watermark: "Watermark"
-        case .measure: "Measure"
-        case .subjectLift: "Remove Background"
-        case .image: "Image"
+        case .arrow: String(localized: "Arrow", bundle: .module)
+        case .shape: String(localized: "Shape", bundle: .module)
+        case .line: String(localized: "Line", bundle: .module)
+        case .freehand: String(localized: "Pencil", bundle: .module)
+        case .highlighter: String(localized: "Highlighter", bundle: .module)
+        case .text: String(localized: "Text", bundle: .module)
+        case .redaction: String(localized: "Blur", bundle: .module)
+        case .spotlight: String(localized: "Spotlight", bundle: .module)
+        case .counter: String(localized: "Counter", bundle: .module)
+        case .crop: String(localized: "Crop", bundle: .module)
+        case .beautify: String(localized: "Beautify", bundle: .module)
+        case .camera: String(localized: "Perspective", bundle: .module)
+        case .progressiveBlur: String(localized: "Progressive Blur", bundle: .module)
+        case .watermark: String(localized: "Watermark", bundle: .module)
+        case .measure: String(localized: "Measure", bundle: .module)
+        case .subjectLift: String(localized: "Remove Background", bundle: .module)
+        case .image: String(localized: "Image", bundle: .module)
         }
     }
 

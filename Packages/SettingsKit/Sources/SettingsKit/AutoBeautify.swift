@@ -15,12 +15,12 @@ public enum AutoBeautifyPreset: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .off: "Off"
-        case .cleanWhite: "Clean White"
-        case .twitter: "Twitter / X"
-        case .instagram: "Instagram"
-        case .story: "Story"
-        case .stuckBottom: "Edge Bleed"
+        case .off: String(localized: "Off", bundle: .module)
+        case .cleanWhite: String(localized: "Clean White", bundle: .module)
+        case .twitter: String(localized: "Twitter / X", bundle: .module)
+        case .instagram: String(localized: "Instagram", bundle: .module)
+        case .story: String(localized: "Story", bundle: .module)
+        case .stuckBottom: String(localized: "Edge Bleed", bundle: .module)
         }
     }
 }

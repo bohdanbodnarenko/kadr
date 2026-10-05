@@ -49,9 +49,9 @@ public extension AutomationParameter {
         case .path: "The file to act on."
         case .state: "hide, show or toggle."
         case .tab: "The Settings tab to open."
-        case .linebreaks: "Keep line breaks in recognised text (true or false)."
+        case .linebreaks: "Keep line breaks in recognized text (true or false)."
         case .display: "1-based display index; 1 is the screen with the menu bar."
-        case .start: "With a region, begin at once (true, default) or show the overlay first (false)."
+        case .start: "With a region, begin at once (true, default) or show the selection screen first (false)."
         case .autoScroll: "Let Kadr scroll the page (true or false)."
         }
     }

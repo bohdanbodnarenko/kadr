@@ -11,6 +11,10 @@ import PackageDescription
 
 let package = Package(
     name: "StudioSession",
+    // Display titles are localized from this package's own catalog, through
+    // Bundle.module (docs/18 X-4). Only the agent and editor link it, so the
+    // resource bundle always ships beside the code.
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "StudioSession", targets: ["StudioSession"])
@@ -24,6 +28,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Shared", package: "Shared")
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

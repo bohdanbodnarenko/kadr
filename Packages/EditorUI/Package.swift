@@ -8,6 +8,10 @@ import PackageDescription
 
 let package = Package(
     name: "EditorUI",
+    // Its strings live in its own catalog, looked up through `Bundle.module`, so the
+    // editor's chrome can be translated without the app's catalog knowing about it
+    // (docs/18 X-4).
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "EditorUI", targets: ["EditorUI"])
@@ -35,6 +39,7 @@ let package = Package(
                 .product(name: "StudioSession", package: "StudioSession"),
                 .product(name: "StudioRender", package: "StudioRender")
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

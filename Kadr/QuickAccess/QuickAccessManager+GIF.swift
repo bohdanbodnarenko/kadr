@@ -86,7 +86,7 @@ extension QuickAccessManager {
     func confirmExport(_ estimate: GIFResponse) -> Bool {
         let size = ByteCountFormatter.string(fromByteCount: Int64(estimate.byteCount), countStyle: .file)
         let alert = NSAlert()
-        alert.messageText = "Export this recording as a GIF?"
+        alert.messageText = String(localized: "Export this recording as a GIF?")
         var detail = "The GIF will be roughly \(size). GIFs are much larger than "
             + "video, so long recordings get big quickly."
         if estimate.isClipped {
@@ -95,8 +95,8 @@ extension QuickAccessManager {
                 + "will cover the first \(seconds) seconds. Trim it first to choose which part."
         }
         alert.informativeText = detail
-        alert.addButton(withTitle: "Export")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Export"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         let answer = ActivationJuggler.shared.withTemporaryActivation(
             returningTo: ActivationJuggler.returnTarget()
         ) { alert.runModal() }

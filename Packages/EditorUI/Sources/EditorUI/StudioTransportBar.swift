@@ -69,7 +69,7 @@ struct StudioTransportBar: View {
                 model.pausePlayback()
                 model.addOrSelectZoom(at: model.playhead)
             } label: {
-                Label("Zoom", systemImage: "plus.magnifyingglass")
+                Label(String(localized: "Zoom", bundle: .module), systemImage: "plus.magnifyingglass")
                     .font(.system(size: 12, weight: .medium))
                     .labelStyle(.titleAndIcon)
                     .padding(.horizontal, 6)
@@ -79,8 +79,8 @@ struct StudioTransportBar: View {
             }
             .buttonStyle(StudioTransportIconStyle())
             .fixedSize()
-            .help("Add a zoom at the playhead (Z at the pointer, or click the zoom lane)")
-            .accessibilityLabel("Add zoom")
+            .help(Text("Add a zoom at the playhead (Z at the pointer, or click the zoom lane)", bundle: .module))
+            .accessibilityLabel(Text("Add zoom", bundle: .module))
             StudioSuggestedZoomsButton(model: model)
             Menu {
                 zoomMenuItems
@@ -91,8 +91,8 @@ struct StudioTransportBar: View {
             .menuIndicator(.hidden)
             .buttonStyle(StudioTransportIconStyle())
             .fixedSize()
-            .help("More zoom actions")
-            .accessibilityLabel("More zoom actions")
+            .help(Text("More zoom actions", bundle: .module))
+            .accessibilityLabel(Text("More zoom actions", bundle: .module))
         }
     }
 
@@ -134,27 +134,29 @@ struct StudioTransportBar: View {
     /// Every edit tool in one place, for a bar with no room for a row of icons.
     private var editMenu: some View {
         Menu {
-            Button("Split Clip at Playhead") { model.splitAtPlayhead() }
-            Button("Delete Selection") { model.deleteTimelineSelection() }
+            Button(String(localized: "Split Clip at Playhead", bundle: .module)) { model.splitAtPlayhead() }
+            Button(String(localized: "Delete Selection", bundle: .module)) { model.deleteTimelineSelection() }
                 .disabled(!model.canDeleteTimelineSelection)
             Divider()
-            Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
+            Button(String(localized: "Trim Start to Playhead", bundle: .module)) { model.trimStartToPlayhead() }
                 .disabled(!model.playheadIsInsideEdit)
-            Button("Trim End to Playhead") { model.trimEndToPlayhead() }
+            Button(String(localized: "Trim End to Playhead", bundle: .module)) { model.trimEndToPlayhead() }
                 .disabled(!model.playheadIsInsideEdit)
-            Menu("Clip Speed") { speedItems }
-            Button("Reset Clips") { model.resetClips() }
+            Menu(String(localized: "Clip Speed", bundle: .module)) { speedItems }
+            Button(String(localized: "Reset Clips", bundle: .module)) { model.resetClips() }
                 .disabled(!model.hasClipEdits)
             Divider()
-            Button("Add Zoom at Playhead") { model.addOrSelectZoom(at: model.playhead) }
+            Button(String(localized: "Add Zoom at Playhead", bundle: .module)) {
+                model.addOrSelectZoom(at: model.playhead)
+            }
             zoomMenuItems
         } label: {
-            Label("Edit", systemImage: "slider.horizontal.3")
+            Label(String(localized: "Edit", bundle: .module), systemImage: "slider.horizontal.3")
                 .font(.system(size: 12, weight: .medium))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Split, trim, speed and zoom")
+        .help(Text("Split, trim, speed and zoom", bundle: .module))
     }
 
     private func playback(compact: Bool) -> some View {
@@ -208,25 +210,25 @@ struct StudioTransportBar: View {
             model.addSuggestedZooms()
         }
         .disabled(suggested == 0)
-        Button("Previous Zoom  [") { model.selectAdjacentZoom(forward: false) }
+        Button(String(localized: "Previous Zoom  [", bundle: .module)) { model.selectAdjacentZoom(forward: false) }
             .disabled(model.edit.zooms.isEmpty)
-        Button("Next Zoom  ]") { model.selectAdjacentZoom(forward: true) }
+        Button(String(localized: "Next Zoom  ]", bundle: .module)) { model.selectAdjacentZoom(forward: true) }
             .disabled(model.edit.zooms.isEmpty)
         Divider()
-        Toggle("Show Suggested Zooms", isOn: Binding(
+        Toggle(String(localized: "Show Suggested Zooms", bundle: .module), isOn: Binding(
             get: { model.showsZoomSuggestions },
             set: { model.showsZoomSuggestions = $0 }
         ))
-        Button("Replace All with Smart Zooms") { model.planSmartZooms() }
+        Button(String(localized: "Replace All with Smart Zooms", bundle: .module)) { model.planSmartZooms() }
             .disabled(model.editedClickTimes.isEmpty)
-        Button("Remove Every Zoom", role: .destructive) { model.resetZooms() }
+        Button(String(localized: "Remove Every Zoom", bundle: .module), role: .destructive) { model.resetZooms() }
             .disabled(model.edit.zooms.isEmpty)
     }
 
     private var trimMenu: some View {
         Menu {
-            Button("Trim Start to Playhead") { model.trimStartToPlayhead() }
-            Button("Trim End to Playhead") { model.trimEndToPlayhead() }
+            Button(String(localized: "Trim Start to Playhead", bundle: .module)) { model.trimStartToPlayhead() }
+            Button(String(localized: "Trim End to Playhead", bundle: .module)) { model.trimEndToPlayhead() }
         } label: {
             iconLabel("arrow.left.and.right")
         }
@@ -235,8 +237,8 @@ struct StudioTransportBar: View {
         .buttonStyle(StudioTransportIconStyle())
         .fixedSize()
         .disabled(!model.playheadIsInsideEdit)
-        .help("Drop everything before or after the playhead")
-        .accessibilityLabel("Trim clip")
+        .help(Text("Drop everything before or after the playhead", bundle: .module))
+        .accessibilityLabel(Text("Trim clip", bundle: .module))
     }
 
     private var speedMenu: some View {
@@ -249,8 +251,8 @@ struct StudioTransportBar: View {
         .menuIndicator(.hidden)
         .buttonStyle(StudioTransportIconStyle())
         .fixedSize()
-        .help("Play this clip faster")
-        .accessibilityLabel("Clip speed")
+        .help(Text("Play this clip faster", bundle: .module))
+        .accessibilityLabel(Text("Clip speed", bundle: .module))
     }
 
     private var speedItems: some View {
@@ -317,7 +319,7 @@ private struct StudioSuggestedZoomsButton: View {
         .help(count > 0
             ? "Add the \(count) suggested zooms from your clicks. Your own zooms stay."
             : "No suggested zooms: every click cluster already has one")
-        .accessibilityLabel("Add suggested zooms")
+        .accessibilityLabel(Text("Add suggested zooms", bundle: .module))
         .accessibilityValue("\(count)")
     }
 }

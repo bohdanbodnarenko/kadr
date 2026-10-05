@@ -173,13 +173,13 @@ public enum StudioBackdropKind: String, Sendable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .none:
-            "None"
+            String(localized: "None", bundle: .module)
         case .colour:
-            "Colour"
+            String(localized: "Color", bundle: .module)
         case .gradient:
-            "Gradient"
+            String(localized: "Gradient", bundle: .module)
         case .wallpaper:
-            "Wallpaper"
+            String(localized: "Wallpaper", bundle: .module)
         }
     }
 }

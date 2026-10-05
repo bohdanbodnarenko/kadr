@@ -17,7 +17,7 @@ enum KadrIntentError: Error, CustomLocalizedStringResourceConvertible {
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
-        case .cancelled: "Cancelled."
+        case .cancelled: "Canceled."
         case let .failed(message): "\(message)"
         }
     }
@@ -294,8 +294,8 @@ struct ToggleDesktopIconsIntent: AppIntent {
 }
 
 struct OpenAllInOneIntent: AppIntent {
-    static let title: LocalizedStringResource = "All-in-One"
-    static let description = IntentDescription("Open Kadr's All-in-One capture HUD.")
+    static let title: LocalizedStringResource = "Open Capture Island"
+    static let description = IntentDescription("Open Kadr's capture island.")
     static let openAppWhenRun = true
 
     @MainActor
@@ -307,7 +307,7 @@ struct OpenAllInOneIntent: AppIntent {
 
 struct OpenHistoryIntent: AppIntent {
     static let title: LocalizedStringResource = "Open History"
-    static let description = IntentDescription("Open Kadr's capture library.")
+    static let description = IntentDescription("Open Kadr's capture History.")
     static let openAppWhenRun = true
 
     @MainActor

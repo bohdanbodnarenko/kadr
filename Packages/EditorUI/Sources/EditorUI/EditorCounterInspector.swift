@@ -9,7 +9,7 @@ struct EditorCounterInspector: View {
     @Bindable var model: EditorDocumentModel
 
     var body: some View {
-        InspectorStackedRow("Colour") {
+        InspectorStackedRow("Color") {
             EditorSwatchStrip(
                 selected: inspectedFill,
                 onSelect: { model.applyCounterFill($0) }
@@ -27,11 +27,11 @@ struct EditorCounterInspector: View {
             ) { size in
                 Text(size.shortTitle)
             }
-            .help("Badge size")
+            .help(Text("Badge size", bundle: .module))
         }
 
         InspectorRow("Numbering") {
-            Picker("Numbering", selection: Binding(
+            Picker(String(localized: "Numbering", bundle: .module), selection: Binding(
                 get: { inspectedNumbering },
                 set: { model.applyCounterNumbering($0) }
             )) {

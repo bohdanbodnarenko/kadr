@@ -17,11 +17,11 @@ struct StudioExportedBanner: View {
                 .resizable()
                 .frame(width: 28, height: 28)
                 .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
-                .help("Drag the exported file anywhere")
-                .accessibilityLabel("Exported file")
-                .accessibilityHint("Drag to share it")
+                .help(Text("Drag the exported file anywhere", bundle: .module))
+                .accessibilityLabel(Text("Exported file", bundle: .module))
+                .accessibilityHint(Text("Drag to share it", bundle: .module))
             VStack(alignment: .leading, spacing: 1) {
-                Text("Exported")
+                Text("Exported", bundle: .module)
                     .font(.callout.weight(.semibold))
                 Text(url.lastPathComponent)
                     .font(.caption)
@@ -30,7 +30,7 @@ struct StudioExportedBanner: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 8)
-            Button("Show in Finder") {
+            Button(String(localized: "Show in Finder", bundle: .module)) {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 onDismiss()
             }
@@ -40,8 +40,8 @@ struct StudioExportedBanner: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.borderless)
-            .help("Dismiss")
-            .accessibilityLabel("Dismiss")
+            .help(Text("Dismiss", bundle: .module))
+            .accessibilityLabel(Text("Dismiss", bundle: .module))
         }
         .controlSize(.small)
         .padding(.horizontal, 12)
@@ -50,7 +50,7 @@ struct StudioExportedBanner: View {
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
         .padding(.horizontal, 10)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Exported \(url.lastPathComponent)")
+        .accessibilityLabel(Text("Exported \(url.lastPathComponent)", bundle: .module))
     }
 }
 

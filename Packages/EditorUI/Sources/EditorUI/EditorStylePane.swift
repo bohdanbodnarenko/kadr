@@ -128,11 +128,11 @@ struct EditorStylePane: View {
                             model.setSubjectLiftBackground(isTransparent ? .transparent : .color(.white))
                         }
                     ),
-                    title: { $0 ? "Transparent" : "Colour" }
+                    title: { $0 ? "Transparent" : "Color" }
                 )
 
                 if let colour = model.subjectLiftBackground.color {
-                    InspectorColorRow("Colour", selection: Binding(
+                    InspectorColorRow("Color", selection: Binding(
                         get: { Color(colour) },
                         set: { model.setSubjectLiftBackground(.color(AnnotationColor($0))) }
                     ))

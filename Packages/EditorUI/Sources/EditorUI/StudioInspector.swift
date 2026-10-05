@@ -53,7 +53,7 @@ struct StudioInspector: View {
     }
 
     private var tabPicker: some View {
-        Picker("Inspector", selection: Binding(
+        Picker(String(localized: "Inspector", bundle: .module), selection: Binding(
             get: { tab },
             set: { storedTab = $0.rawValue }
         )) {
@@ -118,15 +118,17 @@ struct StudioInspector: View {
                     format: .multiplier
                 )
                 HStack {
-                    Button("Split at Playhead") { model.splitAtPlayhead() }
+                    Button(String(localized: "Split at Playhead", bundle: .module)) { model.splitAtPlayhead() }
                     Spacer(minLength: 0)
-                    Button("Delete Clip", role: .destructive) { model.removeClip(id: clip.id) }
-                        .disabled(model.edit.clips.clips.count < 2)
+                    Button(String(localized: "Delete Clip", bundle: .module), role: .destructive) {
+                        model.removeClip(id: clip.id)
+                    }
+                    .disabled(model.edit.clips.clips.count < 2)
                 }
             } header: {
-                Text("Clip \(clipPosition)")
+                Text("Clip \(clipPosition)", bundle: .module)
             } footer: {
-                Text("Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap.")
+                Text("Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap.", bundle: .module)
             }
         }
     }

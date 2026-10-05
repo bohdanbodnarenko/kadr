@@ -169,7 +169,7 @@ struct RecordingOverlapTests {
     /// start then resumed and set `.recording` on top of it. The result was a recording
     /// that existed only in the menu bar: every frame dropped, desktop icons still hidden,
     /// and Stop reporting `noFramesCaptured`.
-    @Test("A start that was cancelled while it was suspended does not claim the recording")
+    @Test("A start that was canceled while it was suspended does not claim the recording")
     func cancelDuringStartLeavesNoPhantom() async {
         let engine = RecordingEngine(stitcher: StubOverlapStitcher())
         let token = await engine.beginStartForTesting()
@@ -182,7 +182,7 @@ struct RecordingOverlapTests {
         await #expect(throws: RecordingError.cancelledDuringStart) {
             try await engine.finishStartForTesting(token: token)
         }
-        #expect(await engine.state == .idle, "a cancelled start resurrected itself as .recording")
+        #expect(await engine.state == .idle, "a canceled start resurrected itself as .recording")
     }
 
     /// The generation check must not fire on the ordinary path, or every recording would

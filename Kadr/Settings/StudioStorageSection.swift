@@ -38,7 +38,8 @@ struct StudioStorageSection: View {
                 Text(warning)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("Remove \(lastCopyCount) Session\(lastCopyCount == 1 ? "" : "s")…", role: .destructive) {
+                // Delete, not Remove: the footage is gone for good (docs/18 X-5).
+                Button("Delete ^[\(lastCopyCount) Session](inflect: true)…", role: .destructive) {
                     showsRemoveConfirmation = true
                 }
                 Button("Show in Finder") { reveal() }
@@ -49,15 +50,18 @@ struct StudioStorageSection: View {
             // The count is in the title because it is the fact that matters, and a dialog
             // whose title is a question the user answers without reading the body is how
             // somebody deletes recordings by accident.
-            "Delete \(lastCopyCount) recording\(lastCopyCount == 1 ? "" : "s")?",
+            "Delete ^[\(lastCopyCount) recording](inflect: true)?",
             isPresented: $showsRemoveConfirmation,
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) { removeLastCopies() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Kadr has the only copy of \(lastCopyCount == 1 ? "this recording" : "these recordings"). "
-                + "Deleting the session deletes the footage with it, and it cannot be recovered.")
+            // Whole sentences per count, so a translation never has to agree with a
+            // fragment spliced in from code (docs/18 X-4).
+            Text(lastCopyCount == 1
+                ? "Kadr has the only copy of this recording. Deleting it cannot be undone."
+                : "Kadr has the only copy of these recordings. Deleting them cannot be undone.")
         }
     }
 

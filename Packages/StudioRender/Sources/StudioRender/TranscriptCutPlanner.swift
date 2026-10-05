@@ -10,8 +10,8 @@ public struct ProposedCut: Sendable, Hashable, Identifiable {
 
         public var title: String {
             switch self {
-            case .fillerWord: "Filler word"
-            case .silence: "Silence"
+            case .fillerWord: String(localized: "Filler word", bundle: .module)
+            case .silence: String(localized: "Silence", bundle: .module)
             }
         }
     }

@@ -10,30 +10,37 @@ extension StudioInspector {
         if let id = model.selectedZoom, let cue = model.edit.zooms.first(where: { $0.id == id }) {
             Section {
                 zoomNavigationRow(id: id)
-                Toggle("Use this zoom", isOn: Binding(
+                Toggle(String(localized: "Use this zoom", bundle: .module), isOn: Binding(
                     get: { cue.isEnabled },
                     set: { value in model.updateZoom(id) { $0.isEnabled = value } }
                 ))
                 zoomFocusControls(id: id, cue: cue)
                 zoomTimingControls(id: id, cue: cue)
                 HStack {
-                    Button("Move to Playhead") { model.moveZoom(id, to: model.playhead) }
+                    Button(String(localized: "Move to Playhead", bundle: .module)) {
+                        model.moveZoom(id, to: model.playhead)
+                    }
                     Spacer(minLength: 0)
-                    Button("Remove", role: .destructive) { model.removeSelectedZoom() }
+                    Button(String(localized: "Remove", bundle: .module), role: .destructive) {
+                        model.removeSelectedZoom()
+                    }
                 }
             } header: {
-                Text("Zoom \(zoomPosition(of: id))")
+                Text("Zoom \(zoomPosition(of: id))", bundle: .module)
             } footer: {
                 if cue.anchor.followsPointer {
-                    Text("The camera stays on the pointer for the life of this zoom.")
+                    Text("The camera stays on the pointer for the life of this zoom.", bundle: .module)
                 }
             }
         } else {
             Section {
-                Text("Select a zoom on the timeline to edit it, or press Z to add one at the playhead.")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Select a zoom on the timeline to edit it, or press Z to add one at the playhead.",
+                    bundle: .module
+                )
+                .foregroundStyle(.secondary)
             } header: {
-                Text("Zoom")
+                Text("Zoom", bundle: .module)
             }
         }
     }
@@ -48,7 +55,7 @@ extension StudioInspector {
     private func zoomNavigationRow(id: ZoomCue.ID) -> some View {
         let ordered = model.zoomsInOrder
         let index = ordered.firstIndex { $0.id == id } ?? 0
-        return LabeledContent("Step through") {
+        return LabeledContent(String(localized: "Step through", bundle: .module)) {
             HStack(spacing: 6) {
                 Button {
                     model.selectAdjacentZoom(forward: false)
@@ -56,29 +63,29 @@ extension StudioInspector {
                     Image(systemName: "chevron.left")
                 }
                 .disabled(index == 0)
-                .help("Previous zoom ([)")
-                .accessibilityLabel("Previous zoom")
+                .help(Text("Previous zoom ([)", bundle: .module))
+                .accessibilityLabel(Text("Previous zoom", bundle: .module))
                 Button {
                     model.selectAdjacentZoom(forward: true)
                 } label: {
                     Image(systemName: "chevron.right")
                 }
                 .disabled(index >= ordered.count - 1)
-                .help("Next zoom (])")
-                .accessibilityLabel("Next zoom")
+                .help(Text("Next zoom (])", bundle: .module))
+                .accessibilityLabel(Text("Next zoom", bundle: .module))
                 Button {
                     model.previewZoom(id)
                 } label: {
-                    Label("Play", systemImage: "play.fill")
+                    Label(String(localized: "Play", bundle: .module), systemImage: "play.fill")
                 }
-                .help("Play this zoom from just before it starts (Return)")
+                .help(Text("Play this zoom from just before it starts (Return)", bundle: .module))
             }
         }
     }
 
     @ViewBuilder
     private func zoomFocusControls(id: ZoomCue.ID, cue: ZoomCue) -> some View {
-        Picker("Focus", selection: Binding(
+        Picker(String(localized: "Focus", bundle: .module), selection: Binding(
             get: { model.zoomFocus(of: id) },
             set: { value in model.setZoomFocus(id, to: value) }
         )) {
@@ -98,8 +105,8 @@ extension StudioInspector {
                 format: .percent
             )
         } else {
-            Button("Aim on Preview…") { model.beginAimingZoom(id) }
-                .help("Place this zoom's frame on the picture itself")
+            Button(String(localized: "Aim on Preview…", bundle: .module)) { model.beginAimingZoom(id) }
+                .help(Text("Place this zoom's frame on the picture itself", bundle: .module))
             StudioZoomFocusPad(
                 position: Binding(
                     get: { model.normalizedZoomAnchor(for: id) },
@@ -108,9 +115,9 @@ extension StudioInspector {
                 magnification: cue.magnification,
                 aspect: model.manifest.pixelSize
             )
-            Button("Aim at the Pointer") { model.aimSelectedZoomAtPointer() }
+            Button(String(localized: "Aim at the Pointer", bundle: .module)) { model.aimSelectedZoomAtPointer() }
                 .disabled(!model.hasPointerAtPlayhead)
-                .help("Point this zoom at where the pointer was at the playhead")
+                .help(Text("Point this zoom at where the pointer was at the playhead", bundle: .module))
         }
     }
 

@@ -13,9 +13,9 @@ enum RecordingFailureNotice {
         guard (error as? RecordingError) != .cancelledDuringStart else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Recording could not start"
+        alert.messageText = String(localized: "Recording could not start")
         alert.informativeText = message(for: error)
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         attachShowInFinder(to: alert, error: error)
         NSApp.activate()
         handle(alert.runModal(), error: error)
@@ -24,9 +24,9 @@ enum RecordingFailureNotice {
     static func presentStopFailure(_ error: any Error) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Recording could not finish"
+        alert.messageText = String(localized: "Recording could not finish")
         alert.informativeText = message(for: error)
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         attachShowInFinder(to: alert, error: error)
         NSApp.activate()
         handle(alert.runModal(), error: error)
@@ -35,9 +35,9 @@ enum RecordingFailureNotice {
     static func presentInterruption(_ reason: String) {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Recording stopped"
-        alert.informativeText = "Everything captured so far was saved. \(reason)"
-        alert.addButton(withTitle: "OK")
+        alert.messageText = String(localized: "Recording stopped")
+        alert.informativeText = String(localized: "Everything captured so far was saved. \(reason)")
+        alert.addButton(withTitle: String(localized: "OK"))
         NSApp.activate()
         alert.runModal()
     }
@@ -74,7 +74,7 @@ enum RecordingFailureNotice {
     private static func attachShowInFinder(to alert: NSAlert, error: any Error) {
         guard let directory = segmentDirectory(from: error) else { return }
         alert.informativeText += "\n\nThe footage is still in \(directory)."
-        alert.addButton(withTitle: "Show in Finder")
+        alert.addButton(withTitle: String(localized: "Show in Finder"))
         alert.accessoryView = FinderTarget(path: directory)
     }
 

@@ -11,7 +11,7 @@ public enum ReframeAspect: String, Sendable, Hashable, Codable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .original: "Original"
+        case .original: String(localized: "Original", bundle: .module)
         case .sixteenNine: "16:9"
         case .nineSixteen: "9:16"
         case .square: "1:1"
@@ -40,8 +40,8 @@ public enum ReframeFill: String, Sendable, Hashable, Codable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .fill: "Fill the frame"
-        case .fit: "Show everything"
+        case .fill: String(localized: "Fill the frame", bundle: .module)
+        case .fit: String(localized: "Show everything", bundle: .module)
         }
     }
 }

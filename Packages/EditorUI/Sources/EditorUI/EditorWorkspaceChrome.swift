@@ -53,12 +53,12 @@ struct EditorZoomControl: View {
 
     var body: some View {
         Menu {
-            Button("Zoom In") { session.zoomIn() }
-            Button("Zoom Out") { session.zoomOut() }
+            Button(String(localized: "Zoom In", bundle: .module)) { session.zoomIn() }
+            Button(String(localized: "Zoom Out", bundle: .module)) { session.zoomOut() }
 
             Divider()
 
-            Button("Fit Canvas") { session.fit() }
+            Button(String(localized: "Fit Canvas", bundle: .module)) { session.fit() }
 
             Divider()
 
@@ -78,8 +78,8 @@ struct EditorZoomControl: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .editorFloatingCard(cornerRadius: 15)
-        .help("Zoom. ⌘1 fits the capture, ⌘0 shows actual size.")
-        .accessibilityLabel("Zoom")
+        .help(Text("Zoom. ⌘1 fits the capture, ⌘0 shows actual size.", bundle: .module))
+        .accessibilityLabel(Text("Zoom", bundle: .module))
         .accessibilityValue(session.zoomToFit ? "Fit" : "\(session.zoomPercent) percent")
     }
 }
@@ -89,7 +89,7 @@ struct EditorCanvasSizeBadge: View {
     let size: CGSize
 
     var body: some View {
-        Text("\(Int(size.width.rounded())) × \(Int(size.height.rounded())) px")
+        Text("\(Int(size.width.rounded())) × \(Int(size.height.rounded())) px", bundle: .module)
             .font(.system(size: 12, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(.secondary)
@@ -97,7 +97,7 @@ struct EditorCanvasSizeBadge: View {
             .padding(.vertical, 7)
             .fixedSize()
             .editorFloatingCard(cornerRadius: 15)
-            .help("Size in pixels")
+            .help(Text("Size in pixels", bundle: .module))
     }
 }
 
@@ -152,7 +152,7 @@ private struct EditorCropBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Picker("Ratio", selection: Binding(
+            Picker(String(localized: "Ratio", bundle: .module), selection: Binding(
                 get: { model.cropAspect },
                 set: { model.applyCropAspect($0) }
             )) {
@@ -163,7 +163,7 @@ private struct EditorCropBar: View {
             .labelsHidden()
             .pickerStyle(.menu)
             .fixedSize()
-            .help("Aspect ratio")
+            .help(Text("Aspect ratio", bundle: .module))
 
             Text(sizeText)
                 .font(.system(size: 12, weight: .medium))
@@ -172,16 +172,16 @@ private struct EditorCropBar: View {
                 // Wide enough for four-digit sides, so dragging a handle does not make the
                 // capsule breathe.
                 .frame(minWidth: 104)
-                .help("Size in pixels")
+                .help(Text("Size in pixels", bundle: .module))
 
-            Button("Reset") { model.clearCrop() }
+            Button(String(localized: "Reset", bundle: .module)) { model.clearCrop() }
                 .disabled(model.document.crop == nil)
-                .help("Put the crop back to the whole capture")
+                .help(Text("Put the crop back to the whole capture", bundle: .module))
 
-            Button("Done") { model.selectTool(.select) }
+            Button(String(localized: "Done", bundle: .module)) { model.selectTool(.select) }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .help("Finish cropping (Return)")
+                .help(Text("Finish cropping (Return)", bundle: .module))
         }
         .padding(.leading, 12)
         .padding(.trailing, 8)

@@ -13,7 +13,7 @@ struct EditorStyleTests {
         ))
     }
 
-    @Test("Changing colour recolours the selection, not just the next drawing")
+    @Test("Changing color recolors the selection, not just the next drawing")
     func applyColorUpdatesSelection() throws {
         let model = makeModel()
         model.tool = .arrow
@@ -293,7 +293,7 @@ struct EditorStyleTests {
         #expect(model.inspectedTool == .arrow)
     }
 
-    @Test("Counter size and colour rewrite every badge, not just the selection")
+    @Test("Counter size and color rewrite every badge, not just the selection")
     func counterStyleUpdatesAllBadges() {
         let model = makeModel()
         model.tool = .counter
@@ -320,7 +320,7 @@ struct EditorStyleTests {
         #expect(model.styleMemory.lastCounterFill == .black)
     }
 
-    @Test("The next counter lands at the remembered size and colour")
+    @Test("The next counter lands at the remembered size and color")
     func counterPlaceUsesRememberedStyle() throws {
         let model = makeModel()
         model.tool = .counter

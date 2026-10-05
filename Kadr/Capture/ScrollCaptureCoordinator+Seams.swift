@@ -25,14 +25,14 @@ extension ScrollCaptureCoordinator {
         alert.messageText = count == 1
             ? "One join in this capture is uncertain"
             : "\(count) joins in this capture are uncertain"
-        alert.informativeText = "Kadr could not be sure how two frames line up, which "
+        alert.informativeText = String(localized: "Kadr could not be sure how two frames line up, which ")
             + "usually means the page moved in a way the overlap could not explain — a "
             + "sticky banner, an animation, or scrolling faster than the frames could "
             + "follow. Keep it if it looks right, retry without the frame that caused it, "
             + "or take the frames away and assemble them yourself."
-        alert.addButton(withTitle: "Keep Anyway")
-        alert.addButton(withTitle: "Retry")
-        alert.addButton(withTitle: "Export Frames")
+        alert.addButton(withTitle: String(localized: "Keep Anyway"))
+        alert.addButton(withTitle: String(localized: "Retry"))
+        alert.addButton(withTitle: String(localized: "Export Frames"))
 
         return switch runModal(alert) {
         case .alertSecondButtonReturn: .retry
@@ -43,11 +43,11 @@ extension ScrollCaptureCoordinator {
 
     func presentStitchFailure(frames: [URL]) {
         let alert = NSAlert()
-        alert.messageText = "Kadr could not stitch this capture"
-        alert.informativeText = "The frames are still here. You can save them and put the "
+        alert.messageText = String(localized: "Kadr could not stitch this capture")
+        alert.informativeText = String(localized: "The frames are still here. You can save them and put the ")
             + "page together yourself."
-        alert.addButton(withTitle: "Export Frames")
-        alert.addButton(withTitle: "Discard")
+        alert.addButton(withTitle: String(localized: "Export Frames"))
+        alert.addButton(withTitle: String(localized: "Discard"))
         if runModal(alert) == .alertFirstButtonReturn {
             exportFrames(frames)
         }
@@ -60,8 +60,8 @@ extension ScrollCaptureCoordinator {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        panel.message = "Choose where to put the \(frames.count) captured frames."
+        panel.prompt = String(localized: "Export Here")
+        panel.message = String(localized: "Choose where to put the \(frames.count) captured frames.")
         let response = ActivationJuggler.shared.withTemporaryActivation(
             returningTo: ActivationJuggler.returnTarget()
         ) {
@@ -113,13 +113,13 @@ extension ScrollCaptureCoordinator {
     /// capture that is already grabbing frames (T-CAP-10).
     func explainAccessibility() {
         let alert = NSAlert()
-        alert.messageText = "Kadr needs Accessibility to scroll for you"
-        alert.informativeText = "Auto-scroll works by sending scroll events to the window "
+        alert.messageText = String(localized: "Kadr needs Accessibility to scroll for you")
+        alert.informativeText = String(localized: "Auto-scroll works by sending scroll events to the window ")
             + "you picked, which macOS only allows with Accessibility permission. This "
             + "capture will carry on with you doing the scrolling; the permission takes "
             + "effect from the next one."
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Scroll Myself")
+        alert.addButton(withTitle: String(localized: "Open System Settings"))
+        alert.addButton(withTitle: String(localized: "Scroll Myself"))
         if runModal(alert) == .alertFirstButtonReturn {
             // The system's own prompt, whose button opens the right pane.
             AutoScroller.requestTrust()

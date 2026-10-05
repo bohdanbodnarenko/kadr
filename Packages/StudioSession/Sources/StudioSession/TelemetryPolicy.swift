@@ -68,42 +68,42 @@ public enum TelemetryPolicy {
 
         public var caption: String {
             switch self {
-            case .returnKey: "Return"
-            case .enter: "Enter"
-            case .tab: "Tab"
-            case .escape: "Esc"
-            case .delete: "Delete"
-            case .forwardDelete: "Fwd Delete"
+            case .returnKey: String(localized: "Return", bundle: .module)
+            case .enter: String(localized: "Enter", bundle: .module)
+            case .tab: String(localized: "Tab", bundle: .module)
+            case .escape: String(localized: "Esc", bundle: .module)
+            case .delete: String(localized: "Delete", bundle: .module)
+            case .forwardDelete: String(localized: "Fwd Delete", bundle: .module)
             case .upArrow: "↑"
             case .downArrow: "↓"
             case .leftArrow: "←"
             case .rightArrow: "→"
-            case .pageUp: "Page Up"
-            case .pageDown: "Page Down"
-            case .home: "Home"
-            case .end: "End"
-            case .space: "Space"
-            case .f1: "F1"
-            case .f2: "F2"
-            case .f3: "F3"
-            case .f4: "F4"
-            case .f5: "F5"
-            case .f6: "F6"
-            case .f7: "F7"
-            case .f8: "F8"
-            case .f9: "F9"
-            case .f10: "F10"
-            case .f11: "F11"
-            case .f12: "F12"
-            case .f13: "F13"
-            case .f14: "F14"
-            case .f15: "F15"
-            case .f16: "F16"
-            case .f17: "F17"
-            case .f18: "F18"
-            case .f19: "F19"
-            case .fn: "fn"
-            case .capsLock: "Caps Lock"
+            case .pageUp: String(localized: "Page Up", bundle: .module)
+            case .pageDown: String(localized: "Page Down", bundle: .module)
+            case .home: String(localized: "Home", bundle: .module)
+            case .end: String(localized: "End", bundle: .module)
+            case .space: String(localized: "Space", bundle: .module)
+            case .f1: String(localized: "F1", bundle: .module)
+            case .f2: String(localized: "F2", bundle: .module)
+            case .f3: String(localized: "F3", bundle: .module)
+            case .f4: String(localized: "F4", bundle: .module)
+            case .f5: String(localized: "F5", bundle: .module)
+            case .f6: String(localized: "F6", bundle: .module)
+            case .f7: String(localized: "F7", bundle: .module)
+            case .f8: String(localized: "F8", bundle: .module)
+            case .f9: String(localized: "F9", bundle: .module)
+            case .f10: String(localized: "F10", bundle: .module)
+            case .f11: String(localized: "F11", bundle: .module)
+            case .f12: String(localized: "F12", bundle: .module)
+            case .f13: String(localized: "F13", bundle: .module)
+            case .f14: String(localized: "F14", bundle: .module)
+            case .f15: String(localized: "F15", bundle: .module)
+            case .f16: String(localized: "F16", bundle: .module)
+            case .f17: String(localized: "F17", bundle: .module)
+            case .f18: String(localized: "F18", bundle: .module)
+            case .f19: String(localized: "F19", bundle: .module)
+            case .fn: String(localized: "fn", bundle: .module)
+            case .capsLock: String(localized: "Caps Lock", bundle: .module)
             }
         }
     }

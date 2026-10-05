@@ -61,7 +61,10 @@ struct StudioZoomLane: View {
                 .gesture(createGesture)
                 .onHover { isHovering = $0 }
                 .contextMenu { laneMenu(suggestions: suggestions) }
-                .help("Click to add a zoom here, or drag to set its length. Z adds one at the pointer.")
+                .help(Text(
+                    "Click to add a zoom here, or drag to set its length. Z adds one at the pointer.",
+                    bundle: .module
+                ))
 
             if isHovering, creating == nil, dragging == nil, resizing == nil {
                 StudioZoomAddGhost(
@@ -74,7 +77,7 @@ struct StudioZoomLane: View {
             }
 
             if model.edit.zooms.isEmpty, suggestions.isEmpty, creating == nil, !isHovering {
-                Text("Click or drag here to add a zoom")
+                Text("Click or drag here to add a zoom", bundle: .module)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.tertiary)
                     .padding(.leading, 8)
@@ -138,17 +141,21 @@ struct StudioZoomLane: View {
 
     @ViewBuilder
     private func laneMenu(suggestions: [ZoomCue]) -> some View {
-        Button("Add Zoom at Playhead") { model.addOrSelectZoom(at: model.playhead) }
+        Button(String(localized: "Add Zoom at Playhead", bundle: .module)) { model.addOrSelectZoom(at: model.playhead) }
         if !suggestions.isEmpty {
-            Button("Add All \(suggestions.count) Suggested Zooms") { model.addSuggestedZooms() }
+            Button(String(localized: "Add All \(suggestions.count) Suggested Zooms", bundle: .module)) {
+                model.addSuggestedZooms()
+            }
         }
         Divider()
-        Toggle("Show Suggested Zooms", isOn: Binding(
+        Toggle(String(localized: "Show Suggested Zooms", bundle: .module), isOn: Binding(
             get: { model.showsZoomSuggestions },
             set: { model.showsZoomSuggestions = $0 }
         ))
         if !model.dismissedZoomSuggestions.isEmpty {
-            Button("Restore Dismissed Suggestions") { model.restoreDismissedZoomSuggestions() }
+            Button(String(localized: "Restore Dismissed Suggestions", bundle: .module)) {
+                model.restoreDismissedZoomSuggestions()
+            }
         }
     }
 
@@ -164,14 +171,14 @@ struct StudioZoomLane: View {
         }
         .buttonStyle(.plain)
         .offset(x: span.lowerBound * scale)
-        .help("Suggested zoom — \(clicks) click\(clicks == 1 ? "" : "s") here. Click to add it.")
-        .accessibilityLabel("Suggested zoom at \(StudioClock.precise(span.lowerBound))")
-        .accessibilityHint("Adds this zoom")
+        .help(Text("Suggested zoom — ^[\(clicks) click](inflect: true) here. Click to add it.", bundle: .module))
+        .accessibilityLabel(Text("Suggested zoom at \(StudioClock.precise(span.lowerBound))", bundle: .module))
+        .accessibilityHint(Text("Adds this zoom", bundle: .module))
         .contextMenu {
-            Button("Add This Zoom") { model.acceptZoomSuggestion(cue) }
-            Button("Dismiss Suggestion") { model.dismissZoomSuggestion(cue) }
+            Button(String(localized: "Add This Zoom", bundle: .module)) { model.acceptZoomSuggestion(cue) }
+            Button(String(localized: "Dismiss Suggestion", bundle: .module)) { model.dismissZoomSuggestion(cue) }
             Divider()
-            Button("Add All Suggested Zooms") { model.addSuggestedZooms() }
+            Button(String(localized: "Add All Suggested Zooms", bundle: .module)) { model.addSuggestedZooms() }
         }
     }
 
@@ -213,17 +220,17 @@ struct StudioZoomLane: View {
         .accessibilityAction(named: "Play") { model.previewZoom(cue.id) }
         .accessibilityAction(named: "Remove") { remove(cue) }
         .contextMenu {
-            Button("Play This Zoom") { model.previewZoom(cue.id) }
+            Button(String(localized: "Play This Zoom", bundle: .module)) { model.previewZoom(cue.id) }
             Button(cue.isEnabled ? "Disable Zoom" : "Enable Zoom") {
                 model.updateZoom(cue.id) { $0.isEnabled.toggle() }
             }
-            Menu("Focus") {
+            Menu(String(localized: "Focus", bundle: .module)) {
                 ForEach(StudioZoomFocus.allCases, id: \.self) { focus in
                     Button(focus.title) { model.setZoomFocus(cue.id, to: focus) }
                 }
             }
             Divider()
-            Button("Remove Zoom", role: .destructive) { remove(cue) }
+            Button(String(localized: "Remove Zoom", bundle: .module), role: .destructive) { remove(cue) }
         }
     }
 

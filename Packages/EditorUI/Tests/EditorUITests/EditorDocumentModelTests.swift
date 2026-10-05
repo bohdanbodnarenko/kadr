@@ -73,7 +73,7 @@ struct EditorDraftingTests {
         #expect(spec.rect == CGRect(x: 0, y: 0, width: 100, height: 100))
     }
 
-    @Test("Option draws a shape out from its centre")
+    @Test("Option draws a shape out from its center")
     func optionDrawsFromCentre() {
         let model = makeModel()
         model.tool = .shape

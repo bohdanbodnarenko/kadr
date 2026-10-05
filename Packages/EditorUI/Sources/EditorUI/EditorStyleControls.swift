@@ -29,7 +29,7 @@ struct EditorSwatchStrip: View {
 
             HStack(spacing: 8) {
                 ColorPicker(
-                    "Custom colour",
+                    "Custom color",
                     selection: Binding(
                         get: { Color(selected) },
                         set: { onSelect(AnnotationColor($0)) }
@@ -41,11 +41,14 @@ struct EditorSwatchStrip: View {
                 Button {
                     addSelectedToPalette()
                 } label: {
-                    Label("Add to Palette", systemImage: "plus")
+                    Label(String(localized: "Add to Palette", bundle: .module), systemImage: "plus")
                 }
                 .buttonStyle(InspectorButtonStyle(fillsWidth: false))
                 .disabled(!palette.canAdd(selected))
-                .help("Save this colour to your palette. Option-click a saved colour to remove it.")
+                .help(Text(
+                    "Save this color to your palette. Option-click a saved color to remove it.",
+                    bundle: .module
+                ))
 
                 Spacer(minLength: 0)
             }
@@ -78,8 +81,8 @@ struct EditorSwatchStrip: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(removable ? "Option-click to remove" : "Colour")
-        .accessibilityLabel("Colour")
+        .help(removable ? "Option-click to remove" : "Color")
+        .accessibilityLabel(Text("Color", bundle: .module))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -104,7 +107,7 @@ struct EditorSwatchStrip: View {
 
 struct EditorCopiedToast: View {
     var body: some View {
-        Label("Copied", systemImage: "checkmark.circle.fill")
+        Label(String(localized: "Copied", bundle: .module), systemImage: "checkmark.circle.fill")
             .font(.system(size: 13, weight: .semibold))
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -161,8 +164,8 @@ struct EditorWidthPresets: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("\(Int(width)) pt")
-        .accessibilityLabel("Stroke width \(Int(width)) points")
+        .help(Text("\(Int(width)) pt", bundle: .module))
+        .accessibilityLabel(Text("Stroke width \(Int(width)) points", bundle: .module))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

@@ -171,7 +171,7 @@ struct AnnotationLayerFactoryTests {
         }
     }
 
-    @Test("A redaction with the capture's pixels shows a real blur, not a grey box")
+    @Test("A redaction with the capture's pixels shows a real blur, not a gray box")
     func redactionSamplesTheImage() throws {
         let image = stripedImage()
         let spec = RedactionSpec(
@@ -212,7 +212,7 @@ struct AnnotationLayerFactoryTests {
         #expect(layer.contents != nil)
     }
 
-    @Test("Erase fills with the colour of the region's edge")
+    @Test("Erase fills with the color of the region's edge")
     func eraseFillsFromTheEdge() throws {
         let image = splitToneImage(width: 64, height: 64)
         let spec = RedactionSpec(

@@ -111,7 +111,7 @@ struct RecordingPane: View {
                         step: 0.05
                     )
                     ColorPicker(
-                        "Click colour",
+                        "Click color",
                         selection: clickColorBinding,
                         supportsOpacity: false
                     )

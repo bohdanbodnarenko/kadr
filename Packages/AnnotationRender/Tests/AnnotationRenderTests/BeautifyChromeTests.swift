@@ -210,7 +210,7 @@ struct BeautifyChromeTests {
 
     // MARK: - Gradients
 
-    @Test("A three-stop gradient passes through its middle colour")
+    @Test("A three-stop gradient passes through its middle color")
     func gradientUsesItsMiddleStop() throws {
         let ramp = BeautifyGradient(
             start: AnnotationColor(red: 1, green: 0, blue: 0),

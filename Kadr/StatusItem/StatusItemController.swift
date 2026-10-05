@@ -127,7 +127,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
-        statusItem.button?.toolTip = "Kadr"
+        statusItem.button?.toolTip = String(localized: "Kadr")
         statusItem.behavior = .removalAllowed
         statusItem.isVisible = true
         showIdleIcon()
@@ -238,7 +238,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // A take being saved can no longer be stopped, paused, restarted or discarded;
         // offering those rows asked for confirmation and then did nothing (docs/18 REC-12).
         guard !controls.isSaving else {
-            let saving = NSMenuItem(title: "Saving Recording…", action: nil, keyEquivalent: "")
+            let saving = NSMenuItem(title: String(localized: "Saving Recording…"), action: nil, keyEquivalent: "")
             saving.isEnabled = false
             menu.addItem(saving)
             return
@@ -253,7 +253,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         status.isEnabled = false
         menu.addItem(status)
 
-        let stop = NSMenuItem(title: "Stop Recording", action: #selector(didSelectStopRecording), keyEquivalent: "")
+        let stop = NSMenuItem(
+            title: String(localized: "Stop Recording"),
+            action: #selector(didSelectStopRecording),
+            keyEquivalent: ""
+        )
         stop.target = self
         stop.image = NSImage(systemSymbolName: "stop.circle", accessibilityDescription: nil)
         stop.setShortcut(for: CaptureCommand.stopRecording.shortcutName)

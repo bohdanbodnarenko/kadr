@@ -301,8 +301,8 @@ public enum CropAspectPreset: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .free: "Free"
-        case .original: "Original"
+        case .free: String(localized: "Free", bundle: .module)
+        case .original: String(localized: "Original", bundle: .module)
         case .square: "1:1"
         case .fourThree: "4:3"
         case .threeTwo: "3:2"

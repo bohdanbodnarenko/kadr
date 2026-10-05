@@ -18,7 +18,7 @@ struct EditorRedactionReviewStrip: View {
             if !model.redactionCandidates.isEmpty {
                 candidateList
             } else if !model.isFindingRedactions, model.redactionAssistError == nil {
-                Text("No secrets found. Use the field above to redact matching text.")
+                Text("No secrets found. Use the field above to redact matching text.", bundle: .module)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -33,18 +33,18 @@ struct EditorRedactionReviewStrip: View {
             if model.isFindingRedactions {
                 ProgressView()
                     .controlSize(.small)
-                Text("Looking for secrets…")
+                Text("Looking for secrets…", bundle: .module)
             } else {
                 Text(title)
                     .font(.headline)
             }
             Spacer()
-            Button("Accept All") {
+            Button(String(localized: "Accept All", bundle: .module)) {
                 model.acceptAllRedactions()
             }
             .disabled(model.redactionCandidates.isEmpty)
             .keyboardShortcut("a", modifiers: [.command, .option])
-            Button("Dismiss") {
+            Button(String(localized: "Dismiss", bundle: .module)) {
                 model.dismissRedactionReview()
             }
         }
@@ -63,10 +63,10 @@ struct EditorRedactionReviewStrip: View {
 
     private var findField: some View {
         HStack {
-            TextField("Redact all text matching…", text: $model.redactionQuery)
+            TextField(String(localized: "Redact all text matching…", bundle: .module), text: $model.redactionQuery)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(onFind)
-            Button("Find", action: onFind)
+            Button(String(localized: "Find", bundle: .module), action: onFind)
                 .disabled(model.redactionQuery.trimmingCharacters(in: .whitespacesAndNewlines).count < 2)
         }
     }
@@ -89,11 +89,11 @@ struct EditorRedactionReviewStrip: View {
             Text(snippet(candidate.text))
                 .font(.callout.monospaced())
                 .lineLimit(1)
-            Button("Accept") {
+            Button(String(localized: "Accept", bundle: .module)) {
                 model.acceptRedaction(candidate.id)
             }
             .controlSize(.small)
-            Button("Skip", role: .cancel) {
+            Button(String(localized: "Skip", bundle: .module), role: .cancel) {
                 model.skipRedaction(candidate.id)
             }
             .controlSize(.small)

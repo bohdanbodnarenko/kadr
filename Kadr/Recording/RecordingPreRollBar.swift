@@ -43,12 +43,12 @@ struct RecordingPreRollBar: View {
             }
             RecordingBarCircleButton(
                 symbol: settings.recordsSystemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill",
-                help: settings.recordsSystemAudio ? "System sound is on" : "System sound is off",
+                help: settings.recordsSystemAudio ? "System audio is on" : "System audio is off",
                 isOn: settings.recordsSystemAudio
             ) {
                 settings.recordsSystemAudio.toggle()
             }
-            .accessibilityLabel("System sound")
+            .accessibilityLabel("System audio")
             .accessibilityValue(settings.recordsSystemAudio ? "On" : "Off")
             RecordingBarCircleButton(
                 symbol: settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",

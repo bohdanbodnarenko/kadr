@@ -320,7 +320,7 @@ struct CameraBubbleTests {
         #expect(bubble == .standard)
     }
 
-    @Test("A free centre places the bubble there")
+    @Test("A free center places the bubble there")
     func freeCenter() {
         var bubble = CameraBubble.standard
         bubble.move(toNormalizedCenter: CGPoint(x: 0.5, y: 0.5))
@@ -330,7 +330,7 @@ struct CameraBubbleTests {
         #expect(bubble.placement == .centre)
     }
 
-    @Test("A free centre at a corner stays inside the frame")
+    @Test("A free center at a corner stays inside the frame")
     func freeCenterStaysInside() {
         var bubble = CameraBubble.standard
         bubble.move(toNormalizedCenter: CGPoint(x: 0, y: 0))
@@ -366,7 +366,7 @@ struct CameraBubbleTests {
         #expect(snapped == corner.frame(in: size))
     }
 
-    @Test("A bubble with a free centre round-trips")
+    @Test("A bubble with a free center round-trips")
     func freeCenterRoundTrips() throws {
         var bubble = CameraBubble.standard
         bubble.move(toNormalizedCenter: CGPoint(x: 0.3, y: 0.7))
