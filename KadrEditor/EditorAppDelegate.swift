@@ -40,6 +40,8 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Application Support, and a deleted capture should not leave its annotations
         // behind (docs/07 H5, M7).
         EditorAutosave().sweepOrphans()
+        // The editor's own hangs and crashes, kept beside the agent's (docs/18 T-DIAG-2).
+        EditorMetricKitCollector.shared.start()
         // Copies of Finder-opened images are only for the window that edits them, and stale
         // hand-off markers mean an open that never arrived (docs/18 ED-1).
         CaptureImporter().sweepImports(keeping: Set(windows.map(\.documentURL)))
