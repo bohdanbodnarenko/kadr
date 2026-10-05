@@ -67,6 +67,18 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         )
     }
 
+    /// docs/18 STU-5: checked before the render rather than discovered at minute seven.
+    public static func notEnoughSpaceToExport(_ estimate: String, to destination: URL) -> Self {
+        Self(
+            title: "Not enough free space to export.",
+            message: "This export needs about \(estimate), and the disk that holds "
+                + "“\(destination.deletingLastPathComponent().lastPathComponent)” has less free. "
+                + "Free some space, or choose another location or a smaller size.",
+            primaryAction: .chooseExportLocation,
+            secondaryAction: .retry(.export(destination))
+        )
+    }
+
     public static func importFailed(_ detail: String) -> Self {
         Self(
             title: "Kadr could not import that file.",

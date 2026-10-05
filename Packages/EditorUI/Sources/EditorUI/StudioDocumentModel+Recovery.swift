@@ -1,4 +1,5 @@
 import Foundation
+import StudioRender
 
 @MainActor
 public extension StudioDocumentModel {
@@ -45,5 +46,21 @@ public extension StudioDocumentModel {
             }
         }
         return removed
+    }
+}
+
+extension StudioDocumentModel {
+    /// What an export of `snapshot` should weigh, or nil when the settings cannot say.
+    func estimatedExportBytes(for snapshot: StudioExportSnapshot) -> Int? {
+        let size = StudioRenderPlan.outputSize(
+            edit: snapshot.edit,
+            sourceSize: manifest.pixelSize,
+            maxLongestEdge: snapshot.settings.maxLongestEdge
+        )
+        return snapshot.settings.estimatedBytes(
+            outputSize: size,
+            duration: snapshot.edit.duration,
+            manifestFrameRate: manifest.frameRate
+        )
     }
 }

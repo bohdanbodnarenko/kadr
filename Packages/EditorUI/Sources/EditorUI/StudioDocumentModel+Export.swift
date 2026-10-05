@@ -298,6 +298,16 @@ public extension StudioDocumentModel {
             return
         }
 
+        // Said before minutes of rendering, not after them (docs/18 STU-5).
+        if let estimate = estimatedExportBytes(for: snapshot),
+           StudioRenderPartialFile.hasRoom(forEstimatedBytes: estimate, at: destination) == false {
+            failure = .notEnoughSpaceToExport(
+                ByteCountFormatter.string(fromByteCount: Int64(estimate), countStyle: .file),
+                to: destination
+            )
+            return
+        }
+
         exportProgress = 0
         // Any debounced draft write lands before the commit, so the two cannot disagree
         // about what was exported.
