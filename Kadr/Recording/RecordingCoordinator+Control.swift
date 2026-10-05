@@ -27,7 +27,15 @@ extension RecordingCoordinator {
             do {
                 try await engine.pause()
             } catch {
-                logger.error("Could not pause: \(error.localizedDescription, privacy: .public)")
+                // Still recording: undo the early camera and telemetry pause, and say so
+                // rather than leave a bar that looks paused-pending forever (docs/18 X-5a).
+                studio.resumeTelemetry()
+                studio.resumeCamera()
+                FailurePresenter.report(
+                    "Kadr could not pause the recording. It is still recording.",
+                    detail: error.localizedDescription,
+                    logger: logger
+                )
                 return
             }
             // Stop or Discard may have landed while the segment closed. Writing `.paused`
@@ -58,7 +66,13 @@ extension RecordingCoordinator {
             do {
                 try await engine.resume()
             } catch {
-                logger.error("Could not resume: \(error.localizedDescription, privacy: .public)")
+                studio.pauseCamera()
+                studio.pauseTelemetry()
+                FailurePresenter.report(
+                    "Kadr could not resume the recording. It is still paused.",
+                    detail: error.localizedDescription,
+                    logger: logger
+                )
                 return
             }
             // Same as pause: a Stop in the meantime owns the state now, and restarting the

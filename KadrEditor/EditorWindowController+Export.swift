@@ -244,6 +244,7 @@ extension EditorWindowController {
             let anchor = NSRect(x: view.bounds.midX, y: view.bounds.maxY - 12, width: 1, height: 1)
             picker.show(relativeTo: anchor, of: view, preferredEdge: .minY)
         } catch {
+            model.failExport(.share, message: error.localizedDescription)
             logger.error("Share from editor failed: \(error.localizedDescription, privacy: .public)")
         }
     }
