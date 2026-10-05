@@ -179,7 +179,10 @@ final class ScrollCaptureCoordinator {
                     region: rect,
                     on: display.displayID,
                     axis: settings.scrollAxis,
-                    frameRate: settings.scrollFrameRate
+                    frameRate: settings.scrollFrameRate,
+                    onInterrupted: { [weak self] in
+                        Task { @MainActor in self?.streamInterrupted() }
+                    }
                 ) { [weak self] note in
                     Task { @MainActor in
                         self?.received(note)
