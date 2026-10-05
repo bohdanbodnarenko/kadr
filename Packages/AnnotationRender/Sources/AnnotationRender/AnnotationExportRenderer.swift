@@ -21,9 +21,19 @@ public struct AnnotationExportRenderer: Sendable {
         self.objectShadowsEnabled = objectShadowsEnabled ?? ObjectShadowPolicy.isEnabled()
     }
 
-    public enum RenderError: Error, Equatable {
+    public enum RenderError: Error, Equatable, LocalizedError {
         case couldNotCreateContext
         case couldNotCreateImage
+
+        /// Banners showed "…RenderError error 0" (docs/18 ED-8).
+        public var errorDescription: String? {
+            switch self {
+            case .couldNotCreateContext:
+                "There is not enough memory to draw an image this large."
+            case .couldNotCreateImage:
+                "Kadr could not draw the finished image."
+            }
+        }
     }
 
     /// Flattens a document into a single image.

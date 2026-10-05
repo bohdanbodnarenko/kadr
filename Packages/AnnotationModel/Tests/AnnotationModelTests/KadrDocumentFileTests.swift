@@ -281,3 +281,43 @@ struct StyleMemoryTests {
         #expect(abs(memory.lastFillOpacity - 0.7) < 0.001)
     }
 }
+
+/// What a project from another build says when it cannot be read (docs/18 ED-8).
+@Suite("Reading projects from other builds")
+struct KadrDocumentFileCompatibilityTests {
+    private func archive(json: String) -> Data {
+        ZipArchive.archive([
+            ZipArchive.Entry(name: KadrDocumentFile.baseImageEntry, data: fakePNG),
+            ZipArchive.Entry(name: KadrDocumentFile.commandsEntry, data: Data(json.utf8))
+        ])
+    }
+
+    @Test("A newer file version is named as such, even when it does not decode")
+    func newerVersion() {
+        #expect(throws: KadrDocumentFile.FileError.unsupportedVersion(9)) {
+            try KadrDocumentFile.contents(of: archive(json: #"{"version":9,"whatever":true}"#))
+        }
+    }
+
+    @Test("An unknown command type is a newer Kadr, not a broken file")
+    func unknownCommand() throws {
+        let base = try JSONEncoder().encode(makeContents().document.baseImage)
+        let json = #"{"version":1,"baseImage":"# + String(decoding: base, as: UTF8.self)
+            + #","commands":[{"hologram":{"id":"x"}}]}"#
+        #expect(throws: KadrDocumentFile.FileError.newerCommands) {
+            try KadrDocumentFile.contents(of: archive(json: json))
+        }
+    }
+
+    @Test("Errors read as sentences, not type names")
+    func messages() {
+        let errors: [KadrDocumentFile.FileError] = [
+            .unsupportedVersion(2), .newerCommands, .malformed("x"), .missingEntry("a")
+        ]
+        for error in errors {
+            let text = error.localizedDescription
+            #expect(!text.contains("FileError"))
+            #expect(text.hasSuffix("."))
+        }
+    }
+}

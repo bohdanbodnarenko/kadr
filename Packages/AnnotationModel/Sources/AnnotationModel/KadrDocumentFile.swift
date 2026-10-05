@@ -40,10 +40,37 @@ public enum KadrDocumentFile {
 
     public static let currentVersion = 1
 
-    public enum FileError: Error, Equatable {
+    public enum FileError: Error, Equatable, LocalizedError {
         case missingEntry(String)
         case unsupportedVersion(Int)
+        /// A command type this build cannot read, from a newer Kadr.
+        case newerCommands
         case malformed(String)
+
+        /// Sentences a person can act on; the detail stays in the log (docs/18 ED-8).
+        public var errorDescription: String? {
+            switch self {
+            case .unsupportedVersion, .newerCommands:
+                "This project was saved by a newer version of Kadr. Update Kadr to open it."
+            case .missingEntry, .malformed:
+                "This project file is damaged or is not a Kadr project."
+            }
+        }
+    }
+
+    private struct VersionProbe: Decodable {
+        var version: Int
+    }
+
+    private static func failsInsideCommands(_ error: DecodingError) -> Bool {
+        let path: [any CodingKey] = switch error {
+        case let .dataCorrupted(context), let .keyNotFound(_, context),
+             let .typeMismatch(_, context), let .valueNotFound(_, context):
+            context.codingPath
+        @unknown default:
+            []
+        }
+        return path.first?.stringValue == "commands" && path.count > 1
     }
 
     public static func data(for contents: Contents) throws -> Data {
@@ -73,14 +100,20 @@ public enum KadrDocumentFile {
             throw FileError.missingEntry(commandsEntry)
         }
 
+        // The version first: a newer file may not decode at all, and "malformed" is the
+        // wrong thing to tell someone whose file is fine (docs/18 ED-8).
+        if let probe = try? JSONDecoder().decode(VersionProbe.self, from: json), probe.version > currentVersion {
+            throw FileError.unsupportedVersion(probe.version)
+        }
         let payload: Payload
         do {
             payload = try JSONDecoder().decode(Payload.self, from: json)
+        } catch let error as DecodingError where Self.failsInsideCommands(error) {
+            // A command this build does not know: written by a newer Kadr with the same
+            // file version, not a broken file.
+            throw FileError.newerCommands
         } catch {
             throw FileError.malformed(String(describing: error))
-        }
-        guard payload.version <= currentVersion else {
-            throw FileError.unsupportedVersion(payload.version)
         }
 
         return Contents(
