@@ -1,6 +1,6 @@
 import Foundation
-@testable import MediaExport
 import Testing
+@testable import MediaExport
 
 /// A staged file dropped into a file-URL-only app is kept from the sweep (docs/18 OUT-2).
 @Suite("Staging retain")
