@@ -258,11 +258,13 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         panel.canCreateDirectories = true
         panel.message = "Export the edited recording."
 
-        let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+        let completion: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
+            // No Finder reveal: the studio says "Exported · Show in Finder" itself, with a
+            // file the user can drag straight out, instead of switching apps every time
+            // (docs/18 STU-13).
             Task { @MainActor in
                 await model.export(to: url)
-                self?.reveal(url)
             }
         }
         // A sheet on the studio window (docs/17 T-STU-12), so it is plainly attached to
@@ -272,15 +274,6 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         } else {
             panel.begin(completionHandler: completion)
         }
-    }
-
-    /// Shows the finished file, if it was written.
-    ///
-    /// Only on success: revealing after a failure opens a folder to point at nothing, and
-    /// the failure has already been reported through the model.
-    private func reveal(_ url: URL) {
-        guard model.failure == nil, FileManager.default.fileExists(atPath: url.path) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     // MARK: - Closing

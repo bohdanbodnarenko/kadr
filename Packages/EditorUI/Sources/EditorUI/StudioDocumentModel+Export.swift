@@ -295,6 +295,7 @@ public extension StudioDocumentModel {
         let snapshot = exportSnapshot()
         if reuseRenderedFile(for: snapshot, at: destination) {
             notice = "That edit was already exported, so Kadr copied the finished file."
+            lastExportedURL = destination
             writeCaptions(for: snapshot, beside: destination)
             return
         }
@@ -321,6 +322,7 @@ public extension StudioDocumentModel {
             writeCaptions(for: snapshot, beside: destination)
             exportProgress = nil
             notifyExportFinished(at: destination)
+            lastExportedURL = destination
         } catch is CancellationError {
             exportProgress = nil
             logger.info("Studio export cancelled")

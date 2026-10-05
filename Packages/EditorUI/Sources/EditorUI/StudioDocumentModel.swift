@@ -165,8 +165,13 @@ public final class StudioDocumentModel {
             if NSApp != nil {
                 StudioDockProgress.update(exportProgress)
             }
+            // When this render began, for the time-left estimate (docs/18 STU-13).
+            if oldValue == nil, exportProgress != nil { exportStartedAt = Date() }
         }
     }
+    @ObservationIgnored var exportStartedAt: Date?
+    /// The file the last export wrote, for the in-window "Exported" banner (docs/18 STU-13).
+    public var lastExportedURL: URL?
 
     /// Whether the inspector column is open, and whether the export sheet is up.
     ///
@@ -182,11 +187,6 @@ public final class StudioDocumentModel {
     }
     public var showsExportOptions = false
 
-    static let inspectorPresentedKey = "studio.inspector.presented"
-
-    static var rememberedInspectorPresented: Bool {
-        UserDefaults.standard.object(forKey: inspectorPresentedKey) as? Bool ?? true
-    }
 
     /// Set when something went wrong that the user should see.
     public var failure: StudioFailurePresentation? {
@@ -489,17 +489,4 @@ public final class StudioDocumentModel {
     @ObservationIgnored var draftGeneration = 0
     /// Whether this model has put a draft on disk yet. The first one is written in place.
     @ObservationIgnored var hasWrittenDraft = false
-
-    /// The guard `tidySpeech` applies before it rebuilds the timeline.
-    ///
-    /// Its own method so a test can reach it: the rest of `tidySpeech` needs a microphone,
-    /// a permission grant and a speech model, and the refusal needs none of those — which
-    /// is exactly the split that let the bug through in the first place.
-    func refuseTidyIfEditedForTesting() {
-        guard edit.clips.isEdited(ofRecordingLasting: manifest.duration) else { return }
-        failure = .tidyRefused()
-    }
-
-    nonisolated static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
-        + "Undo your clip edits first, or trim the pauses by hand."
 }

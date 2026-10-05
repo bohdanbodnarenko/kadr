@@ -19,7 +19,8 @@ struct StudioExportCompressionTests {
         #expect(decoded.container == .mp4)
         #expect(decoded.includeAudio == false)
         #expect(decoded.frameRate == .source)
-        #expect(decoded.compresses == false)
+        // docs/18 STU-13: an old uncompressed Medium was a request for a smaller file.
+        #expect(decoded.sizePreset == .smaller)
     }
 
     @Test("Compress round-trips")
