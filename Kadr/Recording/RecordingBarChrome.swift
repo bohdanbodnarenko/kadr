@@ -136,10 +136,9 @@ struct RecordingBarIcon: View {
     var tint: Color?
 
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous)
         Image(systemName: symbol)
             .font(.system(size: RecordingBarMetrics.iconSize, weight: .regular))
             .foregroundStyle(
@@ -149,7 +148,7 @@ struct RecordingBarIcon: View {
             .frame(width: RecordingBarMetrics.controlSize, height: RecordingBarMetrics.controlSize)
             .background {
                 if isOn == true {
-                    shape.fill(Color.primary.opacity(contrast == .increased ? 0.22 : 0.12))
+                    shape.fill(KadrFill.selected)
                 }
             }
             .contentShape(shape)

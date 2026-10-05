@@ -196,8 +196,8 @@ struct StudioTransportBar: View {
 
     private var separator: some View {
         Rectangle()
-            .fill(Color.primary.opacity(0.18))
-            .frame(width: 1, height: 14)
+            .fill(KadrFill.stroke)
+            .frame(width: KadrFill.strokeWidth, height: 14)
             .padding(.horizontal, 6)
     }
 
@@ -348,7 +348,7 @@ private struct StudioPlayPauseButton: View {
             Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: 12, weight: .bold))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.primary.opacity(0.07)))
+                .background(Circle().fill(KadrFill.hover))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import SettingsKit
 import Shared
@@ -248,12 +249,12 @@ struct QuickAccessCardView: View {
         // light one inside it that holds the edge of a dark capture against a dark desktop.
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.16), lineWidth: 0.5)
+                .strokeBorder(Color.black.opacity(KadrAccessibility.increaseContrast ? 0.5 : 0.16), lineWidth: 0.5)
         )
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius - 0.5, style: .continuous)
                 .inset(by: 0.5)
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(KadrAccessibility.increaseContrast ? 0.45 : 0.18), lineWidth: 0.5)
         )
         // Flattened first, so the shadow is cast by the rounded result rather than by the
         // square image inside it.
