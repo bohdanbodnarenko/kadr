@@ -65,7 +65,8 @@ public struct StagingArea: Sendable {
     /// Moves a staged file to a path the user picked (CleanShot §6.2 / §7).
     ///
     /// The save panel has already confirmed a replace, so an existing file at
-    /// `destination` is removed first rather than getting a counter suffix.
+    /// `destination` is replaced rather than getting a counter suffix — in one step, so a
+    /// failed move never leaves the user with neither file (docs/18 §4.3 P3).
     @discardableResult
     public func finalize(_ url: URL, to destination: URL) throws -> URL {
         let folder = destination.deletingLastPathComponent()
@@ -73,15 +74,11 @@ public struct StagingArea: Sendable {
         if url.standardizedFileURL == destination.standardizedFileURL {
             return destination
         }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
         do {
-            try FileManager.default.moveItem(at: url, to: destination)
+            return try FileReplacement.move(url, to: destination)
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
-        return destination
     }
 
     /// Copies a file the user owns — or the History library does — into staging, so a

@@ -211,11 +211,8 @@ extension QuickAccessManager {
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.moveItem(at: original, to: destination)
-            return destination
+            // One step, so a failed move cannot cost the file being replaced.
+            return try FileReplacement.move(original, to: destination)
         } catch {
             logger.error("Could not save to the chosen path: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -229,11 +226,7 @@ extension QuickAccessManager {
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            if FileManager.default.fileExists(atPath: destination.path) {
-                try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: source, to: destination)
-            return destination
+            return try FileReplacement.copy(source, to: destination)
         } catch {
             logger.error("Could not copy to the chosen path: \(error.localizedDescription, privacy: .public)")
             return nil
