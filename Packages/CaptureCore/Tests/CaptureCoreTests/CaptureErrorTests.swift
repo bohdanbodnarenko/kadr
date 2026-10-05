@@ -69,4 +69,15 @@ struct CaptureErrorMappingTests {
             #expect(error.errorDescription?.isEmpty == false)
         }
     }
+
+    /// docs/18 CAP-11: identifiers belong in the log, never in a banner.
+    @Test("Messages carry no internal identifiers", arguments: [
+        (CaptureError.displayNotFound(69_734_272), "69734272"),
+        (.windowNotFound(4242), "4242"),
+        (.captureFailed(code: -3801, description: "SCStreamErrorDomain boom"), "-3801")
+    ])
+    func noIdentifiersInMessages(error: CaptureError, identifier: String) {
+        #expect(error.errorDescription?.contains(identifier) == false)
+        #expect(error.logDescription.contains(identifier))
+    }
 }

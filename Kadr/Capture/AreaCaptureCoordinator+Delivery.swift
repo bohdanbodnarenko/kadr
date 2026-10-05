@@ -176,7 +176,7 @@ extension AreaCaptureCoordinator {
         permissions.noteCaptureFailure(error)
         let mapped = CaptureError.mapping(error)
         automation.report(.failed(mapped.errorDescription ?? "Capture failed."))
-        logger.error("Capture failed: \(mapped.errorDescription ?? "unknown", privacy: .public)")
+        logger.error("Capture failed: \(mapped.logDescription, privacy: .public)")
 
         // A lost grant is the one failure worth interrupting the user over: every capture
         // will keep failing until they act (docs/03 §9). Everything else — a window closed
