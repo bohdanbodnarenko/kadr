@@ -167,11 +167,18 @@ final class RecordingCoordinator {
     }
 
     func handleEngineEvent(_ event: RecordingEngineEvent) {
-        guard state == .recording || state == .paused else { return }
         let message: String = switch event {
         case let .streamStopped(reason), let .writerFailed(reason):
             reason
         }
+        // The stream can die after the engine started but before this take claimed
+        // `.recording`. Dropping it left a take that looked live with nothing filming; it
+        // is held and replayed once the start completes (docs/18 REC-7).
+        if state == .starting {
+            pendingInterruption = message
+            return
+        }
+        guard state == .recording || state == .paused else { return }
         pendingInterruption = message
         liveNotice = "Saving what was captured…"
         stop()

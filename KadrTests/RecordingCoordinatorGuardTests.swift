@@ -167,4 +167,35 @@ struct RecordingCoordinatorGuardTests {
         #expect(!coordinator.pausedForSleep)
         #expect(coordinator.state == state)
     }
+
+    /// docs/18 REC-7: a stream that dies before the start claims `.recording` is held,
+    /// not dropped, so the take is saved once it starts instead of looking live forever.
+    @Test("A stream death while starting is held for the start to replay")
+    func streamDeathDuringStartIsHeld() {
+        let coordinator = makeCoordinator()
+        coordinator.state = .starting
+        coordinator.handleEngineEvent(.streamStopped("The display went away."))
+        #expect(coordinator.pendingInterruption == "The display went away.")
+        #expect(coordinator.state == .starting)
+    }
+
+    /// docs/18 REC-7: cancel's trailing cleanup used to knock a take started in the
+    /// meantime back to idle.
+    @Test("Cancel's cleanup leaves a newer take alone")
+    func cancelSparesNewerTake() async {
+        let coordinator = makeCoordinator()
+        coordinator.state = .recording
+        coordinator.cancel()
+
+        // A new take claims the coordinator before the engine finishes winding down.
+        coordinator.state = .starting
+        coordinator.startGeneration &+= 1
+        coordinator.wantsGIFExport = true
+        for _ in 0 ..< 200 {
+            await Task.yield()
+        }
+
+        #expect(coordinator.state == .starting)
+        #expect(coordinator.wantsGIFExport)
+    }
 }

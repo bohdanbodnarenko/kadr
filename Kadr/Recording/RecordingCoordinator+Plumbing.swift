@@ -63,6 +63,7 @@ extension RecordingCoordinator {
             // existed on disk. If the state moved out from under us, the engine has
             // already been told to stand down and there is nothing here to claim.
             guard state == .starting else {
+                pendingInterruption = nil
                 await engine.cancel()
                 isTransitioning = false
                 logger.info("Recording was stopped while it was still starting")
@@ -78,6 +79,10 @@ extension RecordingCoordinator {
             isTransitioning = false
             showStartNotice()
             logger.info("Recording started")
+            if pendingInterruption != nil {
+                liveNotice = "Saving what was captured…"
+                stop()
+            }
         } catch {
             // Only this start's own pieces. A Stop or Cancel during the start has already
             // torn them down, and if another take has claimed the coordinator since, the
@@ -92,6 +97,7 @@ extension RecordingCoordinator {
             teleprompter.stop()
             hygiene?.endRecording()
             isTransitioning = false
+            pendingInterruption = nil
             state = .idle
             // A cancellation is not a capture failure. Feeding it to the permission
             // tracker would count the user's own Escape as evidence that screen

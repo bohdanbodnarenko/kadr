@@ -242,12 +242,18 @@ extension RecordingCoordinator {
         studio.cancel()
         stopGeometryObserver()
         teleprompter.stop()
+        pendingInterruption = nil
+        // A new take can start while the engine winds down; its state is not ours to reset
+        // (docs/18 REC-7).
+        let generation = startGeneration
         Task { [weak self] in
-            await self?.engine.cancel()
-            self?.state = .idle
-            self?.clearTakeState()
-            self?.report(.cancelled)
-            self?.finishTerminationIfNeeded()
+            guard let self else { return }
+            await engine.cancel()
+            if generation == startGeneration, !isBusy {
+                clearTakeState()
+            }
+            report(.cancelled)
+            finishTerminationIfNeeded()
         }
     }
 
@@ -324,7 +330,17 @@ extension RecordingCoordinator {
         if isRecording {
             stop()
         }
+        // A stitch that never returns must not hold the quit forever. The segments stay on
+        // disk, and crash recovery offers them at the next launch (docs/18 REC-7).
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.terminationTimeout)
+            guard let self, terminationCompletion != nil else { return }
+            logger.error("Quit stopped waiting for the recording to finish saving")
+            finishTerminationIfNeeded()
+        }
     }
+
+    static let terminationTimeout: Duration = .seconds(60)
 
     private func finishTerminationIfNeeded() {
         let done = terminationCompletion
