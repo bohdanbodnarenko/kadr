@@ -119,6 +119,9 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             return
         }
 
+        // From the window opening, not from a view's onAppear: a view can appear more than
+        // once, and the starting look is the document's business (docs/18 STU-14).
+        model.applyDefaultPresetIfFresh()
         let root = StudioRootView(model: model) { [weak self] model in
             self?.presentExportPanel(for: model)
         }

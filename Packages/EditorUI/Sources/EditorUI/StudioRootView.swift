@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 public struct StudioRootView: View {
     @State private var model: StudioDocumentModel
+    @State private var isHoveringNotice = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onExport: (StudioDocumentModel) -> Void
 
@@ -87,6 +88,10 @@ public struct StudioRootView: View {
                     .foregroundStyle(.tint)
                 Text(notice)
                     .font(.callout)
+                if let action = model.noticeAction {
+                    Button(action.title) { model.performNoticeAction(action) }
+                        .controlSize(.small)
+                }
                 Button {
                     model.notice = nil
                 } label: {
@@ -103,9 +108,14 @@ public struct StudioRootView: View {
             .shadow(radius: 6, y: 2)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
+            .onHover { isHoveringNotice = $0 }
             .task(id: notice) {
-                // Long enough to read a sentence, and it does not block anything meanwhile.
-                try? await Task.sleep(for: .seconds(4))
+                // Long enough to read a sentence, longer when there is a button to reach,
+                // and never while the pointer is on it (docs/14 UX-36).
+                try? await Task.sleep(for: .seconds(model.noticeAction == nil ? 4 : 8))
+                while isHoveringNotice, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
                 if model.notice == notice {
                     model.notice = nil
                 }
@@ -127,7 +137,6 @@ public struct StudioRootView: View {
             }
         }
         .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
-        .onAppear { model.applyDefaultPresetIfFresh() }
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.

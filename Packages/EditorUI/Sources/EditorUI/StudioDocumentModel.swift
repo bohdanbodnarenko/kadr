@@ -195,8 +195,13 @@ public final class StudioDocumentModel {
 
     /// Set when something worked and saying so is the whole feedback.
     public var notice: String? {
-        didSet { Self.announce(notice, unless: oldValue == notice) }
+        didSet {
+            Self.announce(notice, unless: oldValue == notice)
+            if notice != oldValue { noticeAction = nil }
+        }
     }
+    /// A button the notice offers, set after the notice itself (docs/18 STU-14).
+    public var noticeAction: StudioNoticeAction?
 
     /// The look last applied from the preset bar.
     var storedAppliedPresetID: UUID?
