@@ -300,7 +300,7 @@ public struct StudioRootView: View {
 
     private func copyButton(compact: Bool) -> some View {
         Menu {
-            Button("Copy") {
+            Button("Copy (\(StudioExportSettings.sharingSummary))") {
                 Task { await model.copyEditedToClipboard() }
             }
             Button("Copy Original") {
@@ -314,14 +314,14 @@ public struct StudioRootView: View {
             }
         }
         .fixedSize()
-        .help("Copy the edited recording shown in the preview")
+        .help("Copy the edited recording as \(StudioExportSettings.sharingSummary)")
         .accessibilityLabel("Copy")
         .disabled(model.exportProgress != nil)
     }
 
     private func shareControl(compact: Bool) -> some View {
         Menu {
-            Button("Share") {
+            Button("Share (\(StudioExportSettings.sharingSummary))") {
                 Task { await model.shareEdited() }
             }
             ShareLink(item: model.session.screenURL) {
@@ -336,7 +336,7 @@ public struct StudioRootView: View {
         }
         .fixedSize()
         .background(StudioShareAnchor(model: model))
-        .help("Share the edited recording shown in the preview")
+        .help("Share the edited recording as \(StudioExportSettings.sharingSummary)")
         .accessibilityLabel("Share")
         .disabled(model.exportProgress != nil)
     }

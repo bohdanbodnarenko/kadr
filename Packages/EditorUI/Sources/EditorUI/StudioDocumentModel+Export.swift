@@ -115,7 +115,7 @@ public extension StudioDocumentModel {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
             .appendingPathComponent(Self.safeFileName(session.displayName))
-            .appendingPathExtension(exportSettings.filenameExtension)
+            .appendingPathExtension(StudioExportSettings.sharing.filenameExtension)
     }
 
     /// This session's staging folder for Copy and Share.
@@ -144,9 +144,10 @@ public extension StudioDocumentModel {
         return cleaned.isEmpty ? "Recording" : String(cleaned.prefix(200))
     }
 
-    /// Writes the current edit to `destination`, reusing a stamped render when possible.
+    /// Writes the current edit to `destination` with the sharing preset, reusing a stamped
+    /// render when possible (docs/18 STU-6).
     private func writeEditedRecording(to destination: URL) async throws {
-        let snapshot = exportSnapshot()
+        let snapshot = exportSnapshot(settings: .sharing)
         if reuseRenderedFile(for: snapshot, at: destination) {
             return
         }
@@ -224,11 +225,11 @@ public extension StudioDocumentModel {
     /// `edit` again after the `await` stamped the render with whatever the user had
     /// changed in the meantime — so the next export of the *new* edit reused the old
     /// file — and timed the captions against clips the movie does not have.
-    internal func exportSnapshot() -> StudioExportSnapshot {
+    internal func exportSnapshot(settings: StudioExportSettings? = nil) -> StudioExportSnapshot {
         StudioExportSnapshot(
             edit: edit,
             transcript: transcript,
-            settings: exportSettings,
+            settings: settings ?? exportSettings,
             inputsDigest: renderInputsDigest(edit: edit, transcript: transcript)
         )
     }

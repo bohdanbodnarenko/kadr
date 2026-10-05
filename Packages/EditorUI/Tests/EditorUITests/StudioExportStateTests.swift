@@ -103,15 +103,20 @@ struct StudioExportStateTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let studio = try model(in: folder)
 
-        let rendered = folder.appendingPathComponent("already.mov")
+        // Copy renders with the sharing preset (docs/18 STU-6), so that is what it reuses.
+        let rendered = folder.appendingPathComponent("already.mp4")
         try Data("edited export".utf8).write(to: rendered)
         let digest = try #require(RenderStamp.digest(of: studio.edit))
-        let size = StudioRenderPlan(edit: studio.edit, sourceSize: studio.manifest.pixelSize).outputSize
+        let size = StudioRenderPlan.outputSize(
+            edit: studio.edit,
+            sourceSize: studio.manifest.pixelSize,
+            maxLongestEdge: StudioExportSettings.sharing.maxLongestEdge
+        )
         try SessionDocument(session: studio.session).write(RenderStamp(
             editDigest: digest,
             outputPath: rendered.path,
             pixelSize: size,
-            inputsDigest: studio.exportSnapshot().inputsDigest
+            inputsDigest: studio.exportSnapshot(settings: .sharing).inputsDigest
         ))
 
         await studio.copyEditedToClipboard()
@@ -227,6 +232,24 @@ struct StudioExportStateTests {
         studio.commitOnClose()
         #expect(FileManager.default.fileExists(atPath: staged.path))
         try? FileManager.default.removeItem(at: staged)
+    }
+
+    @Test("Copy uses the sharing preset, not what the Export popover last held")
+    func copyIgnoresExportSettings() async throws {
+        let folder = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 1)
+        try studio.session.setDisplayName("Preset take")
+        studio.exportSettings.container = .gif
+        studio.exportSettings.resolution = .sd
+
+        await studio.copyEditedToClipboard()
+        let staged = try studio.stagedRenderURL()
+        defer { try? FileManager.default.removeItem(at: staged) }
+        #expect(staged.pathExtension == "mp4")
+        #expect(FileManager.default.fileExists(atPath: staged.path))
+        #expect(StudioExportSettings.sharing.container == .mp4)
+        #expect(StudioExportSettings.sharing.codec == .h264)
     }
 
     @Test("Retry re-runs the operation the failure names")

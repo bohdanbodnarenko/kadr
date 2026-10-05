@@ -196,6 +196,24 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
         self.gifFrameRate = gifFrameRate
     }
 
+    /// What Copy and Share render, whatever the Export popover last held (docs/18 STU-6).
+    ///
+    /// They used to borrow the export settings, so a GIF or a 480p export chosen last week
+    /// was what landed in a chat today. A clipboard movie has to play everywhere it is
+    /// pasted, so this is fixed: MP4, H.264, up to 1080p, quality-compressed, with sound.
+    public static let sharing = StudioExportSettings(
+        quality: .high,
+        codec: .h264,
+        resolution: .fullHD,
+        container: .mp4,
+        includeAudio: true,
+        frameRate: .source,
+        compresses: true
+    )
+
+    /// The sharing preset in words, for the menu items that use it.
+    public static let sharingSummary = "MP4, up to 1080p"
+
     private enum CodingKeys: String, CodingKey {
         case quality, codec, resolution, container, includeAudio, frameRate, compresses
         case gifWidth, gifFrameRate
