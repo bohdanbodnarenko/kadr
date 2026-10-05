@@ -215,6 +215,9 @@ final class AreaCaptureCoordinator {
         // Opened here so the interval covers the freeze, which is the expensive half of
         // the < 100 ms hotkey-to-overlay budget (PRD §8).
         let interval = signposter.beginInterval("hotkeyToOverlay")
+        // Also logged as plain text, so `make perf` can read the PRD §8 budget back from a
+        // run with a grant (docs/18 CAP-9).
+        let hotkeyAt = ContinuousClock.now
 
         inFlight = Task { [weak self] in
             guard let self else { return }
@@ -261,6 +264,8 @@ final class AreaCaptureCoordinator {
                     self?.finish(with: outcome, freezes: freezes)
                     self?.onArmedStateChanged?()
                 }
+                let elapsed = (ContinuousClock.now - hotkeyAt) / .milliseconds(1)
+                logger.info("Overlay presented in \(String(format: "%.1f", elapsed), privacy: .public) ms")
                 hygiene?.beginCapture()
                 onArmedStateChanged?()
                 if mode != .window, let windows = try? await windowFetch.value, !Task.isCancelled {
