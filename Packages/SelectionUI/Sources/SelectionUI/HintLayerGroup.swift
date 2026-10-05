@@ -46,9 +46,11 @@ final class HintLayerGroup {
             attributes: [.font: Self.font]
         ).size().width) + Self.padding.width * 2
         let height: CGFloat = 32
+        // Bottom-centre, clear of where people drag; the view is flipped, so the bottom is
+        // maxY. Mid-screen it sat under the selection being drawn (docs/18 CAP-10).
         let frame = CGRect(
             x: bounds.midX - width / 2,
-            y: bounds.midY - height / 2,
+            y: bounds.maxY - height - Self.bottomMargin,
             width: width,
             height: height
         )
@@ -63,6 +65,8 @@ final class HintLayerGroup {
         )
         container.isHidden = false
     }
+
+    static let bottomMargin: CGFloat = 72
 
     func hide() {
         container.isHidden = true

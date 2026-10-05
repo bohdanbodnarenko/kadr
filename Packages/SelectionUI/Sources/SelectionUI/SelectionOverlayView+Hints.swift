@@ -9,7 +9,7 @@ extension SelectionOverlayView {
                 mode: mode,
                 phase: interaction.phase,
                 isEyedropper: isEyedropperMode,
-                isEnabled: showsCaptureHints
+                isEnabled: showsCaptureHints && isActiveDisplay
             ),
             in: bounds
         )

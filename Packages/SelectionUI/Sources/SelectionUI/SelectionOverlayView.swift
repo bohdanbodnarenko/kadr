@@ -83,6 +83,8 @@ final class SelectionOverlayView: NSView {
     var lastRegionGhost: CGRect?
     /// Teaching copy on the idle overlay (docs/03 §1.1). Off from Settings → Capture.
     var showsCaptureHints = true
+    /// Whether the pointer is on this display; only that display teaches (docs/18 CAP-10).
+    var isActiveDisplay = true
     /// When true, mouse-up leaves handles until Enter commits (docs/03 §1.1, docs/14 UX-17C).
     var confirmsSelection = false
     /// `F` captures this display from area mode (docs/03 §1.3).
@@ -455,6 +457,10 @@ final class SelectionOverlayView: NSView {
 
     /// Hides the pointer-following chrome on displays the pointer is not on.
     func setActive(_ isActive: Bool) {
+        if isActiveDisplay != isActive {
+            isActiveDisplay = isActive
+            updateHints()
+        }
         guard !isActive else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
