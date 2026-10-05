@@ -268,7 +268,10 @@ public struct SelectionInteraction: Equatable, Sendable {
             dragNudge.width += delta.width
             dragNudge.height += delta.height
             self.anchor = clampToBounds(CGPoint(x: anchor.x + delta.width, y: anchor.y + delta.height))
-            let raw = CGPoint(x: pointer.x - dragNudge.width + delta.width, y: pointer.y - dragNudge.height + delta.height)
+            let raw = CGPoint(
+                x: pointer.x - dragNudge.width + delta.width,
+                y: pointer.y - dragNudge.height + delta.height
+            )
             drag(to: raw)
             return
         }

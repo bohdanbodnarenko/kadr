@@ -182,12 +182,13 @@ final class ScrollCaptureCoordinator {
                     frameRate: settings.scrollFrameRate,
                     onInterrupted: { [weak self] in
                         Task { @MainActor in self?.streamInterrupted() }
+                    },
+                    onFrame: { [weak self] note in
+                        Task { @MainActor in
+                            self?.received(note)
+                        }
                     }
-                ) { [weak self] note in
-                    Task { @MainActor in
-                        self?.received(note)
-                    }
-                }
+                )
                 await strip.begin(frameSize: session.pixelSize, axis: settings.scrollAxis)
                 state = .capturing
                 showHUD(over: rect, on: display)

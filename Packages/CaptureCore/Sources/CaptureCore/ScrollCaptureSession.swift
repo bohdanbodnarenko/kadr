@@ -186,7 +186,9 @@ public actor ScrollCaptureSession {
         }
         var removed = 0
         for entry in entries where entry.lastPathComponent.hasPrefix(frameFolderPrefix) {
-            if (try? manager.removeItem(at: entry)) != nil { removed += 1 }
+            if (try? manager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
         }
         return removed
     }

@@ -144,6 +144,16 @@ extension AppDelegate {
         }
     }
 
+    /// The island's display pick, named after the app the island saved (docs/17 T-CAP-3).
+    func captureIslandDisplay(_ displayID: CGDirectDisplayID) {
+        areaCapture.captureDisplay(displayID, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
+    /// The island's Screen menu, likewise.
+    func captureIslandScreen(_ target: FullscreenTarget?) {
+        areaCapture.captureFullscreen(target: target, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
         let frontmost = allInOne.takeFrontmostBeforePresent()

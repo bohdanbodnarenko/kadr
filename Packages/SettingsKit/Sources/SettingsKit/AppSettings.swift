@@ -275,18 +275,7 @@ public final class AppSettings {
 
     /// A typed timer value, used when it is longer than any preset. Zero means unused.
     public var customTimerSeconds: Int {
-        didSet {
-            store[SettingKeys.customTimerSeconds] = max(0, customTimerSeconds)
-            if customTimerSeconds > 0 {
-                rememberedCustomTimerSeconds = customTimerSeconds
-            }
-        }
-    }
-
-    /// The last typed timer value. Picking a preset switches the custom value off but keeps
-    /// it here, so the island's timer menu can still offer it (docs/17 T-CAP-12).
-    public var rememberedCustomTimerSeconds: Int {
-        didSet { store[SettingKeys.rememberedCustomTimerSeconds] = max(0, rememberedCustomTimerSeconds) }
+        didSet { store[SettingKeys.customTimerSeconds] = max(0, customTimerSeconds) }
     }
 
     public var overlayCorner: OverlayCorner {
@@ -467,7 +456,6 @@ public final class AppSettings {
         scrollReviewsSeams = store[SettingKeys.scrollReviewsSeams]
         selfTimer = store[SettingKeys.selfTimer]
         customTimerSeconds = store[SettingKeys.customTimerSeconds]
-        rememberedCustomTimerSeconds = max(store[SettingKeys.rememberedCustomTimerSeconds], store[SettingKeys.customTimerSeconds])
         overlayCorner = store[SettingKeys.overlayCorner]
         overlayTimeout = store[SettingKeys.overlayTimeout]
         overlayOnPrimaryDisplay = store[SettingKeys.overlayOnPrimaryDisplay]

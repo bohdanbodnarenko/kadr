@@ -240,8 +240,7 @@ struct AllInOneView: View {
             model.settings.customTimerSeconds = seconds
             model.settings.selfTimer = .off
         } else {
-            model.settings.customTimerSeconds = 0
-            model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
+            model.settings.selectPresetTimer(SelfTimer(rawValue: seconds) ?? .off)
         }
     }
 

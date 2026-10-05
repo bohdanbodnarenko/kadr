@@ -8,7 +8,7 @@ import Testing
 struct IslandPlacementMemoryTests {
     private func defaults() -> UserDefaults {
         let name = "IslandPlacementMemoryTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
+        let defaults = UserDefaults(suiteName: name) ?? .standard
         defaults.removePersistentDomain(forName: name)
         return defaults
     }
@@ -17,7 +17,8 @@ struct IslandPlacementMemoryTests {
 
     @Test("Nothing remembered means no frame")
     func empty() {
-        #expect(IslandPlacementMemory.frame(for: size, in: CGRect(x: 0, y: 0, width: 1000, height: 800), defaults: defaults()) == nil)
+        let visible = CGRect(x: 0, y: 0, width: 1000, height: 800)
+        #expect(IslandPlacementMemory.frame(for: size, in: visible, defaults: defaults()) == nil)
     }
 
     @Test("A spot carries proportionally to another screen", arguments: [

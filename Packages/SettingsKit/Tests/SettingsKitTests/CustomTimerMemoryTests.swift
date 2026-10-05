@@ -14,8 +14,7 @@ struct CustomTimerMemoryTests {
 
         let settings = AppSettings(store: store)
         settings.customTimerSeconds = 7
-        settings.customTimerSeconds = 0
-        settings.selfTimer = .threeSeconds
+        settings.selectPresetTimer(.threeSeconds)
 
         #expect(settings.timerSeconds == 3)
         #expect(settings.rememberedCustomTimerSeconds == 7)
