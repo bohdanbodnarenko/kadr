@@ -115,23 +115,27 @@ struct StudioTranscriptPanel: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 6)
                         }
-                        FlowWords(
-                            words: group.words,
-                            clips: clips,
-                            selectedIDs: selectedIDs,
-                            activeID: activeWordID,
-                            marks: TranscriptMarks(
-                                fillers: model.transcriptFillerWords,
-                                matches: Set(matchIDs),
-                                currentMatch: currentMatchID
-                            ),
-                            actions: TranscriptChipActions(
-                                onSelect: handleTap,
-                                onCutSentence: { model.cutSentence(containing: $0) },
-                                onRestore: { model.restoreWords([$0]) }
+                        // Paragraph-sized rows, so the stack is lazy over a long transcript and
+                        // a new active word re-renders the one row it is in (docs/18 STU-15).
+                        ForEach(group.chunks) { chunk in
+                            FlowWords(
+                                words: chunk.words,
+                                clips: clips,
+                                selectedIDs: chunk.ids.intersection(selectedIDs),
+                                activeID: activeWordID.flatMap { chunk.ids.contains($0) ? $0 : nil },
+                                marks: TranscriptMarks(
+                                    fillers: model.transcriptFillerWords,
+                                    matches: chunk.ids.intersection(matchIDs),
+                                    currentMatch: currentMatchID.flatMap { chunk.ids.contains($0) ? $0 : nil }
+                                ),
+                                actions: TranscriptChipActions(
+                                    onSelect: handleTap,
+                                    onCutSentence: { model.cutSentence(containing: $0) },
+                                    onRestore: { model.restoreWords([$0]) }
+                                )
                             )
-                        )
-                        .equatable()
+                            .equatable()
+                        }
                     }
                 }
             }
@@ -279,9 +283,22 @@ struct StudioTranscriptPanel: View {
 struct TranscriptTrackGroup: Identifiable, Equatable {
     var track: SpeechTrackKind
     var words: [TranscriptWord]
+    /// The words in rows of at most `chunkSize`, built once with the group.
+    var chunks: [TranscriptChunk] = []
 
     var id: SpeechTrackKind {
         track
+    }
+
+    /// Words per transcript row: about a paragraph.
+    static let chunkSize = 80
+
+    init(track: SpeechTrackKind, words: [TranscriptWord]) {
+        self.track = track
+        self.words = words
+        chunks = stride(from: 0, to: words.count, by: Self.chunkSize).map { start in
+            TranscriptChunk(words: Array(words[start ..< min(start + Self.chunkSize, words.count)]))
+        }
     }
 
     /// Groups in track order, each keeping the words' own order. One pass over the words.
@@ -293,6 +310,21 @@ struct TranscriptTrackGroup: Identifiable, Equatable {
         return byTrack
             .sorted { $0.key.rawValue < $1.key.rawValue }
             .map { TranscriptTrackGroup(track: $0.key, words: $0.value) }
+    }
+}
+
+/// One row of a transcript track.
+struct TranscriptChunk: Identifiable, Equatable {
+    let words: [TranscriptWord]
+    let ids: Set<String>
+
+    var id: String {
+        words.first?.id ?? ""
+    }
+
+    init(words: [TranscriptWord]) {
+        self.words = words
+        ids = Set(words.map(\.id))
     }
 }
 
