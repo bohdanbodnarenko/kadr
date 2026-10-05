@@ -211,3 +211,56 @@ there.
 
 **Open question**
 - [ ] **§6 `contentRect`.** Now possible with the runtime geometry-probe toggle (T-DIAG-3).
+
+## 8. Device verification for the polish review
+
+From docs/18 §7, plus the device-only items the Phase 1–3 fixes left open. Reproduce each
+on a real build; a failure reopens the item named in brackets.
+
+**Editor**
+- [ ] **In-place hand-off.** Capture with no default look → Annotate → ⌘S. No Save As sheet;
+  the file beside the original changes. Then Move to Trash: the Desktop file goes. (ED-1)
+- [ ] **Copy after drawing.** Draw an arrow, press Copy, paste into Slack: the image arrives.
+  (ED-2)
+- [ ] **Proxy drag.** After a save with a blur, drag the title-bar proxy into Mail: the
+  flattened image goes, not the `.kadr`. (ED-3)
+- [ ] **Tall captures.** Open a 30,000 px scrolling capture; export it. (ED-13)
+
+**Capture**
+- [ ] **W on the area overlay.** Windows highlight and a click captures. (CAP-1)
+- [ ] **Esc while scrolling.** Esc during a scrolling capture stitches instead of discarding.
+  (CAP-2)
+- [ ] **Island captures.** Area capture from the island over a focused window: are the
+  traffic lights coloured in the result? (CAP-4)
+- [ ] **Cursor on 15.2+.** Fullscreen capture with "Include cursor" on macOS 15.2–15.x. (CAP-5)
+
+**Cards and History**
+- [ ] **Card focus.** Click Copy on a card, then ⌘V in another app; then type ⌫ with the
+  pointer elsewhere. (OUT-1)
+- [ ] **Drag-out.** Drag a fresh card into Terminal and into Finder; check the save folder
+  and staging after a relaunch. (OUT-2)
+
+**Recording**
+- [ ] **Still ending.** Record a still desktop with audio off; stop by hotkey after 10 s.
+  The file is 10 s long. (REC-3)
+- [ ] **Crash recovery.** `kill -9` Kadr mid-take; relaunch. Is the take recovered and
+  playable? If not, it is reported once with Show in Finder. (REC-4)
+- [ ] **Sleep.** Close the lid mid-take for a minute: the take is paused and says so on
+  wake. (REC-5)
+- [ ] **Studio scrubbing.** Zoom the timeline, pause, drag the playhead away from centre:
+  the view does not jump back. (STU-3)
+
+**Shell**
+- [ ] **Desktop cover.** With "Hide icons while capturing" on, capture during a Finder copy:
+  no Finder restart, icons hidden, wallpaper right. Check its RAM with the icons left
+  hidden. (SH-4)
+- [ ] **Permission alert focus.** Dismiss the permission-recovery alert with Later: the
+  previous app gets the keyboard back. Does the Screen row flip after a grant? (SH-8,
+  T-SH-4)
+- [ ] **Slider and toolbar.** Editor at its minimum width; `KadrSlider` in light mode at
+  rest and with Increase Contrast. (UX-25, SH-11)
+- [ ] **Studio length.** A 30-minute recording at full timeline zoom. (STU-15)
+
+**Visual pass**
+- [ ] Screenshots of all 11 surfaces in Light, Dark, Increase Contrast and Reduce
+  Transparency (docs/14 D0).

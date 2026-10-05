@@ -32,8 +32,9 @@ When a task references a doc section, read it before writing code.
    allowed only inside NSHostingView content that is deallocated on close.
    Nothing SwiftUI in the selection overlay's mouse path — CALayer only.
 5. Swift 6 language mode, strict concurrency, no new DispatchQueues outside
-   SCK-required handler queues. @MainActor UI, actors for engines,
-   AsyncStream at delegate boundaries.
+   SCK-required handler queues and the AVCapture/AVAssetWriter delegate queues
+   AVFoundation requires (camera, microphone, sample-buffer delegates). @MainActor
+   UI, actors for engines, AsyncStream at delegate boundaries.
 6. Coordinates go through Shared.Geometry typed wrappers (ScreenPoint,
    PixelRect) — never raw CGRect math across the AppKit/CG flip or
    point/pixel scaling.
