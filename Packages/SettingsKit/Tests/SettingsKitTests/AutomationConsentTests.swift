@@ -171,10 +171,10 @@ struct AutomationConsentTests {
         #expect(gate.decisions.isEmpty)
     }
 
-    @Test("Reset turns the switch off and forgets every app")
-    func reset() {
-        let defaults = store()
-        let consent = AutomationConsent(store: defaults)
+    @Test("A reset survives a reload")
+    func resetPersists() {
+        let storage = InMemoryConsentStorage()
+        let consent = consent(storage)
         consent.allowsOtherApps = true
         consent.record(.allowed, for: Self.raycast)
 
@@ -182,7 +182,7 @@ struct AutomationConsentTests {
 
         #expect(!consent.allowsOtherApps)
         #expect(consent.rememberedApps.isEmpty)
-        let reloaded = AutomationConsent(store: defaults)
+        let reloaded = self.consent(storage)
         #expect(!reloaded.allowsOtherApps)
         #expect(reloaded.rememberedApps.isEmpty)
     }

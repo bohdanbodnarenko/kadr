@@ -110,7 +110,7 @@ test: test-packages test-app test-editor ## Run every test
 test-packages: ## Run every package's tests
 	@for package in $(PACKAGES); do \
 		printf '\n== %s ==\n' "$$package"; \
-		( cd Packages/$$package && swift test ); \
+		( cd Packages/$$package && swift test ) || exit 1; \
 	done
 
 # One package, for CI's matrix: `make test-package PACKAGE=Shared`.
