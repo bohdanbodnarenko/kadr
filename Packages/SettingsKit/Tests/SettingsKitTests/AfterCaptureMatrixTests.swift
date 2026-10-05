@@ -245,4 +245,18 @@ struct AfterCaptureMigrationTests {
         SettingsMigrator.migrate(store)
         #expect(AfterCaptureMatrix.read(from: store, forKey: SettingKeys.afterCapture.name) == nil)
     }
+
+    // MARK: - docs/18 SH-6: onboarding reads the matrix
+
+    @Test("Every old-style action round-trips through the matrix", arguments: DefaultCaptureAction.allCases)
+    func equivalentRoundTrip(action: DefaultCaptureAction) {
+        #expect(AfterCaptureMatrix.migrating(action).equivalentDefaultAction == action)
+    }
+
+    @Test("A tuned matrix has no single equivalent")
+    func tunedMatrixHasNoEquivalent() {
+        var matrix = AfterCaptureMatrix.migrating(.copyToClipboard)
+        matrix.recording = []
+        #expect(matrix.equivalentDefaultAction == nil)
+    }
 }

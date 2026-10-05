@@ -47,7 +47,7 @@ enum AppPermission: String, CaseIterable, Identifiable, Sendable {
     var explanation: String {
         switch self {
         case .screen: "Screenshots, recordings and system audio. Nothing leaves this Mac."
-        case .accessibility: "Auto-scroll a long page, and show keys while recording."
+        case .accessibility: "Auto-scroll a long page, and show keys while recording (with Input Monitoring)."
         case .inputMonitoring: "Read clicks and shortcuts for the studio and key overlays. Never plain typing."
         case .microphone: "Add your voice to a recording, as its own track."
         case .camera: "Show a webcam beside the screen, only while that recording runs."

@@ -199,6 +199,19 @@ struct CapturePane: View {
                             Text(wallpaper.title).tag(wallpaper)
                         }
                     }
+                    if settings.captureWallpaper == .customImage {
+                        // The option used to exist with no way to name the image, so it
+                        // silently kept the user's wallpaper (docs/18 SH-9).
+                        LabeledContent("Image") {
+                            HStack {
+                                Text(customWallpaperName)
+                                    .truncationMode(.middle)
+                                    .lineLimit(1)
+                                    .foregroundStyle(.secondary)
+                                Button("Choose…", action: chooseCustomWallpaper)
+                            }
+                        }
+                    }
                     Toggle("Precision crosshair (press C on the overlay)", isOn: $settings.capturePrecisionCrosshair)
                     Toggle("Snap the selection to edges Kadr finds", isOn: $settings.captureSnapsToEdges)
                 }
@@ -227,5 +240,22 @@ struct CapturePane: View {
         panel.prompt = "Choose"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.windowBackdropImagePath = url.path
+    }
+}
+
+private extension CapturePane {
+    var customWallpaperName: String {
+        let path = settings.captureWallpaperImagePath
+        return path.isEmpty ? "None chosen" : URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    func chooseCustomWallpaper() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.captureWallpaperImagePath = url.path
     }
 }

@@ -88,7 +88,7 @@ extension EditorWindowController {
             return
         }
 
-        logger.info("Moved \(capture.displayName, privacy: .public) to the Trash")
+        logger.info("Moved \(capture.displayName, privacy: .private) to the Trash")
         autosave.discard(for: documentURL)
         // The work is in the Trash, not lost, so the unsaved-changes question does not apply.
         isClosingConfirmed = true

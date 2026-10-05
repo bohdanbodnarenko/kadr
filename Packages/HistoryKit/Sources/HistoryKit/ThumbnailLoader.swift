@@ -26,7 +26,7 @@ public struct ThumbnailLoader: Sendable {
         // Deferred cache: creating the source must not read the whole file.
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else {
-            logger.error("Could not read \(url.lastPathComponent, privacy: .public) for a thumbnail")
+            logger.error("Could not read \(url.lastPathComponent, privacy: .private) for a thumbnail")
             return nil
         }
         return thumbnail(from: source, maxPixelSize: maxPixelSize)

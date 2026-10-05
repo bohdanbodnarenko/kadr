@@ -187,9 +187,19 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             header(model.step.title, subtitle: "You can change all of this later in Settings.")
 
-            Picker("After capturing", selection: $settings.defaultAction) {
+            // Read from the per-kind matrix and written only on an explicit choice: the
+            // retired setting used to be bound directly, and merely showing this step
+            // could overwrite a matrix tuned in Settings (docs/18 SH-6).
+            Picker("After capturing", selection: Binding<DefaultCaptureAction?>(
+                get: { settings.afterCapture.equivalentDefaultAction },
+                set: {
+                    if let action = $0 {
+                        settings.defaultAction = action
+                    }
+                }
+            )) {
                 ForEach(DefaultCaptureAction.allCases, id: \.self) { action in
-                    Text(action.title).tag(action)
+                    Text(action.title).tag(DefaultCaptureAction?.some(action))
                 }
             }
             .pickerStyle(.radioGroup)

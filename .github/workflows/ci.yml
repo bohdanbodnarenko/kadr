@@ -53,6 +53,14 @@ jobs:
         run: make test-app
       - name: Test the editor app
         run: make test-editor
+      - name: Build the agent tests for the macOS 14 run
+        run: make test-app-build
+      - name: Hand the built tests to the macOS 14 job
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-tests
+          path: build/Build/Products
+          retention-days: 1
       # The archive, not the build product: `xcodebuild build` plus a strip is not what
       # ships, and measuring it reported 16 MB for a release that downloads at 12.9 MB.
       - name: App bundle size budget (PRD §8)
@@ -68,13 +76,29 @@ jobs:
           path: perf-results.json
           if-no-files-found: warn
 
+  # The deployment target. Its runners cannot build with the current SDK, so this runs the
+  # bundle the app job built; several surfaces branch on macOS 26, and the older branch was
+  # otherwise never exercised (docs/18 X-7).
+  macos14:
+    name: Agent tests on macOS 14
+    needs: app
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: agent-tests
+          path: build/Build/Products
+      - name: Run the agent tests
+        run: make test-app-run
+
   static:
     name: Lint and architecture checks
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Install SwiftLint and SwiftFormat
-        run: brew install swiftlint swiftformat
+      - name: Install the pinned SwiftLint and SwiftFormat
+        run: make lint-tools
       - name: Lint and format check
         run: make lint
       - name: Layering, zero-network and agent-linkage checks (docs/04 §11)

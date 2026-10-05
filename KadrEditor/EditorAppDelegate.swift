@@ -40,6 +40,8 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Application Support, and a deleted capture should not leave its annotations
         // behind (docs/07 H5, M7).
         EditorAutosave().sweepOrphans()
+        // The editor's own hangs and crashes, kept beside the agent's (docs/18 T-DIAG-2).
+        EditorMetricKitCollector.shared.start()
         // Copies of Finder-opened images are only for the window that edits them, and stale
         // hand-off markers mean an open that never arrived (docs/18 ED-1).
         CaptureImporter().sweepImports(keeping: Set(windows.map(\.documentURL)))
@@ -294,9 +296,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             if !isKadrOwned(url) || url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
                 NSDocumentController.shared.noteNewRecentDocumentURL(url)
             }
-            logger.info("Opened \(url.lastPathComponent, privacy: .public)")
+            logger.info("Opened \(url.lastPathComponent, privacy: .private)")
         } catch {
-            logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
+            logger.error("Could not open \(url.lastPathComponent, privacy: .private): \(error.localizedDescription)")
             presentOpenFailure(for: url, error: error)
         }
     }
@@ -340,7 +342,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             }
             studioWindows.append(controller)
             controller.show()
-            logger.info("Opened \(session.directory.lastPathComponent, privacy: .public) in the studio")
+            logger.info("Opened \(session.directory.lastPathComponent, privacy: .private) in the studio")
         } catch {
             logger.error("Could not open the studio: \(error.localizedDescription, privacy: .public)")
             presentOpenFailure(for: session.directory, error: error)
@@ -355,9 +357,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             }
             trimWindows.append(controller)
             controller.show()
-            logger.info("Opened \(url.lastPathComponent, privacy: .public) for trimming")
+            logger.info("Opened \(url.lastPathComponent, privacy: .private) for trimming")
         } catch {
-            logger.error("Could not trim \(url.lastPathComponent, privacy: .public)")
+            logger.error("Could not trim \(url.lastPathComponent, privacy: .private)")
             presentOpenFailure(for: url, error: error)
         }
     }

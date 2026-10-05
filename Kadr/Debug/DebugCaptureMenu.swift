@@ -188,7 +188,7 @@
             guard CGImageDestinationFinalize(destination) else {
                 throw CocoaError(.fileWriteUnknown)
             }
-            logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+            logger.info("Wrote \(url.lastPathComponent, privacy: .private)")
         }
     }
 #endif

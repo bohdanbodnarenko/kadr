@@ -31,7 +31,7 @@ struct ProjectIngest {
     /// A `.kadr`: read the base image out of the zip for the size and the thumbnail.
     private func projectDraft(for url: URL) -> HistoryIngest? {
         guard let contents = try? KadrDocumentFile.read(from: url) else {
-            logger.error("Could not read \(url.lastPathComponent, privacy: .public) as a project")
+            logger.error("Could not read \(url.lastPathComponent, privacy: .private) as a project")
             return nil
         }
         let size = contents.document.baseImage.pixelSize
@@ -51,7 +51,7 @@ struct ProjectIngest {
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int
         else {
-            logger.error("Could not read \(url.lastPathComponent, privacy: .public) as an image")
+            logger.error("Could not read \(url.lastPathComponent, privacy: .private) as an image")
             return nil
         }
         return HistoryIngest(

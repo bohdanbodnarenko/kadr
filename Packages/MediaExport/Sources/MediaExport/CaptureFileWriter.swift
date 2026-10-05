@@ -70,7 +70,7 @@ public struct CaptureFileWriter: Sendable {
             )
             do {
                 try fileManager.moveItem(at: temporary, to: url)
-                logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+                logger.info("Wrote \(url.lastPathComponent, privacy: .private)")
                 return url
             } catch let error as CocoaError where error.code == .fileWriteFileExists {
                 continue
@@ -109,7 +109,7 @@ public struct CaptureFileWriter: Sendable {
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
-        logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+        logger.info("Wrote \(url.lastPathComponent, privacy: .private)")
     }
 
     /// How many times a lost filename race is retried before giving up. Generous: every

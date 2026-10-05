@@ -28,6 +28,9 @@ final class OnboardingModel {
     @ObservationIgnored private let permissions: PermissionCoordinator
     @ObservationIgnored let appPermissions: AppPermissionTracker
     @ObservationIgnored private let settings: AppSettings
+    /// The one grant watch, so a second call replaces it instead of adding another
+    /// 100 ms loop beside it (docs/18 §4.6 P3).
+    @ObservationIgnored private var grantWatch: Task<Void, Never>?
     @ObservationIgnored private let loginItem: LoginItemController
     @ObservationIgnored private let relauncher: RelaunchHelper
     @ObservationIgnored private let logger = KadrLog.logger(.app)
@@ -191,8 +194,9 @@ final class OnboardingModel {
         }
 
         permissions.beginProbing()
-        Task { [weak self] in
-            while let self {
+        grantWatch?.cancel()
+        grantWatch = Task { [weak self] in
+            while let self, !Task.isCancelled {
                 if permissions.state == .granted {
                     needsRelaunch = permissions.needsRelaunchAfterGrant
                     appPermissions.refresh()
@@ -208,6 +212,8 @@ final class OnboardingModel {
     }
 
     func stopWatchingForGrant() {
+        grantWatch?.cancel()
+        grantWatch = nil
         permissions.endProbing()
     }
 

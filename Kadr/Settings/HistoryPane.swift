@@ -46,18 +46,16 @@ struct HistoryPane: View {
                 } message: { usage in
                     Text(PendingRetentionChange.sessionOnlyMessage(for: usage))
                 }
-                Text("Session-only clears the library the next time Kadr launches. "
-                    + "Deleting from History always removes the file Kadr stored.")
+                Text("Session-only clears History at the next launch. Deleting from History "
+                    + "removes Kadr's stored copy.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 Toggle("Search the text in captures", isOn: $settings.historyIndexesText)
-                Text("Kadr reads your captures so History can be searched by what is in "
-                    + "them. It happens in a helper process, only while you are on mains "
-                    + "power, and nothing ever leaves this Mac. Turning it off deletes "
-                    + "everything Kadr has read.")
+                Text("Makes History searchable by the text in your captures. Runs on this "
+                    + "Mac only, on mains power. Turning it off deletes what was read.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -68,8 +66,7 @@ struct HistoryPane: View {
                         Text(cap.title).tag(cap)
                     }
                 }
-                Text("When the library is over the limit, the captures you have not "
-                    + "opened or dragged out recently are removed first.")
+                Text("Over the limit, the captures used least recently go first.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

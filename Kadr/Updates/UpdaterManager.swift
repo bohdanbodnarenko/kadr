@@ -230,7 +230,12 @@ final class UpdaterManager: NSObject {
         #if DEBUG
             logger.info("Ignoring an update check in a debug build")
         #else
-            guard let controller = updaterController() else { return }
+            guard let controller = updaterController() else {
+                // Check Now must answer even when the updater never started (docs/18 SH-7).
+                FailurePresenter.present(message: String(localized: "Kadr could not check for updates.")
+                    + " " + String(localized: "Try again later, or download the latest version from the website."))
+                return
+            }
             logger.notice("Update check requested")
             // Before the call: Sparkle's "Checking…" window appears straight away, and it
             // should appear in front. Released in `standardUserDriverWillFinishUpdateSession`.

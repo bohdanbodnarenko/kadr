@@ -97,7 +97,7 @@ final class StudioSessionRecorder {
         if recordsCamera {
             camera.start(writingTo: session.cameraURL, deviceID: cameraDeviceID)
         }
-        logger.info("Studio session started: \(session.directory.lastPathComponent, privacy: .public)")
+        logger.info("Studio session started: \(session.directory.lastPathComponent, privacy: .private)")
     }
 
     /// Pairs the in-progress segment folder with this session (docs/16 REC-8).
@@ -213,7 +213,7 @@ final class StudioSessionRecorder {
         }
 
         await writePoster(for: session)
-        logger.info("Studio session ready: \(session.directory.lastPathComponent, privacy: .public)")
+        logger.info("Studio session ready: \(session.directory.lastPathComponent, privacy: .private)")
         return session
     }
 

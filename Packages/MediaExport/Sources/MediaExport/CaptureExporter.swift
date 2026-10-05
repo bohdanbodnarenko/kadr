@@ -197,7 +197,7 @@ public struct CaptureExporter: Sendable {
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
-        logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+        logger.info("Wrote \(url.lastPathComponent, privacy: .private)")
         return url
     }
 }

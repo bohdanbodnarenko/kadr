@@ -23,7 +23,7 @@ extension EditorWindowController {
             try writeProject(to: destination, addToHistory: true)
             rebind(to: destination)
             noteProjectKeepsOriginalPixels()
-            logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
+            logger.info("Saved project \(destination.lastPathComponent, privacy: .private)")
         } catch {
             model.failExport(.save, message: error.localizedDescription)
             logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
@@ -170,7 +170,7 @@ extension EditorWindowController {
         if targets.project != nil {
             noteProjectKeepsOriginalPixels()
         }
-        logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .public)")
+        logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .private)")
         CaptureSavedNotice.post(.init(original: original, saved: targets.flattened, previousHash: previousHash))
     }
 
@@ -227,7 +227,7 @@ extension EditorWindowController {
             }
             do {
                 try saveAs(image, to: url)
-                logger.info("Saved \(url.lastPathComponent, privacy: .public)")
+                logger.info("Saved \(url.lastPathComponent, privacy: .private)")
                 completion?(true)
             } catch {
                 completion?(false)
@@ -327,7 +327,7 @@ extension EditorWindowController {
 
     func insertImportedImage(from url: URL) {
         guard let imported = EditorImageImporter.png(from: url) else {
-            logger.error("Could not read \(url.lastPathComponent, privacy: .public)")
+            logger.error("Could not read \(url.lastPathComponent, privacy: .private)")
             return
         }
         placeImportedImage(imported.data, pixelSize: imported.pixelSize)

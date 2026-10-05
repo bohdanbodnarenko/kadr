@@ -202,7 +202,7 @@ final class PinPanel: NonActivatingPanel {
     private func applyDecoded(_ image: CGImage?, previousTarget: Int) {
         guard let image else {
             loadedTarget = previousTarget
-            logger.error("Could not load a backing image for \(self.fileURL.lastPathComponent, privacy: .public)")
+            logger.error("Could not load a backing image for \(self.fileURL.lastPathComponent, privacy: .private)")
             return
         }
         backingImage = image

@@ -15,8 +15,8 @@ struct AutomationConsentSection: View {
             Toggle("Allow other apps to control Kadr", isOn: $consent.allowsOtherApps)
             Text("Lets apps like Raycast and Alfred run kadr:// commands, which can take "
                 + "screenshots and recordings with Kadr's permissions. Each app is asked "
-                + "once. The kadr command-line tool and Shortcuts always work. See "
-                + "Run `kadr help` in Terminal for every command.")
+                + "once. The kadr command-line tool and Shortcuts always work. "
+                + "Run “kadr help” in Terminal for every command.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
