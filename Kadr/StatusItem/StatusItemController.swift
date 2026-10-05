@@ -235,6 +235,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The live recording, first, because while one runs it is the only thing that matters
     /// (docs/03 §1.8, docs/14 UX-08).
     private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
+        // A take being saved can no longer be stopped, paused, restarted or discarded;
+        // offering those rows asked for confirmation and then did nothing (docs/18 REC-12).
+        guard !controls.isSaving else {
+            let saving = NSMenuItem(title: "Saving Recording…", action: nil, keyEquivalent: "")
+            saving.isEnabled = false
+            menu.addItem(saving)
+            return
+        }
         let status = NSMenuItem(
             title: controls.isPaused
                 ? "Recording paused — \(controls.elapsedText)"
