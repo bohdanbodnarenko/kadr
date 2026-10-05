@@ -37,7 +37,7 @@ final class PinHoverBar: NSVisualEffectView {
         copyButton.isBordered = false
         copyButton.target = self
         copyButton.action = #selector(copyPin)
-        copyButton.toolTip = "Copy"
+        copyButton.toolTip = String(localized: "Copy")
         stack.addArrangedSubview(copyButton)
         stack.addArrangedSubview(iconButton(symbol: "square.and.arrow.down", action: #selector(savePin), help: "Save…"))
     }

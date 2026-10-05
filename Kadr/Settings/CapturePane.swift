@@ -237,7 +237,7 @@ struct CapturePane: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-        panel.prompt = "Choose"
+        panel.prompt = String(localized: "Choose")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.windowBackdropImagePath = url.path
     }
@@ -254,7 +254,7 @@ private extension CapturePane {
         panel.allowedContentTypes = [.image]
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
+        panel.prompt = String(localized: "Choose")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.captureWallpaperImagePath = url.path
     }

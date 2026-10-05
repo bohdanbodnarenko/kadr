@@ -245,6 +245,9 @@
         }
       }
     },
+    "%lld%%" : {
+
+    },
     "%lld×%lld" : {
       "localizations" : {
         "en" : {
@@ -285,6 +288,9 @@
           }
         }
       }
+    },
+    "A screen recording is still in progress." : {
+
     },
     "A shortcut could not be registered" : {
 
@@ -397,6 +403,9 @@
     "Auto Scroll to the End" : {
 
     },
+    "Auto-scroll works by sending scroll events to the window " : {
+
+    },
     "Back" : {
 
     },
@@ -506,6 +515,9 @@
     "Capture with the macOS Picker…" : {
 
     },
+    "Captures still on screen are kept temporarily and cleared " : {
+
+    },
     "Card buttons" : {
 
     },
@@ -524,10 +536,19 @@
     "Check for updates automatically" : {
 
     },
+    "Choose" : {
+
+    },
     "Choose image…" : {
 
     },
+    "Choose where to put the %lld captured frames." : {
+
+    },
     "Choose…" : {
+
+    },
+    "Circle" : {
 
     },
     "Circular webcam" : {
@@ -582,6 +603,12 @@
 
     },
     "Close All Cards" : {
+
+    },
+    "Close All Pins" : {
+
+    },
+    "Close Pin" : {
 
     },
     "Closes setup. You can finish it later from the menu bar." : {
@@ -719,6 +746,9 @@
     "Date" : {
 
     },
+    "Debug" : {
+
+    },
     "Default Camera" : {
 
     },
@@ -753,6 +783,9 @@
 
     },
     "Discard" : {
+
+    },
+    "Discard and Quit" : {
 
     },
     "Discard the recording?" : {
@@ -824,7 +857,22 @@
     "Every action is already on the card." : {
 
     },
+    "Everything captured so far was saved. %@" : {
+
+    },
+    "Export" : {
+
+    },
     "Export Diagnostics…" : {
+
+    },
+    "Export Frames" : {
+
+    },
+    "Export Here" : {
+
+    },
+    "Export this recording as a GIF?" : {
 
     },
     "Export…" : {
@@ -843,6 +891,9 @@
 
     },
     "Finish Later" : {
+
+    },
+    "Finish Recording and Quit" : {
 
     },
     "Finish Setup and Try the Editor" : {
@@ -1035,6 +1086,9 @@
     "It tidies itself away on its own. Swipe it toward the edge to hide it sooner." : {
 
     },
+    "Kadr" : {
+
+    },
     "Kadr %@ is available" : {
 
     },
@@ -1048,6 +1102,9 @@
 
     },
     "Kadr could not be moved to Applications." : {
+
+    },
+    "Kadr could not be sure how two frames line up, which " : {
 
     },
     "Kadr could not create a folder for the diagnostics." : {
@@ -1066,6 +1123,9 @@
         }
       }
     },
+    "Kadr could not stitch this capture" : {
+
+    },
     "Kadr has the only copy of these recordings. Deleting them cannot be undone." : {
 
     },
@@ -1081,6 +1141,9 @@
     "Kadr lives here" : {
 
     },
+    "Kadr needs Accessibility to scroll for you" : {
+
+    },
     "Kadr scrolls the page itself and stops when it runs out (⌥↩)" : {
 
     },
@@ -1091,6 +1154,9 @@
 
     },
     "Kadr — %@ is available; right-click to update" : {
+
+    },
+    "Keep Anyway" : {
 
     },
     "Keep Recording" : {
@@ -1258,6 +1324,9 @@
     "Nothing to remove." : {
 
     },
+    "OK" : {
+
+    },
     "Object shadows on inserted images" : {
 
     },
@@ -1284,6 +1353,9 @@
       }
     },
     "Only show keys pressed with ⌘, ⌥ or ⌃" : {
+
+    },
+    "Opacity" : {
 
     },
     "Open" : {
@@ -1314,6 +1386,9 @@
 
     },
     "Open Settings" : {
+
+    },
+    "Open System Settings" : {
 
     },
     "Open as Card" : {
@@ -1425,6 +1500,9 @@
     "Pin to Screen" : {
 
     },
+    "Pins & Cards" : {
+
+    },
     "Placeholders: {app}, {date}, {time}" : {
 
     },
@@ -1509,6 +1587,12 @@
     "Recording controls" : {
 
     },
+    "Recording could not finish" : {
+
+    },
+    "Recording could not start" : {
+
+    },
     "Recording discarded" : {
 
     },
@@ -1528,6 +1612,9 @@
 
     },
     "Recording started" : {
+
+    },
+    "Recording stopped" : {
 
     },
     "Recording the microphone needs macOS 15 or later." : {
@@ -1635,6 +1722,9 @@
     "Rotate 90°" : {
 
     },
+    "Rounded" : {
+
+    },
     "Save" : {
 
     },
@@ -1656,6 +1746,12 @@
     "Save to" : {
 
     },
+    "Save…" : {
+
+    },
+    "Saving Recording…" : {
+
+    },
     "Saving recording" : {
 
     },
@@ -1672,6 +1768,9 @@
 
     },
     "Screen access is off. Practice works without it, and the menu bar icon is always there." : {
+
+    },
+    "Scroll Myself" : {
 
     },
     "Scroll step: %lld pt" : {
@@ -1945,6 +2044,12 @@
     "The file is no longer on disk" : {
 
     },
+    "The footage could not be opened, so it was left where it is. " : {
+
+    },
+    "The frames are still here. You can save them and put the " : {
+
+    },
     "The microphone is on but nothing is reaching it. Check mute and the input." : {
 
     },
@@ -1952,6 +2057,9 @@
 
     },
     "The notch layout needs a camera cutout; the island can go anywhere." : {
+
+    },
+    "The playable footage was preserved in History and can be opened in Studio." : {
 
     },
     "The script will appear while you record" : {
@@ -2015,6 +2123,9 @@
     "Try a practice image" : {
 
     },
+    "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. " : {
+
+    },
     "Turn it on in System Settings ▸ Privacy & Security." : {
 
     },
@@ -2051,6 +2162,9 @@
     "Use Without" : {
 
     },
+    "Use the macOS Picker" : {
+
+    },
     "Version" : {
 
     },
@@ -2067,6 +2181,9 @@
 
     },
     "Webcam position" : {
+
+    },
+    "Welcome to Kadr" : {
 
     },
     "What has been recorded so far is deleted and a new take starts." : {
@@ -2133,6 +2250,9 @@
 
     },
     "macOS 15 asks you to confirm screen recording about once a month." : {
+
+    },
+    "macOS asks about once a month, for every screen-capture app. Turn Kadr back " : {
 
     },
     "macOS is running Kadr from a temporary copy. Permissions, updates and launch at login only stick once it is in Applications." : {

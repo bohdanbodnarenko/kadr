@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@\n\n" : {
+
+    },
     "About Kadr Editor" : {
 
     },
@@ -20,6 +23,9 @@
 
     },
     "Bring to Front" : {
+
+    },
+    "Cancel" : {
 
     },
     "Clear Menu" : {
@@ -49,6 +55,15 @@
     "Delete Clip or Zoom" : {
 
     },
+    "Discard" : {
+
+    },
+    "Discard Changes" : {
+
+    },
+    "Don't Save" : {
+
+    },
     "Duplicate" : {
 
     },
@@ -56,6 +71,9 @@
 
     },
     "Export Video…" : {
+
+    },
+    "Export the edited recording." : {
 
     },
     "File" : {
@@ -85,10 +103,34 @@
     "Hide Others" : {
 
     },
+    "If you don’t review your documents, all your changes will be lost." : {
+
+    },
+    "Imported “%@”." : {
+
+    },
     "Increase Tool Size" : {
 
     },
+    "Insert" : {
+
+    },
     "Kadr Help" : {
+
+    },
+    "Kadr copies an image and edits the copy; the original is left alone." : {
+
+    },
+    "Kadr could not open “%@”." : {
+
+    },
+    "Kadr could not save the edit to “%@”." : {
+
+    },
+    "Kadr has unsaved changes to “%@”." : {
+
+    },
+    "Keep Working" : {
 
     },
     "Keyboard Shortcuts" : {
@@ -101,6 +143,18 @@
 
     },
     "Minimize" : {
+
+    },
+    "Move to Trash" : {
+
+    },
+    "Move “%@” to the Trash?" : {
+
+    },
+    "OK" : {
+
+    },
+    "Open" : {
 
     },
     "Open Recent" : {
@@ -130,13 +184,28 @@
     "Print…" : {
 
     },
+    "Quit Anyway" : {
+
+    },
     "Quit Kadr Editor" : {
+
+    },
+    "Quitting now stops " : {
 
     },
     "Recording studio" : {
 
     },
+    "Redactions are burned into the saved image, which is the file to share. " : {
+
+    },
     "Redo" : {
+
+    },
+    "Restore" : {
+
+    },
+    "Review Changes…" : {
 
     },
     "Save" : {
@@ -146,6 +215,15 @@
 
     },
     "Save Project…" : {
+
+    },
+    "Save this capture" : {
+
+    },
+    "Save writes the flattened image and a project file so the " : {
+
+    },
+    "Save your changes to “%@”?" : {
 
     },
     "Select All" : {
@@ -178,6 +256,12 @@
     "Still running: %@. Closing stops them and deletes any partly written file." : {
 
     },
+    "Stop and Close" : {
+
+    },
+    "Stop work on “%@”?" : {
+
+    },
     "Studio" : {
       "comment" : "The video editor for screen recordings.",
       "extractionState" : "manual",
@@ -190,6 +274,15 @@
         }
       }
     },
+    "The editor closed before these annotations were saved." : {
+
+    },
+    "The look is in the editor’s Look list. Open a capture to apply it." : {
+
+    },
+    "The project keeps the original pixels." : {
+
+    },
     "Tools" : {
 
     },
@@ -199,6 +292,9 @@
     "Trim Start to Playhead" : {
 
     },
+    "Trimming “%@”…" : {
+
+    },
     "Undo" : {
 
     },
@@ -206,6 +302,9 @@
 
     },
     "Window" : {
+
+    },
+    "You have %lld Kadr documents with unsaved changes. " : {
 
     },
     "Zoom" : {

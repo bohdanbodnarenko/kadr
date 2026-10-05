@@ -38,7 +38,11 @@ extension StatusItemController {
 
         // The global shortcut, if the user gave History one — not a hard-coded ⇧⌘L that
         // only worked while this menu happened to be open.
-        let historyItem = NSMenuItem(title: "History…", action: #selector(didSelectHistory), keyEquivalent: "")
+        let historyItem = NSMenuItem(
+            title: String(localized: "History…"),
+            action: #selector(didSelectHistory),
+            keyEquivalent: ""
+        )
         historyItem.target = self
         historyItem.setShortcut(for: CaptureCommand.openHistory.shortcutName)
         historyItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)

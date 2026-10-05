@@ -18,7 +18,7 @@ extension StatusItemController {
             for item in extras {
                 submenu.addItem(item)
             }
-            let debug = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
+            let debug = NSMenuItem(title: String(localized: "Debug"), action: nil, keyEquivalent: "")
             debug.submenu = submenu
             menu.addItem(debug)
         }
@@ -55,29 +55,26 @@ extension StatusItemController {
         if showsTesterItems {
             // Only with ⌥ held: testers are told where to find these, and nobody else
             // needs two more rows every time they open the menu (docs/17 T-DIAG-1).
-            let export = NSMenuItem(
-                title: String(localized: "Export Diagnostics…"),
-                action: #selector(didSelectExportDiagnostics),
-                keyEquivalent: ""
-            )
-            export.target = self
-            menu.addItem(export)
-            let report = NSMenuItem(
-                title: String(localized: "Report a Problem…"),
-                action: #selector(didSelectReportProblem),
-                keyEquivalent: ""
-            )
-            report.target = self
-            menu.addItem(report)
+            let rows: [(String, Selector)] = [
+                (String(localized: "Export Diagnostics…"), #selector(didSelectExportDiagnostics)),
+                (String(localized: "Report a Problem…"), #selector(didSelectReportProblem))
+            ]
+            for (title, action) in rows {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = self
+                menu.addItem(item)
+            }
         }
 
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(didSelectSettings), keyEquivalent: ",")
+        let settingsTitle = String(localized: "Settings…")
+        let settingsItem = NSMenuItem(title: settingsTitle, action: #selector(didSelectSettings), keyEquivalent: ",")
         settingsItem.keyEquivalentModifierMask = [.command]
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
 
-        let quitItem = NSMenuItem(title: "Quit Kadr", action: #selector(didSelectQuit), keyEquivalent: "q")
+        let quitTitle = String(localized: "Quit Kadr")
+        let quitItem = NSMenuItem(title: quitTitle, action: #selector(didSelectQuit), keyEquivalent: "q")
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
         menu.addItem(quitItem)

@@ -59,7 +59,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "History"
+        window.title = String(localized: "History")
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false

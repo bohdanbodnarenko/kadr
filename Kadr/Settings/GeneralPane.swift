@@ -182,7 +182,7 @@ struct GeneralPane: View {
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = settings.saveFolder
-        panel.prompt = "Choose"
+        panel.prompt = String(localized: "Choose")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.saveFolderPath = url.path
     }

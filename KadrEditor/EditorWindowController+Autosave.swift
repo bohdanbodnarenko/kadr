@@ -27,10 +27,10 @@ extension EditorWindowController {
         }
 
         let alert = NSAlert()
-        alert.messageText = "Kadr has unsaved changes to “\(documentURL.lastPathComponent)”."
-        alert.informativeText = "The editor closed before these annotations were saved."
-        alert.addButton(withTitle: "Restore")
-        alert.addButton(withTitle: "Discard")
+        alert.messageText = String(localized: "Kadr has unsaved changes to “\(documentURL.lastPathComponent)”.")
+        alert.informativeText = String(localized: "The editor closed before these annotations were saved.")
+        alert.addButton(withTitle: String(localized: "Restore"))
+        alert.addButton(withTitle: String(localized: "Discard"))
         alert.alertStyle = .informational
 
         alert.beginSheetModal(for: window) { [weak self] response in

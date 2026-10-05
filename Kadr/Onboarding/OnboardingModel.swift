@@ -259,7 +259,7 @@ final class OnboardingModel {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "Choose"
+        panel.prompt = String(localized: "Choose")
         panel.directoryURL = settings.saveFolder
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.saveFolderPath = url.path

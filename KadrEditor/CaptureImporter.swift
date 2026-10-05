@@ -36,8 +36,8 @@ struct CaptureImporter {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Open"
-        panel.message = "Kadr copies an image and edits the copy; the original is left alone."
+        panel.prompt = String(localized: "Open")
+        panel.message = String(localized: "Kadr copies an image and edits the copy; the original is left alone.")
         guard panel.runModal() == .OK, let url = panel.url else { return nil }
         if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
             return url
@@ -120,7 +120,7 @@ struct CaptureImporter {
 
     private func present(_ error: any Error, for url: URL) {
         let alert = NSAlert()
-        alert.messageText = "Kadr could not open “\(url.lastPathComponent)”."
+        alert.messageText = String(localized: "Kadr could not open “\(url.lastPathComponent)”.")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         if let window = NSApp.keyWindow {

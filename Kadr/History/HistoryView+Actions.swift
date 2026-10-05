@@ -47,7 +47,7 @@ extension HistoryView {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "Export"
+        panel.prompt = String(localized: "Export")
         panel.begin { response in
             guard response == .OK, let directory = panel.url else { return }
             controller.export(ids: ids, to: directory)

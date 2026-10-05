@@ -47,13 +47,13 @@ extension EditorWindowController {
         let capture = trashableCapture()
 
         let alert = NSAlert()
-        alert.messageText = "Move “\(capture.displayName)” to the Trash?"
+        alert.messageText = String(localized: "Move “\(capture.displayName)” to the Trash?")
         alert.informativeText = capture.image != nil && capture.project != nil
             ? "Its editable project moves to the Trash too. You can put both back from the Trash."
             : "You can put it back from the Trash."
-        let trashButton = alert.addButton(withTitle: "Move to Trash")
+        let trashButton = alert.addButton(withTitle: String(localized: "Move to Trash"))
         trashButton.hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Cancel"))
         alert.alertStyle = .warning
 
         let responder = FocusRestoration.capture(from: window)

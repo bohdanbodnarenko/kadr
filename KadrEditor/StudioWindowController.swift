@@ -84,11 +84,11 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     static func presentCommitFailure(_ error: any Error, name: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Kadr could not save the edit to “\(name)”."
-        alert.informativeText = "\(error.localizedDescription)\n\n"
+        alert.messageText = String(localized: "Kadr could not save the edit to “\(name)”.")
+        alert.informativeText = String(localized: "\(error.localizedDescription)\n\n")
             + "Your changes are kept as a draft, and Kadr offers to recover them the next time "
             + "you open this recording."
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.runModal()
     }
 
@@ -259,7 +259,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         // title carries anything else, and the timestamped folder name is nobody's choice.
         panel.nameFieldStringValue = "\(model.session.displayName).\(model.exportSettings.filenameExtension)"
         panel.canCreateDirectories = true
-        panel.message = "Export the edited recording."
+        panel.message = String(localized: "Export the edited recording.")
 
         let completion: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = panel.url else { return }
@@ -299,15 +299,15 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         guard !operations.isEmpty else { return true }
 
         let alert = NSAlert()
-        alert.messageText = "Stop work on “\(sender.title)”?"
+        alert.messageText = String(localized: "Stop work on “\(sender.title)”?")
         // Whole sentences per count, so the verb agrees in any language (docs/18 X-4).
         let running = Self.list(operations)
         alert.informativeText = operations.count == 1
             ? String(localized: "Still running: \(running). Closing stops it and deletes any partly written file.")
             : String(localized: "Still running: \(running). Closing stops them and deletes any partly written file.")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Stop and Close")
-        alert.addButton(withTitle: "Keep Working")
+        alert.addButton(withTitle: String(localized: "Stop and Close"))
+        alert.addButton(withTitle: String(localized: "Keep Working"))
         let responder = FocusRestoration.capture(from: sender)
         alert.beginSheetModal(for: sender) { [weak self] response in
             guard response == .alertFirstButtonReturn else {

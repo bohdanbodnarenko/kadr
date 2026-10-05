@@ -15,7 +15,7 @@ extension StatusItemController {
         for item in items {
             submenu.addItem(item)
         }
-        let parent = NSMenuItem(title: "Pins & Cards", action: nil, keyEquivalent: "")
+        let parent = NSMenuItem(title: String(localized: "Pins & Cards"), action: nil, keyEquivalent: "")
         parent.image = NSImage(systemSymbolName: "square.stack", accessibilityDescription: nil)
         parent.submenu = submenu
         menu.addItem(parent)
@@ -48,7 +48,11 @@ extension StatusItemController {
             let hidden = pinsAreHidden()
             let hide = makeCommandItem(.hidePins, title: hidden ? "Show Pins" : CaptureCommand.hidePins.title)
             items.append(hide)
-            let close = NSMenuItem(title: "Close All Pins", action: #selector(didSelectCloseAllPins), keyEquivalent: "")
+            let close = NSMenuItem(
+                title: String(localized: "Close All Pins"),
+                action: #selector(didSelectCloseAllPins),
+                keyEquivalent: ""
+            )
             close.target = self
             items.append(close)
         }

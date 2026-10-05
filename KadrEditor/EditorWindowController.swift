@@ -243,13 +243,13 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         window.makeKeyAndOrderFront(nil)
 
         let alert = NSAlert()
-        alert.messageText = "Save your changes to “\(documentURL.lastPathComponent)”?"
-        alert.informativeText = "Save writes the flattened image and a project file so the "
+        alert.messageText = String(localized: "Save your changes to “\(documentURL.lastPathComponent)”?")
+        alert.informativeText = String(localized: "Save writes the flattened image and a project file so the ")
             + "annotations stay editable."
-        alert.addButton(withTitle: "Save")
-        let dontSave = alert.addButton(withTitle: "Don't Save")
+        alert.addButton(withTitle: String(localized: "Save"))
+        let dontSave = alert.addButton(withTitle: String(localized: "Don't Save"))
         dontSave.hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Cancel"))
         alert.buttons.last?.keyEquivalent = "\u{1b}"
         alert.alertStyle = .warning
 

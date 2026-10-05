@@ -202,8 +202,8 @@ private final class CameraPreviewChromeView: NSView {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Circle", action: #selector(makeCircle), keyEquivalent: "")
-        menu.addItem(withTitle: "Rounded", action: #selector(makeRounded), keyEquivalent: "")
+        menu.addItem(withTitle: String(localized: "Circle"), action: #selector(makeCircle), keyEquivalent: "")
+        menu.addItem(withTitle: String(localized: "Rounded"), action: #selector(makeRounded), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(
             withTitle: CameraPreviewPanel.fillsDisplay ? "Exit Full Screen" : "Fill Screen",

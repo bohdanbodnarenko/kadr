@@ -27,7 +27,7 @@ final class KadrHelpWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Kadr Help"
+        window.title = String(localized: "Kadr Help")
         window.contentViewController = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
