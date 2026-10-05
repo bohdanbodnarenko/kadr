@@ -42,6 +42,7 @@ struct CaptureImporter {
         if url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
             return url
         }
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
         return copyIntoLibrary(url)
     }
 
