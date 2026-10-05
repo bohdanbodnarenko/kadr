@@ -23,15 +23,10 @@ struct HistoryView: View {
     @State private var recordingTitles: [String: String] = [:]
     @State var renaming: HistoryRecord?
     @State private var renameText = ""
-    @State private var pendingBatchDelete = false
     @FocusState private var gridFocused: Bool
     @State private var gridWidth: CGFloat = 560
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 12)]
-
-    private var batchDeleteMessage: String {
-        KadrPlural.files(selection.selected.count) + ". You can undo this right after."
-    }
 
     var body: some View {
         historyChrome
@@ -43,18 +38,6 @@ struct HistoryView: View {
                 TextField("Name", text: $renameText)
                 Button("Rename") { applyRename() }
                 Button("Cancel", role: .cancel) { renaming = nil }
-            }
-            .confirmationDialog(
-                "Move to Trash?",
-                isPresented: $pendingBatchDelete,
-                titleVisibility: .visible
-            ) {
-                Button(batchDeleteButtonTitle, role: .destructive) {
-                    Task { await performDelete(Array(selection.selected)) }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(batchDeleteMessage)
             }
     }
 
@@ -75,10 +58,6 @@ struct HistoryView: View {
         .frame(minWidth: HistoryWindowGeometry.minimumWidth, minHeight: HistoryWindowGeometry.minimumHeight)
         .background(.background)
         .kadrLayoutDirection()
-    }
-
-    private var batchDeleteButtonTitle: String {
-        "Move \(selection.selected.count) Items to Trash"
     }
 
     private func title(for record: HistoryRecord) -> String {
@@ -106,7 +85,15 @@ struct HistoryView: View {
         guard let record = renaming else { return }
         let filename = Self.libraryFilename(displayName: renameText, current: record.originalFilename)
         if let session = studioSession(for: record) {
-            try? session.setDisplayName(renameText)
+            do {
+                try session.setDisplayName(renameText)
+            } catch {
+                // The library name still changes below; the studio title is what failed,
+                // and saying so beats a grid that shows a name the studio never took
+                // (docs/18 §4.3 P3).
+                FailurePresenter.present(message: "Kadr could not rename the recording's project. "
+                    + error.localizedDescription)
+            }
         }
         Task { await controller.rename(record, to: filename) }
         refreshRecordingTitles()
@@ -377,10 +364,8 @@ struct HistoryView: View {
     func deleteSelected() async {
         let ids = Array(selection.selected)
         guard !ids.isEmpty else { return }
-        if ids.count > 1 {
-            pendingBatchDelete = true
-            return
-        }
+        // No confirmation, as in Finder: the banner's Undo is the safety net, and asking
+        // first as well made a batch delete answer two questions (docs/18 §4.3 P3).
         await performDelete(ids)
     }
 
