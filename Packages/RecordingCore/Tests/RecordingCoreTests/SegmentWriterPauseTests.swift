@@ -95,4 +95,37 @@ struct SegmentWriterPauseTests {
         let total = await engine.accumulatedDurationForTesting
         #expect(abs(total - 2.0) < 0.2, "engine length \(total) s should be the 2 s actually recorded")
     }
+
+    /// docs/18 REC-3: a still screen sends only idle ticks, which carry no picture. The
+    /// file must still last until the last tick, not end at the last new frame.
+    @Test("A still ending lasts until the segment closes")
+    func stillTailSurvivesClose() async throws {
+        let directory = scratch()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var options = RecordingOptions()
+        options.capturesSystemAudio = false
+        options.capturesMicrophone = false
+
+        let factory: SegmentWriterFactory = { url, width, height, options in
+            try SegmentWriter(fileURL: url, pixelWidth: width, pixelHeight: height, options: options)
+        }
+        let engine = RecordingEngine(makeWriter: factory)
+        let first = try factory(directory.appendingPathComponent("segment-0.mp4"), 100, 100, options)
+        await engine.primeForTesting(state: .recording, segments: [], sessionDirectory: directory, writer: first)
+
+        for time in stride(from: 10.0, through: 11.0, by: 0.1) {
+            try await engine.deliverForTesting(frame(at: time))
+            try await Task.sleep(for: .milliseconds(15))
+        }
+        // Four still seconds: idle ticks only.
+        for time in stride(from: 12.0, through: 15.0, by: 1.0) {
+            try await engine.deliverForTesting(frame(at: time, kind: .clock))
+        }
+        try await engine.pause()
+
+        let segments = await engine.segmentsForTesting
+        let segment = try #require(segments.first)
+        let length = try await fileDuration(segment)
+        #expect(length > 4.8, "the still tail was cut: \(length) s, expected about 5 s")
+    }
 }

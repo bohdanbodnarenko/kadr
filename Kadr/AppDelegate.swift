@@ -283,13 +283,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func recoverInterruptedFootageThenSweep() {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            var unrecoverable: [URL] = []
             let count = await RecordingCrashRecovery.recover(
                 saveFolder: settings.saveFolder,
-                present: { [weak self] url in self?.areaCapture.showRecording(at: url) }
+                present: { [weak self] url in self?.areaCapture.showRecording(at: url) },
+                unrecoverable: { unrecoverable.append($0) }
             )
             if count > 0 {
                 RecordingCrashRecovery.announce(count)
             }
+            RecordingCrashRecovery.announceUnrecoverable(unrecoverable)
             StudioSessionRecorder.sweep()
             unfinishedRecordings.refresh()
         }

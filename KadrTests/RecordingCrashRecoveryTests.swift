@@ -98,16 +98,22 @@ struct RecordingCrashRecoveryTests {
         try FileManager.default.createDirectory(at: abandoned, withIntermediateDirectories: true)
         try Data("not a movie".utf8).write(to: abandoned.appendingPathComponent("segment-0.mp4"))
 
-        let count = await RecordingCrashRecovery.recover(
-            temporaryDirectory: temporary,
-            inProgressDirectory: root.appendingPathComponent("in-progress", isDirectory: true),
-            saveFolder: root.appendingPathComponent("saves", isDirectory: true),
-            sessions: RecordingSessionStore(root: sessions),
-            present: { _ in }
-        )
+        // docs/18 REC-4: reported once, with the folder, and never retried after.
+        for launch in 1 ... 2 {
+            var reported: [URL] = []
+            let count = await RecordingCrashRecovery.recover(
+                temporaryDirectory: temporary,
+                inProgressDirectory: root.appendingPathComponent("in-progress", isDirectory: true),
+                saveFolder: root.appendingPathComponent("saves", isDirectory: true),
+                sessions: RecordingSessionStore(root: sessions),
+                present: { _ in },
+                unrecoverable: { reported.append($0) }
+            )
 
-        #expect(count == 0)
-        #expect(FileManager.default.fileExists(atPath: abandoned.path))
+            #expect(count == 0)
+            #expect(FileManager.default.fileExists(atPath: abandoned.path))
+            #expect(reported.map(\.lastPathComponent) == (launch == 1 ? [abandoned.lastPathComponent] : []))
+        }
     }
 
     @Test("A recording title keeps its movie extension")

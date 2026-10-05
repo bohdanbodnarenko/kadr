@@ -32,6 +32,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var showsTesterItems = false
     /// Whether the status item is currently showing the recording icon (click = stop).
     var showsRecordingIcon = false
+    /// The user's "show in menu bar" choice. The item is shown anyway while a recording
+    /// runs: a take must never run with no Kadr indicator and no Stop (docs/18 REC-2).
+    var userWantsMenuBarIcon = true
     /// KVO for the user dragging the icon out of the menu bar (docs/16 APP-2).
     var visibilityObservation: NSKeyValueObservation?
     /// The settings-driven visibility observer, kept so it is registered once and can be
@@ -232,6 +235,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// The live recording, first, because while one runs it is the only thing that matters
     /// (docs/03 §1.8, docs/14 UX-08).
     private func addRecordingItems(_ controls: RecordingControls, to menu: NSMenu) {
+        // A take being saved can no longer be stopped, paused, restarted or discarded;
+        // offering those rows asked for confirmation and then did nothing (docs/18 REC-12).
+        guard !controls.isSaving else {
+            let saving = NSMenuItem(title: "Saving Recording…", action: nil, keyEquivalent: "")
+            saving.isEnabled = false
+            menu.addItem(saving)
+            return
+        }
         let status = NSMenuItem(
             title: controls.isPaused
                 ? "Recording paused — \(controls.elapsedText)"
@@ -375,6 +386,8 @@ struct RecordingControls {
     var audioLevel: Float = 0
     /// True when the microphone is on but has not picked up anything this take.
     var microphoneIsSilent: Bool = false
+    /// True when the take asked for a microphone and records without one (docs/18 REC-1).
+    var microphoneDropped: Bool = false
     /// Transient status while a take is interrupted or the transport is settling.
     var notice: String?
     var isTransitioning: Bool = false

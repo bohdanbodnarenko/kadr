@@ -9,6 +9,8 @@ struct RecordingInputResolution: Sendable {
     var options: RecordingOptions
     var cameraDeviceID: String
     var notice: String?
+    /// The take asked for a microphone and will record without one (docs/18 REC-1).
+    var droppedMicrophone = false
 }
 
 enum RecordingInputResolver {
@@ -21,6 +23,7 @@ enum RecordingInputResolver {
         var options = options
         var camera = cameraDeviceID
         var notices: [String] = []
+        var droppedMicrophone = false
 
         // The camera switched on from Settings or the pre-roll never chose a device, so the
         // take recorded no camera at all (docs/17 T-REC-9). Take the system's default.
@@ -36,9 +39,11 @@ enum RecordingInputResolver {
                 options.microphoneDeviceID = nil
                 options.capturesMicrophone = false
                 notices.append("Microphone unavailable — recording without it.")
+                droppedMicrophone = true
             } else if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
                 options.capturesMicrophone = false
                 notices.append("Microphone permission is off — recording without it.")
+                droppedMicrophone = true
             }
         }
 
@@ -55,7 +60,9 @@ enum RecordingInputResolver {
         return RecordingInputResolution(
             options: options,
             cameraDeviceID: camera,
-            notice: notices.first
+            // The microphone first: a silent narration is the costliest loss.
+            notice: droppedMicrophone ? notices.first { $0.hasPrefix("Microphone") } : notices.first,
+            droppedMicrophone: droppedMicrophone
         )
     }
 

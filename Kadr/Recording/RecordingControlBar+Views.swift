@@ -84,6 +84,15 @@ struct RecordingLiveControls: View {
             if showsClock {
                 elapsed
             }
+            // The notch has no clock element to carry the notice, so it rides in the row,
+            // which the notch expands to show while there is one (docs/18 REC-1).
+            if !showsClock, let notice = model.notice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+            }
 
             if model.isSaving {
                 saving
@@ -111,6 +120,13 @@ struct RecordingLiveControls: View {
                     .padding(.trailing, 6)
                     .help("The microphone is on but nothing is reaching it. Check mute and the input.")
                     .accessibilityLabel("Microphone is silent")
+            } else if model.microphoneDropped {
+                Image(systemName: "mic.slash.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.trailing, 6)
+                    .help("This take is recording without a microphone.")
+                    .accessibilityLabel("No microphone")
             }
 
             RecordingBarDivider()

@@ -120,4 +120,51 @@ struct RecordingCoordinatorGuardTests {
         #expect(unwanted.cameraDeviceID.isEmpty)
         #expect(unwanted.notice == nil)
     }
+
+    /// docs/18 REC-1: a microphone the take must go without is flagged for the whole take,
+    /// and its notice wins over a camera's.
+    @Test("A missing microphone is flagged and named first")
+    func missingMicrophoneIsFlagged() {
+        let resolved = RecordingInputResolver.resolve(
+            options: RecordingOptions(
+                capturesSystemAudio: false,
+                capturesMicrophone: true,
+                microphoneDeviceID: "unplugged-\(UUID().uuidString)"
+            ),
+            cameraDeviceID: "",
+            wantsCamera: true,
+            defaultCamera: { nil }
+        )
+        #expect(resolved.droppedMicrophone)
+        #expect(!resolved.options.capturesMicrophone)
+        #expect(resolved.notice == "Microphone unavailable — recording without it.")
+    }
+
+    /// docs/18 REC-5: wake explains a pause Kadr took for sleep, and only that one.
+    @Test("Wake explains a pause taken for sleep", arguments: [
+        (true, RecordingState.paused, true),
+        (false, .paused, false),
+        (true, .idle, false)
+    ])
+    func wakeExplainsSleepPause(pausedForSleep: Bool, state: RecordingState, explains: Bool) {
+        let coordinator = makeCoordinator()
+        coordinator.state = state
+        coordinator.pausedForSleep = pausedForSleep
+
+        coordinator.systemDidWake()
+
+        #expect((coordinator.liveNotice == RecordingCoordinator.sleepNotice) == explains)
+        #expect(!coordinator.pausedForSleep)
+    }
+
+    @Test("Sleep leaves anything but a running take alone", arguments: [
+        RecordingState.idle, .starting, .paused, .finishing
+    ])
+    func sleepIgnoresOtherStates(state: RecordingState) {
+        let coordinator = makeCoordinator()
+        coordinator.state = state
+        coordinator.systemWillSleep()
+        #expect(!coordinator.pausedForSleep)
+        #expect(coordinator.state == state)
+    }
 }
