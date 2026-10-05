@@ -80,7 +80,6 @@ struct EditorToolbar: View {
             ) {
                 isInspectorPresented.toggle()
             }
-            .keyboardShortcut("i", modifiers: [.command, .option])
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)

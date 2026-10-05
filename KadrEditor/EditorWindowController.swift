@@ -81,6 +81,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             // projects (the agent cannot read pixels this way), are measured after open.
             needsVisibleBounds = contents.document.baseImage.visibleBounds == nil
             model = EditorDocumentModel(document: contents.document)
+            if let exportScale = contents.exportScale {
+                model.exportScale = CGFloat(exportScale)
+            }
         } else {
             // Read once: decoded from these bytes, and kept as the base PNG when that is
             // what they already are. Kept in memory rather than mapped, because saving a

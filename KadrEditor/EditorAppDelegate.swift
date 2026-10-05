@@ -82,6 +82,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // A capture the agent handed over is edited in place, so ⌘S and Move to Trash act
         // on the file the user sees (docs/18 ED-1).
         guard !handoff.consume(url) else { return nil }
+        // The original, not the hidden copy, is what Open Recent offers: the copy is swept
+        // within a week and its name means nothing to the user (docs/18 T-ED-9).
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
         return CaptureImporter().copyIntoLibrary(url)
     }
 

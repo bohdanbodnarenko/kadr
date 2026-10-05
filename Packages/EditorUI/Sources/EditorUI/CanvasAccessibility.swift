@@ -83,7 +83,9 @@ enum CanvasAccessibility {
         return degrees < 0 ? degrees + 360 : degrees
     }
 
-    /// Tab and ⇧Tab: the next annotation after the current selection, wrapping round.
+    /// Tab and ⇧Tab: the next annotation after the current selection, or nil past either
+    /// end, so focus can leave the canvas for the rest of the window instead of being
+    /// trapped in it under Full Keyboard Access (docs/18 ED-9).
     static func nextSelection(
         in items: [Item],
         after selection: Set<AnnotationID>,
@@ -94,8 +96,7 @@ enum CanvasAccessibility {
         guard let anchor = backward ? indices.first : indices.last else {
             return backward ? items.last?.id : items.first?.id
         }
-        let step = backward ? -1 : 1
-        let next = (anchor + step + items.count) % items.count
-        return items[next].id
+        let next = anchor + (backward ? -1 : 1)
+        return items.indices.contains(next) ? items[next].id : nil
     }
 }

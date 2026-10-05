@@ -22,11 +22,20 @@ public enum KadrDocumentFile {
         /// Must describe `baseImagePNG` exactly; a wrong value writes a zip other tools
         /// reject. Nil means "compute it".
         public var baseImageCRC32: UInt32?
+        /// The Export Size the project was saved with, below 1 when it downscales; nil for
+        /// native size (docs/18 ED-12).
+        public var exportScale: Double?
 
-        public init(document: AnnotationDocument, baseImagePNG: Data, baseImageCRC32: UInt32? = nil) {
+        public init(
+            document: AnnotationDocument,
+            baseImagePNG: Data,
+            baseImageCRC32: UInt32? = nil,
+            exportScale: Double? = nil
+        ) {
             self.document = document
             self.baseImagePNG = baseImagePNG
             self.baseImageCRC32 = baseImageCRC32
+            self.exportScale = exportScale
         }
     }
 
@@ -36,27 +45,64 @@ public enum KadrDocumentFile {
         var version: Int
         var baseImage: BaseImageReference
         var commands: [AnnotationCommand]
+        /// Optional, so older files read and native size writes nothing.
+        var exportScale: Double?
     }
 
     public static let currentVersion = 1
 
-    public enum FileError: Error, Equatable {
+    public enum FileError: Error, Equatable, LocalizedError {
         case missingEntry(String)
         case unsupportedVersion(Int)
+        /// A command type this build cannot read, from a newer Kadr.
+        case newerCommands
         case malformed(String)
+
+        /// Sentences a person can act on; the detail stays in the log (docs/18 ED-8).
+        public var errorDescription: String? {
+            switch self {
+            case .unsupportedVersion, .newerCommands:
+                "This project was saved by a newer version of Kadr. Update Kadr to open it."
+            case .missingEntry, .malformed:
+                "This project file is damaged or is not a Kadr project."
+            }
+        }
     }
 
-    public static func data(for contents: Contents) throws -> Data {
+    private struct VersionProbe: Decodable {
+        var version: Int
+    }
+
+    private static func failsInsideCommands(_ error: DecodingError) -> Bool {
+        let path: [any CodingKey] = switch error {
+        case let .dataCorrupted(context), let .keyNotFound(_, context),
+             let .typeMismatch(_, context), let .valueNotFound(_, context):
+            context.codingPath
+        @unknown default:
+            []
+        }
+        return path.first?.stringValue == "commands" && path.count > 1
+    }
+
+    /// The project's annotations and base-image record, without the image itself.
+    ///
+    /// Public so autosave can write the small part on every edit and the base image once
+    /// (docs/18 ED-10).
+    public static func commandsJSON(for document: AnnotationDocument, exportScale: Double? = nil) throws -> Data {
         let payload = Payload(
             version: currentVersion,
-            baseImage: encodedBaseImage(of: contents.document),
-            commands: contents.document.commands
+            baseImage: encodedBaseImage(of: document),
+            commands: document.commands,
+            exportScale: exportScale.flatMap { $0 < 1 ? $0 : nil }
         )
         let encoder = JSONEncoder()
         // Sorted and pretty so a `.kadr` diffs usefully in version control.
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let json = try encoder.encode(payload)
+        return try encoder.encode(payload)
+    }
 
+    public static func data(for contents: Contents) throws -> Data {
+        let json = try commandsJSON(for: contents.document, exportScale: contents.exportScale)
         return ZipArchive.archive([
             ZipArchive.Entry(name: baseImageEntry, data: contents.baseImagePNG, crc: contents.baseImageCRC32),
             ZipArchive.Entry(name: commandsEntry, data: json)
@@ -72,20 +118,31 @@ public enum KadrDocumentFile {
         guard let json = entries.first(where: { $0.name == commandsEntry })?.data else {
             throw FileError.missingEntry(commandsEntry)
         }
+        return try contents(commandsJSON: json, baseImagePNG: image)
+    }
 
+    /// Reassembles a project from `commandsJSON(for:)` and its base image.
+    public static func contents(commandsJSON json: Data, baseImagePNG image: Data) throws -> Contents {
+        // The version first: a newer file may not decode at all, and "malformed" is the
+        // wrong thing to tell someone whose file is fine (docs/18 ED-8).
+        if let probe = try? JSONDecoder().decode(VersionProbe.self, from: json), probe.version > currentVersion {
+            throw FileError.unsupportedVersion(probe.version)
+        }
         let payload: Payload
         do {
             payload = try JSONDecoder().decode(Payload.self, from: json)
+        } catch let error as DecodingError where Self.failsInsideCommands(error) {
+            // A command this build does not know: written by a newer Kadr with the same
+            // file version, not a broken file.
+            throw FileError.newerCommands
         } catch {
             throw FileError.malformed(String(describing: error))
-        }
-        guard payload.version <= currentVersion else {
-            throw FileError.unsupportedVersion(payload.version)
         }
 
         return Contents(
             document: AnnotationDocument(baseImage: payload.baseImage, commands: payload.commands),
-            baseImagePNG: image
+            baseImagePNG: image,
+            exportScale: payload.exportScale
         )
     }
 

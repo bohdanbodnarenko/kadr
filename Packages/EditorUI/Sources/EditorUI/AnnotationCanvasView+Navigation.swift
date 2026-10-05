@@ -134,9 +134,10 @@ extension AnnotationCanvasView {
     }
 
     private func applyToolShortcut(_ event: NSEvent) {
-        guard let character = event.charactersIgnoringModifiers?.lowercased().first,
-              let tool = EditorTool.allCases.first(where: { $0.shortcut == character })
-        else {
+        guard let tool = EditorTool.tool(
+            forKeyCode: event.keyCode,
+            modifiers: event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        ) else {
             super.keyDown(with: event)
             return
         }

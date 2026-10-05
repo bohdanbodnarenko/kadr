@@ -116,6 +116,7 @@ extension EditorWindowController {
             return model.document.commands.contains(where: \.isSelectable)
         // Cut included: a locked object would be copied and then not deleted (T-ED-12).
         case #selector(cut(_:)),
+             #selector(delete(_:)),
              #selector(duplicate(_:)),
              #selector(bringToFront(_:)),
              #selector(bringForward(_:)),
@@ -129,7 +130,7 @@ extension EditorWindowController {
             menuItem.state = model.isCanvasLocked ? .on : .off
             return true
         default:
-            return true
+            return menuItem.action == #selector(chooseTool(_:)) ? validateToolItem(menuItem) : true
         }
     }
 

@@ -345,32 +345,6 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
         }
     }
 
-    // MARK: - Undo and redo
-
-    public var canUndo: Bool {
-        historyIndex > 0
-    }
-
-    public var canRedo: Bool {
-        historyIndex < history.count - 1
-    }
-
-    @discardableResult
-    public mutating func undo() -> Bool {
-        guard canUndo else { return false }
-        historyIndex -= 1
-        pruneSelection()
-        return true
-    }
-
-    @discardableResult
-    public mutating func redo() -> Bool {
-        guard canRedo else { return false }
-        historyIndex += 1
-        pruneSelection()
-        return true
-    }
-
     /// Rotate the capture 90° clockwise (docs/03 §3 P2). One undo step.
     public mutating func rotateClockwise() {
         pushHistory(commands, canvasOrientation: orientation.rotatedClockwise())
@@ -406,7 +380,8 @@ public struct AnnotationDocument: Codable, Hashable, Sendable {
 
     /// Drops selected ids that no longer exist, so undoing a delete does not leave the
     /// selection pointing at ghosts.
-    private mutating func pruneSelection() {
+    /// Internal, not private: undo and redo live in `AnnotationDocument+History.swift`.
+    mutating func pruneSelection() {
         let live = Set(commands.map(\.id))
         selection.formIntersection(live)
     }
