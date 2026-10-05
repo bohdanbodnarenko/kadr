@@ -239,8 +239,24 @@ struct StudioZoomLane: View {
         }
         .frame(width: 20, height: height)
         .contentShape(Rectangle())
+        // An adjustable control, not a button with no action (docs/14 UX-32): VoiceOver's
+        // increment and decrement move the edge a tenth of a second.
+        .accessibilityElement()
         .accessibilityLabel(leading ? "Zoom start" : "Zoom end")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(Self.timeLabel(leading
+                ? model.editedDisplayRange(of: cue).lowerBound
+                : model.editedDisplayRange(of: cue).upperBound))
+        .accessibilityAdjustableAction { direction in
+            let step: TimeInterval = direction == .increment ? 0.1 : -0.1
+            let span = model.editedDisplayRange(of: cue)
+            model.selectedZoom = cue.id
+            model.setZoomRange(
+                cue.id,
+                start: leading ? span.lowerBound + step : span.lowerBound,
+                end: leading ? span.upperBound : span.upperBound + step,
+                preferredTransition: cue.transitionDuration
+            )
+        }
         .highPriorityGesture(
             DragGesture(minimumDistance: 1, coordinateSpace: Self.dragSpace)
                 .onChanged { value in
@@ -293,6 +309,12 @@ struct StudioZoomLane: View {
                 }
             }
             .onEnded { _ in dragging = nil }
+    }
+
+    /// "1:05.3": a handle's time to a tenth, for VoiceOver.
+    static func timeLabel(_ seconds: TimeInterval) -> String {
+        let tenths = Int((max(seconds, 0) * 10).rounded())
+        return String(format: "%d:%02d.%d", tenths / 600, (tenths / 10) % 60, tenths % 10)
     }
 
     private func clamped(_ time: TimeInterval) -> TimeInterval {
