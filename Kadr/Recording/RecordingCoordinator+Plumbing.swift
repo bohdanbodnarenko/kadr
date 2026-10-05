@@ -117,7 +117,7 @@ extension RecordingCoordinator {
     /// missing or not allowed — rather than only logging it (docs/17 T-REC-9).
     ///
     /// Cleared after a few seconds by a Task that exists only while a take does.
-    private func showStartNotice() {
+    func showStartNotice() {
         guard let notice = startNotice else { return }
         startNotice = nil
         liveNotice = notice

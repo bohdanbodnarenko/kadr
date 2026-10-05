@@ -44,6 +44,11 @@ enum CaptureAccessGate {
     static func needsPrompt(status: AppPermissionStatus) -> Bool {
         status != .allowed
     }
+
+    /// Whether macOS will still show its own prompt; after a denial it never does.
+    static func canAsk(status: AppPermissionStatus) -> Bool {
+        status != .denied && status != .restricted
+    }
 }
 
 enum CaptureMediaAccess {
@@ -88,9 +93,16 @@ struct CaptureAccessPromptView: View {
                 Button("Use Without", action: onUseWithout)
                     .keyboardShortcut(.cancelAction)
                 Spacer(minLength: 8)
-                Button("Open Settings", action: onOpenSettings)
-                Button("Allow", action: onAllow)
-                    .keyboardShortcut(.defaultAction)
+                // Once access is denied macOS never asks again, so Allow would do nothing;
+                // only System Settings can change it (docs/18 REC-10).
+                if CaptureAccessGate.canAsk(status: CaptureMediaAccess.status(for: kind)) {
+                    Button("Open Settings", action: onOpenSettings)
+                    Button("Allow", action: onAllow)
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Open Settings", action: onOpenSettings)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
         .padding(14)

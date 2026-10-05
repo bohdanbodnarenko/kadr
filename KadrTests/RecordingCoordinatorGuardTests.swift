@@ -198,4 +198,43 @@ struct RecordingCoordinatorGuardTests {
         #expect(coordinator.state == .starting)
         #expect(coordinator.wantsGIFExport)
     }
+
+    /// docs/18 REC-10: only the take's own inputs count as lost.
+    @Test("A disconnection loses only the take's own input", arguments: [
+        ("mic-a", true, false, String?.some("mic-a"), String?.none, 1, RecordingCoordinator.LostInput?.some(.microphone)),
+        ("mic-b", true, false, "mic-a", nil, 1, nil),
+        ("mic-a", true, false, "", nil, 1, nil),
+        ("mic-a", true, false, "", nil, 0, .microphone),
+        ("mic-a", true, false, nil, nil, 0, nil),
+        ("cam-a", false, true, nil, "cam-a", 1, .camera),
+        ("cam-b", false, true, nil, "cam-a", 1, nil)
+    ])
+    func lostInput(
+        id: String,
+        isAudio: Bool,
+        isVideo: Bool,
+        microphone: String?,
+        camera: String?,
+        remaining: Int,
+        expected: RecordingCoordinator.LostInput?
+    ) {
+        #expect(RecordingCoordinator.lostInput(
+            disconnectedID: id,
+            isAudio: isAudio,
+            isVideo: isVideo,
+            microphoneID: microphone,
+            cameraID: camera,
+            remainingAudioDevices: remaining
+        ) == expected)
+    }
+
+    /// docs/18 REC-10: after a denial macOS never prompts again, so Allow is not offered.
+    @Test("Allow is offered only while macOS can still ask", arguments: [
+        (AppPermissionStatus.notEnabled, true),
+        (.denied, false),
+        (.restricted, false)
+    ])
+    func allowOffered(status: AppPermissionStatus, canAsk: Bool) {
+        #expect(CaptureAccessGate.canAsk(status: status) == canAsk)
+    }
 }

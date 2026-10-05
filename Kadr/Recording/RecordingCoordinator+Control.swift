@@ -223,6 +223,7 @@ extension RecordingCoordinator {
         startedByAutomation = false
         wantsGIFExport = false
         microphoneDropped = false
+        cameraThisTake = nil
     }
 
     func cancel() {

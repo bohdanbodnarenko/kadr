@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import OverlayKit
 import RecordingCore
 import SettingsKit
@@ -41,6 +42,14 @@ struct RecordSetupView: View {
         }
         .onExitCommand { model.escape() }
         .onAppear { model.refreshDevices() }
+        // A camera or microphone plugged in while the bar is up appears in its menu
+        // without reopening the recorder (docs/18 REC-10).
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            model.refreshDevices()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            model.refreshDevices()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshAfterPermissionChange()
         }
@@ -265,16 +274,34 @@ struct RecordSetupView: View {
         }
     }
 
+    /// A menu like the microphone's, so choosing a camera does not hide behind a
+    /// right-click (docs/18 REC-10). C still toggles it from the keyboard.
     private var cameraToggle: some View {
-        RecordingBarCircleButton(
-            symbol: model.settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
-            help: cameraHelp,
-            key: RecordSetupKey.camera.caption,
-            isOn: model.settings.recordingShowsWebcam
-        ) {
-            model.requestCameraToggle()
+        Menu {
+            Button {
+                if model.settings.recordingShowsWebcam {
+                    model.requestCameraToggle()
+                }
+            } label: {
+                microphoneLabel("Off", selected: !model.settings.recordingShowsWebcam)
+            }
+            Divider()
+            if model.cameras.isEmpty {
+                // No list until access is granted: this asks for it.
+                Button("Default Camera") {
+                    if !model.settings.recordingShowsWebcam {
+                        model.requestCameraToggle()
+                    }
+                }
+            }
+            cameraDeviceMenu
+        } label: {
+            RecordingBarIcon(
+                symbol: model.settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
+                isOn: model.settings.recordingShowsWebcam
+            )
         }
-        .contextMenu { cameraDeviceMenu }
+        .recordingBarMenu(tooltip: cameraHelp)
         .disabled(cameraUnavailable)
         .accessibilityLabel("Camera")
         .accessibilityValue(model.settings.recordingShowsWebcam ? "On" : "Off")
@@ -289,7 +316,8 @@ struct RecordSetupView: View {
             Button {
                 model.selectCamera(deviceID: device.uniqueID)
             } label: {
-                if model.settings.recordingCameraDeviceID == device.uniqueID {
+                if model.settings.recordingShowsWebcam,
+                   model.settings.recordingCameraDeviceID == device.uniqueID {
                     Label(device.localizedName, systemImage: "checkmark")
                 } else {
                     Text(device.localizedName)
@@ -300,12 +328,12 @@ struct RecordSetupView: View {
 
     private var cameraHelp: String {
         guard model.settings.recordingShowsWebcam else {
-            return "Camera off — click to record your camera, right-click to pick one"
+            return "Camera off — click to pick a camera"
         }
         if let match = model.cameras.first(where: { $0.uniqueID == model.settings.recordingCameraDeviceID }) {
             return "Camera on — \(match.localizedName)"
         }
-        return "Camera on — right-click to pick one"
+        return "Camera on — click to pick another"
     }
 
     @ViewBuilder
