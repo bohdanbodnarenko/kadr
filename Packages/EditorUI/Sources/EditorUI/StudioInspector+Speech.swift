@@ -111,10 +111,16 @@ extension StudioInspector {
         } else {
             Toggle("Filler words", isOn: Bindable(model).tidyRemovesFillers)
             Toggle("Long pauses", isOn: Bindable(model).tidyShortensPauses)
-            Button("Find Cuts…") {
-                Task { await model.tidySpeech() }
+            HStack {
+                Button("Find Cuts…") {
+                    Task { await model.tidySpeech() }
+                }
+                .disabled(!model.tidyRemovesFillers && !model.tidyShortensPauses)
+                Button("Transcribe") {
+                    Task { await model.transcribeOnly() }
+                }
+                .help("Make a transcript for captions, without proposing any cuts")
             }
-            .disabled(!model.tidyRemovesFillers && !model.tidyShortensPauses)
         }
     }
 
@@ -187,10 +193,22 @@ extension StudioInspector {
 
     // MARK: - Captions
 
-    /// Burned-in captions, which exist only once there is a transcript to draw.
+    /// Burned-in captions. Always shown, so captions can be found before a transcript
+    /// exists; until then the section offers to make one (docs/18 STU-4).
     @ViewBuilder
     var captionSection: some View {
-        if model.transcript != nil {
+        if model.transcript == nil {
+            Section {
+                LabeledContent("Transcribe to add captions") {
+                    Button("Transcribe") {
+                        Task { await model.transcribeOnly() }
+                    }
+                    .disabled(model.isTranscribing)
+                }
+            } header: {
+                Text("Captions")
+            }
+        } else {
             Section {
                 Toggle("Burn in captions", isOn: Binding(
                     get: { model.edit.showsCaptions },

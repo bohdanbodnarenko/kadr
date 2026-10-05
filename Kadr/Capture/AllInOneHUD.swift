@@ -76,6 +76,9 @@ final class AllInOneHUD {
         model.onCancel = { [weak self] in self?.dismiss() }
         model.onPicked = { [weak self] in self?.close(keepingTarget: true) }
         model.onHandOff = { [weak self] in self?.handOff() }
+        model.waitForTarget = { [weak self] in
+            await TargetActivation.wait(for: self?.returnTarget?.processIdentifier)
+        }
 
         // Every present, not only the first: a stale target is how files ended up named
         // after an app the user had left long ago. Kadr frontmost (the island re-shown)
@@ -272,6 +275,9 @@ final class AllInOneModel {
     @ObservationIgnored private let perform: (AllInOneMode) -> Void
     @ObservationIgnored var onPicked: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
+    /// Waits, briefly, for the app the island was opened over to be active again, so a
+    /// freeze taken right after a pick shows it as the user left it (docs/18 CAP-4).
+    @ObservationIgnored var waitForTarget: () async -> Void = {}
     /// Record is not a capture: the island hands over to the recorder instead of closing.
     @ObservationIgnored var onHandOff: () -> Void = {}
     @ObservationIgnored var onPickDisplay: (CGDirectDisplayID) -> Void = { _ in }
@@ -298,23 +304,36 @@ final class AllInOneModel {
         settings.lastAllInOneMode = mode.rawValue
         if mode == .record {
             onHandOff()
+            perform(mode)
         } else {
             onPicked()
+            afterTargetIsActive { [perform] in perform(mode) }
         }
-        perform(mode)
     }
 
     /// Closes the island first, so a tool that captures does not capture the island.
     func use(_ tool: AllInOneTool) {
         onPicked()
-        onTool(tool)
+        afterTargetIsActive { [onTool] in onTool(tool) }
     }
 
     /// Captures the screen with an explicit target, for this capture only.
     func pickScreen(_ target: FullscreenTarget) {
         settings.lastAllInOneMode = AllInOneMode.screen.rawValue
         onPicked()
-        onCaptureScreen(target)
+        afterTargetIsActive { [onCaptureScreen] in onCaptureScreen(target) }
+    }
+
+    /// Runs a capture once the island's activation has gone back to the user's app.
+    ///
+    /// Closing the island yields activation asynchronously; freezing in the same turn
+    /// caught the target with grey traffic lights and an inactive selection colour.
+    private func afterTargetIsActive(_ work: @escaping @MainActor () -> Void) {
+        let wait = waitForTarget
+        Task { @MainActor in
+            await wait()
+            work()
+        }
     }
 
     func pickLast() {

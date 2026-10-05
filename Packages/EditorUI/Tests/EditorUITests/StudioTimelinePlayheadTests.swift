@@ -21,3 +21,19 @@ struct StudioTimelinePlayheadTests {
         #expect(path.contains(CGPoint(x: 5.5, y: 2)), "the flag body is missing")
     }
 }
+
+/// docs/18 STU-3: a zoomed timeline scrolls only when the needle leaves the view.
+@Suite("Playhead following")
+struct PlayheadFollowingTests {
+    @Test("Only a needle outside the visible range pages the view", arguments: [
+        (CGFloat(-1), true),
+        (0, false),
+        (400, false),
+        (791, false),
+        (793, true),
+        (1200, true)
+    ])
+    func outOfView(needleX: CGFloat, follows: Bool) {
+        #expect(PlayheadFollower.needleIsOutOfView(needleX: needleX, viewportWidth: 800) == follows)
+    }
+}

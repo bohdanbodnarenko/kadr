@@ -17,6 +17,8 @@ public extension StudioDocumentModel {
             installSpeechModel()
         case .transcribe:
             await tidySpeech()
+        case .transcribeOnly:
+            await transcribeOnly()
         }
     }
 
