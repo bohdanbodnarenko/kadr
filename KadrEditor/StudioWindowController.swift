@@ -175,7 +175,9 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     }
 
     @objc func exportMovie(_ sender: Any?) {
-        guard model.exportProgress == nil else { return }
+        // Not while cropping: the popover was queued and opened later, out of nowhere,
+        // when the crop ended (docs/18 STU-11).
+        guard model.exportProgress == nil, !model.isCropping else { return }
         model.showsExportOptions = true
     }
 
@@ -206,6 +208,11 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case .togglePlayback: model.togglePlayback()
         case let .step(frames): model.step(frames: frames)
         case let .skip(seconds): model.step(seconds: seconds)
+        case .shuttleReverse: model.shuttle(.reverse)
+        case .shuttleStop: model.shuttle(.stop)
+        case .shuttleForward: model.shuttle(.forward)
+        case .seekToStart: model.seekToStart()
+        case .seekToEnd: model.seekToEnd()
         }
         return true
     }
@@ -219,7 +226,8 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case #selector(copy(_:)):
             FileManager.default.fileExists(atPath: model.session.screenURL.path)
         case #selector(splitClipAtPlayhead(_:)): !model.isCropping
-        case #selector(exportMovie(_:)): model.exportProgress == nil
+        case #selector(exportMovie(_:)): model.exportProgress == nil && !model.isCropping
+        case #selector(deleteTimelineSelection(_:)): model.canDeleteTimelineSelection
         default: true
         }
     }

@@ -129,12 +129,10 @@ struct StudioTimelineView: View {
                 return .ignored
             }
             .onDeleteCommand {
-                // Delete acts on a selection, never on whatever the playhead is over
-                // (docs/17 T-STU-8).
-                if model.selectedZoom != nil {
-                    model.removeSelectedZoom()
-                } else if let clip = model.selectedClip {
-                    model.removeClip(id: clip)
+                // One rule with the trash button: the selection, never the playhead's clip
+                // (docs/17 T-STU-8, docs/18 STU-11).
+                if model.canDeleteTimelineSelection {
+                    model.deleteTimelineSelection()
                 } else {
                     NSSound.beep()
                 }

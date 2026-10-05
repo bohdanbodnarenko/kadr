@@ -124,16 +124,19 @@ public extension StudioDocumentModel {
     ///
     /// One trash control, the way the timeline's delete key already works: a selected zoom
     /// is the thing being aimed at, so it goes first.
+    /// Deletes what is selected: the zoom, else the clip. Never whatever the playhead is
+    /// over — the trash button and Delete now follow the same rule (docs/18 STU-11,
+    /// docs/17 T-STU-8).
     func deleteTimelineSelection() {
         if selectedZoom != nil {
             removeSelectedZoom()
-        } else {
-            removeClipAtPlayhead()
+        } else if let clip = selectedClip {
+            removeClip(id: clip)
         }
     }
 
     var canDeleteTimelineSelection: Bool {
-        selectedZoom != nil || edit.clips.clips.count > 1
+        selectedZoom != nil || (selectedClip != nil && edit.clips.clips.count > 1)
     }
 
     /// Sets the speed of the clip under the playhead.
