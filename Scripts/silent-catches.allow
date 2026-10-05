@@ -1,0 +1,16 @@
+# catch blocks in Kadr/ that log and deliberately show nothing (docs/18 X-2).
+# Read by Scripts/check-silent-catches.sh. One per line:
+#   path|text from the logger.error line|why the user does not need to hear about it
+# A new entry needs a reason a reviewer would accept: background work, a fallback that
+# keeps the user's action working, or a path that is retried on its own.
+Kadr/Recording/StudioSessionRecorder.swift|Could not create a studio session|The recording goes ahead; the studio session is an enhancement and the file is saved without it.
+Kadr/Recording/PointerTelemetryRecorder.swift|Could not flush telemetry|Background write during a take; the chunk stays buffered and the next flush retries it.
+Kadr/Desktop/DesktopHygiene.swift|Could not set wallpaper|Mid-capture cosmetic: the capture still happens with the user's own wallpaper, and a banner would land in it.
+Kadr/Desktop/DesktopHygiene.swift|Could not relaunch Finder|One-time launch cleanup of a hide left by an earlier build; nothing the user started.
+Kadr/History/HistoryController.swift|History ingest failed|Background, after the capture is already saved where the user asked; History misses one row and Rebuild Library recovers it.
+Kadr/History/HistoryController+Replace.swift|History replace failed|Falls through to ingesting the capture as a new row, so History still shows it.
+Kadr/History/HistoryController+Replace.swift|Could not record a capture's location|Background bookkeeping; Reveal falls back to the library copy.
+Kadr/History/HistoryIndexCoordinator.swift|History indexing failed|Background OCR index; History still browses and the next capture retries.
+Kadr/Automation/CLIInstaller.swift|Could not link into|Tries the next directory; the outcome of the whole install is what gets reported.
+Kadr/QuickAccess/EditorLauncher.swift|Could not mark the editor hand-off|The editor still opens the capture, as a copy; the hand-off only chooses in-place editing.
+Kadr/AppDelegate+DataReset.swift|Could not remove|Collected into leftBehind and reported in one alert after the loop, before Kadr quits.

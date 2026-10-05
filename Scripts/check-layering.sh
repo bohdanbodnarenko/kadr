@@ -339,6 +339,13 @@ else
     fail "dead-API check failed (docs/10 R3.3)"
 fi
 
+# ---------------------------------------------------------------- H. no silent failures (docs/18 X-2)
+if Scripts/check-silent-catches.sh; then
+    pass "every catch in the agent that logs an error also reports it, or is allow-listed"
+else
+    fail "a catch in Kadr/ only logs (docs/04 §5 Feedback)"
+fi
+
 # ----------------------------------------------------------------
 echo
 if [ "$failures" -eq 0 ]; then
