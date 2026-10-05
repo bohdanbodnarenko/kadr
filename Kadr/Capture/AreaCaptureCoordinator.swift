@@ -207,6 +207,12 @@ final class AreaCaptureCoordinator {
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
+        // A countdown still waiting (a timed full-screen capture, say) would otherwise fire
+        // into or after this overlay; the overlay is the newer request (docs/18 §4.2 P3).
+        if timer.isRunning {
+            logger.info("Cancelled a waiting countdown for a new overlay")
+            timer.cancel()
+        }
         frontmostAtHotkey = frontmost ?? Self.currentFrontmostApp()
         self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
