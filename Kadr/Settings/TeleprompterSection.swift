@@ -7,6 +7,7 @@ import SwiftUI
 /// The script somebody reads from while recording, and how it behaves (docs/08).
 struct TeleprompterSection: View {
     @Bindable var settings: AppSettings
+    @State private var installStatus: FeedbackStatus?
 
     var body: some View {
         Section {
@@ -52,10 +53,13 @@ struct TeleprompterSection: View {
             Toggle("Dock under the camera", isOn: $settings.teleprompterDocksUnderCamera)
                 .disabled(!settings.teleprompterEnabled)
 
-            Button("Install speech model…") {
+            Button("Install Speech Model…") {
                 Task { await installSpeechModel() }
             }
-            .disabled(!settings.teleprompterEnabled)
+            .disabled(!settings.teleprompterEnabled || installStatus?.kind == .progress)
+            ControlInlineStatus(status: installStatus) {
+                installStatus = nil
+            }
 
             Toggle("Mirror the text", isOn: $settings.teleprompterMirrored)
                 .disabled(!settings.teleprompterEnabled)
@@ -85,13 +89,27 @@ struct TeleprompterSection: View {
     }
 
     /// User-initiated: never auto-download (CLAUDE.md rule 1).
+    ///
+    /// Reports progress and the outcome in place: the download takes minutes, and a button
+    /// that answered nothing looked broken (docs/18 SH-7).
     private func installSpeechModel() async {
+        installStatus = FeedbackStatus(kind: .progress, message: "Installing the speech model…", progress: 0)
+        let client = VisionClient()
+        defer { client.disconnect() }
         do {
-            _ = try await VisionClient().installSpeechModel(
+            _ = try await client.installSpeechModel(
                 SpeechInstallRequest(localeIdentifier: Locale.current.identifier)
-            )
+            ) { fraction in
+                Task { @MainActor in
+                    guard installStatus?.kind == .progress else { return }
+                    installStatus?.progress = fraction
+                }
+            }
+            installStatus = .done("The speech model is installed.")
+        } catch is CancellationError {
+            installStatus = nil
         } catch {
-            FailurePresenter.present(message: error.localizedDescription)
+            installStatus = .failure("Kadr could not install the speech model. \(error.localizedDescription)")
         }
     }
 }

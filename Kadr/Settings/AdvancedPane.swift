@@ -12,6 +12,7 @@ struct AdvancedPane: View {
     @State private var isInstalled = false
     @State private var showsResetConfirmation = false
     @State private var showsRemoveDataConfirmation = false
+    @State private var diagnosticsStatus: FeedbackStatus?
 
     var body: some View {
         Form {
@@ -68,7 +69,17 @@ struct AdvancedPane: View {
 
             Section("Diagnostics") {
                 Button("Export Diagnostics…") {
-                    Task { await AppDelegate.shared.exportDiagnostics() }
+                    // Collecting sizes and logs takes a few seconds; say so, then say it is
+                    // done, rather than leave a button that seems to do nothing (docs/18 SH-7).
+                    diagnosticsStatus = FeedbackStatus(kind: .progress, message: "Collecting diagnostics…")
+                    Task {
+                        let url = await AppDelegate.shared.exportDiagnostics()
+                        diagnosticsStatus = url == nil ? nil : .done("Exported and shown in Finder.")
+                    }
+                }
+                .disabled(diagnosticsStatus?.kind == .progress)
+                ControlInlineStatus(status: diagnosticsStatus) {
+                    diagnosticsStatus = nil
                 }
                 Text("Writes a zip of Kadr's log, crash reports and this Mac's setup — no "
                     + "captures or file names — and shows it in Finder. Nothing is sent.")
@@ -86,9 +97,15 @@ struct AdvancedPane: View {
             Button("Reset", role: .destructive) {
                 settings.resetToDefaults()
                 HotkeyCenter.restoreAll()
+                AutomationConsentGate.shared.consent.reset()
                 AppDelegate.shared.reapplySettingsAfterReset()
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            // Named, because a reset that silently also rebinds shortcuts and revokes
+            // automation grants is a surprise found later (docs/18 SH-5).
+            Text("Every setting, every keyboard shortcut and every app allowed to control Kadr "
+                + "goes back to how it was on first launch. History, pins and captures are kept.")
         }
         .confirmationDialog(
             "Remove all Kadr data and quit?",
