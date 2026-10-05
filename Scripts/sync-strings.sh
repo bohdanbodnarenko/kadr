@@ -19,11 +19,16 @@ cd "$(dirname "$0")/.." || exit 1
 check=false
 [[ "${1:-}" == "--check" ]] && check=true
 
-intermediates="${KADR_INTERMEDIATES:-build/Build/Intermediates.noindex/Kadr.build/Debug}"
+intermediates="${KADR_INTERMEDIATES:-build/Build/Intermediates.noindex}"
 status=0
 
-# catalog : the target whose build emitted its strings
-for pair in "Kadr/Localizable.xcstrings:Kadr.build" "KadrEditor/Localizable.xcstrings:KadrEditor.build"; do
+# catalog : where the build that compiled its sources left their strings. EditorUI has a
+# catalog of its own, read through Bundle.module, so the editor's chrome is translatable
+# without the app knowing its strings.
+for pair in \
+    "Kadr/Localizable.xcstrings:Kadr.build/Debug/Kadr.build" \
+    "KadrEditor/Localizable.xcstrings:Kadr.build/Debug/KadrEditor.build" \
+    "Packages/EditorUI/Sources/EditorUI/Resources/Localizable.xcstrings:EditorUI.build/Debug/EditorUI-t.build"; do
     catalog="${pair%%:*}"
     target="${pair##*:}"
     stringsdata=()

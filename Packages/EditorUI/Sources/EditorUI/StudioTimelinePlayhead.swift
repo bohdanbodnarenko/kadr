@@ -52,8 +52,8 @@ struct StudioTimelinePlayhead: View {
                             onScrub(Self.time(atX: value.location.x, scale: scale, duration: duration))
                         }
                 )
-                .help("Drag to scrub")
-                .accessibilityLabel("Playhead")
+                .help(Text("Drag to scrub", bundle: .module))
+                .accessibilityLabel(Text("Playhead", bundle: .module))
                 // docs/17 T-STU-11: VoiceOver hears where it is and can move it.
                 .accessibilityValue(StudioClock.precise(clock.time))
                 .accessibilityAdjustableAction { direction in

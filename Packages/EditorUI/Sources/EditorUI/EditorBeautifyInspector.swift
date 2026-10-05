@@ -51,7 +51,7 @@ struct EditorBeautifyInspector: View {
                 KadrSlider(title: "Strength", value: shadowStrengthBinding, range: 0.15 ... 1)
             }
             InspectorRow("Aspect") {
-                Picker("Aspect", selection: aspectBinding) {
+                Picker(String(localized: "Aspect", bundle: .module), selection: aspectBinding) {
                     ForEach(BeautifyAspect.allCases, id: \.self) { aspect in
                         Text(aspect.title).tag(aspect)
                     }
@@ -76,7 +76,10 @@ struct EditorBeautifyInspector: View {
         }
         InspectorToggleRow("Bleed off the edge", isOn: sticksBinding)
             .disabled(spec.alignment == .center)
-            .help("Removes the padding on the edges the capture touches, and squares the corners there.")
+            .help(Text(
+                "Removes the padding on the edges the capture touches, and squares the corners there.",
+                bundle: .module
+            ))
     }
 
     /// The ring around the capture. Part of the card, so it lives with the card's controls.

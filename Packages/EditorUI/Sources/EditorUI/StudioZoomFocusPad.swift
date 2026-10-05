@@ -75,9 +75,12 @@ struct StudioZoomFocusPad: View {
             }
         }
         .frame(height: 112)
-        .help("Drag to aim the zoom. The outline is what stays on screen. Double-click centers it.")
-        .accessibilityLabel("Zoom target")
-        .accessibilityHint("Drag to move the target. Double-click to center.")
+        .help(Text(
+            "Drag to aim the zoom. The outline is what stays on screen. Double-click centers it.",
+            bundle: .module
+        ))
+        .accessibilityLabel(Text("Zoom target", bundle: .module))
+        .accessibilityHint(Text("Drag to move the target. Double-click to center.", bundle: .module))
     }
 
     private func fittedSize(in container: CGSize) -> CGSize {

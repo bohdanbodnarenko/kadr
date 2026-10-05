@@ -10,7 +10,7 @@ struct StudioExportOptionsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Export Options")
+            Text("Export Options", bundle: .module)
                 .font(.headline)
 
             if model.exportSettings.container == .gif {
@@ -20,7 +20,7 @@ struct StudioExportOptionsView: View {
             }
 
             labeled("Format") {
-                Picker("Format", selection: $model.exportSettings.container) {
+                Picker(String(localized: "Format", bundle: .module), selection: $model.exportSettings.container) {
                     ForEach(StudioExportSettings.Container.allCases) { option in
                         Text(option.rawValue).tag(option)
                     }
@@ -49,7 +49,7 @@ struct StudioExportOptionsView: View {
             }
 
             if model.exportSettings.container != .gif {
-                Toggle("Include audio", isOn: $model.exportSettings.includeAudio)
+                Toggle(String(localized: "Include audio", bundle: .module), isOn: $model.exportSettings.includeAudio)
                     .toggleStyle(.switch)
                     .controlSize(.small)
 
@@ -67,9 +67,9 @@ struct StudioExportOptionsView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel)
+                Button(String(localized: "Cancel", bundle: .module), action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button("Export", action: onConfirm)
+                Button(String(localized: "Export", bundle: .module), action: onConfirm)
                     .keyboardShortcut(.defaultAction)
             }
             .controlSize(.small)
@@ -84,7 +84,7 @@ struct StudioExportOptionsView: View {
     @ViewBuilder
     private var gifControls: some View {
         labeled("Width") {
-            Picker("Width", selection: $model.exportSettings.gifWidth) {
+            Picker(String(localized: "Width", bundle: .module), selection: $model.exportSettings.gifWidth) {
                 ForEach(StudioExportSettings.GIFWidth.allCases) { option in
                     Text(option.title).tag(option)
                 }
@@ -93,7 +93,7 @@ struct StudioExportOptionsView: View {
             .labelsHidden()
         }
         labeled("Frame rate") {
-            Picker("Frame rate", selection: $model.exportSettings.gifFrameRate) {
+            Picker(String(localized: "Frame rate", bundle: .module), selection: $model.exportSettings.gifFrameRate) {
                 ForEach(StudioExportSettings.GIFFrameRate.allCases) { option in
                     Text(option.title).tag(option)
                 }
@@ -106,7 +106,7 @@ struct StudioExportOptionsView: View {
     @ViewBuilder
     private var movieControls: some View {
         labeled("Size") {
-            Picker("Size", selection: $model.exportSettings.sizePreset) {
+            Picker(String(localized: "Size", bundle: .module), selection: $model.exportSettings.sizePreset) {
                 ForEach(StudioExportSettings.SizePreset.allCases) { option in
                     Text(option.rawValue).tag(option)
                 }
@@ -116,7 +116,7 @@ struct StudioExportOptionsView: View {
         }
 
         labeled("Codec") {
-            Picker("Codec", selection: $model.exportSettings.codec) {
+            Picker(String(localized: "Codec", bundle: .module), selection: $model.exportSettings.codec) {
                 ForEach(StudioExportSettings.Codec.allCases) { option in
                     Text(option.rawValue).tag(option)
                 }
@@ -126,7 +126,7 @@ struct StudioExportOptionsView: View {
         }
 
         labeled("Resolution") {
-            Picker("Resolution", selection: $model.exportSettings.resolution) {
+            Picker(String(localized: "Resolution", bundle: .module), selection: $model.exportSettings.resolution) {
                 ForEach(StudioExportSettings.Resolution.allCases) { option in
                     Text(option.rawValue).tag(option)
                 }
@@ -136,7 +136,7 @@ struct StudioExportOptionsView: View {
         }
 
         labeled("Frame rate") {
-            Picker("Frame rate", selection: $model.exportSettings.frameRate) {
+            Picker(String(localized: "Frame rate", bundle: .module), selection: $model.exportSettings.frameRate) {
                 ForEach(StudioExportSettings.FrameRate.allCases) { option in
                     Text(option.title).tag(option)
                 }

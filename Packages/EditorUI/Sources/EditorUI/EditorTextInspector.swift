@@ -21,8 +21,8 @@ struct EditorTextInspector: View {
 
     var body: some View {
         InspectorRow("Preset") {
-            Picker("Preset", selection: presetBinding) {
-                Text("Custom").tag(-1)
+            Picker(String(localized: "Preset", bundle: .module), selection: presetBinding) {
+                Text("Custom", bundle: .module).tag(-1)
                 ForEach(Array(TextStyle.presets.enumerated()), id: \.offset) { index, preset in
                     Text(preset.name).tag(index)
                 }
@@ -31,7 +31,7 @@ struct EditorTextInspector: View {
         }
 
         InspectorRow("Font") {
-            Picker("Font", selection: fontBinding) {
+            Picker(String(localized: "Font", bundle: .module), selection: fontBinding) {
                 ForEach(EditorFontCatalog.families(including: style.fontName), id: \.self) { family in
                     Text(family).tag(family)
                 }

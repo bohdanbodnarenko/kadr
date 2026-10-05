@@ -24,20 +24,20 @@ public enum StudioInspectorTab: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .clip: String(localized: "Clip")
-        case .frame: String(localized: "Frame")
-        case .effects: String(localized: "Effects")
-        case .audio: String(localized: "Audio")
+        case .clip: String(localized: "Clip", bundle: .module)
+        case .frame: String(localized: "Frame", bundle: .module)
+        case .effects: String(localized: "Effects", bundle: .module)
+        case .audio: String(localized: "Audio", bundle: .module)
         }
     }
 
     /// For VoiceOver, where "Frame" alone is ambiguous between a rectangle and a video frame.
     public var accessibilityLabel: String {
         switch self {
-        case .clip: String(localized: "Clip and zoom")
-        case .frame: String(localized: "Frame and canvas")
-        case .effects: String(localized: "Pointer and overlays")
-        case .audio: String(localized: "Audio and speech")
+        case .clip: String(localized: "Clip and zoom", bundle: .module)
+        case .frame: String(localized: "Frame and canvas", bundle: .module)
+        case .effects: String(localized: "Pointer and overlays", bundle: .module)
+        case .audio: String(localized: "Audio and speech", bundle: .module)
         }
     }
 

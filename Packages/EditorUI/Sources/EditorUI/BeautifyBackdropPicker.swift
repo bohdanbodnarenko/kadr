@@ -19,9 +19,9 @@ struct BeautifyBackdropPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button("None") { onChoose(.none) }
+            Button(String(localized: "None", bundle: .module)) { onChoose(.none) }
                 .buttonStyle(InspectorButtonStyle(fillsWidth: true))
-                .accessibilityLabel("No backdrop")
+                .accessibilityLabel(Text("No backdrop", bundle: .module))
             swatches("Colors", items: BeautifyPalette.solids.map(BeautifyBackdrop.solid))
             swatches("Gradients", items: BeautifyPalette.gradients.map(BeautifyBackdrop.gradient))
             images
@@ -92,7 +92,7 @@ struct BeautifyBackdropPicker: View {
             )
         case let .image(path):
             HStack(spacing: 8) {
-                Button("Choose Image…") { pickImage() }
+                Button(String(localized: "Choose Image…", bundle: .module)) { pickImage() }
                     .buttonStyle(InspectorButtonStyle(fillsWidth: false))
                 if !path.isEmpty {
                     Text(URL(fileURLWithPath: path).lastPathComponent)
@@ -116,7 +116,7 @@ struct BeautifyBackdropPicker: View {
 
     private var images: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Images")
+            Text("Images", bundle: .module)
                 .font(.inspectorNote)
                 .foregroundStyle(.secondary)
             LazyVGrid(columns: Self.columns, spacing: 6) {
@@ -132,8 +132,8 @@ struct BeautifyBackdropPicker: View {
                 }
                 .buttonStyle(.plain)
                 .frame(height: Self.swatchHeight)
-                .help("Choose an image")
-                .accessibilityLabel("Choose an image")
+                .help(Text("Choose an image", bundle: .module))
+                .accessibilityLabel(Text("Choose an image", bundle: .module))
 
                 ForEach(BackdropRecents.load(), id: \.self) { path in
                     Button {

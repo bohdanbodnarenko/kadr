@@ -37,8 +37,8 @@ struct StudioZoomBlockLabel: View {
                 .opacity(visible ? 1 : 0)
                 .allowsHitTesting(visible)
                 .animation(.easeOut(duration: 0.12), value: visible)
-                .help("Remove this zoom")
-                .accessibilityLabel("Remove zoom")
+                .help(Text("Remove this zoom", bundle: .module))
+                .accessibilityLabel(Text("Remove zoom", bundle: .module))
             }
         }
         .foregroundStyle(.white)
@@ -102,7 +102,7 @@ struct StudioZoomAddGhost: View {
                 RoundedRectangle(cornerRadius: 3)
                     .strokeBorder(Color.orange.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                 if width >= 58 {
-                    Label("Add zoom", systemImage: "plus")
+                    Label(String(localized: "Add zoom", bundle: .module), systemImage: "plus")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color.orange)
                         .labelStyle(.titleAndIcon)
@@ -137,7 +137,7 @@ struct StudioTimelineTrackHeaders: View {
     var body: some View {
         VStack(alignment: .leading, spacing: laneSpacing) {
             HStack(spacing: 2) {
-                Text("Zoom")
+                Text("Zoom", bundle: .module)
                 Spacer(minLength: 0)
                 Button {
                     model.pausePlayback()
@@ -151,11 +151,11 @@ struct StudioTimelineTrackHeaders: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Add a zoom at the playhead (Z at the pointer)")
-                .accessibilityLabel("Add zoom at playhead")
+                .help(Text("Add a zoom at the playhead (Z at the pointer)", bundle: .module))
+                .accessibilityLabel(Text("Add zoom at playhead", bundle: .module))
             }
             .frame(height: cueHeight)
-            Text("Clips")
+            Text("Clips", bundle: .module)
                 .frame(height: clipHeight, alignment: .center)
         }
         .font(.system(size: 11, weight: .medium))

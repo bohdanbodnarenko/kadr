@@ -6,20 +6,20 @@ import SwiftUI
 extension StudioInspector {
     var audioSection: some View {
         Section {
-            Toggle("Mute", isOn: Binding(
+            Toggle(String(localized: "Mute", bundle: .module), isOn: Binding(
                 get: { model.edit.mutesAudio },
                 set: { value in model.change { $0.mutesAudio = value } }
             ))
-            Toggle("Mix to mono", isOn: Binding(
+            Toggle(String(localized: "Mix to mono", bundle: .module), isOn: Binding(
                 get: { model.edit.mixesToMono },
                 set: { value in model.change { $0.mixesToMono = value } }
             ))
             .disabled(model.edit.mutesAudio)
             soundtrackRow
-            Button("Export Audio…") { model.exportEditedAudio() }
+            Button(String(localized: "Export Audio…", bundle: .module)) { model.exportEditedAudio() }
                 .disabled(model.edit.mutesAudio)
         } header: {
-            Text("Audio")
+            Text("Audio", bundle: .module)
         } footer: {
             Text(soundtrackSummary)
         }
@@ -29,27 +29,28 @@ extension StudioInspector {
     @ViewBuilder
     private var soundtrackRow: some View {
         if let name = model.edit.soundtrackDisplayName ?? model.edit.soundtrackFileName {
-            LabeledContent("Soundtrack") {
+            LabeledContent(String(localized: "Soundtrack", bundle: .module)) {
                 HStack(spacing: 8) {
                     Text(name)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Button("Remove", role: .destructive) { model.removeSoundtrack() }
-                        .buttonStyle(.link)
+                    Button(String(localized: "Remove", bundle: .module), role: .destructive) { model.removeSoundtrack()
+                    }
+                    .buttonStyle(.link)
                 }
             }
         } else {
-            Button("Import Soundtrack…") { model.chooseSoundtrack() }
+            Button(String(localized: "Import Soundtrack…", bundle: .module)) { model.chooseSoundtrack() }
         }
     }
 
     private var soundtrackSummary: String {
         if model.edit.mutesAudio {
-            return String(localized: "Muted in the preview and in the export.")
+            return String(localized: "Muted in the preview and in the export.", bundle: .module)
         }
         if model.edit.soundtrackDisplayName ?? model.edit.soundtrackFileName != nil {
-            return String(localized: "The imported track plays instead of the recording's own audio.")
+            return String(localized: "The imported track plays instead of the recording's own audio.", bundle: .module)
         }
-        return String(localized: "The recording's own audio, cut and sped with the picture.")
+        return String(localized: "The recording's own audio, cut and sped with the picture.", bundle: .module)
     }
 }

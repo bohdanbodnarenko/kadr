@@ -13,7 +13,7 @@ extension StudioInspector {
             // hidden so four segments get the whole row — at the inspector's narrowest they
             // do not fit beside one, and the section header already says Canvas. VoiceOver
             // still reads the title.
-            Picker("Backdrop", selection: backdropKind) {
+            Picker(String(localized: "Backdrop", bundle: .module), selection: backdropKind) {
                 ForEach(StudioBackdropKind.allCases) { kind in
                     Text(kind.title).tag(kind)
                 }
@@ -57,10 +57,10 @@ extension StudioInspector {
                 format: .percent
             )
         } header: {
-            Text("Canvas")
+            Text("Canvas", bundle: .module)
         } footer: {
             if case .none = model.edit.canvas.background {
-                Text("No backdrop: the recording fills the frame edge to edge.")
+                Text("No backdrop: the recording fills the frame edge to edge.", bundle: .module)
             }
         }
     }
@@ -87,7 +87,7 @@ extension StudioInspector {
             EmptyView()
         case let .solid(current):
             canvasSolidSwatches(current: current)
-            ColorPicker("Color", selection: Binding(
+            ColorPicker(String(localized: "Color", bundle: .module), selection: Binding(
                 get: { Color(current) },
                 set: { color in
                     model.change(coalescingAs: "canvas.fill") { $0.canvas.setSolid(StudioColor(color)) }
@@ -112,10 +112,10 @@ extension StudioInspector {
         case .wallpaper:
             studioWallpaperRecents
             HStack {
-                Button("Choose Image…") { model.chooseWallpaper() }
+                Button(String(localized: "Choose Image…", bundle: .module)) { model.chooseWallpaper() }
                 Spacer(minLength: 0)
                 if model.edit.canvas.wallpaperFileName != nil {
-                    Button("Remove", role: .destructive) { model.removeWallpaper() }
+                    Button(String(localized: "Remove", bundle: .module), role: .destructive) { model.removeWallpaper() }
                 }
             }
         }
@@ -123,11 +123,14 @@ extension StudioInspector {
 
     @ViewBuilder
     private func gradientStops(ramp: StudioGradient) -> some View {
-        ColorPicker("From", selection: gradientStop(ramp: ramp, index: 0))
+        ColorPicker(String(localized: "From", bundle: .module), selection: gradientStop(ramp: ramp, index: 0))
         if ramp.stops.count > 2 {
-            ColorPicker("Middle", selection: gradientStop(ramp: ramp, index: 1))
+            ColorPicker(String(localized: "Middle", bundle: .module), selection: gradientStop(ramp: ramp, index: 1))
         }
-        ColorPicker("To", selection: gradientStop(ramp: ramp, index: ramp.stops.count - 1))
+        ColorPicker(
+            String(localized: "To", bundle: .module),
+            selection: gradientStop(ramp: ramp, index: ramp.stops.count - 1)
+        )
         Button(ramp.stops.count > 2 ? "Remove Midpoint" : "Add Midpoint") {
             model.change { $0.canvas.setGradient(ramp.togglingMidpoint()) }
         }
@@ -206,7 +209,7 @@ extension StudioInspector {
     private var studioWallpaperRecents: some View {
         let recents = BackdropRecents.load()
         if !recents.isEmpty {
-            LabeledContent("Recent") {
+            LabeledContent(String(localized: "Recent", bundle: .module)) {
                 HStack(spacing: 6) {
                     ForEach(recents.prefix(4), id: \.self) { path in
                         Button(URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent) {

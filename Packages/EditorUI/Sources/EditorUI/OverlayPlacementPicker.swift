@@ -16,7 +16,7 @@ struct OverlayPlacementPicker: View {
     ]
 
     var body: some View {
-        LabeledContent("Position") {
+        LabeledContent(String(localized: "Position", bundle: .module)) {
             VStack(spacing: 2) {
                 ForEach(Self.rows, id: \.self) { row in
                     HStack(spacing: 2) {
@@ -34,10 +34,10 @@ struct OverlayPlacementPicker: View {
             }
             .frame(width: 78, height: 46)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Position")
+            .accessibilityLabel(Text("Position", bundle: .module))
             .accessibilityValue(Self.spokenName(selection))
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Choose which corner or edge the overlay sits on")
+            .accessibilityHint(Text("Choose which corner or edge the overlay sits on", bundle: .module))
         }
     }
 
@@ -59,11 +59,11 @@ struct OverlayPlacementPicker: View {
     /// "Top left", not "Left" — the enum's own title is the column, which only reads as a
     /// position when the row it sits in is visible.
     static func spokenName(_ slot: OverlayPlacement) -> String {
-        let row = slot.isTop ? String(localized: "Top") : String(localized: "Bottom")
+        let row = slot.isTop ? String(localized: "Top", bundle: .module) : String(localized: "Bottom", bundle: .module)
         let column = switch slot {
-        case .topLeading, .bottomLeading: String(localized: "left")
-        case .top, .bottom: String(localized: "center")
-        case .topTrailing, .bottomTrailing: String(localized: "right")
+        case .topLeading, .bottomLeading: String(localized: "left", bundle: .module)
+        case .top, .bottom: String(localized: "center", bundle: .module)
+        case .topTrailing, .bottomTrailing: String(localized: "right", bundle: .module)
         }
         return "\(row) \(column)"
     }

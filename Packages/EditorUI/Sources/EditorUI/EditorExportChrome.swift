@@ -50,15 +50,15 @@ struct EditorExportChrome: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button("Retry") {
+                    Button(String(localized: "Retry", bundle: .module)) {
                         onRetry(failure.action)
                     }
                     if failure.offersAnotherLocation {
-                        Button("Choose Another Location") {
+                        Button(String(localized: "Choose Another Location", bundle: .module)) {
                             onChooseAnotherLocation(failure.action)
                         }
                     }
-                    Button("Dismiss") {
+                    Button(String(localized: "Dismiss", bundle: .module)) {
                         model.exportFailure = nil
                     }
                     .foregroundStyle(.secondary)
@@ -103,7 +103,7 @@ struct EditorExportChrome: View {
         HStack(spacing: 10) {
             ProgressView()
                 .controlSize(.small)
-            Text("Removing the background…")
+            Text("Removing the background…", bundle: .module)
                 .font(.callout)
             Spacer(minLength: 0)
         }
@@ -111,6 +111,6 @@ struct EditorExportChrome: View {
         .padding(.vertical, 8)
         .editorFloatingCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Removing the background")
+        .accessibilityLabel(Text("Removing the background", bundle: .module))
     }
 }

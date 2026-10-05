@@ -40,7 +40,7 @@ struct StudioZoomTargetOverlay: View {
             }
             .contentShape(Rectangle())
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Zoom target")
+            .accessibilityLabel(Text("Zoom target", bundle: .module))
             .accessibilityValue(String(format: "%.1f×", cue.magnification))
         }
     }
@@ -96,7 +96,7 @@ struct StudioZoomTargetOverlay: View {
             .position(point)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .help("Where the pointer was when this zoom starts")
+            .help(Text("Where the pointer was when this zoom starts", bundle: .module))
         }
     }
 
@@ -123,7 +123,7 @@ struct StudioZoomTargetOverlay: View {
                     NSCursor.arrow.set()
                 }
             }
-            .help("Drag to aim this zoom. Drag a corner to change how close it goes.")
+            .help(Text("Drag to aim this zoom. Drag a corner to change how close it goes.", bundle: .module))
     }
 
     private func handle(_ corner: Corner, target: CGRect, anchor: CGPoint) -> some View {

@@ -84,7 +84,7 @@ struct StudioCropOverlay: View {
             }
             .accessibilityElement()
             .accessibilityLabel(handle.accessibilityTitle)
-            .accessibilityHint("Adjust to grow or shrink the crop")
+            .accessibilityHint(Text("Adjust to grow or shrink the crop", bundle: .module))
             .accessibilityAdjustableAction { direction in adjust(handle, direction) }
     }
 

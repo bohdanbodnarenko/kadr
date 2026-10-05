@@ -24,7 +24,10 @@ extension StudioInspector {
     var speechSection: some View {
         Section {
             if !model.supportedLocales.isEmpty {
-                Picker("Language", selection: Bindable(model).speechLocaleIdentifier) {
+                Picker(
+                    String(localized: "Language", bundle: .module),
+                    selection: Bindable(model).speechLocaleIdentifier
+                ) {
                     ForEach(model.supportedLocales, id: \.self) { identifier in
                         Text(Locale.current.localizedString(forIdentifier: identifier) ?? identifier)
                             .tag(identifier)
@@ -39,7 +42,7 @@ extension StudioInspector {
                 cutReview
             }
         } header: {
-            Text("Speech")
+            Text("Speech", bundle: .module)
         } footer: {
             speechFooter
         }
@@ -55,7 +58,7 @@ extension StudioInspector {
             tidyControl
         case .notApplicable:
             if model.dictationSettingsNeeded {
-                Button("Open Dictation Settings") {
+                Button(String(localized: "Open Dictation Settings", bundle: .module)) {
                     if let url = SpeechDictationSettings.url {
                         NSWorkspace.shared.open(url)
                     }
@@ -94,7 +97,7 @@ extension StudioInspector {
     @ViewBuilder
     var tidyControl: some View {
         if model.isTranscribing {
-            LabeledContent("Listening…") {
+            LabeledContent(String(localized: "Listening…", bundle: .module)) {
                 HStack(spacing: 8) {
                     if let progress = model.transcriptionProgress {
                         ProgressView(value: progress)
@@ -104,7 +107,7 @@ extension StudioInspector {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    Button("Cancel") { model.cancelTidySpeech() }
+                    Button(String(localized: "Cancel", bundle: .module)) { model.cancelTidySpeech() }
                         .buttonStyle(.link)
                 }
             }
@@ -112,18 +115,18 @@ extension StudioInspector {
             // Filler words are known for a few languages only; elsewhere the toggle would
             // propose nothing (docs/18 STU-10).
             if model.fillerWordsAvailable {
-                Toggle("Filler words", isOn: Bindable(model).tidyRemovesFillers)
+                Toggle(String(localized: "Filler words", bundle: .module), isOn: Bindable(model).tidyRemovesFillers)
             }
-            Toggle("Long pauses", isOn: Bindable(model).tidyShortensPauses)
+            Toggle(String(localized: "Long pauses", bundle: .module), isOn: Bindable(model).tidyShortensPauses)
             HStack {
-                Button("Find Cuts…") {
+                Button(String(localized: "Find Cuts…", bundle: .module)) {
                     Task { await model.tidySpeech() }
                 }
                 .disabled(!(model.tidyRemovesFillers && model.fillerWordsAvailable) && !model.tidyShortensPauses)
-                Button("Transcribe") {
+                Button(String(localized: "Transcribe", bundle: .module)) {
                     Task { await model.transcribeOnly() }
                 }
-                .help("Make a transcript for captions, without proposing any cuts")
+                .help(Text("Make a transcript for captions, without proposing any cuts", bundle: .module))
             }
         }
     }
@@ -144,7 +147,7 @@ extension StudioInspector {
                     }
                 }
                 Spacer(minLength: 8)
-                Button("Preview") { model.seekToCut(cut) }
+                Button(String(localized: "Preview", bundle: .module)) { model.seekToCut(cut) }
                     .buttonStyle(.link)
             }
         }
@@ -159,7 +162,7 @@ extension StudioInspector {
             .font(.callout)
         }
         HStack {
-            Button("Cancel", role: .cancel) {
+            Button(String(localized: "Cancel", bundle: .module), role: .cancel) {
                 largeRemovalArmed = false
                 model.discardPendingCuts()
             }
@@ -181,17 +184,17 @@ extension StudioInspector {
     @ViewBuilder
     var installControl: some View {
         if let progress = model.installProgress {
-            LabeledContent("Downloading…") {
+            LabeledContent(String(localized: "Downloading…", bundle: .module)) {
                 HStack(spacing: 8) {
                     ProgressView(value: progress)
                         .progressViewStyle(.linear)
                         .frame(width: 90)
-                    Button("Cancel") { model.cancelSpeechModelInstall() }
+                    Button(String(localized: "Cancel", bundle: .module)) { model.cancelSpeechModelInstall() }
                         .buttonStyle(.link)
                 }
             }
         } else {
-            Button("Install Speech Model…") { model.installSpeechModel() }
+            Button(String(localized: "Install Speech Model…", bundle: .module)) { model.installSpeechModel() }
         }
     }
 
@@ -203,18 +206,18 @@ extension StudioInspector {
     var captionSection: some View {
         if model.transcript == nil {
             Section {
-                LabeledContent("Transcribe to add captions") {
-                    Button("Transcribe") {
+                LabeledContent(String(localized: "Transcribe to add captions", bundle: .module)) {
+                    Button(String(localized: "Transcribe", bundle: .module)) {
                         Task { await model.transcribeOnly() }
                     }
                     .disabled(model.isTranscribing)
                 }
             } header: {
-                Text("Captions")
+                Text("Captions", bundle: .module)
             }
         } else {
             Section {
-                Toggle("Burn in captions", isOn: Binding(
+                Toggle(String(localized: "Burn in captions", bundle: .module), isOn: Binding(
                     get: { model.edit.showsCaptions },
                     set: { value in model.change { $0.showsCaptions = value } }
                 ))
@@ -234,16 +237,16 @@ extension StudioInspector {
                         range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
                         format: .multiplier
                     )
-                    Toggle("Highlight the spoken word", isOn: Binding(
+                    Toggle(String(localized: "Highlight the spoken word", bundle: .module), isOn: Binding(
                         get: { model.edit.highlightsSpokenWord },
                         set: { value in model.change { $0.highlightsSpokenWord = value } }
                     ))
                 }
             } header: {
-                Text("Captions")
+                Text("Captions", bundle: .module)
             } footer: {
                 if model.edit.showsCaptions {
-                    Text("Captions are drawn into the exported movie, not attached as a track.")
+                    Text("Captions are drawn into the exported movie, not attached as a track.", bundle: .module)
                 }
             }
         }
