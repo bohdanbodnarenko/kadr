@@ -68,6 +68,8 @@ public enum SettingKeys {
     /// round-trip through the presets picker.
     public static let selfTimer = SettingKey("capture.selfTimer", default: SelfTimer.off)
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
+    /// The last typed timer value, kept after a preset is picked (docs/17 T-CAP-12).
+    public static let rememberedCustomTimerSeconds = SettingKey("capture.rememberedCustomTimerSeconds", default: 0)
     /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
     /// Open an editable review window after Capture Text (docs/03 §1.7).

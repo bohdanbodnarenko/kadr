@@ -152,7 +152,7 @@ struct AllInOneView: View {
 
     var timerOptions: [Int] {
         var options = Self.presetTimerOptions
-        let custom = model.settings.customTimerSeconds
+        let custom = model.settings.rememberedCustomTimerSeconds
         if custom > 0, !options.contains(custom) {
             options.append(custom)
             options.sort()
@@ -164,12 +164,7 @@ struct AllInOneView: View {
         Menu {
             ForEach(timerOptions, id: \.self) { seconds in
                 Button(timerLabel(seconds)) {
-                    if seconds == model.settings.customTimerSeconds, seconds > 0 {
-                        model.settings.selfTimer = .off
-                    } else {
-                        model.settings.customTimerSeconds = 0
-                        model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
-                    }
+                    selectTimer(seconds)
                 }
             }
         } label: {
@@ -227,10 +222,27 @@ struct AllInOneView: View {
         if seconds == 0 {
             return "No delay"
         }
-        if seconds == model.settings.customTimerSeconds, seconds > 0 {
+        if isCustomTimer(seconds) {
             return "Custom: \(seconds)s"
         }
         return "\(seconds) seconds"
+    }
+
+    /// The remembered typed value, offered beside the presets even after a preset was
+    /// picked; choosing it turns it back on (docs/17 T-CAP-12).
+    func isCustomTimer(_ seconds: Int) -> Bool {
+        seconds > 0 && seconds == model.settings.rememberedCustomTimerSeconds
+            && !Self.presetTimerOptions.contains(seconds)
+    }
+
+    func selectTimer(_ seconds: Int) {
+        if isCustomTimer(seconds) {
+            model.settings.customTimerSeconds = seconds
+            model.settings.selfTimer = .off
+        } else {
+            model.settings.customTimerSeconds = 0
+            model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
+        }
     }
 
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {

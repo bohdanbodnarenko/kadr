@@ -52,6 +52,7 @@ public extension AppSettings {
         captureConfirmsSelection = SettingKeys.captureConfirmsSelection.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
+        rememberedCustomTimerSeconds = SettingKeys.rememberedCustomTimerSeconds.defaultValue
         scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
         scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
         scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue
