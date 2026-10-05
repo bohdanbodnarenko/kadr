@@ -339,11 +339,7 @@ extension EditorWindowController {
     }
 
     func placeImportedImage(_ png: Data, pixelSize: CGSize) {
-        let point = CGPoint(
-            x: model.document.contentRect.midX,
-            y: model.document.contentRect.midY
-        )
-        _ = model.insertImage(pngData: png, pixelSize: pixelSize, at: point)
+        _ = model.insertImage(pngData: png, pixelSize: pixelSize, at: model.nextPastePoint())
     }
 
     /// A PNG for Pin or Share, in the editor's temporary folder.

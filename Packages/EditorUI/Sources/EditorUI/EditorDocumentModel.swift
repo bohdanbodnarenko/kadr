@@ -190,6 +190,13 @@ public final class EditorDocumentModel {
     /// Arrows bound to the dragged annotations, precomputed at gesture start (docs/16 ED-5).
     var dragDependents: Set<AnnotationID> = []
     var isMovingSelection = false
+    /// Snapping for the current move (docs/18 ED-7): the boxes it can land on, how close
+    /// counts (image points, set by the canvas from its zoom), and the guides to draw.
+    @ObservationIgnored var snapTargets: [CGRect] = []
+    @ObservationIgnored public var snapThreshold: CGFloat = 6
+    @ObservationIgnored public internal(set) var snapGuides: [SnapGuides.Guide] = []
+    /// ⌥ was held when the move began: the first movement drags copies.
+    @ObservationIgnored var duplicatesOnDrag = false
     /// The handle currently being dragged, if this gesture is a resize rather than a move.
     var resizeHandle: SelectionHandle?
     var resizeStartBounds: CGRect?

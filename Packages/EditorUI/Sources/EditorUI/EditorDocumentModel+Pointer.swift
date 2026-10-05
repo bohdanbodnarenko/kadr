@@ -121,6 +121,9 @@ public extension EditorDocumentModel {
             dragOrigin = nil
             dragStartCommands = [:]
             dragDependents = []
+            snapTargets = []
+            snapGuides = []
+            duplicatesOnDrag = false
             isMovingSelection = false
             resizeHandle = nil
             resizeStartBounds = nil
@@ -140,7 +143,7 @@ public extension EditorDocumentModel {
             if let marquee {
                 let enclosed = AnnotationHitTesting.enclosed(in: document.commands, by: marquee)
                 let ids = Set(enclosed.map(\.id))
-                document.selection = modifiers.contains(.extendSelection)
+                document.selection = modifiers.contains(.extendSelection) || modifiers.contains(.constrain)
                     ? document.selection.union(ids)
                     : ids
             }
@@ -190,8 +193,12 @@ public extension EditorDocumentModel {
             return
         }
 
+        // ⌘ toggles; ⇧ adds but never removes, so ⇧-dragging a selected object still
+        // constrains the move instead of deselecting it (docs/18 ED-7).
         if modifiers.contains(.extendSelection) {
             document.selection.formSymmetricDifference([hit.id])
+        } else if modifiers.contains(.constrain) {
+            document.selection.insert(hit.id)
         } else if !document.selection.contains(hit.id) {
             document.selection = [hit.id]
         }
@@ -201,14 +208,18 @@ public extension EditorDocumentModel {
         isMovingSelection = !document.selection.isEmpty
         guard isMovingSelection else { return }
 
+        // One undo step for the whole drag, however many frames it takes (docs/09 U0.2).
+        document.beginGesture()
+        // Copied on the first movement, not here: an ⌥-click, or an ⌥-drag that turns out
+        // to be a resize from the centre, must not leave a copy behind.
+        duplicatesOnDrag = modifiers.contains(.fromCenter)
         dragStartCommands = Dictionary(
             uniqueKeysWithValues: document.commands
                 .filter { document.selection.contains($0.id) }
                 .map { ($0.id, $0) }
         )
         captureArrowDependents()
-        // One undo step for the whole drag, however many frames it takes (docs/09 U0.2).
-        document.beginGesture()
+        captureSnapTargets()
     }
 
     /// Positions the selection for the pointer's current location.
@@ -225,8 +236,19 @@ public extension EditorDocumentModel {
                 delta.width = 0
             }
         }
+        if duplicatesOnDrag {
+            duplicatesOnDrag = false
+            duplicateSelectionForDrag()
+            dragStartCommands = Dictionary(
+                uniqueKeysWithValues: document.commands
+                    .filter { document.selection.contains($0.id) }
+                    .map { ($0.id, $0) }
+            )
+            captureArrowDependents()
+        }
         let starts = dragStartCommands
         guard !starts.isEmpty else { return }
+        delta = snappedDelta(delta, modifiers: modifiers)
 
         document.updateGesture { commands in
             for index in commands.indices {
@@ -252,6 +274,7 @@ public extension EditorDocumentModel {
         isMovingSelection = true
         dragStartCommands = Dictionary(uniqueKeysWithValues: selected.map { ($0.id, $0) })
         captureArrowDependents()
+        captureSnapTargets()
         document.beginGesture()
         return true
     }
