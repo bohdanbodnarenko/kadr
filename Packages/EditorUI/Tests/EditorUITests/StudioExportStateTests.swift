@@ -10,8 +10,10 @@ import Testing
 /// `RenderStamp` had both halves written and tested and no production caller at all, so
 /// "do not re-render an unchanged edit" existed only in the type system: pressing Export
 /// twice on a ten-minute recording rendered it twice.
+///
+/// Serialized because several tests write and read the one system pasteboard.
 @MainActor
-@Suite("Studio export state")
+@Suite("Studio export state", .serialized)
 struct StudioExportStateTests {
     private func scratch() -> URL {
         let url = FileManager.default.temporaryDirectory
