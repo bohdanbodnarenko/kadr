@@ -37,6 +37,9 @@ extension EditorWindowController {
             guard let self else { return }
             if response == .alertFirstButtonReturn {
                 model.replaceDocument(recovered.document)
+                if let exportScale = recovered.exportScale {
+                    model.exportScale = CGFloat(exportScale)
+                }
                 // A recovered copy may predate the measurement this window made. One still in
                 // flight adopts into whatever document is current when it lands.
                 if let measuredVisibleBounds {
@@ -135,6 +138,7 @@ extension EditorWindowController {
     /// and a detached write would not get the chance to finish.
     func writeAutosave(synchronously: Bool = false) {
         let document = model.document
+        let exportScale = Double(model.exportScale)
         let basePNG = basePNG
         let snapshotURL = documentURL
         let snapshotAutosave = autosave
@@ -142,7 +146,9 @@ extension EditorWindowController {
         autosaveMayExist = true
         let write: @Sendable () -> Void = {
             do {
-                try snapshotAutosave.write(basePNG.contents(for: document), for: snapshotURL)
+                var contents = try basePNG.contents(for: document)
+                contents.exportScale = exportScale
+                try snapshotAutosave.write(contents, for: snapshotURL)
             } catch {
                 snapshotLogger.error("Could not autosave: \(error.localizedDescription, privacy: .public)")
             }

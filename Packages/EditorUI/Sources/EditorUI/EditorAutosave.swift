@@ -89,7 +89,7 @@ public struct EditorAutosave: Sendable {
             try contents.baseImagePNG.write(to: base, options: .atomic)
             try Data(checksum.utf8).write(to: checksumFile, options: .atomic)
         }
-        try KadrDocumentFile.commandsJSON(for: contents.document)
+        try KadrDocumentFile.commandsJSON(for: contents.document, exportScale: contents.exportScale)
             .write(to: url(for: captureURL), options: .atomic)
         try? manager.removeItem(at: legacyURL(for: captureURL))
         try? Data(captureURL.standardizedFileURL.path.utf8)

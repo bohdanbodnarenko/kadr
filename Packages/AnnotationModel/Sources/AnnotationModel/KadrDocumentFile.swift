@@ -22,11 +22,20 @@ public enum KadrDocumentFile {
         /// Must describe `baseImagePNG` exactly; a wrong value writes a zip other tools
         /// reject. Nil means "compute it".
         public var baseImageCRC32: UInt32?
+        /// The Export Size the project was saved with, below 1 when it downscales; nil for
+        /// native size (docs/18 ED-12).
+        public var exportScale: Double?
 
-        public init(document: AnnotationDocument, baseImagePNG: Data, baseImageCRC32: UInt32? = nil) {
+        public init(
+            document: AnnotationDocument,
+            baseImagePNG: Data,
+            baseImageCRC32: UInt32? = nil,
+            exportScale: Double? = nil
+        ) {
             self.document = document
             self.baseImagePNG = baseImagePNG
             self.baseImageCRC32 = baseImageCRC32
+            self.exportScale = exportScale
         }
     }
 
@@ -36,6 +45,8 @@ public enum KadrDocumentFile {
         var version: Int
         var baseImage: BaseImageReference
         var commands: [AnnotationCommand]
+        /// Optional, so older files read and native size writes nothing.
+        var exportScale: Double?
     }
 
     public static let currentVersion = 1
@@ -77,11 +88,12 @@ public enum KadrDocumentFile {
     ///
     /// Public so autosave can write the small part on every edit and the base image once
     /// (docs/18 ED-10).
-    public static func commandsJSON(for document: AnnotationDocument) throws -> Data {
+    public static func commandsJSON(for document: AnnotationDocument, exportScale: Double? = nil) throws -> Data {
         let payload = Payload(
             version: currentVersion,
             baseImage: encodedBaseImage(of: document),
-            commands: document.commands
+            commands: document.commands,
+            exportScale: exportScale.flatMap { $0 < 1 ? $0 : nil }
         )
         let encoder = JSONEncoder()
         // Sorted and pretty so a `.kadr` diffs usefully in version control.
@@ -90,7 +102,7 @@ public enum KadrDocumentFile {
     }
 
     public static func data(for contents: Contents) throws -> Data {
-        let json = try commandsJSON(for: contents.document)
+        let json = try commandsJSON(for: contents.document, exportScale: contents.exportScale)
         return ZipArchive.archive([
             ZipArchive.Entry(name: baseImageEntry, data: contents.baseImagePNG, crc: contents.baseImageCRC32),
             ZipArchive.Entry(name: commandsEntry, data: json)
@@ -129,7 +141,8 @@ public enum KadrDocumentFile {
 
         return Contents(
             document: AnnotationDocument(baseImage: payload.baseImage, commands: payload.commands),
-            baseImagePNG: image
+            baseImagePNG: image,
+            exportScale: payload.exportScale
         )
     }
 

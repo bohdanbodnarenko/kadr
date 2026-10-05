@@ -33,14 +33,18 @@ extension EditorWindowController {
     /// Writes the project. Never brings Finder forward: a save is the silent write
     /// (docs/03:171); only Show in Finder reveals (T-ED-1).
     func writeProject(to destination: URL, addToHistory: Bool = true) throws {
-        try KadrDocumentFile.write(
-            basePNG.contents(for: model.document),
-            to: destination
-        )
+        try KadrDocumentFile.write(projectContents(), to: destination)
         markClean()
         if addToHistory {
             addToLibrary(destination)
         }
+    }
+
+    /// The project as it would be written now, Export Size included (docs/18 ED-12).
+    func projectContents() throws -> KadrDocumentFile.Contents {
+        var contents = try basePNG.contents(for: model.document)
+        contents.exportScale = Double(model.exportScale)
+        return contents
     }
 
     /// The document matches what is on disk.
@@ -175,9 +179,12 @@ extension EditorWindowController {
     }
 
     /// Encodes in the format the destination's extension names.
-    func write(_ image: CGImage, to url: URL) throws {
+    func write(_ image: CGImage, to url: URL, quality: Double? = nil) throws {
         var options = exportEncodingOptions
         options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
+        if let quality {
+            options.quality = quality
+        }
         try CaptureFileWriter().write(image, to: url, options: options)
     }
 
@@ -213,11 +220,9 @@ extension EditorWindowController {
             ? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             : documentURL.deletingLastPathComponent()
         panel.message = "Save this capture"
-        var types = ImageFormat.writable.map(\.contentType)
-        if let project = UTType(filenameExtension: KadrDocumentFile.fileExtension) {
-            types.append(project)
-        }
-        panel.allowedContentTypes = types
+        let current = ImageFormat(fileExtension: (capturedImageURL ?? documentURL).pathExtension) ?? .png
+        let accessory = SaveAsAccessory(panel: panel, initial: .image(current))
+        panel.accessoryView = accessory.view
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             defer { self.model.endExport() }
@@ -226,7 +231,7 @@ extension EditorWindowController {
                 return
             }
             do {
-                try saveAs(image, to: url)
+                try saveAs(image, to: url, quality: accessory.quality)
                 logger.info("Saved \(url.lastPathComponent, privacy: .public)")
                 completion?(true)
             } catch {
@@ -239,7 +244,7 @@ extension EditorWindowController {
 
     /// Writes to a destination the user picked and rebinds the window to it, so the title,
     /// the proxy icon and the next ⌘S all follow (T-ED-1).
-    func saveAs(_ image: CGImage, to url: URL) throws {
+    func saveAs(_ image: CGImage, to url: URL, quality: Double? = nil) throws {
         guard let targets = EditorSaveTargets.chosen(
             url,
             writesProject: EditorCanvasPreferences.writesSidecarOnSave()
@@ -250,7 +255,7 @@ extension EditorWindowController {
             noteProjectKeepsOriginalPixels()
             return
         }
-        try write(image, to: targets.flattened)
+        try write(image, to: targets.flattened, quality: quality)
         if let project = targets.project {
             try writeProject(to: project, addToHistory: false)
         }
@@ -361,9 +366,11 @@ extension EditorWindowController {
     /// Matches the agent's General-pane sRGB toggle by reading the agent defaults
     /// domain — the two processes do not share `UserDefaults.standard`.
     var exportEncodingOptions: EncodingOptions {
+        // The DPI tag follows the pixels: a 2× capture exported at half size is a 1× image,
+        // and tagging it 144 DPI made it open at half its size elsewhere (docs/18 ED-12).
         EncodingOptions(
             format: .png,
-            scale: DisplayScale(model.document.baseImage.scale),
+            scale: DisplayScale(max(model.document.baseImage.scale * model.exportScale, 0.01)),
             convertToSRGB: Self.agentConvertsExportsToSRGB
         )
     }

@@ -309,6 +309,16 @@ struct KadrDocumentFileCompatibilityTests {
         }
     }
 
+    @Test("Export Size travels with the project; native size writes nothing", arguments: [
+        (0.5 as Double?, 0.5 as Double?), (1, nil), (nil, nil)
+    ])
+    func exportScaleRoundTrip(saved: Double?, expected: Double?) throws {
+        var contents = makeContents()
+        contents.exportScale = saved
+        let read = try KadrDocumentFile.contents(of: KadrDocumentFile.data(for: contents))
+        #expect(read.exportScale == expected)
+    }
+
     @Test("Errors read as sentences, not type names")
     func messages() {
         let errors: [KadrDocumentFile.FileError] = [
