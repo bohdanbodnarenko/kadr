@@ -48,4 +48,30 @@ extension HistoryController {
             recent[index] = record
         }
     }
+
+    /// Records that the capture at `url` now lives there, outside the library.
+    ///
+    /// Hashed off the main actor: for a long recording that is a read of the whole file.
+    func noteOriginal(_ url: URL) {
+        Task { [weak self] in
+            guard let self else { return }
+            await openIfNeeded()
+            guard let store else { return }
+            guard let hash = await Task.detached(priority: .utility, operation: {
+                try? HistoryStore.contentHash(of: url)
+            }).value else { return }
+            do {
+                try await store.setOriginalPath(url, forContentHash: hash)
+            } catch {
+                logger.error("Could not record a capture's location: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// The file to hand out for `record`: the user's own when it is still there, so Reveal,
+    /// Pin and Annotate show its real name and place, else the library copy (docs/18 OUT-6,
+    /// T-OUT-10).
+    func preferredFileURL(for record: HistoryRecord) -> URL? {
+        store?.originalFile(for: record) ?? fileURL(for: record)
+    }
 }

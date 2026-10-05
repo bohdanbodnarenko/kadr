@@ -32,6 +32,13 @@ enum HistoryDatabase {
                 table.column("application_name")
             }
         }
+        // v2: where the capture lives outside the library, so Reveal, Pin and the Trash
+        // can use the user's own file and its real name rather than a hash (docs/18 OUT-6).
+        migrator.registerMigration("v2-original-path") { db in
+            try db.alter(table: "capture_records") { table in
+                table.add(column: "original_path", .text)
+            }
+        }
         return migrator
     }
 
@@ -68,6 +75,7 @@ extension HistoryRecord: FetchableRecord, PersistableRecord {
         lastAccessedAt = row["last_accessed_at"]
         byteSize = row["byte_size"]
         originalFilename = row["original_filename"]
+        originalPath = row["original_path"]
     }
 
     public func encode(to container: inout PersistenceContainer) {
@@ -83,5 +91,6 @@ extension HistoryRecord: FetchableRecord, PersistableRecord {
         container["last_accessed_at"] = lastAccessedAt
         container["byte_size"] = byteSize
         container["original_filename"] = originalFilename
+        container["original_path"] = originalPath
     }
 }

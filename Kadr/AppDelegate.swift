@@ -392,15 +392,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
         history.start()
         history.onPin = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             _ = areaCapture.quickAccess.pinFile(at: url)
         }
         history.onAnnotate = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             areaCapture.quickAccess.annotateFile(at: url)
         }
         history.onCopyText = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             areaCapture.quickAccess.recognizeText(at: url)
         }
 

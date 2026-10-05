@@ -112,7 +112,8 @@ public actor HistoryStore {
             capturedAt: draft.capturedAt,
             lastAccessedAt: draft.capturedAt,
             byteSize: byteSize,
-            originalFilename: draft.originalFilename
+            originalFilename: draft.originalFilename,
+            originalPath: draft.originalURL?.standardizedFileURL.path
         )
         try HistorySidecar.write(record, to: layout.sidecarURL(id: record.id))
         try await insert(record)
@@ -401,8 +402,10 @@ public actor HistoryStore {
                 try? FileManager.default.removeItem(at: file)
                 try? FileManager.default.removeItem(at: thumb)
             case .trash:
-                try? FileManager.default.trashItem(at: file, resultingItemURL: nil)
-                try? FileManager.default.trashItem(at: thumb, resultingItemURL: nil)
+                // Under the name the user knows: Finder's Trash showed `3fa9c1….png`,
+                // which nobody can recognise or Put Back to anything (docs/18 OUT-6).
+                Self.trash(file, as: record.originalFilename, in: layout)
+                try? FileManager.default.removeItem(at: thumb)
             }
         }
 
