@@ -195,13 +195,6 @@ public final class AutomationConsent {
         return "\(bundleID)|\(teamID ?? "unsigned")"
     }
 
-    /// Forgets every answer and turns the switch off, for Reset All Settings.
-    public func reset() {
-        decisions.removeAll()
-        names.removeAll()
-        allowsOtherApps = false
-    }
-
     private func persist() {
         storage.save(AutomationConsentSnapshot(allowsOtherApps: allowsOtherApps, decisions: decisions, names: names))
     }
