@@ -25,6 +25,16 @@ struct UpdatesPane: View {
 
                 Toggle("Receive beta builds", isOn: $updater.receivesBetaBuilds)
 
+                if let version = updater.availableUpdateVersion {
+                    // A background check found it and waited quietly; this is one of the
+                    // three places it waits (docs/18 SH-3).
+                    LabeledContent(String(localized: "Kadr \(version) is available")) {
+                        Button("Install…") {
+                            updater.checkForUpdates()
+                        }
+                    }
+                }
+
                 Button("Check Now") {
                     updater.checkForUpdates()
                 }

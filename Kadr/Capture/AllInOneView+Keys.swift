@@ -25,6 +25,14 @@ extension AllInOneView {
     /// The utilities, each with the single key that runs it while the island is open.
     var toolsMenu: some View {
         Menu {
+            if let version = model.availableUpdate() {
+                Button {
+                    model.installUpdate()
+                } label: {
+                    Label(String(localized: "Update to \(version)…"), systemImage: "arrow.down.circle")
+                }
+                Divider()
+            }
             ForEach(Array(AllInOneTool.groups.enumerated()), id: \.offset) { index, group in
                 if index > 0 {
                     Divider()

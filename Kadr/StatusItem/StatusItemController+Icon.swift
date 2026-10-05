@@ -5,13 +5,18 @@ import Shared
 extension StatusItemController {
     func showIdleIcon() {
         showsRecordingIcon = false
+        // A background-found update badges the icon; the menu's row was easy to miss
+        // because a click opens the island, not the menu (docs/18 SH-3).
+        let update = availableUpdate()
         apply(StatusItemAppearance(
             symbol: "camera.viewfinder",
-            accessibilityDescription: "Kadr",
+            accessibilityDescription: update == nil ? "Kadr" : "Kadr — update available",
             isTemplate: true,
             title: "",
             length: NSStatusItem.squareLength,
-            toolTip: "Kadr — click to capture, right-click for the menu"
+            toolTip: update.map { String(localized: "Kadr — \($0) is available; right-click to update") }
+                ?? "Kadr — click to capture, right-click for the menu",
+            isBadged: update != nil
         ))
         attachIdleMenu()
     }
@@ -91,11 +96,31 @@ extension StatusItemController {
         if !appearance.isTemplate {
             image = image?.withSymbolConfiguration(.init(paletteColors: [.systemRed]))
         }
+        if appearance.isBadged, let base = image {
+            image = Self.badged(base)
+        }
         image?.isTemplate = appearance.isTemplate
         if let image {
             iconCache[appearance.imageKey] = image
         }
         return image
+    }
+
+    /// `base` with a dot at its top-right corner, cut out of the glyph so it reads at menu
+    /// bar size in either appearance. Drawn once and cached with the other icons.
+    private static func badged(_ base: NSImage) -> NSImage {
+        let size = base.size
+        return NSImage(size: size, flipped: false) { rect in
+            let diameter = max(4, size.width * 0.36)
+            let dot = NSRect(x: rect.maxX - diameter, y: rect.maxY - diameter, width: diameter, height: diameter)
+            base.draw(in: rect)
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dot.insetBy(dx: -1.5, dy: -1.5)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
     }
 
     /// Idle: a click opens the capture island; right-click, ⌃-click or ⌥-click opens the
@@ -220,9 +245,11 @@ struct StatusItemAppearance: Equatable {
     let title: String
     let length: CGFloat
     let toolTip: String
+    /// A dot on the glyph: something waits in the menu (docs/18 SH-3).
+    var isBadged = false
 
     /// Two appearances with the same key share one image.
     var imageKey: String {
-        "\(symbol)|\(isTemplate)|\(accessibilityDescription)"
+        "\(symbol)|\(isTemplate)|\(accessibilityDescription)|\(isBadged)"
     }
 }
