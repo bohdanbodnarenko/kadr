@@ -153,10 +153,20 @@ struct RecordingNotchIsland: View {
         .allowsHitTesting(false)
     }
 
+    /// Live is a filled red dot, the countdown an orange ring: the shape tells them apart
+    /// when the colour cannot (Differentiate Without Colour, docs/18 X-3).
+    @ViewBuilder
+    private var statusDot: some View {
+        if model.preRoll == nil {
+            Circle().fill(RecordingBarMetrics.recordTint)
+        } else {
+            Circle().strokeBorder(Color.orange, lineWidth: 2)
+        }
+    }
+
     private var statusEar: some View {
         HStack(spacing: 5) {
-            Circle()
-                .fill(model.preRoll == nil ? RecordingBarMetrics.recordTint : Color.orange)
+            statusDot
                 .frame(width: 8, height: 8)
                 .opacity(model.isPaused ? 0.35 : 1)
 
