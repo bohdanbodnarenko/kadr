@@ -98,7 +98,9 @@ struct RecordingBarCircleButton: View {
     var help: String = ""
     /// Shown as a keycap in the hover pill when the control has a single-key shortcut.
     var key: String?
-    var isOn: Bool = true
+    /// Nil for an action; true or false for a toggle, which then shows its state by more
+    /// than a fainter tint (docs/18 REC P3).
+    var isOn: Bool?
     var tint: Color?
     let action: () -> Void
 
@@ -119,20 +121,30 @@ struct RecordingBarCircleButton: View {
 
 struct RecordingBarIcon: View {
     let symbol: String
-    var isOn: Bool = true
+    /// Nil for an action; a toggle that is on also sits on a faint plate, so on and off
+    /// differ by shape as well as by how bright the glyph is — which a low-contrast display
+    /// or Differentiate Without Colour cannot rely on (docs/18 REC P3).
+    var isOn: Bool?
     var tint: Color?
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
         Image(systemName: symbol)
             .font(.system(size: RecordingBarMetrics.iconSize, weight: .regular))
             .foregroundStyle(
-                (tint ?? (isOn ? RecordingBarMetrics.activeTint : RecordingBarMetrics.inactiveTint))
+                (tint ?? (isOn != false ? RecordingBarMetrics.activeTint : RecordingBarMetrics.inactiveTint))
                     .opacity(isEnabled ? 1 : 0.3)
             )
             .frame(width: RecordingBarMetrics.controlSize, height: RecordingBarMetrics.controlSize)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background {
+                if isOn == true {
+                    shape.fill(Color.primary.opacity(contrast == .increased ? 0.22 : 0.12))
+                }
+            }
+            .contentShape(shape)
     }
 }
 
@@ -182,7 +194,7 @@ struct RecordingAudioMeter: View {
         HStack(spacing: spacing) {
             ForEach(0 ..< 5, id: \.self) { index in
                 Capsule()
-                    .fill(level > Float(index) / 5 ? Color.green : Color.primary.opacity(0.18))
+                    .fill(level > Float(index) / 5 ? Self.color(forBar: index) : Color.primary.opacity(0.18))
                     .frame(
                         width: barWidth,
                         height: compact ? 5 + CGFloat(index) * 2 : 6 + CGFloat(index) * 2.5
@@ -191,6 +203,13 @@ struct RecordingAudioMeter: View {
         }
         .accessibilityLabel("Audio level")
         .accessibilityValue("\(Int((level * 100).rounded())) percent")
+    }
+
+    /// The system's green, not a fixed one, so Increase Contrast and the dark notch get
+    /// their own shade; the top bar warns in orange that the input is close to clipping
+    /// (docs/18 REC P3).
+    static func color(forBar index: Int) -> Color {
+        index == 4 ? Color(nsColor: .systemOrange) : Color(nsColor: .systemGreen)
     }
 }
 
