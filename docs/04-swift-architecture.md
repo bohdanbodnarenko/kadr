@@ -161,6 +161,18 @@ final class NonActivatingPanel: NSPanel {
 - Quick Access cards: file-promise drags (`NSFilePromiseProvider`) so drops into Mail/Slack/Finder materialize the file with its real name even in overlay-only staging mode.
 - Pins: `.floating` panels; click-through = `ignoresMouseEvents = true`; backing image is an ImageIO-downsampled texture at panel size × scale, full-res lazily reloaded for zoom/copy.
 
+### Feedback (docs/18 X-2)
+
+One model, `ControlKit.FeedbackStatus` with a `FeedbackKind` (progress, completion, warning, error), shared by the agent, the annotation editor and the studio. Each app draws it in its own chrome, but the kind fixes the symbol, the tint and whether it waits to be dismissed. The surface follows from what happened:
+
+| What happened | Surface | Lifetime |
+|---|---|---|
+| A recoverable failure or warning on something the user started | **Banner**: `FailurePresenter` in the agent, the export banner in the editor, the failure banner in the studio. Carries the retry. | Stays until dismissed or retried |
+| Something destructive is about to happen | **Alert**, and only then | Modal, answered |
+| A finished action whose result is not already on screen | **Toast**: a completion banner; an Undo when the action was destructive | Takes itself away |
+
+A `logger.error` in a `catch` on a path the user started is half a report: use `FailurePresenter.report`, which logs and shows in one call. `Scripts/check-layering.sh` enforces this for `Kadr/`: a `catch` that only logs must be in its allow-list, with the reason it is not user-facing.
+
 ---
 
 ## 6. Annotation editor

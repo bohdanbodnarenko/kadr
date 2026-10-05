@@ -94,7 +94,7 @@ struct ControlInlineStatus: View {
                     Button(title) { status.recovery?() }
                         .controlSize(.small)
                 }
-                if status.kind == .error || status.kind == .warning {
+                if status.kind.staysUntilDismissed {
                     Button("Dismiss", action: onDismiss)
                         .controlSize(.small)
                 }
