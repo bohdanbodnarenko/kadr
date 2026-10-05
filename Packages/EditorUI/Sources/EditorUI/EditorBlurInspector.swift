@@ -144,7 +144,7 @@ private struct FocusPad: View {
             let size = geometry.size
             ZStack {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(KadrFill.hover)
                 Circle()
                     .fill(Color.accentColor)
                     .frame(width: 8, height: 8)

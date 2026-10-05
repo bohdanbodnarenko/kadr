@@ -214,7 +214,7 @@ struct QuickAccessStackView: View {
                         .fill(.regularMaterial)
                         .overlay(
                             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                                .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
                         )
                         .frame(height: QuickAccessCardView.sliverHeight)
                         .padding(.horizontal, CGFloat(depth) * 10)

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import SwiftUI
 
@@ -110,10 +111,21 @@ final class CardThumbnailCache {
 /// A fixed translucent fill rather than a system material: the overlay panel is almost
 /// never the key window, and a vibrancy material there renders in its flat inactive state —
 /// grey on one capture, invisible on the next. This reads the same over any picture.
+///
+/// Reduce Transparency makes the glass nearly opaque and Increase Contrast strengthens its
+/// edge, so the white glyphs stay legible over any capture (docs/18 X-3).
 enum CardGlass {
-    static let fill = Color(white: 0.08, opacity: 0.62)
-    static let hoverFill = Color(white: 0.08, opacity: 0.8)
-    static let edge = Color.white.opacity(0.16)
+    static var fill: Color {
+        Color(white: 0.08, opacity: KadrAccessibility.reduceTransparency ? 0.94 : 0.62)
+    }
+
+    static var hoverFill: Color {
+        Color(white: 0.08, opacity: KadrAccessibility.reduceTransparency ? 0.98 : 0.8)
+    }
+
+    static var edge: Color {
+        Color.white.opacity(KadrAccessibility.increaseContrast ? 0.45 : 0.16)
+    }
 }
 
 /// A glyph in the card's action bar: white on the bar's glass, a soft disc under the pointer.
@@ -145,10 +157,11 @@ private struct CardBarButtonBody: View {
 
     private var fill: Double {
         guard isEnabled else { return 0 }
+        let contrast = KadrAccessibility.increaseContrast
         if configuration.isPressed {
-            return 0.28
+            return contrast ? 0.4 : 0.28
         }
-        return isHovering ? 0.16 : 0
+        return isHovering ? (contrast ? 0.3 : 0.16) : 0
     }
 }
 

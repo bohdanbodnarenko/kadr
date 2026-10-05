@@ -187,7 +187,7 @@ extension StudioInspector {
             shape
                 .fill(fill())
                 .overlay {
-                    shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                    shape.strokeBorder(KadrFill.stroke, lineWidth: 1)
                 }
                 .overlay {
                     shape

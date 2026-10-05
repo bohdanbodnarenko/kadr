@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// A map of the recording for placing a zoom, not a second copy of the preview.
@@ -32,7 +33,7 @@ struct StudioZoomFocusPad: View {
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(KadrFill.hover)
                     .frame(width: size.width, height: size.height)
                     .position(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
 
@@ -42,7 +43,7 @@ struct StudioZoomFocusPad: View {
                     path.move(to: CGPoint(x: origin.x, y: origin.y + size.height / 2))
                     path.addLine(to: CGPoint(x: origin.x + size.width, y: origin.y + size.height / 2))
                 }
-                .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .stroke(KadrFill.stroke, lineWidth: 0.5)
 
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)

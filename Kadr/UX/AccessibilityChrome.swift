@@ -1,22 +1,26 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Process-local accessibility policies for the agent (docs/14 UX-03).
 ///
-/// Kept out of Shared: that package cannot take SwiftUI, and these values are only
-/// meaningful next to windows and chrome. Read on demand so a toggle in System Settings
-/// is honoured without a timer.
+/// A thin layer over ControlKit's tokens, which the editor shares (docs/18 X-1). Read on
+/// demand so a toggle in System Settings is honoured without a timer.
 enum AccessibilityChrome {
     static var reduceMotion: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        KadrAccessibility.reduceMotion
     }
 
     static var reduceTransparency: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        KadrAccessibility.reduceTransparency
     }
 
     static var increaseContrast: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        KadrAccessibility.increaseContrast
+    }
+
+    static var differentiateWithoutColor: Bool {
+        KadrAccessibility.differentiateWithoutColor
     }
 
     /// Hover-revealed controls stay revealed for VoiceOver, which has no hover to reveal them.
@@ -26,20 +30,20 @@ enum AccessibilityChrome {
 
     /// Critically damped spring: no decorative bounce (docs/14 §8).
     static var defaultSpring: Animation {
-        .spring(duration: 0.32, bounce: 0)
+        KadrMotion.layout
     }
 
     /// Short opacity-only change used when Reduce Motion is on.
     static var reduced: Animation {
-        .easeOut(duration: 0.12)
+        KadrMotion.reduced
     }
 
     static func animation(_ animation: Animation) -> Animation? {
-        reduceMotion ? nil : animation
+        KadrMotion.animation(animation)
     }
 
     static func transition(_ transition: AnyTransition) -> AnyTransition {
-        reduceMotion ? .opacity : transition
+        KadrMotion.transition(transition)
     }
 }
 
@@ -61,7 +65,7 @@ struct AccessibilityChromeModifier: ViewModifier {
         }
         .overlay {
             if AccessibilityChrome.increaseContrast || AccessibilityChrome.reduceTransparency {
-                shape.strokeBorder(Color.primary.opacity(AccessibilityChrome.increaseContrast ? 0.45 : 0.18))
+                shape.strokeBorder(KadrFill.stroke, lineWidth: KadrFill.strokeWidth)
             }
         }
     }
@@ -87,9 +91,7 @@ extension View {
         if AccessibilityChrome.reduceTransparency {
             background(shape.fill(Color(nsColor: .windowBackgroundColor)))
                 .overlay {
-                    shape.strokeBorder(
-                        Color.primary.opacity(AccessibilityChrome.increaseContrast ? 0.45 : 0.18)
-                    )
+                    shape.strokeBorder(KadrFill.stroke, lineWidth: KadrFill.strokeWidth)
                 }
         } else if #available(macOS 26.0, *) {
             if interactive {

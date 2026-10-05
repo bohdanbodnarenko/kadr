@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -54,7 +55,7 @@ struct StudioZoomLane: View {
     var body: some View {
         let suggestions = model.zoomSuggestions
         return ZStack(alignment: .topLeading) {
-            Color.primary.opacity(0.06)
+            KadrFill.hover
                 .frame(width: width, height: height)
                 .contentShape(Rectangle())
                 .gesture(createGesture)

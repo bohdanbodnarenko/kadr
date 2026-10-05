@@ -1,3 +1,4 @@
+import ControlKit
 import SettingsKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -86,7 +87,7 @@ struct CardLayoutEditor: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.primary.opacity(0.12))
+                .strokeBorder(KadrFill.stroke)
         )
     }
 

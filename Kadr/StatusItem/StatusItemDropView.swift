@@ -34,6 +34,20 @@ final class StatusItemDropView: NSView {
         superview?.rightMouseUp(with: event)
     }
 
+    // MARK: - Accessibility
+
+    // The view covers the status button. It is not an element of its own, so VoiceOver
+    // and Accessibility Inspector reach the labelled button underneath rather than an
+    // unnamed view on top of it (docs/18 X-3).
+
+    override func isAccessibilityElement() -> Bool {
+        false
+    }
+
+    override func accessibilityChildren() -> [Any]? {
+        nil
+    }
+
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         Self.droppedFile(from: sender) == nil ? [] : .copy
     }
