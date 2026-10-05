@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 struct StudioFailureBanner: View {
@@ -7,8 +8,9 @@ struct StudioFailureBanner: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            Image(systemName: failure.kind.symbolName)
+                .foregroundStyle(failure.kind.tint)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(failure.title)
                     .font(.callout.weight(.semibold))

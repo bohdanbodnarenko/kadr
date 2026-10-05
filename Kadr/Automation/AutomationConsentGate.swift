@@ -1,5 +1,6 @@
 import AppKit
 import AutomationKit
+import ControlKit
 import os
 import OverlayKit
 import SettingsKit

@@ -1,3 +1,4 @@
+import ControlKit
 import CoreGraphics
 import Foundation
 import HistoryKit

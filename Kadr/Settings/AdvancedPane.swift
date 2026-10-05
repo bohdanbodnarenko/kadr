@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import SettingsKit
 import SwiftUI

@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import StudioRender
 
@@ -54,6 +55,12 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         self.style = style
         self.primaryAction = primaryAction
         self.secondaryAction = secondaryAction
+    }
+
+    /// The shared feedback kind (docs/18 X-2): a failure the user can act on is an error;
+    /// one that only explains why nothing happened is a warning.
+    public var kind: FeedbackKind {
+        primaryAction == .dismiss ? .warning : .error
     }
 
     // MARK: - Common failures
