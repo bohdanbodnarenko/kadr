@@ -230,20 +230,16 @@ struct HistoryView: View {
             return .handled
         }
 
-        let extending = press.modifiers.contains(.shift)
+        if let direction = Self.focusDirection(for: press.key) {
+            selection.moveFocus(
+                direction,
+                in: controller.records,
+                extending: press.modifiers.contains(.shift),
+                windowWidth: gridWidth
+            )
+            return .handled
+        }
         switch press.key {
-        case .upArrow:
-            selection.moveFocus(.up, in: controller.records, extending: extending, windowWidth: gridWidth)
-            return .handled
-        case .downArrow:
-            selection.moveFocus(.down, in: controller.records, extending: extending, windowWidth: gridWidth)
-            return .handled
-        case .leftArrow:
-            selection.moveFocus(.left, in: controller.records, extending: extending, windowWidth: gridWidth)
-            return .handled
-        case .rightArrow:
-            selection.moveFocus(.right, in: controller.records, extending: extending, windowWidth: gridWidth)
-            return .handled
         case .space:
             if let id = selection.focused ?? selection.anchor, let record = controller.record(id: id) {
                 preview(record)
@@ -291,8 +287,10 @@ struct HistoryView: View {
             .accessibilityLabel("Share \(record.originalFilename)")
         }
         Divider()
-        Button(targets(for: record).count > 1 ? "Move \(targets(for: record).count) Items to Trash" : "Move to Trash",
-               role: .destructive) {
+        Button(
+            targets(for: record).count > 1 ? "Move \(targets(for: record).count) Items to Trash" : "Move to Trash",
+            role: .destructive
+        ) {
             Task { await performDelete(targets(for: record)) }
         }
     }

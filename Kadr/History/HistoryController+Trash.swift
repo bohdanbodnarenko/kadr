@@ -3,8 +3,8 @@ import HistoryKit
 import os
 import Shared
 
-// Split from `HistoryController.swift` for the file-length cap: deletes that wait out their
-// Undo window, and what the user is told when the library cannot be opened.
+/// Split from `HistoryController.swift` for the file-length cap: deletes that wait out their
+/// Undo window, and what the user is told when the library cannot be opened.
 extension HistoryController {
     /// Moves library items to the Trash, with an Undo (docs/14 UX-22, docs/17 T-OUT-7).
     ///

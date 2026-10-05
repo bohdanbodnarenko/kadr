@@ -14,7 +14,7 @@ public enum AutomationHelp {
             lines.append(contentsOf: ["", "This command takes no options."])
         } else {
             lines.append(contentsOf: ["", "Options:"])
-            let width = parameters.map { $0.rawValue.count }.max() ?? 0
+            let width = parameters.map(\.rawValue.count).max() ?? 0
             for parameter in parameters {
                 let name = parameter.rawValue.padding(toLength: width, withPad: " ", startingAt: 0)
                 var line = "  --\(name)  \(parameter.summary)"

@@ -14,7 +14,12 @@ public extension AppCommand {
                 details.append(String(localized: "Reads the file “\(Self.name(of: path))”"))
             }
             if let region = options.region {
-                details.append(String(localized: "A \(Int(region.width)) × \(Int(region.height)) pt region, with no selection shown"))
+                details
+                    .append(
+                        String(
+                            localized: "A \(Int(region.width)) × \(Int(region.height)) pt region, no selection shown"
+                        )
+                    )
             }
             return details
         case let .recordScreen(options), let .recordRegion(options):

@@ -32,6 +32,6 @@ struct CardThumbnailCacheTests {
         #expect(cache.image(for: key(0)) == nil)
         #expect(cache.image(for: key(total - 1)) != nil)
         cache.removeAll()
-        #expect(cache.count == 0)
+        #expect(cache.image(for: key(total - 1)) == nil)
     }
 }

@@ -61,7 +61,7 @@ struct HistoryPagingTests {
         (HistoryFilter(capturedAfter: Date.distantPast), true),
         (HistoryFilter(capturedAfter: Date.distantFuture), false)
     ])
-    func matches(filter: HistoryFilter, expected: Bool) throws {
+    func matches(filter: HistoryFilter, expected: Bool) {
         let record = HistoryRecord(
             contentHash: "x",
             relativePath: "x.png",

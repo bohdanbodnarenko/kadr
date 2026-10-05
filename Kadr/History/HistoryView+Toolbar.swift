@@ -33,9 +33,12 @@ extension HistoryView {
                 .pickerStyle(.inline)
                 .labelsHidden()
             } label: {
-                Label(kindFilterLabel, systemImage: kindFilter == nil
-                    ? "line.3.horizontal.decrease.circle"
-                    : "line.3.horizontal.decrease.circle.fill")
+                Label(
+                    kindFilterLabel,
+                    systemImage: kindFilter == nil
+                        ? "line.3.horizontal.decrease.circle"
+                        : "line.3.horizontal.decrease.circle.fill"
+                )
             }
             .menuStyle(.borderlessButton)
         }

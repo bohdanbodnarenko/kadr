@@ -48,6 +48,17 @@ extension HistoryView {
         return true
     }
 
+    /// The grid direction an arrow key moves focus in.
+    static func focusDirection(for key: KeyEquivalent) -> FocusDirection? {
+        switch key {
+        case .upArrow: .up
+        case .downArrow: .down
+        case .leftArrow: .left
+        case .rightArrow: .right
+        default: nil
+        }
+    }
+
     static var typeSelectInterval: TimeInterval {
         1
     }

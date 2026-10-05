@@ -22,7 +22,12 @@ nonisolated enum OverlaySwipe: Equatable {
     /// The least total travel a flick still needs, so a single jolt is not a swipe.
     static let flickMinimum: CGFloat = 16
 
-    static func from(deltaX: CGFloat, deltaY: CGFloat, corner: OverlayCorner, lastStep: CGSize = .zero) -> OverlaySwipe? {
+    static func from(
+        deltaX: CGFloat,
+        deltaY: CGFloat,
+        corner: OverlayCorner,
+        lastStep: CGSize = .zero
+    ) -> OverlaySwipe? {
         if abs(deltaX) > abs(deltaY) {
             let outward: CGFloat = corner.isLeading ? -1 : 1
             let travel = deltaX * outward
