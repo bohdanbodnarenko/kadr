@@ -197,6 +197,8 @@ public final class EditorDocumentModel {
     @ObservationIgnored public internal(set) var snapGuides: [SnapGuides.Guide] = []
     /// ⌥ was held when the move began: the first movement drags copies.
     @ObservationIgnored var duplicatesOnDrag = false
+    /// The last nudge's selection and where it left history, for coalescing.
+    @ObservationIgnored var lastNudge: (selection: Set<AnnotationID>, position: Int)?
     /// The handle currently being dragged, if this gesture is a resize rather than a move.
     var resizeHandle: SelectionHandle?
     var resizeStartBounds: CGRect?
@@ -384,8 +386,17 @@ public final class EditorDocumentModel {
     }
 
     /// Arrow-key nudging (docs/03 §3).
+    /// Arrow-key nudges of the same selection, with nothing else in between, are one undo
+    /// step: holding → for a second is one move, not thirty (docs/18 T-ED-12).
     public func nudgeSelection(dx: CGFloat, dy: CGFloat) {
+        let previous = lastNudge
+        let before = document.historyPosition
         moveSelection(by: CGSize(width: dx, height: dy))
+        guard document.historyPosition != before else { return }
+        if previous?.selection == document.selection, previous?.position == before {
+            document.foldLastStep()
+        }
+        lastNudge = (document.selection, document.historyPosition)
     }
 
     public func deleteSelection() {

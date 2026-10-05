@@ -80,6 +80,27 @@ struct EditorArrangeGestureTests {
         #expect(model.selection == [first.id, second.id])
     }
 
+    @Test("A run of nudges is one undo step; a different selection starts a new one")
+    func nudgesCoalesce() {
+        let first = shape(CGRect(x: 100, y: 100, width: 40, height: 40))
+        let second = shape(CGRect(x: 300, y: 300, width: 40, height: 40))
+        let model = makeModel([first, second])
+        model.selection = [first.id]
+        for _ in 0 ..< 5 {
+            model.nudgeSelection(dx: 1, dy: 0)
+        }
+        #expect(rect(of: model.document.commands.first)?.minX == 105)
+        model.selection = [second.id]
+        model.nudgeSelection(dx: 0, dy: 1)
+
+        model.undo()
+        #expect(rect(of: model.document.commands.last)?.minY == 300)
+        #expect(rect(of: model.document.commands.first)?.minX == 105)
+        model.undo()
+        #expect(rect(of: model.document.commands.first)?.minX == 100)
+        #expect(!model.canUndo)
+    }
+
     @Test("Repeated pastes step away from the centre")
     func pasteCascade() {
         let model = makeModel([])

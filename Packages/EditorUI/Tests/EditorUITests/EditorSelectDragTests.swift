@@ -173,7 +173,7 @@ struct EditorSelectDragTests {
 
     // MARK: - The other pointer paths still behave
 
-    @Test("Arrow-key nudges are still one step each, and still relative")
+    @Test("Arrow-key nudges are still relative, and a run of them undoes as one (docs/18 T-ED-12)")
     func nudgeIsUnaffected() throws {
         let model = makeModel()
         let id = addShape(model)
@@ -184,7 +184,7 @@ struct EditorSelectDragTests {
         #expect(try #require(rect(model, id)).origin == CGPoint(x: 110, y: 100))
 
         model.undo()
-        #expect(try #require(rect(model, id)).origin == CGPoint(x: 105, y: 100))
+        #expect(try #require(rect(model, id)).origin == CGPoint(x: 100, y: 100))
     }
 
     @Test("A marquee drag over empty canvas selects and edits nothing")

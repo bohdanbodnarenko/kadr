@@ -1,6 +1,12 @@
 import Foundation
 
 public extension AnnotationDocument {
+    /// Where the document stands in its undo history, so a caller can tell whether anything
+    /// was recorded between two of its own edits.
+    var historyPosition: Int {
+        historyIndex
+    }
+
     // MARK: - Undo and redo
 
     var canUndo: Bool {
