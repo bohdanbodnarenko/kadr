@@ -150,7 +150,8 @@ public extension StudioDocumentModel {
             try Task.checkCancellation()
             let options = TranscriptionOptions(
                 localeIdentifier: SpeechLanguage.currentIdentifier(speechLocaleIdentifier),
-                tracks: .all
+                tracks: .all,
+                timeout: TranscriptionOptions.timeout(forDuration: manifest.duration)
             )
             let produced = try await transcriber.transcribe(
                 audioAt: session.screenURL,

@@ -149,3 +149,17 @@ struct ChapterMarksTests {
         #expect(marks.contains { abs($0.time - 8) < 0.01 })
     }
 }
+
+/// docs/18 STU-9: a long recording gets a bound that fits it.
+@Suite("Transcription timeout")
+struct TranscriptionTimeoutTests {
+    @Test("Three times real time, never under 30 minutes", arguments: [
+        (60.0, 1800.0),
+        (600.0, 1800.0),
+        (1200.0, 3600.0),
+        (3600.0, 10800.0)
+    ])
+    func scales(duration: TimeInterval, expected: TimeInterval) {
+        #expect(TranscriptionOptions.timeout(forDuration: duration) == expected)
+    }
+}
