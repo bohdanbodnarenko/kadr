@@ -36,11 +36,16 @@ struct SliderTrackView<Trailing: View>: View {
     @ViewBuilder let trailing: Trailing
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var increasedContrast: Bool {
+        contrast == .increased
+    }
 
     var body: some View {
         ZStack(alignment: .leading) {
-            Capsule(style: .continuous).fill(SliderPalette.track(for: colorScheme))
+            Capsule(style: .continuous).fill(SliderPalette.track(for: colorScheme, increasedContrast: increasedContrast))
             positioned
             labels
         }
@@ -57,7 +62,11 @@ struct SliderTrackView<Trailing: View>: View {
     private var positioned: some View {
         ZStack(alignment: .leading) {
             Capsule(style: .continuous)
-                .fill(SliderPalette.fill(for: colorScheme, isEngaged: interaction.isPressed || interaction.isFocused))
+                .fill(SliderPalette.fill(
+                    for: colorScheme,
+                    isEngaged: interaction.isPressed || interaction.isFocused,
+                    increasedContrast: increasedContrast
+                ))
                 .frame(width: geometry.fillWidth(progress: progress), height: geometry.fillHeight)
                 .padding(.leading, geometry.inset)
             ticks
@@ -134,30 +143,43 @@ struct SliderTrackView<Trailing: View>: View {
     private var stroke: Color {
         interaction.isFocused
             ? Color.accentColor.opacity(0.72)
-            : SliderPalette.border(isActive: interaction.isActive)
+            : SliderPalette.border(isActive: interaction.isActive, increasedContrast: increasedContrast)
     }
 }
 
 /// The slider's colours, in one place so the light and dark tables stay side by side.
+///
+/// The resting values were raised and given an Increase Contrast branch: a 9% fill on a 4%
+/// track was nearly invisible in light mode, so the value read only from the label
+/// (docs/18 SH-11).
 enum SliderPalette {
-    static func track(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark ? Color.white.opacity(0.055) : Color.black.opacity(0.04)
+    static func track(for colorScheme: ColorScheme, increasedContrast: Bool = false) -> Color {
+        if increasedContrast {
+            return colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.10)
+        }
+        return colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.055)
     }
 
     /// Neutral at rest, tinted while the pointer or keyboard has hold of the control.
-    static func fill(for colorScheme: ColorScheme, isEngaged: Bool) -> Color {
+    static func fill(for colorScheme: ColorScheme, isEngaged: Bool, increasedContrast: Bool = false) -> Color {
         if isEngaged {
-            return Color.accentColor.opacity(colorScheme == .dark ? 0.24 : 0.16)
+            return Color.accentColor.opacity(increasedContrast ? 0.45 : colorScheme == .dark ? 0.28 : 0.22)
         }
-        return Color.primary.opacity(colorScheme == .dark ? 0.13 : 0.09)
+        if increasedContrast {
+            return Color.primary.opacity(colorScheme == .dark ? 0.32 : 0.28)
+        }
+        return Color.primary.opacity(colorScheme == .dark ? 0.17 : 0.15)
     }
 
     static func handle(isHovering: Bool, isPressed: Bool) -> Color {
         Color.primary.opacity(isPressed ? 0.88 : isHovering ? 0.62 : 0.38)
     }
 
-    static func border(isActive: Bool) -> Color {
-        Color.primary.opacity(isActive ? 0.16 : 0.10)
+    static func border(isActive: Bool, increasedContrast: Bool = false) -> Color {
+        if increasedContrast {
+            return Color.primary.opacity(isActive ? 0.55 : 0.40)
+        }
+        return Color.primary.opacity(isActive ? 0.16 : 0.10)
     }
 }
 
