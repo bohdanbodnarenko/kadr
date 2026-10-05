@@ -1,4 +1,5 @@
 import AppKit
+import OverlayKit
 import SwiftUI
 
 /// A one-time tip in a native popover (docs/03 §8.2).
@@ -17,6 +18,9 @@ final class CoachPopover: NSObject, NSPopoverDelegate {
     private var host: NSHostingController<AnyView>?
     /// What the popover is anchored to, so the keyboard can be handed back on close.
     private weak var anchorView: NSView?
+    /// The app that was frontmost when the tip appeared, for tips anchored somewhere that
+    /// cannot take the keyboard back, such as the menu-bar icon (docs/18 SH-8).
+    private var previousApp: NSRunningApplication?
     /// Called once, however the popover goes away.
     var onClose: (() -> Void)?
 
@@ -43,6 +47,7 @@ final class CoachPopover: NSObject, NSPopoverDelegate {
         self.popover = popover
         self.host = host
         anchorView = view
+        previousApp = ActivationJuggler.returnTarget()
     }
 
     /// Swaps the content in place; the popover resizes itself around it.
@@ -99,8 +104,13 @@ final class CoachPopover: NSObject, NSPopoverDelegate {
     /// back afterwards. Only for a window still on screen: a tip that closes because the
     /// island is going away must not order it front again.
     private func returnKeyboardToAnchor() {
-        guard let window = anchorView?.window, window.isVisible else {
+        let previous = previousApp
+        previousApp = nil
+        guard let window = anchorView?.window, window.isVisible, window.canBecomeKey else {
+            // The menu-bar coach: its anchor is the status bar, which cannot be key, so
+            // the keyboard goes back to the app the user was in (docs/18 SH-8).
             anchorView = nil
+            ActivationJuggler.shared.yieldActivation(to: previous)
             return
         }
         anchorView = nil

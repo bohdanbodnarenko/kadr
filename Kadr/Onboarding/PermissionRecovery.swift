@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import OverlayKit
 import Shared
 
 /// What to do when a capture fails because the grant went away (docs/03 §9).
@@ -47,10 +48,14 @@ struct PermissionRecovery {
         alert.addButton(withTitle: includePicker ? "Later" : "Cancel")
 
         // An accessory app has to come forward for a modal, or the alert appears behind
-        // whatever the user was doing.
-        NSApp.activate()
-
-        return switch alert.runModal() {
+        // whatever the user was doing — and must hand the keyboard back after Later, which
+        // a bare activate never did (docs/18 SH-8).
+        let response = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) {
+            alert.runModal()
+        }
+        return switch response {
         case .alertFirstButtonReturn: .openSettings
         case .alertSecondButtonReturn: includePicker ? .usePicker : .dismiss
         default: .dismiss
