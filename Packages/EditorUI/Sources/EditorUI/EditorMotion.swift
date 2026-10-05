@@ -1,22 +1,28 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Editor/studio motion and material policy (docs/14 UX-03, UX-30C).
 ///
-/// Process-local: EditorUI must not push SwiftUI into Shared.
+/// Reads ControlKit's tokens, which the agent shares, instead of keeping a hand copy of
+/// the agent's policy (docs/18 X-1).
 enum EditorMotion {
     static let rtlArgument = "-KadrRTL"
 
     static var reduceMotion: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        KadrAccessibility.reduceMotion
     }
 
     static var reduceTransparency: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        KadrAccessibility.reduceTransparency
     }
 
     static var increaseContrast: Bool {
-        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        KadrAccessibility.increaseContrast
+    }
+
+    static var differentiateWithoutColor: Bool {
+        KadrAccessibility.differentiateWithoutColor
     }
 
     static var isRightToLeft: Bool {
@@ -24,11 +30,11 @@ enum EditorMotion {
     }
 
     static func animation(_ animation: Animation) -> Animation? {
-        reduceMotion ? nil : animation
+        KadrMotion.animation(animation)
     }
 
     static func transition(_ transition: AnyTransition) -> AnyTransition {
-        reduceMotion ? .opacity : transition
+        KadrMotion.transition(transition)
     }
 }
 

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Shared metrics for the floating recording / All-in-One islands.
@@ -36,9 +37,16 @@ enum RecordingBarMetrics {
     static let inactiveTint = Color(nsColor: .labelColor).opacity(0.4)
     static let stroke = Color(nsColor: .separatorColor)
     /// Hairline that defines the glass edge against a background of the same brightness.
-    static let edge = Color(nsColor: .labelColor).opacity(0.12)
+    /// Stronger under Increase Contrast (docs/18 X-3).
+    static var edge: Color {
+        Color(nsColor: .labelColor).opacity(KadrFill.opacity(.stroke, increaseContrast: KadrAccessibility.increaseContrast))
+    }
+
     static let recordTint = Color(nsColor: .systemRed)
-    static let hoverFill = Color(nsColor: .labelColor).opacity(0.11)
+
+    static var hoverFill: Color {
+        Color(nsColor: .labelColor).opacity(KadrAccessibility.increaseContrast ? 0.2 : 0.11)
+    }
     static let hoverDiameter: CGFloat = 32
 
     /// Picker → countdown → live. Enough travel to read as one bar changing shape rather
@@ -46,9 +54,7 @@ enum RecordingBarMetrics {
     static let modeChange = Animation.spring(response: 0.34, dampingFraction: 0.86)
 
     static var tooltipAnimation: Animation {
-        AccessibilityChrome.reduceMotion
-            ? AccessibilityChrome.reduced
-            : .easeOut(duration: 0.12)
+        AccessibilityChrome.reduceMotion ? KadrMotion.reduced : KadrMotion.hover
     }
 
     static var shape: RoundedRectangle {
