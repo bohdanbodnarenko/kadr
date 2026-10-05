@@ -166,6 +166,28 @@ extension AreaCaptureCoordinator {
         }
     }
 
+    /// A countdown still waiting (a timed full-screen capture, say) would otherwise fire
+    /// into or after a new overlay; the overlay is the newer request (docs/18 §4.2 P3).
+    func cancelWaitingCountdown() {
+        guard timer.isRunning else { return }
+        logger.info("Cancelled a waiting countdown for a new overlay")
+        timer.cancel()
+    }
+
+    /// Logged as plain text as well as the signpost, so `make perf` can read the PRD §8
+    /// hotkey-to-overlay budget back from a run with a grant (docs/18 CAP-9).
+    func logOverlayLatency(since hotkeyAt: ContinuousClock.Instant) {
+        let elapsed = (ContinuousClock.now - hotkeyAt) / .milliseconds(1)
+        logger.info("Overlay presented in \(String(format: "%.1f", elapsed), privacy: .public) ms")
+    }
+
+    /// A selection that was made and then lost on the way to a file: rare, but the user
+    /// did ask for a capture and must hear that none is coming (docs/17 T-CAP-6).
+    func reportLostCapture(_ detail: String) {
+        FailurePresenter.report("Kadr could not finish that capture. Try again.", detail: detail, logger: logger)
+        automation.report(.failed("The capture could not be finished."))
+    }
+
     func handle(_ error: any Error) {
         if error is CancellationError {
             // Deliberately silent: a cancelled task means a *newer* capture superseded

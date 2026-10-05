@@ -207,12 +207,7 @@ final class AreaCaptureCoordinator {
         guard recovery.allowCapture(permissions: permissions, onPicker: { [weak self] in
             self?.captureWithSystemPicker()
         }) else { return }
-        // A countdown still waiting (a timed full-screen capture, say) would otherwise fire
-        // into or after this overlay; the overlay is the newer request (docs/18 §4.2 P3).
-        if timer.isRunning {
-            logger.info("Cancelled a waiting countdown for a new overlay")
-            timer.cancel()
-        }
+        cancelWaitingCountdown()
         frontmostAtHotkey = frontmost ?? Self.currentFrontmostApp()
         self.purpose = purpose
         // A second hotkey re-freezes rather than stacking overlays (docs/03 §1.1).
@@ -221,8 +216,6 @@ final class AreaCaptureCoordinator {
         // Opened here so the interval covers the freeze, which is the expensive half of
         // the < 100 ms hotkey-to-overlay budget (PRD §8).
         let interval = signposter.beginInterval("hotkeyToOverlay")
-        // Also logged as plain text, so `make perf` can read the PRD §8 budget back from a
-        // run with a grant (docs/18 CAP-9).
         let hotkeyAt = ContinuousClock.now
 
         inFlight = Task { [weak self] in
@@ -270,8 +263,7 @@ final class AreaCaptureCoordinator {
                     self?.finish(with: outcome, freezes: freezes)
                     self?.onArmedStateChanged?()
                 }
-                let elapsed = (ContinuousClock.now - hotkeyAt) / .milliseconds(1)
-                logger.info("Overlay presented in \(String(format: "%.1f", elapsed), privacy: .public) ms")
+                logOverlayLatency(since: hotkeyAt)
                 hygiene?.beginCapture()
                 onArmedStateChanged?()
                 if mode != .window, let windows = try? await windowFetch.value, !Task.isCancelled {
@@ -318,7 +310,7 @@ final class AreaCaptureCoordinator {
 
         let global = screenRect.inDisplaySpace(.current)
         guard let displayID = DisplayLookup.display(containing: global) else {
-            logger.error("The requested region is not on any display")
+            FailurePresenter.report("That region is not on any display.", logger: logger)
             automation.report(.failed("That region is not on any display."))
             return
         }
@@ -443,14 +435,17 @@ final class AreaCaptureCoordinator {
 
     private func finishRegion(_ result: SelectionResult, freezes: [DisplayFreeze], timerSeconds: Int) {
         guard let freeze = freezes.first(where: { $0.geometry.displayID == result.display.displayID }) else {
-            logger.error("The selected display's freeze went missing")
+            reportLostCapture("The selected display's freeze went missing")
             return
         }
         let frozen = FrozenDisplay(geometry: freeze.geometry, image: freeze.image)
 
         // Capture Text reads the same crop instead of exporting it (docs/03 §1.7).
         if purpose == .recognizeText {
-            guard let image = frozen.croppedImage(localRect: result.localRect) else { return }
+            guard let image = frozen.croppedImage(localRect: result.localRect) else {
+                reportLostCapture("Could not crop the text selection out of the frozen image")
+                return
+            }
             recognizeText(in: image, on: result.display.displayID)
             return
         }
@@ -471,7 +466,7 @@ final class AreaCaptureCoordinator {
         // Cropped from the frozen bitmap, never re-captured — that is what guarantees
         // the file matches what the user selected on (docs/03 §1.1).
         guard let image = frozen.croppedImage(localRect: result.localRect) else {
-            logger.error("Could not crop the selection out of the frozen image")
+            reportLostCapture("Could not crop the selection out of the frozen image")
             return
         }
 
