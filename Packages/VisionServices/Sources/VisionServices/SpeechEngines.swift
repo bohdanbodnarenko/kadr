@@ -180,7 +180,9 @@ struct AnalyzerEngine: SpeechEngine {
             await analyzer.cancelAndFinishNow()
             collected.cancel()
             _ = try? await collected.value
-            if Task.isCancelled { throw CancellationError() }
+            if Task.isCancelled {
+                throw CancellationError()
+            }
             throw VisionServiceError.transcriptionFailed
         }
         return try await collected.value

@@ -148,7 +148,11 @@ public final class VisionClient {
         let requestData = try JSONEncoder().encode(request)
         // A batch is a handful of OCR passes; generous enough for a slow machine, bounded
         // so a wedged helper cannot leave the pass hanging forever.
-        return try await send(.historyIndexing, timeout: .seconds(120), fallback: .historyUnavailable) { service, reply in
+        return try await send(
+            .historyIndexing,
+            timeout: .seconds(120),
+            fallback: .historyUnavailable
+        ) { service, reply in
             service.indexHistory(requestData: requestData, reply: reply)
         }
     }
@@ -235,7 +239,11 @@ public final class VisionClient {
 
     public func warmUpSpeech(_ request: SpeechStatusRequest) async throws {
         let requestData = try JSONEncoder().encode(request)
-        let _: Bool = try await send(.speechWarmUp, timeout: .seconds(60), fallback: .speechUnavailable) { service, reply in
+        let _: Bool = try await send(
+            .speechWarmUp,
+            timeout: .seconds(60),
+            fallback: .speechUnavailable
+        ) { service, reply in
             service.warmUpSpeech(requestData: requestData, reply: reply)
         }
     }
@@ -304,17 +312,23 @@ public final class VisionClient {
         let resultData: Data
         do {
             resultData = try await withTaskCancellationHandler {
-                try await Self.race(on: boxed, operation: operation, timeout: timeout, fallback: fallback, invoke: invoke)
+                try await Self.race(
+                    on: boxed,
+                    operation: operation,
+                    timeout: timeout,
+                    fallback: fallback,
+                    invoke: invoke
+                )
             } onCancel: {
-            // Cancelling the caller's task stops the work in the helper (docs/17 T-STU-5).
-            // On *this* connection — the helper keeps one service per connection, so a
-            // cancel sent anywhere else reaches nothing — and then the connection goes,
-            // which ends whatever it started even if the cancel message is lost, and
-            // fails the pending reply so this call returns now rather than at the timeout.
+                // Cancelling the caller's task stops the work in the helper (docs/17 T-STU-5).
+                // On *this* connection — the helper keeps one service per connection, so a
+                // cancel sent anywhere else reaches nothing — and then the connection goes,
+                // which ends whatever it started even if the cancel message is lost, and
+                // fails the pending reply so this call returns now rather than at the timeout.
                 (boxed.value.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
                 boxed.value.invalidate()
             }
-        } catch ClientError.timedOut(let operation) {
+        } catch let ClientError.timedOut(operation) {
             // The connection was invalidated to end the wait; the next call needs a new one.
             if self.connection === connection {
                 self.connection = nil

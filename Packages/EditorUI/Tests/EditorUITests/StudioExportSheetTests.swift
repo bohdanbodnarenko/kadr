@@ -5,7 +5,10 @@ import Testing
 /// The export sheet's one size control and its time-left estimate (docs/18 STU-13).
 @Suite("Export sheet")
 struct StudioExportSheetTests {
-    @Test("Each size step maps to one compression and quality, and back", arguments: StudioExportSettings.SizePreset.allCases)
+    @Test(
+        "Each size step maps to one compression and quality, and back",
+        arguments: StudioExportSettings.SizePreset.allCases
+    )
     func sizePresetRoundTrips(preset: StudioExportSettings.SizePreset) {
         var settings = StudioExportSettings()
         settings.sizePreset = preset

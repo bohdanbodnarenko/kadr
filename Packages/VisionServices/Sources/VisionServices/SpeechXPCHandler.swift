@@ -70,7 +70,12 @@ public enum SpeechXPCHandler {
 
     /// Overall progress for one track's `secondsDone`: the span 0.18…0.93 split evenly
     /// between the tracks.
-    static func fraction(track index: Int, of count: Int, secondsDone: TimeInterval, duration: TimeInterval?) -> Double {
+    static func fraction(
+        track index: Int,
+        of count: Int,
+        secondsDone: TimeInterval,
+        duration: TimeInterval?
+    ) -> Double {
         let within = duration.map { $0 > 0 ? min(max(secondsDone / $0, 0), 1) : 0 } ?? 0
         let fraction = 0.18 + 0.75 * (Double(index) + within) / Double(max(count, 1))
         return min(fraction, 0.93)

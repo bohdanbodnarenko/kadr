@@ -465,10 +465,18 @@ private struct TranscriptChip: View, Equatable {
 
     private var accessibilityState: String {
         var states: [String] = []
-        if isCut { states.append("cut") }
-        if isFiller, !isCut { states.append("filler") }
-        if isActive { states.append("playing") }
-        if match != nil { states.append("search match") }
+        if isCut {
+            states.append("cut")
+        }
+        if isFiller, !isCut {
+            states.append("filler")
+        }
+        if isActive {
+            states.append("playing")
+        }
+        if match != nil {
+            states.append("search match")
+        }
         return states.joined(separator: ", ")
     }
 

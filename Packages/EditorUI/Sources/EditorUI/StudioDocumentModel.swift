@@ -165,10 +165,10 @@ public final class StudioDocumentModel {
             if NSApp != nil {
                 StudioDockProgress.update(exportProgress)
             }
-            // When this render began, for the time-left estimate (docs/18 STU-13).
-            if oldValue == nil, exportProgress != nil { exportStartedAt = Date() }
         }
     }
+
+    /// When the running render began, for the time-left estimate (docs/18 STU-13).
     @ObservationIgnored var exportStartedAt: Date?
     /// The file the last export wrote, for the in-window "Exported" banner (docs/18 STU-13).
     public var lastExportedURL: URL?
@@ -179,14 +179,12 @@ public final class StudioDocumentModel {
     /// and ⌘E, which arrive through the responder chain — can reach them. A menu item is
     /// the one place a keyboard command works whatever the window's layout happens to be,
     /// and the transport bar's controls move between three arrangements.
-    ///
-    /// The inspector's state is remembered across windows and launches (docs/18 STU-12):
-    /// someone who hides it to get a bigger preview should not hide it every time.
+    /// Its state is remembered across windows and launches (docs/18 STU-12).
     public var isInspectorPresented = StudioDocumentModel.rememberedInspectorPresented {
         didSet { UserDefaults.standard.set(isInspectorPresented, forKey: Self.inspectorPresentedKey) }
     }
-    public var showsExportOptions = false
 
+    public var showsExportOptions = false
 
     /// Set when something went wrong that the user should see.
     public var failure: StudioFailurePresentation? {
@@ -197,9 +195,12 @@ public final class StudioDocumentModel {
     public var notice: String? {
         didSet {
             Self.announce(notice, unless: oldValue == notice)
-            if notice != oldValue { noticeAction = nil }
+            if notice != oldValue {
+                noticeAction = nil
+            }
         }
     }
+
     /// A button the notice offers, set after the notice itself (docs/18 STU-14).
     public var noticeAction: StudioNoticeAction?
 
