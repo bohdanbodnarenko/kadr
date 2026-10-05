@@ -258,7 +258,7 @@ final class PinPanel: NonActivatingPanel {
     func handleScroll(_ event: NSEvent) {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if modifiers.contains(.option) {
-            setZoom(zoom * (1 + event.scrollingDeltaY / 200))
+            setZoom(currentZoom * (1 + event.scrollingDeltaY / 200), anchoredAt: NSEvent.mouseLocation)
         } else if modifiers.contains(.command) {
             setOpacity(alphaValue + event.scrollingDeltaY / 200)
         }
@@ -296,16 +296,34 @@ final class PinPanel: NonActivatingPanel {
         setZoom(1)
     }
 
-    private func setZoom(_ newZoom: CGFloat) {
+    /// The zoom the pin is shown at now, read from its frame.
+    ///
+    /// Not the stored `zoom`: a manual resize changes the size without it, so ⌥-scroll
+    /// after a drag-resize jumped back to the old size (docs/18 OUT-15).
+    private var currentZoom: CGFloat {
+        let scale = screen?.backingScaleFactor ?? 2
+        let naturalWidth = CGFloat(pixelSize.width) / scale
+        return naturalWidth > 0 ? frame.width / naturalWidth : zoom
+    }
+
+    /// Resizes to `newZoom`. With an anchor, the point of the picture under it stays put,
+    /// so zooming grows toward the pointer rather than away from the bottom-left corner.
+    private func setZoom(_ newZoom: CGFloat, anchoredAt anchor: CGPoint? = nil) {
         zoom = min(max(newZoom, 0.1), 8)
         let scale = screen?.backingScaleFactor ?? 2
-        let width = CGFloat(pixelSize.width) / scale * zoom
-        let height = CGFloat(pixelSize.height) / scale * zoom
-        setFrame(
-            CGRect(origin: frame.origin, size: CGSize(width: width, height: height)),
-            display: true
+        let size = CGSize(
+            width: CGFloat(pixelSize.width) / scale * zoom,
+            height: CGFloat(pixelSize.height) / scale * zoom
         )
+        var origin = frame.origin
+        if let anchor, frame.width > 0, frame.height > 0 {
+            let fractionX = (anchor.x - frame.minX) / frame.width
+            let fractionY = (anchor.y - frame.minY) / frame.height
+            origin = CGPoint(x: anchor.x - fractionX * size.width, y: anchor.y - fractionY * size.height)
+        }
+        setFrame(CGRect(origin: origin, size: size), display: true)
         updateAccessibilityDescription()
+        onGeometryChanged?()
     }
 
     /// Arrow keys nudge the pin, ⇧ by ten points (docs/03 §4).
@@ -358,7 +376,7 @@ final class PinPanel: NonActivatingPanel {
         updateAccessibilityDescription()
         refreshAccessibilityActions()
         let announcement = isClickThrough
-            ? String(localized: "Click-through on. Press Command Option L to interact.")
+            ? PinClickThroughShortcut.announcement
             : String(localized: "Click-through off.")
         FeedbackAnnouncement.post(announcement)
         hoverBar?.setVisible(false)
@@ -372,9 +390,7 @@ final class PinPanel: NonActivatingPanel {
     private func configureAccessibility() {
         imageView.setAccessibilityElement(true)
         imageView.setAccessibilityRole(.image)
-        imageView.setAccessibilityHelp(
-            String(localized: "Press Command Option L to toggle click-through.")
-        )
+        imageView.setAccessibilityHelp(PinClickThroughShortcut.help)
         updateAccessibilityDescription()
         refreshAccessibilityActions()
     }
@@ -437,7 +453,7 @@ final class PinPanel: NonActivatingPanel {
     }
 
     private func showClickThroughBadge() {
-        let badge = NSTextField(labelWithString: "⌘⌥L to interact")
+        let badge = NSTextField(labelWithString: PinClickThroughShortcut.badge)
         badge.font = .systemFont(ofSize: 10, weight: .medium)
         badge.textColor = .white
         badge.backgroundColor = NSColor.black.withAlphaComponent(0.65)
