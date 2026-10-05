@@ -89,6 +89,8 @@ public actor RecordingEngine {
     /// Last complete video frame, so a resume on a static screen still starts the writer
     /// and a static tail survives Stop (docs/16 REC-5).
     var lastVideoBox: SampleBufferBox?
+    /// The latest idle tick since the last new frame: where a still tail ends (docs/18 REC-3).
+    var stillTailEnd: CMTime?
     /// What the running stream records, so its filter can be rebuilt mid-take.
     var liveTarget: RecordingTarget?
     var segmentHasVideo = false
@@ -384,7 +386,10 @@ public actor RecordingEngine {
             let time = recordingTime(of: box.buffer)
             reportGeometry(of: box, at: time)
             clockObserver?(time)
+            let hadVideo = segmentHasVideo
             await seedHeldFrame(into: writer, at: box)
+            // Not the tick that seeded: re-appending at its time would repeat a timestamp.
+            if hadVideo { stillTailEnd = CMSampleBufferGetPresentationTimeStamp(box.buffer) }
             return
         }
         if box.kind != .video {
@@ -400,6 +405,7 @@ public actor RecordingEngine {
 
         if box.kind == .video {
             lastVideoBox = box
+            stillTailEnd = nil
             segmentHasVideo = true
             let time = recordingTime(of: box.buffer)
             reportGeometry(of: box, at: time)

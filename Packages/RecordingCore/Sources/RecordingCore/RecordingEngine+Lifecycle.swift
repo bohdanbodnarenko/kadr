@@ -192,10 +192,25 @@ extension RecordingEngine {
         await awaitPendingClose()
         guard let writer else { return }
         self.writer = nil
+        await appendStillTail(to: writer)
         let close = Task { await self.drain(writer, trimmingTail: trimmingTail) }
         segmentClose = close
         await close.value
         segmentClose = nil
+    }
+
+    /// Writes the held frame again at the last idle tick, so a still ending lasts as long
+    /// as it was on screen (docs/18 REC-3).
+    ///
+    /// Idle ticks are never appended — they carry no picture — so a writer that saw its
+    /// last new frame ten still seconds before Stop finished ten seconds short.
+    func appendStillTail(to writer: any SegmentWriting) async {
+        defer { stillTailEnd = nil }
+        guard segmentHasVideo, let end = stillTailEnd, let lastVideoBox,
+              CMTimeCompare(end, CMSampleBufferGetPresentationTimeStamp(lastVideoBox.buffer)) > 0,
+              let held = lastVideoBox.retimed(to: end)
+        else { return }
+        _ = await writer.append(held)
     }
 
     /// Waits for a close another caller started, so this one sees its result.
