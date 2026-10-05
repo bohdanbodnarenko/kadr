@@ -81,28 +81,31 @@ struct EditorStylePane: View {
                 title: "Size",
                 value: Binding(
                     get: { Double(image.scaleFactor) },
-                    set: { factor in model.updateSelectedImage { $0.scale(to: CGFloat(factor)) } }
+                    set: { factor in model.updateSelectedImageLive { $0.scale(to: CGFloat(factor)) } }
                 ),
                 range: 0.1 ... 4,
-                format: .multiplier
+                format: .multiplier,
+                onEditingEnded: { model.endInspectorStyleEdit() }
             )
             KadrSlider(
                 title: "Opacity",
                 value: Binding(
                     get: { image.opacity },
-                    set: { value in model.updateSelectedImage { $0.opacity = value } }
+                    set: { value in model.updateSelectedImageLive { $0.opacity = value } }
                 ),
                 range: 0.1 ... 1,
-                format: .percent
+                format: .percent,
+                onEditingEnded: { model.endInspectorStyleEdit() }
             )
             KadrSlider(
                 title: "Corners",
                 value: Binding(
                     get: { Double(image.cornerRadius) },
-                    set: { value in model.updateSelectedImage { $0.cornerRadius = CGFloat(value) } }
+                    set: { value in model.updateSelectedImageLive { $0.cornerRadius = CGFloat(value) } }
                 ),
                 range: 0 ... 40,
-                format: .points
+                format: .points,
+                onEditingEnded: { model.endInspectorStyleEdit() }
             )
             InspectorToggleRow("Shadow", isOn: Binding(
                 get: { image.hasShadow },
