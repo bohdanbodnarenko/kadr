@@ -22,6 +22,9 @@ extension QuickAccessManager {
         setActivity(.exportingGIF, on: item)
         Task { [weak self] in
             guard let self else { return }
+            // A client of its own: one shared client was disconnected by whichever of
+            // Compress and GIF finished first, under the other (docs/18 OUT-12).
+            let vision = VisionClient()
             defer { vision.disconnect() }
             // Busy while encoding, so auto-dismiss cannot take the card mid-export
             // (docs/16 OUT-16).

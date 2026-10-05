@@ -15,8 +15,10 @@ struct HistorySidecar: Codable, Sendable {
     var lastAccessedAt: Date
     var byteSize: Int64
     var originalFilename: String
+    /// Added in version 2; absent from older sidecars, which decode it as nil.
+    var originalPath: String?
 
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     init(_ record: HistoryRecord) {
         version = Self.currentVersion
@@ -32,6 +34,7 @@ struct HistorySidecar: Codable, Sendable {
         lastAccessedAt = record.lastAccessedAt
         byteSize = record.byteSize
         originalFilename = record.originalFilename
+        originalPath = record.originalPath
     }
 
     func record() -> HistoryRecord {
@@ -47,7 +50,8 @@ struct HistorySidecar: Codable, Sendable {
             capturedAt: capturedAt,
             lastAccessedAt: lastAccessedAt,
             byteSize: byteSize,
-            originalFilename: originalFilename
+            originalFilename: originalFilename,
+            originalPath: originalPath
         )
     }
 

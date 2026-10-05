@@ -69,6 +69,17 @@ struct HistoryIndexTests {
         #expect(try await store.search("anything").isEmpty)
     }
 
+    @Test("An unindexed capture is findable by its app name")
+    func findsUnindexedByApplication() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let record = try await store.ingest(ingestDraft(seed: 9))
+        #expect(try await store.search("tester").map(\.id) == [record.id])
+        #expect(try await store.search("tester capture").map(\.id) == [record.id])
+        #expect(try await store.search("tester nowhere").isEmpty)
+    }
+
     @Test("An indexed capture is findable by its text")
     func findsByText() async throws {
         let (store, root) = try makeStore()

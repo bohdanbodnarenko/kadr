@@ -175,7 +175,15 @@ struct QuickAccessStackView: View {
                     in: manager.items
                 ),
                 showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item),
-                alwaysShowActions: manager.settings.overlayAlwaysShowActions
+                alwaysShowActions: manager.settings.overlayAlwaysShowActions,
+                requestsKeyboardFocus: manager.keyboardFocusRequest == item.id
+            )
+            // Follows the finger during a swipe and springs home if it falls short
+            // (docs/18 OUT-16).
+            .offset(x: manager.swipeOffset.x(for: item.id))
+            .animation(
+                reduceMotion ? nil : .interactiveSpring(response: 0.28, dampingFraction: 0.8),
+                value: manager.swipeOffset
             )
             // Slides in from the docked edge and settles from a touch smaller, so the card
             // arrives rather than appears. Reduce Motion drops the animation entirely.

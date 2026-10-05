@@ -129,6 +129,8 @@ extension QuickAccessManager {
         overlayPanel = nil
         stopHoverKeyMonitor()
         lastHoveredItemID = nil
+        // No cards, no thumbnails: the idle agent holds no bitmaps (CLAUDE.md rule 2).
+        CardThumbnailCache.shared.removeAll()
         // A banner belongs to the stack it was shown over; a stale error must not come back
         // with the next capture (docs/17 T-OUT-2).
         feedbackStatus = nil
@@ -158,8 +160,10 @@ extension QuickAccessManager {
               let hoveredItemID,
               let item = items.first(where: { $0.id == hoveredItemID })
         else {
+            swipeOffset = .zero
             return
         }
+        swipeOffset = SwipeOffset(itemID: item.id, x: swipe == nil ? swipeTracker.liveOffsetX : 0)
         switch swipe {
         case .dismiss:
             dismiss(item)
@@ -289,6 +293,9 @@ extension QuickAccessManager {
         CaptureProject.move(from: original, to: moved)
         items[index].fileURL = moved
         items[index].isStaged = false
+        // History learns where the capture now lives, so Reveal and Pin use the user's
+        // own file rather than a hash-named library copy (docs/18 OUT-6).
+        history?.noteOriginal(moved)
         return true
     }
 
@@ -367,7 +374,9 @@ extension QuickAccessManager {
             thumbnailSourceURL: thumbnailSourceURL,
             // A poster is rendered for the ingest and belongs to it; the library deletes
             // it once its own copy is written (docs/07 LOW).
-            thumbnailSourceIsTemporary: thumbnailSourceURL != nil
+            thumbnailSourceIsTemporary: thumbnailSourceURL != nil,
+            // A staged file moves when saved; that save tells History (docs/18 OUT-6).
+            originalURL: item.isStaged ? nil : item.fileURL
         ))
     }
 }

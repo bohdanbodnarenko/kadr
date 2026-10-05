@@ -62,6 +62,7 @@ extension QuickAccessManager {
         actions.textAvailable = true
         actions.trim = { [weak self] in self?.trim(item) }
         actions.setHovered = { [weak self] hovering in self?.setHovered(item, hovering: hovering) }
+        actions.keyboardFocused = { [weak self] in self?.lastHoveredItemID = item.id }
         actions.beginDrag = { [weak self] in self?.beginDrag(for: item) }
         actions.peek = { [weak self] in self?.setPeeking(true) }
         actions.compress = { [weak self] in self?.compress(item) }

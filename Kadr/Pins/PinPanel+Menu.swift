@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 
 extension PinContentView {
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -44,9 +45,10 @@ extension PinContentView {
         let clickThrough = NSMenuItem(
             title: panel.clickThroughEnabled ? "Stop Click-Through" : "Click-Through",
             action: #selector(toggleClickThrough),
-            keyEquivalent: "l"
+            keyEquivalent: ""
         )
-        clickThrough.keyEquivalentModifierMask = [.command, .option]
+        // The live binding, not a hard-coded ⌘⌥L: the shortcut is rebindable (docs/18 OUT-15).
+        clickThrough.setShortcut(for: .togglePinClickThrough)
         clickThrough.target = self
         menu.addItem(clickThrough)
 

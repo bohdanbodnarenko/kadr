@@ -196,7 +196,7 @@ final class NonActivatingPanel: NSPanel {
 
 - **No TCA.** Plain `@Observable` models + actor services + environment injection. Rationale: the app's complexity is in AppKit window management and media pipelines — reducer indirection buys testability we already get from package-level unit tests, at real dependency and cognitive cost. (Capso, Mio, Snapzy all converge on this.)
 - Settings: `SettingsKit` `@Observable` façade over `UserDefaults` with typed keys + migration versions; hotkeys stored by `KeyboardShortcuts`.
-- History: content-addressed files under `~/Library/Application Support/Kadr/Captures/` + GRDB/SQLite index (records, thumbnails path, OCR text FTS5 (P3)); retention/eviction in `HistoryKit`; the DB is disposable (rebuildable from files + sidecar JSON).
+- History: content-addressed files under `~/Library/Application Support/Kadr/Captures/` + GRDB/SQLite index (records, thumbnails path, OCR text FTS5 (P3)); retention/eviction in `HistoryKit`; the DB is disposable (rebuildable from files + sidecar JSON). Schema v2 (`v2-original-path`, sidecar version 2) adds `original_path`, the capture's own file outside the library when Kadr has seen it saved; Reveal, Pin and Annotate from History use it while it exists at the recorded size, and a History delete trashes the library copy under its original filename rather than its hash (docs/18 OUT-6). An unreadable database is moved aside and rebuilt from the sidecars at open (docs/18 OUT-3).
 
 ## 10. Distribution & updates
 

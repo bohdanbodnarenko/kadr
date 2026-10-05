@@ -162,6 +162,14 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
         super.sendEvent(event)
     }
 
+    /// Takes the keyboard without a click, for Focus Quick Access (docs/18 UX-18). The panel
+    /// does not activate Kadr, so the app underneath stays frontmost.
+    func takeKeyboard() {
+        guard !isKeyWindow else { return }
+        makeKey()
+        acceptsMouseMovedEvents = true
+    }
+
     /// Set while handing the keyboard back, so re-ordering the panel cannot make it key.
     private var refusesKey = false
 

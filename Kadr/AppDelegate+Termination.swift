@@ -25,7 +25,29 @@ extension AppDelegate {
                 return confirmQuitDuringRecording(recording, unsaved: unsaved, sender: sender)
             }
         }
-        return replyForQuitWithUnsavedCaptures(unsaved)
+        return settlingDeletions(replyForQuitWithUnsavedCaptures(unsaved))
+    }
+
+    /// Lets deletions still inside their Undo window finish before the process goes.
+    ///
+    /// Quitting is the end of the Undo window, so the deletes run now; left to their
+    /// timers they never ran and the "deleted" captures stayed in History (docs/18 OUT-5).
+    /// Bounded, so a stuck database cannot hold up quitting.
+    private func settlingDeletions(_ reply: NSApplication.TerminateReply) -> NSApplication.TerminateReply {
+        guard reply == .terminateNow, let quickAccess = areaCaptureStorage?.quickAccess else { return reply }
+        let history = quickAccess.history
+        guard quickAccess.hasPendingDeletions || history?.hasPendingTrash == true else { return reply }
+        let reply = TerminationReplyOnce()
+        Task { @MainActor in
+            await quickAccess.settlePendingDeletions()
+            await history?.settlePendingTrash()
+            reply.send()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            reply.send()
+        }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -162,5 +184,18 @@ extension AppDelegate {
     func finalizeStagedCapturesBeforeQuit(_ unsaved: [QuickAccessItem]) -> Int {
         guard !unsaved.isEmpty, let quickAccess = areaCaptureStorage?.quickAccess else { return 0 }
         return quickAccess.finalizeAllStaged()
+    }
+}
+
+/// Answers a `.terminateLater` exactly once, whichever of the work or its deadline
+/// finishes first.
+@MainActor
+private final class TerminationReplyOnce {
+    private var sent = false
+
+    func send() {
+        guard !sent else { return }
+        sent = true
+        NSApp.reply(toApplicationShouldTerminate: true)
     }
 }

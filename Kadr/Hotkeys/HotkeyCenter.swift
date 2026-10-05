@@ -42,6 +42,8 @@ extension KeyboardShortcuts.Name {
     static let closeAllOverlays = Self("closeAllOverlays")
     static let saveAllOverlays = Self("saveAllOverlays")
     static let hideOverlays = Self("hideOverlays")
+    /// Unbound by default: the way to reach the cards without the pointer (docs/18 UX-18).
+    static let focusOverlay = Self("focusOverlay")
     static let hidePins = Self("hidePins")
     static let pinClipboard = Self("pinClipboard")
     /// ⌘⌥L, the key a click-through pin's badge promises. Registered only while some pin
@@ -78,6 +80,7 @@ extension CaptureCommand {
         case .closeAllOverlays: .closeAllOverlays
         case .saveAllOverlays: .saveAllOverlays
         case .hideOverlays: .hideOverlays
+        case .focusOverlay: .focusOverlay
         case .hidePins: .hidePins
         case .pinClipboard: .pinClipboard
         case .togglePinClickThrough: .togglePinClickThrough

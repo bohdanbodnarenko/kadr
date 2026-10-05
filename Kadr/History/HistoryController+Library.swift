@@ -25,7 +25,7 @@ extension HistoryController {
 
     func reveal(ids: [UUID]) {
         let urls = ids.compactMap { id -> URL? in
-            guard let record = record(id: id), let url = fileURL(for: record) else { return nil }
+            guard let record = record(id: id), let url = preferredFileURL(for: record) else { return nil }
             markAccessed(record)
             return url
         }

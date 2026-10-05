@@ -61,6 +61,21 @@ final class PinContentView: NSView {
         super.otherMouseDown(with: event)
     }
 
+    /// The keys the pin's menu advertises, for a pin that has the keyboard. They used to be
+    /// shown and not handled (docs/18 OUT-15).
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "w" {
+            panel?.onClose?()
+            return true
+        }
+        if PinClickThroughShortcut.matches(event) {
+            panel?.toggleClickThrough()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func keyDown(with event: NSEvent) {
         let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
         switch event.keyCode {

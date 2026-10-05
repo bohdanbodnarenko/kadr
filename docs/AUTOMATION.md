@@ -52,6 +52,7 @@ bundle, updating Kadr updates the tool.
 
 ```sh
 kadr help                 # the verb list
+kadr help capture-area    # one command's options
 kadr capture-area --json  # {"paths":["/…/Kadr-2026-08-28-14-02-11.png"],"status":"ok"}
 ```
 
@@ -264,4 +265,6 @@ The Shortcuts actions wrap the same commands: **Capture Area**, **Capture Window
 **All-in-One**, **Start Recording**, **Record Region**, **Stop Recording**,
 **Toggle Recording**, **Pin Image**, **Set Desktop Icons** and **Open History**. The capture actions return a
 file the next action can consume; **Capture Text** returns a string. Cancelling a
-capture fails the shortcut, so an "if" block can handle it.
+capture fails the shortcut, so an "if" block can handle it. The capture actions take an
+optional **After Capture** choice (Copy, Save, Annotate, Pin, Show Card); left empty, Kadr's
+own setting applies. **Pin Image** accepts an image passed in memory as well as a file.

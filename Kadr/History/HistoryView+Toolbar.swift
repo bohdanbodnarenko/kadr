@@ -19,35 +19,54 @@ extension HistoryView {
 
     @ToolbarContentBuilder
     var toolbarContent: some ToolbarContent {
+        // Pickers inside the menus, so each shows a checkmark on what is chosen: a filter
+        // you cannot see is one you forget you set (docs/18 OUT-7).
         ToolbarItem(placement: .navigation) {
             Menu {
-                Button("All types") { kindFilter = nil }
-                Divider()
-                ForEach(HistoryItemKind.allCases, id: \.self) { kind in
-                    Button(kind.title) { kindFilter = kind }
+                Picker("Type", selection: $kindFilter) {
+                    Text("All Types").tag(HistoryItemKind?.none)
+                    Divider()
+                    ForEach(HistoryItemKind.allCases, id: \.self) { kind in
+                        Text(kind.title).tag(HistoryItemKind?.some(kind))
+                    }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                Label(kindFilterLabel, systemImage: "line.3.horizontal.decrease.circle")
+                Label(
+                    kindFilterLabel,
+                    systemImage: kindFilter == nil
+                        ? "line.3.horizontal.decrease.circle"
+                        : "line.3.horizontal.decrease.circle.fill"
+                )
             }
             .menuStyle(.borderlessButton)
         }
 
         ToolbarItem(placement: .navigation) {
             Menu {
-                ForEach(HistoryDateFilter.allCases) { filter in
-                    Button(filter.title) { dateFilter = filter }
+                Picker("Date", selection: $dateFilter) {
+                    ForEach(HistoryDateFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
-                Label(dateFilter.title, systemImage: "calendar")
+                Label(dateFilter.title, systemImage: dateFilter == .all ? "calendar" : "calendar.badge.clock")
             }
             .menuStyle(.borderlessButton)
         }
 
         ToolbarItem(placement: .navigation) {
             Menu {
-                ForEach(HistorySort.allCases, id: \.self) { option in
-                    Button(option.title) { sort = option }
+                Picker("Sort", selection: $sort) {
+                    ForEach(HistorySort.allCases, id: \.self) { option in
+                        Text(option.title).tag(option)
+                    }
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
             } label: {
                 Label(sort.title, systemImage: "arrow.up.arrow.down")
             }

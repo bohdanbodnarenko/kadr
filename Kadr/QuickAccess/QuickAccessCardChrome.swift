@@ -41,10 +41,67 @@ struct ThumbnailImage: View {
             }
         }
         .task(id: "\(url.path)-\(revision)") {
-            image = isVideo
+            let key = CardThumbnailCache.Key(path: url.path, revision: revision, maxPixelSize: maxPixelSize)
+            if let cached = CardThumbnailCache.shared.image(for: key) {
+                image = cached
+                return
+            }
+            let url = url
+            let maxPixelSize = maxPixelSize
+            // Off the main thread: a card, its peek miniature and a hover re-render used to
+            // decode the same capture up to three times on it (docs/18 OUT-11).
+            let decoded = isVideo
                 ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
-                : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
+                : await Task.detached(priority: .userInitiated) {
+                    ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
+                }.value
+            guard !Task.isCancelled else { return }
+            if let decoded {
+                CardThumbnailCache.shared.insert(decoded, for: key)
+            }
+            image = decoded
         }
+    }
+}
+
+/// The last few card thumbnails, so re-rendering a card does not decode it again.
+///
+/// Small and bounded: a handful of card-sized bitmaps, gone with the oldest entry. Cleared
+/// with the cards, so the idle agent holds none (CLAUDE.md rule 2).
+@MainActor
+final class CardThumbnailCache {
+    struct Key: Hashable {
+        let path: String
+        let revision: Int
+        let maxPixelSize: Int
+    }
+
+    static let shared = CardThumbnailCache()
+    static let capacity = 12
+
+    private var entries: [Key: CGImage] = [:]
+    private var order: [Key] = []
+
+    func image(for key: Key) -> CGImage? {
+        entries[key]
+    }
+
+    func insert(_ image: CGImage, for key: Key) {
+        if entries.updateValue(image, forKey: key) == nil {
+            order.append(key)
+        }
+        while order.count > Self.capacity {
+            entries.removeValue(forKey: order.removeFirst())
+        }
+    }
+
+    func removeAll() {
+        entries.removeAll()
+        order.removeAll()
+    }
+
+    var count: Int {
+        entries.count
     }
 }
 

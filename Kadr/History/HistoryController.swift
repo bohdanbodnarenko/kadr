@@ -13,15 +13,17 @@ import Shared
 @MainActor
 @Observable
 final class HistoryController {
-    private(set) var recent: [HistoryRecord] = []
-    private(set) var records: [HistoryRecord] = []
-    private(set) var usage: HistoryStorageUsage = .zero
+    // Settable from the controller's extension files (Trash, recovery), which split the
+    // type for the file-length cap; nothing outside `HistoryController+*.swift` writes them.
+    var recent: [HistoryRecord] = []
+    var records: [HistoryRecord] = []
+    var usage: HistoryStorageUsage = .zero
     private(set) var hasMore = false
     private(set) var isLoading = false
     /// True while the next page is being fetched; the grid stays visible (docs/14 UX-23).
     private(set) var isPaging = false
     /// The last load or page failure, for inline Retry (docs/14 UX-23).
-    private(set) var loadError: String?
+    var loadError: String?
 
     let cache = ThumbnailCache()
     private(set) var store: HistoryStore?
@@ -34,11 +36,12 @@ final class HistoryController {
     /// Warned once per launch that the size cap stopped short (docs/17 T-OUT-8).
     private var hasWarnedAboutCap = false
     /// Said once per launch that the database could not open (docs/18 X-5a).
-    private var hasReportedOpenFailure = false
-    private let logger = KadrLog.logger(.history)
+    var hasReportedOpenFailure = false
+    let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
-    private var pageOffset = 0
+    /// The last row of the last page loaded, which the next page starts after (docs/18 OUT-9).
+    private var pageCursor: HistoryRecord?
     private var filter = HistoryFilter.all
 
     /// The filter the window is currently showing, for refreshes driven from elsewhere.
@@ -46,17 +49,22 @@ final class HistoryController {
         filter
     }
 
+    /// Whether the History window is on screen.
+    var isWindowOpen: Bool {
+        window != nil
+    }
+
     private var pending: [HistoryIngest] = []
     /// History deletes inside their Undo window (docs/17 T-OUT-7).
-    @ObservationIgnored private var pendingTrash: [UUID: PendingTrash] = [:]
+    @ObservationIgnored var pendingTrash: [UUID: PendingTrash] = [:]
 
-    private struct PendingTrash {
+    struct PendingTrash {
         let ids: Set<UUID>
         let commit: Task<Void, Never>
     }
 
     /// The open in flight, shared by everyone who asks before it finishes.
-    @ObservationIgnored private var openTask: Task<HistoryStore, any Error>?
+    @ObservationIgnored private var openTask: Task<HistoryStore.Opening, any Error>?
 
     /// What the History window's search field holds, and the indexer behind it
     /// (docs/03 §5 P3).
@@ -210,7 +218,7 @@ final class HistoryController {
 
     func reload(filter: HistoryFilter) async {
         self.filter = filter
-        pageOffset = 0
+        pageCursor = nil
         await openIfNeeded()
         guard let store else { return }
 
@@ -231,8 +239,9 @@ final class HistoryController {
                 // A search returns its whole ranked result set, so there is no next page.
                 hasMore = false
             } else {
-                let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
+                let page = try await store.loadPage(filter: filter, after: nil, limit: Self.pageSize)
                 records = visible(page)
+                pageCursor = page.last
                 hasMore = page.count == Self.pageSize
             }
             usage = try await store.storageUsage()
@@ -263,64 +272,18 @@ final class HistoryController {
         guard hasMore, let store, !isLoading, !isPaging else { return }
         isPaging = true
         defer { isPaging = false }
-        pageOffset += Self.pageSize
         do {
-            let page = try await store.loadPage(filter: filter, offset: pageOffset, limit: Self.pageSize)
-            records.append(contentsOf: visible(page))
+            // After the last row shown, not at an offset: a capture that arrived or left
+            // since the last page would shift an offset by one (docs/18 OUT-9).
+            let page = try await store.loadPage(filter: filter, after: pageCursor, limit: Self.pageSize)
+            let shown = Set(records.map(\.id))
+            records.append(contentsOf: visible(page).filter { !shown.contains($0.id) })
+            pageCursor = page.last ?? pageCursor
             hasMore = page.count == Self.pageSize
             loadError = nil
         } catch {
-            pageOffset = max(0, pageOffset - Self.pageSize)
             loadError = error.localizedDescription
             logger.error("Could not page history: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// Moves library items to the Trash, with an Undo (docs/14 UX-22, docs/17 T-OUT-7).
-    ///
-    /// The rows go at once and the banner offers Undo; the delete itself waits out the
-    /// Undo window. It has to: the library's files are named by hash, so once they are in
-    /// the Trash, Finder's Put Back restores a `3fa9c1….png` and never the History row.
-    /// Retention eviction stays permanent.
-    func moveToTrash(ids: [UUID]) async {
-        guard !ids.isEmpty else { return }
-        let batch = UUID()
-        let hidden = Set(ids)
-        pendingTrash[batch] = PendingTrash(ids: hidden, commit: Task { [weak self] in
-            try? await Task.sleep(for: FeedbackStatus.undoWindow + .seconds(1))
-            guard !Task.isCancelled else { return }
-            await self?.commitTrash(batch)
-        })
-        records.removeAll { hidden.contains($0.id) }
-        recent.removeAll { hidden.contains($0.id) }
-        let message = ids.count == 1
-            ? String(localized: "Moved to Trash")
-            : String(localized: "Moved \(ids.count) captures to Trash")
-        FailurePresenter.present(.undoable(message) { [weak self] in
-            Task { await self?.undoTrash(batch) }
-        })
-    }
-
-    /// Puts a batch back, before its delete has run.
-    func undoTrash(_ batch: UUID) async {
-        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
-        pending.commit.cancel()
-        logger.info("Put \(pending.ids.count, privacy: .public) history item(s) back")
-        await reload(filter: filter)
-    }
-
-    /// Deletes a batch whose Undo window has passed.
-    func commitTrash(_ batch: UUID) async {
-        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
-        await openIfNeeded()
-        guard let store else { return }
-        do {
-            _ = try await store.delete(ids: Array(pending.ids), fileDisposition: .trash)
-            usage = try await store.storageUsage()
-            loadError = nil
-        } catch {
-            loadError = error.localizedDescription
-            logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -422,23 +385,29 @@ final class HistoryController {
     /// first History action after launch a main-thread stall. Every caller already awaits
     /// this, so the open simply moves to a detached task; callers that arrive while it is
     /// running wait on the same task rather than opening a second pool.
-    private func openIfNeeded() async {
+    func openIfNeeded() async {
         if store != nil {
             await drainPending()
             return
         }
+        // Recovering: an unreadable database is set aside and rebuilt from the sidecars
+        // instead of leaving History empty for good (docs/18 OUT-3).
         let opening = openTask ?? Task.detached(priority: .utility) {
-            try HistoryStore.openApplicationSupport(tuning: .agent)
+            try await HistoryStore.openApplicationSupportRecovering(tuning: .agent)
         }
         openTask = opening
         do {
-            let opened = try await opening.value
+            let result = try await opening.value
+            let opened = result.store
             guard store == nil else {
                 // Another caller finished the launch work while this one waited.
                 await drainPending()
                 return
             }
             store = opened
+            if result.setAside != nil {
+                reportRecovery(count: result.recoveredCount)
+            }
             await applyAutomaticRetention(on: opened)
             recent = try await visible(opened.recent(limit: Self.menuStripCount))
             usage = try await opened.storageUsage()
@@ -458,7 +427,9 @@ final class HistoryController {
         var ingested: Set<UUID> = []
         for draft in batch {
             do {
-                try await ingested.insert(store.ingest(draft).id)
+                let record = try await store.ingest(draft)
+                ingested.insert(record.id)
+                showInOpenWindow(record)
             } catch {
                 logger.error("History ingest failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -471,22 +442,5 @@ final class HistoryController {
         // A capture just landed, so the agent is awake anyway: a good moment to read it
         // (docs/03 §5 — the index never wakes the agent by itself).
         startIndexingIfAllowed()
-    }
-}
-
-private extension HistoryController {
-    /// Said once per launch: every History read retries the open, and a banner per attempt
-    /// would bury the screen (docs/18 X-5a; the rebuild is OUT-3).
-    func reportOpenFailure(_ error: any Error) {
-        guard !hasReportedOpenFailure else {
-            logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        hasReportedOpenFailure = true
-        FailurePresenter.report(
-            "Kadr could not open your History. Captures are still saved, but History stays empty.",
-            detail: error.localizedDescription,
-            logger: logger
-        )
     }
 }

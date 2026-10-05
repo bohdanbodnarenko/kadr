@@ -38,6 +38,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case saveAllOverlays
     /// Hide overlay cards so they do not appear in the next capture (CleanShot §6.3).
     case hideOverlays
+    /// Gives the newest card the keyboard without touching it (docs/18 UX-18).
+    case focusOverlay
     /// Hide / show every pinned screenshot without closing them (CleanShot §11).
     case hidePins
     /// Pin whatever is on the clipboard — an image, or text drawn as a card (docs/03 §4).
@@ -75,6 +77,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .closeAllOverlays: String(localized: "Close All Overlays")
         case .saveAllOverlays: String(localized: "Save All Overlays")
         case .hideOverlays: String(localized: "Hide Overlays")
+        case .focusOverlay: String(localized: "Focus Quick Access")
         case .hidePins: String(localized: "Hide Pins")
         case .pinClipboard: String(localized: "Pin Clipboard")
         case .togglePinClickThrough: String(localized: "Toggle Pin Click-Through")
@@ -134,7 +137,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
             ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording, .pauseRecording]),
             ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
             ("Overlays and Pins", [
-                .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
+                .focusOverlay, .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
                 .togglePinClickThrough
             ]),
             ("Library", [.openHistory, .openSaveFolder])

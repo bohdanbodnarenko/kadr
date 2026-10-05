@@ -38,6 +38,9 @@ struct QuickAccessCardActions {
     var studioAvailable = false
     /// Hover pauses auto-dismiss; it does not claim the card (docs/03 §2).
     var setHovered: (Bool) -> Void = { _ in }
+    /// Keyboard focus moved onto the card (Tab, or Focus Quick Access), so card keys act
+    /// on it (docs/18 UX-18).
+    var keyboardFocused: () -> Void = {}
     /// Dragging pauses auto-dismiss until the drop finishes.
     var beginDrag: () -> Void = {}
     /// Tucks the stack into the peek tab (swipe toward the screen edge).

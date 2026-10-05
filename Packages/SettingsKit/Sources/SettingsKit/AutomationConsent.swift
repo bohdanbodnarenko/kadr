@@ -15,7 +15,10 @@ import Observation
 /// * Kadr's own processes — the editor, the bundled CLI — are always allowed.
 ///
 /// Remembered per bundle identifier *and* signing team, so an app cannot inherit another
-/// app's permission by copying its bundle identifier.
+/// app's permission by copying its bundle identifier. Kept in the Keychain, not the
+/// preferences domain, so `defaults write` cannot grant anything; and a web browser's yes
+/// is never remembered, because a browser opens `kadr://` for any page it shows
+/// (docs/18 OUT-13).
 @MainActor
 @Observable
 public final class AutomationConsent {
@@ -49,7 +52,7 @@ public final class AutomationConsent {
 
     /// The switch in Settings → Advanced.
     public var allowsOtherApps: Bool {
-        didSet { store.set(allowsOtherApps, forKey: Self.allowsOtherAppsKey) }
+        didSet { persist() }
     }
 
     /// Remembered answers, by `key(for:)`.
@@ -57,23 +60,76 @@ public final class AutomationConsent {
     /// Display names for the remembered apps, for the Settings list.
     public private(set) var names: [String: String]
 
-    private let store: UserDefaults
+    /// Apps whose answer is asked for every time and never remembered: web browsers, and
+    /// anything else that opens URLs on behalf of content it does not control.
+    public var neverRemembered: Set<String>
+
+    private let storage: AutomationConsentStorage
 
     static let allowsOtherAppsKey = "automation.allowsOtherApps"
     static let decisionsKey = "automation.consentDecisions"
     static let namesKey = "automation.consentNames"
 
-    public init(store: UserDefaults = .standard) {
-        self.store = store
-        allowsOtherApps = store.bool(forKey: Self.allowsOtherAppsKey)
-        let raw = store.dictionary(forKey: Self.decisionsKey) as? [String: String] ?? [:]
-        decisions = raw.compactMapValues(Decision.init(rawValue:))
-        names = store.dictionary(forKey: Self.namesKey) as? [String: String] ?? [:]
+    /// Browsers Kadr knows by bundle identifier. The gate adds whatever the system lists
+    /// as able to open `https:` links.
+    public nonisolated static let knownBrowsers: Set<String> = [
+        "com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.google.Chrome",
+        "com.google.Chrome.canary", "org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition",
+        "company.thebrowser.Browser", "com.microsoft.edgemac", "com.brave.Browser",
+        "com.operasoftware.Opera", "com.vivaldi.Vivaldi", "com.kagi.kagimacOS", "app.zen-browser.zen",
+        "org.chromium.Chromium"
+    ]
+
+    /// - Parameters:
+    ///   - storage: where answers are kept; the Keychain unless a test says otherwise.
+    ///   - legacy: the preferences domain earlier builds kept answers in. Read once, when
+    ///     `storage` is still empty: the switch and any *denials* come across, but no
+    ///     *allow* does — anything could have written one there.
+    public init(
+        storage: AutomationConsentStorage = KeychainConsentStorage(),
+        legacy: UserDefaults = .standard,
+        neverRemembered: Set<String> = AutomationConsent.knownBrowsers
+    ) {
+        self.storage = storage
+        self.neverRemembered = neverRemembered
+        let snapshot = storage.load() ?? Self.migrate(from: legacy, into: storage)
+        allowsOtherApps = snapshot.allowsOtherApps
+        decisions = snapshot.decisions
+        names = snapshot.names
+    }
+
+    private static func migrate(
+        from legacy: UserDefaults,
+        into storage: AutomationConsentStorage
+    ) -> AutomationConsentSnapshot {
+        let raw = legacy.dictionary(forKey: decisionsKey) as? [String: String] ?? [:]
+        let denied = raw.compactMapValues(Decision.init(rawValue:)).filter { $0.value == .denied }
+        let allNames = legacy.dictionary(forKey: namesKey) as? [String: String] ?? [:]
+        let snapshot = AutomationConsentSnapshot(
+            allowsOtherApps: legacy.bool(forKey: allowsOtherAppsKey),
+            decisions: denied,
+            names: allNames.filter { denied[$0.key] != nil }
+        )
+        storage.save(snapshot)
+        for key in [allowsOtherAppsKey, decisionsKey, namesKey] {
+            legacy.removeObject(forKey: key)
+        }
+        return snapshot
     }
 
     /// What to do with a request from `sender`.
     public func verdict(for sender: Sender) -> Verdict {
-        Self.verdict(for: sender, allowsOtherApps: allowsOtherApps, decisions: decisions)
+        if case let .app(bundleID, _, _) = sender, neverRemembered.contains(bundleID) {
+            // A browser is asked every time, whatever an older build remembered for it.
+            return allowsOtherApps ? .ask : .refuse(.notAllowed)
+        }
+        return Self.verdict(for: sender, allowsOtherApps: allowsOtherApps, decisions: decisions)
+    }
+
+    /// Whether an answer for `sender` would be remembered, for the prompt's wording.
+    public func remembersAnswer(for sender: Sender) -> Bool {
+        guard case let .app(bundleID, _, _) = sender else { return false }
+        return !neverRemembered.contains(bundleID)
     }
 
     /// The policy itself, pure so it can be tested as a table.
@@ -94,9 +150,11 @@ public final class AutomationConsent {
         }
     }
 
-    /// Remembers the answer for an app. An unidentified sender is not remembered.
+    /// Remembers the answer for an app. An unidentified sender and a browser are not.
     public func record(_ decision: Decision, for sender: Sender) {
-        guard let key = Self.key(for: sender), case let .app(_, _, name) = sender else { return }
+        guard remembersAnswer(for: sender),
+              let key = Self.key(for: sender), case let .app(_, _, name) = sender
+        else { return }
         decisions[key] = decision
         names[key] = name
         persist()
@@ -137,8 +195,14 @@ public final class AutomationConsent {
         return "\(bundleID)|\(teamID ?? "unsigned")"
     }
 
+    /// Forgets every answer and turns the switch off, for Reset All Settings.
+    public func reset() {
+        decisions.removeAll()
+        names.removeAll()
+        allowsOtherApps = false
+    }
+
     private func persist() {
-        store.set(decisions.mapValues(\.rawValue), forKey: Self.decisionsKey)
-        store.set(names, forKey: Self.namesKey)
+        storage.save(AutomationConsentSnapshot(allowsOtherApps: allowsOtherApps, decisions: decisions, names: names))
     }
 }
