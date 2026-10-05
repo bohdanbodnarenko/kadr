@@ -129,6 +129,8 @@ extension QuickAccessManager {
         overlayPanel = nil
         stopHoverKeyMonitor()
         lastHoveredItemID = nil
+        // No cards, no thumbnails: the idle agent holds no bitmaps (CLAUDE.md rule 2).
+        CardThumbnailCache.shared.removeAll()
         // A banner belongs to the stack it was shown over; a stale error must not come back
         // with the next capture (docs/17 T-OUT-2).
         feedbackStatus = nil
