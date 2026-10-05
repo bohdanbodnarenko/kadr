@@ -8,8 +8,46 @@ alternative that costs nothing, sends nothing, and idles under 30 MB.
 **Status: internal testing (0.9.0).** Capture, cards, pins, History, the annotation
 editor, recording and the studio are all in; a small group of dogfooders is using signed
 builds on the beta update channel while the work in
-[docs/17-internal-testing-readiness.md](docs/17-internal-testing-readiness.md) lands.
+[docs/18-polish-and-ux-review.md](docs/18-polish-and-ux-review.md) lands.
 Testers start with [TESTING.md](TESTING.md).
+
+## Install
+
+Download the latest DMG from the
+[Releases](https://github.com/kadr-app/kadr/releases) page, open it and drag Kadr
+into Applications. Kadr updates itself through Sparkle; Settings ▸ Updates has the
+switch and a Check Now button. Requires macOS 14 or later. (A Homebrew cask,
+`brew install --cask kadr`, follows the first public release.)
+
+## Features
+
+- **Capture:** area with a magnifier loupe and freeze-frame, window, full screen, scrolling
+  capture, self-timer, repeat last area, text recognition (OCR) and a colour picker.
+- **Quick Access cards:** every capture lands as a card you can drag into any app, copy,
+  save, annotate, pin or share.
+- **Annotation editor:** arrows, shapes, text, counters, blur and pixelate redaction with
+  auto-detection of secrets, crop, beautify backgrounds, and re-editable `.kadr` projects.
+- **Recording:** screen, window or area to MP4 or GIF with system audio, microphone,
+  camera bubble, click highlights, key overlays and a teleprompter.
+- **Studio:** trim and cut, automatic zooms from your clicks, transcription, captions and
+  filler-word removal, all on this Mac.
+- **History:** a searchable library of past captures, including the text inside them.
+- **Automation:** `kadr://` URLs, a `kadr` command-line tool and Shortcuts actions.
+
+## Permissions
+
+Kadr asks for each permission only when you first use the feature that needs it.
+
+| Permission | Why |
+|---|---|
+| Screen & System Audio Recording | Required: screenshots, recordings and system audio. |
+| Microphone | Your voice in a recording, as its own track. |
+| Camera | The camera bubble, only while that recording runs. |
+| Accessibility | Auto-scroll in scrolling capture; key overlays (with Input Monitoring). |
+| Input Monitoring | Clicks and shortcuts for the studio and key overlays — never ordinary typing. |
+| Speech Recognition | The teleprompter following your voice, and studio transcription. On-device only. |
+
+Nothing you capture leaves your Mac.
 
 ## Principles
 
