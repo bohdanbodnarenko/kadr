@@ -55,10 +55,17 @@ extension EditorDocumentModel {
 
     /// Closes the gesture the editing opened, and drops an annotation left empty.
     func commitTextEdit(_ id: AnnotationID) {
-        document.endGesture()
+        let typed = document.endGesture()
+        let isFresh = freshTextID == id
+        freshTextID = nil
         if case let .text(spec)? = document.command(id) {
             if spec.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 document.remove([id])
+                // A box placed and left empty leaves no undo step at all.
+                if isFresh { document.foldLastStep() }
+            } else if isFresh, typed {
+                // Placing and typing were one act: one undo step (docs/18 ED-5).
+                document.foldLastStep()
             }
         }
         // Typing was the rest of the text tool's gesture, so the pointer returns to

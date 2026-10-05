@@ -114,6 +114,9 @@ public final class EditorDocumentModel {
     /// The canvas consumes this on mouse-up. Placing the box is not the end of the
     /// gesture — typing is — so the text tool stays armed until that editor commits.
     public internal(set) var pendingTextEditID: AnnotationID?
+    /// A text box placed by the text tool and not yet committed: placing it and typing into
+    /// it fold into one undo step when the editor commits (docs/18 ED-5).
+    @ObservationIgnored var freshTextID: AnnotationID?
 
     /// Auto-redaction review. These sit outside the document until the user accepts
     /// (docs/03 §3, docs/06 M18) — detecting a secret must not blur it on its own.

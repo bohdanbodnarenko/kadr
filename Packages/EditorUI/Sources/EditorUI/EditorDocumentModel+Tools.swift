@@ -101,6 +101,7 @@ public extension EditorDocumentModel {
     internal func finishAppliedTool(placed id: AnnotationID) {
         if tool == .text {
             pendingTextEditID = id
+            freshTextID = id
             return
         }
         if tool.returnsToSelectAfterUse {
