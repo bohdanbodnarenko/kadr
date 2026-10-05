@@ -55,7 +55,7 @@ extension HistoryView {
 
 extension HistorySelection {
     /// The first id whose title starts with `prefix`, ignoring case and diacritics.
-    static func firstMatch(prefix: String, in titles: [(UUID, String)]) -> UUID? {
+    nonisolated static func firstMatch(prefix: String, in titles: [(UUID, String)]) -> UUID? {
         titles.first { _, title in
             title.range(of: prefix, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil
         }?.0
