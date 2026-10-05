@@ -162,7 +162,10 @@ public actor HistoryStore {
         }
 
         return try await dbPool.read { db in
-            let request = Self.apply(filter, to: HistoryRecord.order(Self.order(for: filter.sort)))
+            // The id tiebreak matches keyset paging, so the first page and the ones after
+            // it agree on where equal keys fall (docs/18 OUT-9).
+            let ordered = HistoryRecord.order(Self.order(for: filter.sort), Self.tiebreak(for: filter.sort))
+            let request = Self.apply(filter, to: ordered)
             return try request.limit(limit, offset: offset).fetchAll(db)
         }
     }

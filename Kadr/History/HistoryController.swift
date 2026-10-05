@@ -38,7 +38,8 @@ final class HistoryController {
     private let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
-    private var pageOffset = 0
+    /// The last row of the last page loaded, which the next page starts after (docs/18 OUT-9).
+    private var pageCursor: HistoryRecord?
     private var filter = HistoryFilter.all
 
     /// The filter the window is currently showing, for refreshes driven from elsewhere.
@@ -210,7 +211,7 @@ final class HistoryController {
 
     func reload(filter: HistoryFilter) async {
         self.filter = filter
-        pageOffset = 0
+        pageCursor = nil
         await openIfNeeded()
         guard let store else { return }
 
@@ -231,8 +232,9 @@ final class HistoryController {
                 // A search returns its whole ranked result set, so there is no next page.
                 hasMore = false
             } else {
-                let page = try await store.loadPage(filter: filter, offset: 0, limit: Self.pageSize)
+                let page = try await store.loadPage(filter: filter, after: nil, limit: Self.pageSize)
                 records = visible(page)
+                pageCursor = page.last
                 hasMore = page.count == Self.pageSize
             }
             usage = try await store.storageUsage()
@@ -263,14 +265,16 @@ final class HistoryController {
         guard hasMore, let store, !isLoading, !isPaging else { return }
         isPaging = true
         defer { isPaging = false }
-        pageOffset += Self.pageSize
         do {
-            let page = try await store.loadPage(filter: filter, offset: pageOffset, limit: Self.pageSize)
-            records.append(contentsOf: visible(page))
+            // After the last row shown, not at an offset: a capture that arrived or left
+            // since the last page would shift an offset by one (docs/18 OUT-9).
+            let page = try await store.loadPage(filter: filter, after: pageCursor, limit: Self.pageSize)
+            let shown = Set(records.map(\.id))
+            records.append(contentsOf: visible(page).filter { !shown.contains($0.id) })
+            pageCursor = page.last ?? pageCursor
             hasMore = page.count == Self.pageSize
             loadError = nil
         } catch {
-            pageOffset = max(0, pageOffset - Self.pageSize)
             loadError = error.localizedDescription
             logger.error("Could not page history: \(error.localizedDescription, privacy: .public)")
         }
@@ -477,7 +481,9 @@ final class HistoryController {
         var ingested: Set<UUID> = []
         for draft in batch {
             do {
-                try await ingested.insert(store.ingest(draft).id)
+                let record = try await store.ingest(draft)
+                ingested.insert(record.id)
+                showInOpenWindow(record)
             } catch {
                 logger.error("History ingest failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -524,5 +530,17 @@ private extension HistoryController {
             message: String(localized: "History could not be read, so Kadr rebuilt it: \(count) captures recovered.")
                 + " " + String(localized: "The unreadable file was kept beside it.")
         ))
+    }
+
+    /// Puts a fresh capture at the top of an open, newest-first grid it belongs in, so the
+    /// window does not go stale until the next reload (docs/18 OUT-9). Other sorts and a
+    /// search pick it up when they next query; inserting mid-list would move the rows under
+    /// the pointer.
+    func showInOpenWindow(_ record: HistoryRecord) {
+        guard window != nil, !isSearching, filter.sort == .newest,
+              HistoryStore.matches(record, filter: filter),
+              !records.contains(where: { $0.id == record.id })
+        else { return }
+        records.insert(record, at: 0)
     }
 }
