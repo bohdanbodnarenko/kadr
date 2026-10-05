@@ -27,7 +27,6 @@ final class QuickAccessManager {
     @ObservationIgnored var editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
     /// The helper connection for GIF encoding (docs/03 §1.8).
-    @ObservationIgnored let vision = VisionClient()
     @ObservationIgnored let textRecognizer = TextRecognizer()
     /// Shows what OCR found, the same panel the selection overlay's text mode uses.
     @ObservationIgnored let textToast = TextCaptureToast()
