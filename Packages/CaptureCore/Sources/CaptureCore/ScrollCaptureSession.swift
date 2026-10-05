@@ -96,7 +96,7 @@ public actor ScrollCaptureSession {
         guard !pixels.isEmpty else { throw CaptureError.emptyRegion }
 
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr-Scroll-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("\(Self.frameFolderPrefix)\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         self.directory = directory
@@ -171,6 +171,24 @@ public actor ScrollCaptureSession {
         guard isCapturing, !isStopping else { return }
         logger.error("Scrolling capture stream stopped by the system")
         onInterrupted?()
+    }
+
+    /// The prefix every session's frame folder carries in the temporary directory.
+    public static let frameFolderPrefix = "Kadr-Scroll-"
+
+    /// Deletes frame folders a crashed session left behind. Called once at launch, when no
+    /// session can be running (docs/18 §4.2 P3).
+    @discardableResult
+    public static func sweepOrphanedFrames(in temporary: URL = FileManager.default.temporaryDirectory) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(at: temporary, includingPropertiesForKeys: nil) else {
+            return 0
+        }
+        var removed = 0
+        for entry in entries where entry.lastPathComponent.hasPrefix(frameFolderPrefix) {
+            if (try? manager.removeItem(at: entry)) != nil { removed += 1 }
+        }
+        return removed
     }
 
     /// Stops and deletes everything the session wrote.

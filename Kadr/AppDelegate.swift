@@ -386,6 +386,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
+        // Frames from a scrolling capture that crashed mid-way (docs/18 §4.2 P3).
+        Task.detached(priority: .utility) { ScrollCaptureSession.sweepOrphanedFrames() }
         recoverInterruptedFootageThenSweep()
 
         // Open the library after the status item is up, so SQLite cannot eat into the
