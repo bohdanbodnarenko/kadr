@@ -79,7 +79,7 @@ enum MoveToApplications {
     /// Whether a copy already in Applications may be replaced: only by the same build or a
     /// newer one. Build numbers compare numerically, part by part; an unreadable one is
     /// replaced, since there is nothing to protect.
-    static func shouldReplace(existing: String?, with incoming: String?) -> Bool {
+    nonisolated static func shouldReplace(existing: String?, with incoming: String?) -> Bool {
         guard let existing, let incoming else { return true }
         return existing.compare(incoming, options: .numeric) != .orderedDescending
     }
