@@ -192,7 +192,11 @@ struct OnboardingView: View {
             // could overwrite a matrix tuned in Settings (docs/18 SH-6).
             Picker("After capturing", selection: Binding<DefaultCaptureAction?>(
                 get: { settings.afterCapture.equivalentDefaultAction },
-                set: { if let action = $0 { settings.defaultAction = action } }
+                set: {
+                    if let action = $0 {
+                        settings.defaultAction = action
+                    }
+                }
             )) {
                 ForEach(DefaultCaptureAction.allCases, id: \.self) { action in
                     Text(action.title).tag(DefaultCaptureAction?.some(action))

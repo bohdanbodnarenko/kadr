@@ -57,8 +57,8 @@ struct OverlayPane: View {
                 Toggle("Always show actions", isOn: $settings.overlayAlwaysShowActions)
                 // One fact per sentence, the least obvious first (docs/14 UX-10).
                 Text("Dismissing a card never deletes its file. Hovering pauses auto-dismiss.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Card buttons") {
