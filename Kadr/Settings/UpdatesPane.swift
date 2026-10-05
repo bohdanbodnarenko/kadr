@@ -67,6 +67,13 @@ struct UpdatesPane: View {
                         }
                         .controlSize(.small)
                         .accessibilityLabel("Copy version")
+                        .task(id: copiedVersion) {
+                            // "Copied" said once, then the button is a button again
+                            // (docs/18 §4.6 P3). Lives only as long as the pane does.
+                            guard copiedVersion else { return }
+                            try? await Task.sleep(for: .seconds(2))
+                            copiedVersion = false
+                        }
                     }
                 }
                 LabeledContent("Diagnostics") {
@@ -75,6 +82,11 @@ struct UpdatesPane: View {
                         copiedSummary = true
                     }
                     .controlSize(.small)
+                    .task(id: copiedSummary) {
+                        guard copiedSummary else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        copiedSummary = false
+                    }
                     .help("Copies this Mac's setup and Kadr's settings as text, for a bug report. "
                         + "No file names or captures are included.")
                 }

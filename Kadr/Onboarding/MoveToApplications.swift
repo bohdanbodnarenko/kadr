@@ -76,6 +76,14 @@ enum MoveToApplications {
         }
     }
 
+    /// Whether a copy already in Applications may be replaced: only by the same build or a
+    /// newer one. Build numbers compare numerically, part by part; an unreadable one is
+    /// replaced, since there is nothing to protect.
+    static func shouldReplace(existing: String?, with incoming: String?) -> Bool {
+        guard let existing, let incoming else { return true }
+        return existing.compare(incoming, options: .numeric) != .orderedDescending
+    }
+
     private static func move(_ bundle: URL) throws -> URL {
         let fileManager = FileManager.default
         let system = URL(fileURLWithPath: "/Applications", isDirectory: true)
@@ -83,8 +91,17 @@ enum MoveToApplications {
         try fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
         let destination = folder.appendingPathComponent(bundle.lastPathComponent, isDirectory: true)
 
-        // An older copy goes to the Trash rather than being deleted: it is the user's.
+        // An older copy goes to the Trash rather than being deleted: it is the user's. A
+        // newer one is kept and opened instead: moving a stale download over an updated
+        // install would be a silent downgrade (docs/18 §4.6 P3).
         if fileManager.fileExists(atPath: destination.path) {
+            guard Self.shouldReplace(
+                existing: Bundle(url: destination)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+                with: Bundle(url: bundle)?.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+            ) else {
+                logger.notice("A newer Kadr is already in Applications; opening that one")
+                return destination
+            }
             try fileManager.trashItem(at: destination, resultingItemURL: nil)
         }
         try fileManager.copyItem(at: bundle, to: destination)

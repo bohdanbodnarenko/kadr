@@ -18,4 +18,15 @@ struct MoveToApplicationsTests {
     func hostIsNotOffered() {
         #expect(!RunLocation.classify(bundlePath: Bundle.main.bundlePath).shouldOfferMove)
     }
+
+    @Test("Only the same or an older build in Applications is replaced", arguments: [
+        ("100", "101", true),
+        ("101", "101", true),
+        ("102", "101", false),
+        ("1.10", "1.9", false),
+        ("1.9", "1.10", true)
+    ] as [(String?, String?, Bool)] + [(nil, "5", true), ("5", nil, true)])
+    func replacement(existing: String?, incoming: String?, replaces: Bool) {
+        #expect(MoveToApplications.shouldReplace(existing: existing, with: incoming) == replaces)
+    }
 }
