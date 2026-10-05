@@ -150,11 +150,18 @@ struct HistoryView: View {
             } else {
                 ScrollView {
                     if controller.records.isEmpty, !controller.isLoading {
-                        ContentUnavailableView(
-                            emptyTitle,
-                            systemImage: controller.isSearching ? "magnifyingglass" : "clock",
-                            description: Text(emptyDescription)
-                        )
+                        ContentUnavailableView {
+                            Label(emptyTitle, systemImage: controller.isSearching ? "magnifyingglass" : "clock")
+                        } description: {
+                            Text(emptyDescription)
+                        } actions: {
+                            if hasActiveFilters {
+                                Button("Clear Filters") {
+                                    kindFilter = nil
+                                    dateFilter = .all
+                                }
+                            }
+                        }
                         .frame(maxWidth: .infinity, minHeight: 280)
                     } else {
                         LazyVGrid(columns: columns, spacing: 12) {
@@ -295,15 +302,27 @@ struct HistoryView: View {
         }
     }
 
+    /// Whether a type or date filter is narrowing the grid. Sort never hides anything.
+    var hasActiveFilters: Bool {
+        kindFilter != nil || dateFilter != .all
+    }
+
+    /// A filtered-out grid is not an empty History, and saying "No captures yet" over a
+    /// library of hundreds sent people looking for lost captures (docs/18 OUT-7).
     private var emptyTitle: String {
-        controller.isSearching ? "No matches" : "No captures yet"
+        if controller.isSearching {
+            return "No matches"
+        }
+        return hasActiveFilters ? "No captures match these filters" : "No captures yet"
     }
 
     /// Says *why* there is nothing, which for a search over a half-built index is the
     /// difference between "no results" and "not read yet" (docs/03 §5 P3).
     private var emptyDescription: String {
         guard controller.isSearching else {
-            return "Captures you take show up here, and in the menu bar strip."
+            return hasActiveFilters
+                ? "Clear the filters to see every capture."
+                : "Captures you take show up here, and in the menu bar strip."
         }
         if !controller.indexing.isAllowed {
             return "Search reads the text in your captures. Turn it on in Settings → History, "
