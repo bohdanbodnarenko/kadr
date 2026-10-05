@@ -73,7 +73,11 @@ final class SaveAsAccessory: NSObject {
         if let type {
             panel?.allowedContentTypes = [type]
         }
-        let lossy = if case let .image(format) = choice { format.isLossy } else { false }
+        let lossy = if case let .image(format) = choice {
+            format.isLossy
+        } else {
+            false
+        }
         qualitySlider.isEnabled = lossy
         qualityLabel.textColor = lossy ? .labelColor : .disabledControlTextColor
     }

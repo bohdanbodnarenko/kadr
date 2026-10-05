@@ -51,14 +51,14 @@ struct CanvasAccessibilityTests {
     @Test(
         "Tab walks the annotations and lets focus leave past either end",
         arguments: [
-            ([Int](), false, 0),
+            ([Int](), false, 0 as Int?),
             ([Int](), true, 2),
             ([0], false, 1),
             ([2], false, nil),
             ([0], true, nil),
             ([0, 1], false, 2),
             ([1, 2], true, 0)
-        ] as [([Int], Bool, Int?)]
+        ]
     )
     func tabOrder(selected: [Int], backward: Bool, expected: Int?) {
         let items = CanvasAccessibility.items(for: [Self.arrow(Self.red), Self.arrow(Self.blue), Self.arrow(Self.red)])

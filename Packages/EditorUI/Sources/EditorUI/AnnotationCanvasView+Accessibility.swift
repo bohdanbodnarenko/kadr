@@ -81,7 +81,9 @@ public extension AnnotationCanvasView {
             after: model.selection,
             backward: event.modifierFlags.contains(.shift)
         ) else {
-            if !model.selection.isEmpty { model.selection = [] }
+            if !model.selection.isEmpty {
+                model.selection = []
+            }
             return false
         }
         selectForAccessibility(next)

@@ -84,7 +84,7 @@ public struct EditorAutosave: Sendable {
         let base = baseURL(for: captureURL)
         let checksumFile = stem(for: captureURL).appendingPathExtension("basecrc")
         let checksum = String(contents.baseImageCRC32 ?? KadrDocumentFile.crc32(of: contents.baseImagePNG))
-        let stored = (try? Data(contentsOf: checksumFile)).map { String(decoding: $0, as: UTF8.self) }
+        let stored = (try? Data(contentsOf: checksumFile)).flatMap { String(bytes: $0, encoding: .utf8) }
         if stored != checksum || !manager.fileExists(atPath: base.path) {
             try contents.baseImagePNG.write(to: base, options: .atomic)
             try Data(checksum.utf8).write(to: checksumFile, options: .atomic)

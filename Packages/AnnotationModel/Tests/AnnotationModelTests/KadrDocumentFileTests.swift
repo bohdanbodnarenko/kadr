@@ -302,7 +302,7 @@ struct KadrDocumentFileCompatibilityTests {
     @Test("An unknown command type is a newer Kadr, not a broken file")
     func unknownCommand() throws {
         let base = try JSONEncoder().encode(makeContents().document.baseImage)
-        let json = #"{"version":1,"baseImage":"# + String(decoding: base, as: UTF8.self)
+        let json = try #"{"version":1,"baseImage":"# + #require(String(bytes: base, encoding: .utf8))
             + #","commands":[{"hologram":{"id":"x"}}]}"#
         #expect(throws: KadrDocumentFile.FileError.newerCommands) {
             try KadrDocumentFile.contents(of: archive(json: json))

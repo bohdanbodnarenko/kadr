@@ -1,5 +1,5 @@
-import AppKit
 import AnnotationModel
+import AppKit
 import Foundation
 
 /// What the pointer does right now (docs/03 §3).
@@ -108,7 +108,7 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
     /// never a tool letter (docs/18 ED-6); ⇧ is allowed so Caps Lock and a held Shift
     /// still choose tools.
     public static func tool(forKeyCode keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> EditorTool? {
-        guard modifiers.intersection([.command, .option, .control]).isEmpty else { return nil }
+        guard modifiers.isDisjoint(with: [.command, .option, .control]) else { return nil }
         return allCases.first { $0.shortcutKeyCode == keyCode }
     }
 

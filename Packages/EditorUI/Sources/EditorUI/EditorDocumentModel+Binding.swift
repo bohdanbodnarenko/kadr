@@ -62,7 +62,9 @@ extension EditorDocumentModel {
             if spec.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 document.remove([id])
                 // A box placed and left empty leaves no undo step at all.
-                if isFresh { document.foldLastStep() }
+                if isFresh {
+                    document.foldLastStep()
+                }
             } else if isFresh, typed {
                 // Placing and typing were one act: one undo step (docs/18 ED-5).
                 document.foldLastStep()
