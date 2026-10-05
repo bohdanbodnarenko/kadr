@@ -76,12 +76,17 @@ extension EditorWindowController {
     }
 
     @discardableResult
-    func copyToClipboard(_ image: CGImage) -> Bool {
+    /// Writes the flattened image, plus the selected annotations as a second type when there
+    /// are any, so other apps always get pixels and Kadr's own paste gets objects (ED-2).
+    func copyToClipboard(_ image: CGImage, annotations: Data? = nil) -> Bool {
         guard let data = try? ImageEncoder().encode(image, options: exportEncodingOptions) else {
             return false
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(data, forType: .png)
+        if let annotations {
+            NSPasteboard.general.setData(annotations, forType: .kadrAnnotations)
+        }
         logger.info("Copied the flattened capture")
         return true
     }

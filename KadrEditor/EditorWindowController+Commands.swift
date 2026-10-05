@@ -22,12 +22,10 @@ extension EditorWindowController {
         model.deleteSelection()
     }
 
+    /// ⌘C always puts the flattened image on the clipboard; a selection rides along as
+    /// annotation data for Kadr's own paste (ED-2, docs/03 editor Export).
     @objc func copy(_ sender: Any?) {
-        if copyAnnotationsToPasteboard() {
-            model.requestCopyToast()
-            return
-        }
-        export(.copyFlattened)
+        export(.copy)
     }
 
     @objc func paste(_ sender: Any?) {
