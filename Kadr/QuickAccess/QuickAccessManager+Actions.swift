@@ -41,6 +41,9 @@ extension QuickAccessManager {
         var actions = QuickAccessCardActions()
         actions.copy = { [weak self] in
             self?.copy(item, keepOverlay: NSEvent.modifierFlags.contains(.option))
+            // The next keystroke is a paste somewhere else: it must not land on a card
+            // (docs/18 OUT-1).
+            self?.overlayPanel?.handBackKeyboard()
         }
         actions.save = { [weak self] in self?.save(item) }
         actions.saveAs = { [weak self] in self?.saveAs(item) }
