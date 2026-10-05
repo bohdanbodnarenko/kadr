@@ -86,9 +86,13 @@ struct CaptureImporter {
             let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
             guard now.timeIntervalSince(modified) > maximumAge else { continue }
-            if (try? manager.removeItem(at: entry)) != nil { removed += 1 }
+            if (try? manager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
         }
-        if removed > 0 { logger.info("Swept \(removed, privacy: .public) imported copies") }
+        if removed > 0 {
+            logger.info("Swept \(removed, privacy: .public) imported copies")
+        }
         return removed
     }
 

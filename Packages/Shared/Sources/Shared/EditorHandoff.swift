@@ -62,7 +62,9 @@ public struct EditorHandoff: Sendable {
             let written = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
             guard now.timeIntervalSince(written) > lifetime else { continue }
-            if (try? manager.removeItem(at: entry)) != nil { removed += 1 }
+            if (try? manager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
         }
         return removed
     }

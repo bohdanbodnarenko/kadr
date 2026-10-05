@@ -75,9 +75,9 @@ extension EditorWindowController {
         NSWorkspace.shared.open(url, configuration: configuration)
     }
 
-    @discardableResult
     /// Writes the flattened image, plus the selected annotations as a second type when there
     /// are any, so other apps always get pixels and Kadr's own paste gets objects (ED-2).
+    @discardableResult
     func copyToClipboard(_ image: CGImage, annotations: Data? = nil) -> Bool {
         guard let data = try? ImageEncoder().encode(image, options: exportEncodingOptions) else {
             return false

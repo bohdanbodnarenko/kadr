@@ -447,18 +447,7 @@ final class HistoryController {
             await opened.releaseMemory()
         } catch {
             openTask = nil
-            // Said once per launch: every History read retries the open, and a banner per
-            // attempt would bury the screen (docs/18 X-5a; the rebuild is OUT-3).
-            if !hasReportedOpenFailure {
-                hasReportedOpenFailure = true
-                FailurePresenter.report(
-                    "Kadr could not open your History. Captures are still saved, but History stays empty.",
-                    detail: error.localizedDescription,
-                    logger: logger
-                )
-            } else {
-                logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
-            }
+            reportOpenFailure(error)
         }
     }
 
@@ -482,5 +471,22 @@ final class HistoryController {
         // A capture just landed, so the agent is awake anyway: a good moment to read it
         // (docs/03 §5 — the index never wakes the agent by itself).
         startIndexingIfAllowed()
+    }
+}
+
+private extension HistoryController {
+    /// Said once per launch: every History read retries the open, and a banner per attempt
+    /// would bury the screen (docs/18 X-5a; the rebuild is OUT-3).
+    func reportOpenFailure(_ error: any Error) {
+        guard !hasReportedOpenFailure else {
+            logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        hasReportedOpenFailure = true
+        FailurePresenter.report(
+            "Kadr could not open your History. Captures are still saved, but History stays empty.",
+            detail: error.localizedDescription,
+            logger: logger
+        )
     }
 }

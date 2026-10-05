@@ -135,29 +135,6 @@ public extension StudioDocumentModel {
         try? FileManager.default.removeItem(at: stagingDirectory)
     }
 
-    /// Deletes staged renders older than `maximumAge`, for every session. Called at launch,
-    /// so a copy survives its window long enough to be pasted (docs/18 STU-1).
-    @discardableResult
-    nonisolated static func sweepStagedRenders(
-        olderThan maximumAge: TimeInterval = 24 * 60 * 60,
-        now: Date = Date(),
-        root: URL = stagingRoot
-    ) -> Int {
-        let manager = FileManager.default
-        guard let folders = try? manager.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return 0 }
-        var removed = 0
-        for folder in folders {
-            let modified = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            guard now.timeIntervalSince(modified) > maximumAge else { continue }
-            if (try? manager.removeItem(at: folder)) != nil { removed += 1 }
-        }
-        return removed
-    }
-
     /// A project name as a file name: no path separators, no colon (Finder's slash).
     internal nonisolated static func safeFileName(_ name: String) -> String {
         let cleaned = name

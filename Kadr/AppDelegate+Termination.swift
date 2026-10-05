@@ -60,7 +60,11 @@ extension AppDelegate {
                             guard let logger = self?.logger else { return }
                             // The caller is often a script with nobody watching its exit
                             // code; the person who ran it should still hear (docs/18 X-5a).
-                            FailurePresenter.report("A Kadr automation command failed.", detail: message, logger: logger)
+                            FailurePresenter.report(
+                                "A Kadr automation command failed.",
+                                detail: message,
+                                logger: logger
+                            )
                         }
                     }
                 )
