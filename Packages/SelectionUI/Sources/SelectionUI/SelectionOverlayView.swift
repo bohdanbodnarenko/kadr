@@ -123,6 +123,7 @@ final class SelectionOverlayView: NSView {
         self.mode = mode
         self.purpose = purpose
         interaction = SelectionInteraction(bounds: CGRect(origin: .zero, size: bounds.size))
+        interaction.pixelStep = 1 / scale.factor
         windowHighlight = WindowHighlightLayerGroup(scale: scale)
         loupe = LoupeLayerGroup(sampler: LoupeSampler(image: frozenImage, scale: scale), scale: scale)
         ruler = RulerLayerGroup(scale: scale)
