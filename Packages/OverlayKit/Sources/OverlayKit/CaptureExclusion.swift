@@ -32,6 +32,11 @@ public final class CaptureExclusionRegistry {
 
     private var entries: [Entry] = []
 
+    /// Called after the membership changes, for a capture already running to pick up a
+    /// panel that appeared after its filter was built (docs/18 T-REC-7). Set by whoever owns
+    /// the live capture, and only while it runs.
+    public var onChange: (() -> Void)?
+
     public init() {}
 
     /// Adds a window to the exclusion list. Registering twice is harmless.
@@ -39,10 +44,12 @@ public final class CaptureExclusionRegistry {
         sweep()
         guard !entries.contains(where: { $0.window === window }) else { return }
         entries.append(Entry(window: window))
+        onChange?()
     }
 
     public func unregister(_ window: NSWindow) {
         entries.removeAll { $0.window === window || $0.window == nil }
+        onChange?()
     }
 
     /// The window numbers to keep out of a capture, as ScreenCaptureKit knows them.

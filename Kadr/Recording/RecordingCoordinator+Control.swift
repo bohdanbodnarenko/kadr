@@ -224,6 +224,7 @@ extension RecordingCoordinator {
         wantsGIFExport = false
         microphoneDropped = false
         cameraThisTake = nil
+        stopFollowingExclusionChanges()
     }
 
     func cancel() {

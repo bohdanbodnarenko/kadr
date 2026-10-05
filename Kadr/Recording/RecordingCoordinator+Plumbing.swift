@@ -3,6 +3,7 @@ import CaptureCore
 import Foundation
 import MediaExport
 import os
+import OverlayKit
 import RecordingCore
 import SettingsKit
 import Shared
@@ -78,6 +79,7 @@ extension RecordingCoordinator {
             hygiene?.beginRecording()
             isTransitioning = false
             showStartNotice()
+            followExclusionChanges()
             logger.info("Recording started")
             if pendingInterruption != nil {
                 liveNotice = "Saving what was captured…"
@@ -129,6 +131,26 @@ extension RecordingCoordinator {
             guard let self, liveNotice == notice else { return }
             liveNotice = nil
         }
+    }
+
+    /// Keeps the live stream's filter in step with Kadr's panels for the whole take
+    /// (docs/18 T-REC-7).
+    ///
+    /// A panel that opens mid-take — a card, a notice, the bubble — was kept out of the file
+    /// only by its sharing type, which macOS 15.2+ honours and earlier versions do not. The
+    /// push waits a turn: panels register before they are ordered on screen, and a window
+    /// with no number yet cannot be excluded.
+    func followExclusionChanges() {
+        CaptureExclusionRegistry.shared.onChange = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, state == .recording || state == .paused else { return }
+                await engine.updateExcludedWindowIDs(CaptureExclusionPush.ids)
+            }
+        }
+    }
+
+    func stopFollowingExclusionChanges() {
+        CaptureExclusionRegistry.shared.onChange = nil
     }
 
     func startTicking() {
