@@ -117,9 +117,18 @@ extension SelectionOverlayView {
         ruler.show(along: rect)
     }
 
+    /// A typed size is in points; say so, and on Retina say what it comes to in pixels, or
+    /// "1280x720" silently yields a 2560×1440 file (docs/18 §4.2 P3).
+    func typedSizeText() -> String {
+        let scale = displayScale.factor
+        guard let size = sizeEntry.size, scale != 1 else { return sizeEntry.displayText + " pt" }
+        let pixels = "\(Int((size.width * scale).rounded())) × \(Int((size.height * scale).rounded())) px"
+        return "\(sizeEntry.displayText) pt (\(pixels))"
+    }
+
     func updateBadge() {
         let measurement: String? = if !sizeEntry.isEmpty {
-            sizeEntry.displayText
+            typedSizeText()
         } else if let rect = interaction.rect, !rect.isEmpty {
             DimensionFormatter.text(for: rect, scale: displayScale)
         } else if isPrecisionMode, let pointer = interaction.pointer {

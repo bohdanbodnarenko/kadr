@@ -143,10 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hud = AllInOneHUD(
             settings: settings,
             perform: { [weak self] mode in self?.performAllInOne(mode) },
-            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
+            pickDisplay: { [weak self] id in self?.captureIslandDisplay(id) },
             performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
-            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) },
+            captureScreen: { [weak self] target in self?.captureIslandScreen(target) },
             availableUpdate: { UpdaterManager.shared.availableUpdateVersion },
             installUpdate: { UpdaterManager.shared.checkForUpdates() }
         )
@@ -386,6 +386,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
+        // Frames from a scrolling capture that crashed mid-way (docs/18 §4.2 P3).
+        Task.detached(priority: .utility) { ScrollCaptureSession.sweepOrphanedFrames() }
         recoverInterruptedFootageThenSweep()
 
         // Open the library after the status item is up, so SQLite cannot eat into the

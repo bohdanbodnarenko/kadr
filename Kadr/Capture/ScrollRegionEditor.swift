@@ -18,7 +18,7 @@ import SwiftUI
 @MainActor
 final class ScrollRegionEditor {
     private let screen: NSScreen
-    private var panel: ScrollRegionPanel?
+    private(set) var panel: ScrollRegionPanel?
     private var controls: NonActivatingPanel?
     private let keys = TransientHotKeys()
 
@@ -177,7 +177,7 @@ final class ScrollRegionEditor {
     /// Hot keys rather than a local monitor: a local monitor only sees keys while Kadr is
     /// active, and the moment the user clicks into the page to line it up, it is not.
     private func installKeys() {
-        keys.start([
+        keys.start(arrowBindings().merging([
             .returnKey: { [weak self] in self?.startIfEditing(auto: false) },
             .enter: { [weak self] in self?.startIfEditing(auto: false) },
             .optionReturn: { [weak self] in self?.startIfEditing(auto: true) },
@@ -185,7 +185,7 @@ final class ScrollRegionEditor {
                 guard self?.controls != nil else { return }
                 self?.cancel()
             }
-        ])
+        ]) { _, new in new })
     }
 
     private func startIfEditing(auto: Bool) {
@@ -224,7 +224,7 @@ final class ScrollRegionPanel: NonActivatingPanel, InteractivelyMasked {
 /// Draws the dim, the frame, its handles and the move bar, and turns drags into a frame.
 final class ScrollRegionView: NSView {
     private(set) var rect: CGRect
-    private let limits: CGRect
+    let limits: CGRect
     var isLocked = false {
         didSet { layoutFrame() }
     }
@@ -386,6 +386,12 @@ final class ScrollRegionView: NSView {
         if target == .move {
             NSCursor.closedHand.set()
         }
+    }
+
+    func setRect(_ newRect: CGRect) {
+        rect = newRect
+        layoutFrame()
+        onChange(rect)
     }
 
     override func mouseDragged(with event: NSEvent) {

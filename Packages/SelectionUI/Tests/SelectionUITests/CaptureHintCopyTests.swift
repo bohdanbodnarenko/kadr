@@ -46,4 +46,17 @@ struct CaptureHintCopyTests {
         )
         #expect(text?.contains("Tab") == true)
     }
+
+    /// docs/14 UX-17C: confirm mode says how to finish a selection.
+    @Test("Confirm mode teaches Return once a selection is drawn", arguments: [true, false])
+    func confirmMode(confirms: Bool) {
+        let text = CaptureHintCopy.text(
+            purpose: .capture,
+            mode: .area,
+            phase: .selected,
+            isEyedropper: false,
+            confirmsSelection: confirms
+        )
+        #expect((text?.contains("Return") == true) == confirms)
+    }
 }

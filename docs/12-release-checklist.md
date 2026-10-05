@@ -44,7 +44,7 @@ the longer sections below, which are per release.
    - [ ] passes
 9. **Updates:** Check for Updates… finds the next build on the beta channel.
    - [ ] passes
-10. **Idle budgets:** `make perf` on the release build — idle RSS below 30 MB, 0 % CPU over 60 s.
+10. **Idle budgets:** `make perf` on the release build — idle RSS below 30 MB, 0 % CPU over 60 s. Take one area capture with the hotkey first, so the same run reads "hotkey to overlay" (< 100 ms, PRD §8) from the log.
    - [ ] passes
 
 ---

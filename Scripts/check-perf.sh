@@ -25,6 +25,7 @@ RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; DIM=$'\033[2m'; OF
 # PRD §8 and docs/10 R2.7.
 STATUS_ITEM_BUDGET_MS=150
 LAUNCH_BUDGET_MS=300
+OVERLAY_BUDGET_MS=100
 IDLE_RSS_WARN_MB=30
 IDLE_RSS_FAIL_MB=40
 IDLE_SECONDS=60
@@ -138,6 +139,17 @@ if [ -z "$LAUNCH_MS" ]; then
     LAUNCH_MS="null"
 else
     judge_ms "$LAUNCH_MS" "$LAUNCH_BUDGET_MS" "hotkeys armed"
+fi
+
+# Hotkey to overlay (< 100 ms, PRD §8). Needs a Screen Recording grant and a capture
+# taken during the run, so a missing reading is a note, not a failure (docs/18 CAP-9).
+OVERLAY_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+    --last 10m --info --style compact 2>/dev/null \
+    | sed -n 's/.*Overlay presented in \([0-9.]*\) ms.*/\1/p' | tail -1)
+if [ -z "$OVERLAY_MS" ]; then
+    printf '%s\n' "${DIM}  hotkey to overlay: no capture in the last 10 minutes; take one with a grant to measure${OFF}"
+else
+    judge_ms "$OVERLAY_MS" "$OVERLAY_BUDGET_MS" "hotkey to overlay"
 fi
 
 # ---------------------------------------------------------------- idle memory

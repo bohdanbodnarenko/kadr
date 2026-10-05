@@ -1,4 +1,5 @@
 import AppKit
+import CaptureCore
 import os
 import SelectionUI
 import Shared
@@ -15,9 +16,9 @@ extension AreaCaptureCoordinator {
     /// The same freeze as any other capture, for the same reason: the colour reported is
     /// the colour in the frozen image, so it cannot drift from what the user is looking
     /// at while they line the loupe up (docs/04 §4.2).
-    func beginColorPick() {
+    func beginColorPick(frontmost: AppIdentity? = nil) {
         startsInEyedropperMode = true
-        beginOverlayCapture(mode: .area)
+        beginOverlayCapture(mode: .area, frontmost: frontmost)
     }
 
     /// Puts a picked colour on the clipboard and says so (docs/06 M22).

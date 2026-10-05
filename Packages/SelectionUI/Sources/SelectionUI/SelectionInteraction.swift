@@ -72,6 +72,12 @@ public struct SelectionInteraction: Equatable, Sendable {
     /// ⇧ still forces a square, which is the documented modifier and the override when a
     /// preset is on (docs/03 §1.1).
     public var lockedAspect: CGSize?
+    /// One device pixel in points, so an arrow nudge moves 1 px as docs/03 §1.1 says
+    /// rather than 1 pt (2 px on Retina) (docs/18 CAP-6).
+    public var pixelStep: CGFloat = 1
+    /// Arrow nudges made while the mouse is still down, carried into every later drag
+    /// point so the next mouse move does not undo them (docs/18 CAP-6).
+    public private(set) var dragNudge: CGSize = .zero
 
     /// True while Space is held, which turns a drag into a move (docs/03 §1.1).
     public private(set) var isMovingSelection = false
@@ -94,6 +100,7 @@ public struct SelectionInteraction: Equatable, Sendable {
         let point = clampToBounds(point)
         anchor = point
         pointer = point
+        dragNudge = .zero
         rect = CGRect(origin: point, size: .zero)
         phase = .dragging
         isAlignedToEdge = false
@@ -101,7 +108,7 @@ public struct SelectionInteraction: Equatable, Sendable {
 
     public mutating func drag(to point: CGPoint, modifiers: SelectionModifiers = []) {
         guard phase == .dragging, let anchor else { return }
-        let point = clampToBounds(point)
+        let point = clampToBounds(CGPoint(x: point.x + dragNudge.width, y: point.y + dragNudge.height))
         pointer = point
 
         if isMovingSelection {
@@ -250,17 +257,31 @@ public struct SelectionInteraction: Equatable, Sendable {
 
     // MARK: - Keyboard
 
-    /// Arrow keys: 1 point, or 10 with ⇧ (docs/03 §1.1).
+    /// Arrow keys: 1 pixel, or 10 with ⇧ (docs/03 §1.1).
+    ///
+    /// Mid-drag, the nudge shifts the whole drag — anchor and the corner under the
+    /// pointer — and is remembered, so the mouse carries on from the nudged place.
     public mutating func nudge(_ direction: NudgeDirection, coarse: Bool = false) {
-        let step: CGFloat = coarse ? 10 : 1
-        let offset = direction.offset
-        move(by: CGSize(width: offset.width * step, height: offset.height * step))
+        let step = (coarse ? 10 : 1) * pixelStep
+        let delta = CGSize(width: direction.offset.width * step, height: direction.offset.height * step)
+        if phase == .dragging, !isMovingSelection, let anchor, let pointer {
+            dragNudge.width += delta.width
+            dragNudge.height += delta.height
+            self.anchor = clampToBounds(CGPoint(x: anchor.x + delta.width, y: anchor.y + delta.height))
+            let raw = CGPoint(
+                x: pointer.x - dragNudge.width + delta.width,
+                y: pointer.y - dragNudge.height + delta.height
+            )
+            drag(to: raw)
+            return
+        }
+        move(by: delta)
     }
 
     /// Arrow keys with the selection being resized rather than moved.
     public mutating func resize(_ direction: NudgeDirection, coarse: Bool = false) {
         guard let rect else { return }
-        let step: CGFloat = coarse ? 10 : 1
+        let step = (coarse ? 10 : 1) * pixelStep
         let offset = direction.offset
         let proposed = CGRect(
             x: rect.minX,

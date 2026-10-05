@@ -123,6 +123,7 @@ final class AllInOneHUD {
         }
         self.panel = panel
         self.hosting = hosting
+        openedOrigin = panel.frame.origin
         onShowingChanged?()
         if let onPresented {
             // A turn later, once the panel is on screen and laid out: a popover shown
@@ -196,12 +197,20 @@ final class AllInOneHUD {
         }
         guard let panel else { return }
         onClosed?()
+        rememberPlacement(of: panel)
         CaptureExclusionRegistry.shared.unregister(panel)
         panel.orderOut(nil)
         panel.contentView = nil
         self.panel = nil
         hosting = nil
         onShowingChanged?()
+    }
+
+    /// Remembers the island's spot only if the user dragged it away from where it opened,
+    /// so an island nobody moved keeps following the default placement.
+    private func rememberPlacement(of panel: NSWindow) {
+        guard panel.frame.origin != openedOrigin, let visible = panel.screen?.visibleFrame else { return }
+        IslandPlacementMemory.remember(panel.frame, in: visible)
     }
 
     /// The glass capsule in screen space: the panel less the slack `RecordingIslandSurface`
@@ -224,6 +233,8 @@ final class AllInOneHUD {
     }
 
     private var handOffFrame: NSRect?
+    /// Where the panel opened, to tell a moved island from one left alone.
+    private var openedOrigin: CGPoint?
     private static let handOffFade: TimeInterval = 0.18
 
     /// Leaves for the recorder: remembers where the glass was and fades rather than
@@ -265,6 +276,10 @@ final class AllInOneHUD {
     /// Bottom-centre of the pointer's screen, clear of the menu bar and most window chrome.
     private static func centeredFrame(for size: CGSize) -> NSRect {
         let visible = ActiveScreen.resolve()?.visibleFrame ?? .zero
+        // Where the user last left it, if they moved it (docs/18 §4.2 P3).
+        if let remembered = IslandPlacementMemory.frame(for: size, in: visible) {
+            return remembered
+        }
         let margin: CGFloat = 22
         let x = visible.midX - size.width / 2
         let y = visible.minY + margin

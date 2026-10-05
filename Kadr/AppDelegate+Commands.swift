@@ -144,13 +144,23 @@ extension AppDelegate {
         }
     }
 
+    /// The island's display pick, named after the app the island saved (docs/17 T-CAP-3).
+    func captureIslandDisplay(_ displayID: CGDirectDisplayID) {
+        areaCapture.captureDisplay(displayID, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
+    /// The island's Screen menu, likewise.
+    func captureIslandScreen(_ target: FullscreenTarget?) {
+        areaCapture.captureFullscreen(target: target, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
         let frontmost = allInOne.takeFrontmostBeforePresent()
         switch mode {
         case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
         case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
-        case .screen: areaCapture.captureAllDisplays()
+        case .screen: areaCapture.captureAllDisplays(frontmost: frontmost)
         case .record:
             let source = allInOne.takeHandOffFrame()
             // A take is live, starting or saving: the recorder would only arm a second one
@@ -165,7 +175,7 @@ extension AppDelegate {
         case .gif: recording.beginGIFRecording()
         case .scrolling: scrollCapture.begin()
         case .ocr: areaCapture.beginOverlayCapture(mode: .area, purpose: .recognizeText, frontmost: frontmost)
-        case .color: areaCapture.beginColorPick()
+        case .color: areaCapture.beginColorPick(frontmost: frontmost)
         }
     }
 

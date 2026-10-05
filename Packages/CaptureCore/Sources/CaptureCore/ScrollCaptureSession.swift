@@ -35,6 +35,12 @@ public actor ScrollCaptureSession {
     /// Called on the main actor as each frame lands, for the growing-strip preview and the
     /// settle detection the auto tier needs.
     private var onFrame: (@Sendable (ScrollFrameNote) -> Void)?
+    /// Called when macOS ends the stream while the user had not asked to stop — a display
+    /// unplugged, the grant withdrawn — so the caller can stitch what it has and say so
+    /// rather than wait on a capture that will never grow (docs/18 CAP-8).
+    private var onInterrupted: (@Sendable () -> Void)?
+    /// True between Stop and the last buffered frame being written.
+    private var isStopping = false
 
     public init() {}
 
@@ -61,6 +67,7 @@ public actor ScrollCaptureSession {
         on displayID: CGDirectDisplayID,
         axis: ScrollAxis = .vertical,
         frameRate: Int = 8,
+        onInterrupted: (@Sendable () -> Void)? = nil,
         onFrame: @escaping @Sendable (ScrollFrameNote) -> Void
     ) async throws {
         guard !isCapturing else {
@@ -89,11 +96,12 @@ public actor ScrollCaptureSession {
         guard !pixels.isEmpty else { throw CaptureError.emptyRegion }
 
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("Kadr-Scroll-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("\(Self.frameFolderPrefix)\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         self.directory = directory
         self.onFrame = onFrame
+        self.onInterrupted = onInterrupted
         captureAxis = axis
         pixelSize = PixelSize(width: pixels.width, height: pixels.height)
         framePaths = []
@@ -123,6 +131,8 @@ public actor ScrollCaptureSession {
             for await box in output.buffers {
                 await self?.write(box)
             }
+            // The stream only finishes on its own when macOS stopped it.
+            await self?.streamEnded()
         }
 
         do {
@@ -137,18 +147,50 @@ public actor ScrollCaptureSession {
     /// Stops the stream and returns the frames, in order.
     @discardableResult
     public func stop() async -> [URL] {
-        guard isCapturing else { return framePaths }
-        isCapturing = false
+        guard isCapturing, !isStopping else { return framePaths }
+        isStopping = true
 
+        // Drain rather than cancel: the last frames buffered on SCK's queue are the end
+        // of the page, and dropping them cut the stitch short (docs/18 CAP-8).
         try? await stream?.stopCapture()
+        output?.finish()
+        await consumeTask?.value
+        isCapturing = false
+        isStopping = false
         stream = nil
         output = nil
-        consumeTask?.cancel()
         consumeTask = nil
         onFrame = nil
+        onInterrupted = nil
 
         logger.info("Scrolling capture stopped with \(self.framePaths.count, privacy: .public) frames")
         return framePaths
+    }
+
+    private func streamEnded() {
+        guard isCapturing, !isStopping else { return }
+        logger.error("Scrolling capture stream stopped by the system")
+        onInterrupted?()
+    }
+
+    /// The prefix every session's frame folder carries in the temporary directory.
+    public static let frameFolderPrefix = "Kadr-Scroll-"
+
+    /// Deletes frame folders a crashed session left behind. Called once at launch, when no
+    /// session can be running (docs/18 §4.2 P3).
+    @discardableResult
+    public static func sweepOrphanedFrames(in temporary: URL = FileManager.default.temporaryDirectory) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(at: temporary, includingPropertiesForKeys: nil) else {
+            return 0
+        }
+        var removed = 0
+        for entry in entries where entry.lastPathComponent.hasPrefix(frameFolderPrefix) {
+            if (try? manager.removeItem(at: entry)) != nil {
+                removed += 1
+            }
+        }
+        return removed
     }
 
     /// Stops and deletes everything the session wrote.
@@ -264,6 +306,10 @@ private final class ScrollStreamOutput: NSObject, SCStreamOutput, SCStreamDelega
     }
 
     deinit {
+        continuation.finish()
+    }
+
+    func finish() {
         continuation.finish()
     }
 

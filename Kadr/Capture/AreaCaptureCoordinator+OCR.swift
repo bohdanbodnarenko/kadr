@@ -37,8 +37,11 @@ extension AreaCaptureCoordinator {
                     automation.report(.text(recognition.text))
                 }
             } catch {
-                logger.error("Text recognition failed: \(error.localizedDescription, privacy: .public)")
-                FeedbackAnnouncement.post(ActionUnavailableReason.couldNotReadText.message)
+                FailurePresenter.report(
+                    "Kadr could not recognise text in that window.",
+                    detail: error.localizedDescription,
+                    logger: logger
+                )
                 automation.report(.failed(error.localizedDescription))
             }
         }
