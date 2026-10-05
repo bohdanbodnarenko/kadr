@@ -133,6 +133,13 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
     /// user has ever made about this and throwing it away to show them a new pane would be
     /// rude. Every old case has an exact equivalent; the overlay is added throughout
     /// because the old behaviour always showed a card.
+    /// The single old-style action this matrix is exactly equivalent to, or nil when the
+    /// user has tuned the matrix past what one radio choice can say. Read by onboarding so
+    /// it shows the real behaviour instead of the retired setting (docs/18 SH-6).
+    public var equivalentDefaultAction: DefaultCaptureAction? {
+        DefaultCaptureAction.allCases.first { Self.migrating($0) == self }
+    }
+
     public static func migrating(_ action: DefaultCaptureAction) -> AfterCaptureMatrix {
         let screenshot: AfterCaptureActions = switch action {
         case .copyToClipboard: [.overlay, .copy]
