@@ -13,15 +13,17 @@ import Shared
 @MainActor
 @Observable
 final class HistoryController {
-    private(set) var recent: [HistoryRecord] = []
-    private(set) var records: [HistoryRecord] = []
-    private(set) var usage: HistoryStorageUsage = .zero
+    // Settable from the controller's extension files (Trash, recovery), which split the
+    // type for the file-length cap; nothing outside `HistoryController+*.swift` writes them.
+    var recent: [HistoryRecord] = []
+    var records: [HistoryRecord] = []
+    var usage: HistoryStorageUsage = .zero
     private(set) var hasMore = false
     private(set) var isLoading = false
     /// True while the next page is being fetched; the grid stays visible (docs/14 UX-23).
     private(set) var isPaging = false
     /// The last load or page failure, for inline Retry (docs/14 UX-23).
-    private(set) var loadError: String?
+    var loadError: String?
 
     let cache = ThumbnailCache()
     private(set) var store: HistoryStore?
@@ -34,8 +36,8 @@ final class HistoryController {
     /// Warned once per launch that the size cap stopped short (docs/17 T-OUT-8).
     private var hasWarnedAboutCap = false
     /// Said once per launch that the database could not open (docs/18 X-5a).
-    private var hasReportedOpenFailure = false
-    private let logger = KadrLog.logger(.history)
+    var hasReportedOpenFailure = false
+    let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
     /// The last row of the last page loaded, which the next page starts after (docs/18 OUT-9).
@@ -47,11 +49,16 @@ final class HistoryController {
         filter
     }
 
+    /// Whether the History window is on screen.
+    var isWindowOpen: Bool {
+        window != nil
+    }
+
     private var pending: [HistoryIngest] = []
     /// History deletes inside their Undo window (docs/17 T-OUT-7).
-    @ObservationIgnored private var pendingTrash: [UUID: PendingTrash] = [:]
+    @ObservationIgnored var pendingTrash: [UUID: PendingTrash] = [:]
 
-    private struct PendingTrash {
+    struct PendingTrash {
         let ids: Set<UUID>
         let commit: Task<Void, Never>
     }
@@ -280,67 +287,6 @@ final class HistoryController {
         }
     }
 
-    /// Moves library items to the Trash, with an Undo (docs/14 UX-22, docs/17 T-OUT-7).
-    ///
-    /// The rows go at once and the banner offers Undo; the delete itself waits out the
-    /// Undo window. It has to: the library's files are named by hash, so once they are in
-    /// the Trash, Finder's Put Back restores a `3fa9c1….png` and never the History row.
-    /// Retention eviction stays permanent.
-    func moveToTrash(ids: [UUID]) async {
-        guard !ids.isEmpty else { return }
-        let batch = UUID()
-        let hidden = Set(ids)
-        pendingTrash[batch] = PendingTrash(ids: hidden, commit: Task { [weak self] in
-            try? await Task.sleep(for: FeedbackStatus.undoWindow + .seconds(1))
-            guard !Task.isCancelled else { return }
-            await self?.commitTrash(batch)
-        })
-        records.removeAll { hidden.contains($0.id) }
-        recent.removeAll { hidden.contains($0.id) }
-        let message = ids.count == 1
-            ? String(localized: "Moved to Trash")
-            : String(localized: "Moved \(ids.count) captures to Trash")
-        FailurePresenter.present(.undoable(message) { [weak self] in
-            Task { await self?.undoTrash(batch) }
-        })
-    }
-
-    /// Puts a batch back, before its delete has run.
-    func undoTrash(_ batch: UUID) async {
-        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
-        pending.commit.cancel()
-        logger.info("Put \(pending.ids.count, privacy: .public) history item(s) back")
-        await reload(filter: filter)
-    }
-
-    /// Whether a History delete is still waiting out its Undo window.
-    var hasPendingTrash: Bool {
-        !pendingTrash.isEmpty
-    }
-
-    /// Runs every pending delete now, for quitting (docs/18 OUT-5).
-    func settlePendingTrash() async {
-        for batch in Array(pendingTrash.keys) {
-            pendingTrash[batch]?.commit.cancel()
-            await commitTrash(batch)
-        }
-    }
-
-    /// Deletes a batch whose Undo window has passed.
-    func commitTrash(_ batch: UUID) async {
-        guard let pending = pendingTrash.removeValue(forKey: batch) else { return }
-        await openIfNeeded()
-        guard let store else { return }
-        do {
-            _ = try await store.delete(ids: Array(pending.ids), fileDisposition: .trash)
-            usage = try await store.storageUsage()
-            loadError = nil
-        } catch {
-            loadError = error.localizedDescription
-            logger.error("Could not delete history items: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
     /// Records waiting out their Undo window are not shown, whatever a reload returns.
     private func visible(_ list: [HistoryRecord]) -> [HistoryRecord] {
         let hidden = pendingTrash.values.reduce(into: Set<UUID>()) { $0.formUnion($1.ids) }
@@ -439,7 +385,7 @@ final class HistoryController {
     /// first History action after launch a main-thread stall. Every caller already awaits
     /// this, so the open simply moves to a detached task; callers that arrive while it is
     /// running wait on the same task rather than opening a second pool.
-    private func openIfNeeded() async {
+    func openIfNeeded() async {
         if store != nil {
             await drainPending()
             return
@@ -496,51 +442,5 @@ final class HistoryController {
         // A capture just landed, so the agent is awake anyway: a good moment to read it
         // (docs/03 §5 — the index never wakes the agent by itself).
         startIndexingIfAllowed()
-    }
-}
-
-private extension HistoryController {
-    /// Said once per launch: every History read retries the open, and a banner per attempt
-    /// would bury the screen (docs/18 X-5a; the rebuild is OUT-3).
-    func reportOpenFailure(_ error: any Error) {
-        guard !hasReportedOpenFailure else {
-            logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        hasReportedOpenFailure = true
-        FailurePresenter.report(
-            "Kadr could not open or rebuild your History. Captures are still saved, but History stays empty.",
-            detail: error.localizedDescription,
-            logger: logger,
-            retryTitle: String(localized: "Rebuild Library"),
-            retry: { [weak self] in
-                guard let self else { return }
-                hasReportedOpenFailure = false
-                Task { await self.openIfNeeded() }
-            }
-        )
-    }
-
-    /// Says the library was rebuilt, once, so a History that comes back with fewer
-    /// captures (one whose file is gone) is not a mystery.
-    func reportRecovery(count: Int) {
-        logger.notice("History database was unreadable; rebuilt \(count, privacy: .public) records")
-        FailurePresenter.present(FeedbackStatus(
-            kind: .warning,
-            message: String(localized: "History could not be read, so Kadr rebuilt it: \(count) captures recovered.")
-                + " " + String(localized: "The unreadable file was kept beside it.")
-        ))
-    }
-
-    /// Puts a fresh capture at the top of an open, newest-first grid it belongs in, so the
-    /// window does not go stale until the next reload (docs/18 OUT-9). Other sorts and a
-    /// search pick it up when they next query; inserting mid-list would move the rows under
-    /// the pointer.
-    func showInOpenWindow(_ record: HistoryRecord) {
-        guard window != nil, !isSearching, filter.sort == .newest,
-              HistoryStore.matches(record, filter: filter),
-              !records.contains(where: { $0.id == record.id })
-        else { return }
-        records.insert(record, at: 0)
     }
 }
