@@ -90,7 +90,7 @@ public extension StudioDocumentModel {
         } catch StudioAudioExporter.ExportError.cancelled {
             return
         } catch {
-            failure = .audioExportFailed(error.localizedDescription)
+            failure = .audioExportFailed(error.localizedDescription, to: url, format: format)
         }
     }
 }

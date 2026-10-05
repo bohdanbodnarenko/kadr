@@ -6,8 +6,9 @@ import Testing
 struct StudioFailurePresentationTests {
     @Test("Export failures offer retry and another location")
     func exportFailureActions() {
-        let failure = StudioFailurePresentation.exportFailed("Disk full.")
-        #expect(failure.primaryAction == .retry)
+        let destination = URL(fileURLWithPath: "/Users/me/Movies/Demo.mp4")
+        let failure = StudioFailurePresentation.exportFailed("Disk full.", to: destination)
+        #expect(failure.primaryAction == .retry(.export(destination)))
         #expect(failure.secondaryAction == .chooseExportLocation)
         #expect(failure.style == .inlineBanner)
     }
@@ -17,5 +18,22 @@ struct StudioFailurePresentationTests {
         let failure = StudioFailurePresentation.tidyRefused()
         #expect(failure.style == .sheet)
         #expect(failure.message == StudioDocumentModel.tidyRefusal)
+    }
+
+    // MARK: - docs/18 STU-2: every Retry names what it re-runs
+
+    @Test("Each retryable failure carries its own operation", arguments: [
+        (StudioFailurePresentation.copyEditedFailed("x"), StudioFailurePresentation.Action.retry(.copyEdited)),
+        (.shareEditedFailed("x"), .retry(.shareEdited)),
+        (.speechModelDownloadFailed("x"), .retry(.installSpeechModel)),
+        (.transcriptionFailed("x"), .retry(.transcribe)),
+        (.transcriptionFailed("x", retryable: false), .dismiss),
+        (
+            .audioExportFailed("x", to: URL(fileURLWithPath: "/tmp/a.m4a"), format: .m4a),
+            .retry(.exportAudio(URL(fileURLWithPath: "/tmp/a.m4a"), .m4a))
+        )
+    ])
+    func retryCarriesOperation(failure: StudioFailurePresentation, expected: StudioFailurePresentation.Action) {
+        #expect(failure.primaryAction == expected)
     }
 }

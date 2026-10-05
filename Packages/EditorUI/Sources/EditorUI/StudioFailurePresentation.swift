@@ -1,4 +1,5 @@
 import Foundation
+import StudioRender
 
 /// A studio failure with severity, message, and the next useful action (docs/14 UX-35).
 ///
@@ -21,9 +22,23 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
 
     public enum Action: Equatable, Sendable {
         case dismiss
-        case retry
+        /// Runs the failed operation again. The operation travels with the action, so the
+        /// banner never has to guess what failed from its title (docs/18 STU-2).
+        case retry(Operation)
+        /// Applies cuts the user was warned remove more than the cap.
+        case confirmLargeCuts
         case openSpeechSettings
         case chooseExportLocation
+    }
+
+    /// Something the studio can run again from a failure banner.
+    public enum Operation: Equatable, Sendable {
+        case export(URL)
+        case copyEdited
+        case shareEdited
+        case exportAudio(URL, StudioAudioExporter.Format)
+        case installSpeechModel
+        case transcribe
     }
 
     public init(
@@ -42,11 +57,11 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
 
     // MARK: - Common failures
 
-    public static func exportFailed(_ detail: String) -> Self {
+    public static func exportFailed(_ detail: String, to destination: URL) -> Self {
         Self(
             title: "Kadr could not export this recording.",
             message: detail,
-            primaryAction: .retry,
+            primaryAction: .retry(.export(destination)),
             secondaryAction: .chooseExportLocation
         )
     }
@@ -65,11 +80,15 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         )
     }
 
-    public static func audioExportFailed(_ detail: String) -> Self {
+    public static func audioExportFailed(
+        _ detail: String,
+        to destination: URL,
+        format: StudioAudioExporter.Format
+    ) -> Self {
         Self(
             title: "Kadr could not export the soundtrack.",
             message: detail,
-            primaryAction: .retry
+            primaryAction: .retry(.exportAudio(destination, format))
         )
     }
 
@@ -86,7 +105,7 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         Self(
             title: "The language model could not download.",
             message: detail,
-            primaryAction: .retry
+            primaryAction: .retry(.installSpeechModel)
         )
     }
 
@@ -97,11 +116,13 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         )
     }
 
-    public static func transcriptionFailed(_ detail: String) -> Self {
+    /// - Parameter retryable: false when trying again cannot help, such as a recording
+    ///   with no sound, so the banner does not offer a Retry that fails the same way.
+    public static func transcriptionFailed(_ detail: String, retryable: Bool = true) -> Self {
         Self(
             title: "Kadr could not transcribe this recording.",
             message: detail,
-            primaryAction: .retry
+            primaryAction: retryable ? .retry(.transcribe) : .dismiss
         )
     }
 
@@ -132,7 +153,7 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         Self(
             title: "Kadr could not copy this edit.",
             message: detail,
-            primaryAction: .retry
+            primaryAction: .retry(.copyEdited)
         )
     }
 
@@ -140,7 +161,7 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         Self(
             title: "Kadr could not share this edit.",
             message: detail,
-            primaryAction: .retry
+            primaryAction: .retry(.shareEdited)
         )
     }
 

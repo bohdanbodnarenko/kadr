@@ -211,7 +211,7 @@ struct StudioExportStateTests {
 
     // MARK: - docs/17 T-STU-4: Copy and Share are tracked renders
 
-    @Test("Copy renders into a per-session staging folder, named for the project, removed on close")
+    @Test("Copy renders into a per-session staging folder, named for the project, kept past close")
     func copyIsStagedAndPurged() async throws {
         let folder = StudioPlaybackFixtures.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -223,8 +223,44 @@ struct StudioExportStateTests {
         #expect(staged.deletingPathExtension().lastPathComponent == "Demo- take 2")
         #expect(FileManager.default.fileExists(atPath: staged.path))
 
+        // The clipboard holds only the URL: the file must outlive the window (docs/18 STU-1).
         studio.commitOnClose()
-        #expect(!FileManager.default.fileExists(atPath: studio.stagingDirectory.path))
+        #expect(FileManager.default.fileExists(atPath: staged.path))
+        try? FileManager.default.removeItem(at: staged)
+    }
+
+    @Test("Retry re-runs the operation the failure names")
+    func retryDispatchesCopy() async throws {
+        let folder = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try await StudioPlaybackFixtures.model(in: folder, seconds: 1)
+        // Distinct from the other staging tests: fixtures share a session folder name.
+        try studio.session.setDisplayName("Retry take")
+        let staged = try studio.stagedRenderURL()
+        defer { try? FileManager.default.removeItem(at: staged) }
+
+        await studio.retry(.copyEdited)
+        #expect(FileManager.default.fileExists(atPath: staged.path))
+        #expect(studio.failure == nil)
+    }
+
+    @Test("The launch sweep removes only staged renders past their age")
+    func stagedRenderSweep() throws {
+        let root = StudioPlaybackFixtures.scratch()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fresh = root.appendingPathComponent("fresh", isDirectory: true)
+        let stale = root.appendingPathComponent("stale", isDirectory: true)
+        for folder in [fresh, stale] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-2 * 24 * 60 * 60)],
+            ofItemAtPath: stale.path
+        )
+
+        #expect(StudioDocumentModel.sweepStagedRenders(root: root) == 1)
+        #expect(FileManager.default.fileExists(atPath: fresh.path))
+        #expect(!FileManager.default.fileExists(atPath: stale.path))
     }
 
     @Test("Copy counts as an export, and Cancel stops it")

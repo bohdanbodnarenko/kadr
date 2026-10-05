@@ -388,11 +388,12 @@ public struct StudioRootView: View {
         switch action {
         case .dismiss:
             model.failure = nil
-        case .retry:
+        case let .retry(operation):
             model.failure = nil
-            if failure.title.contains("40%") {
-                model.applyPendingCuts(confirmingLargeRemoval: true)
-            }
+            Task { await model.retry(operation) }
+        case .confirmLargeCuts:
+            model.failure = nil
+            model.applyPendingCuts(confirmingLargeRemoval: true)
         case .openSpeechSettings:
             if let url = URL(
                 string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"

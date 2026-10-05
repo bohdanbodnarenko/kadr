@@ -164,7 +164,7 @@ public extension StudioDocumentModel {
                 )
             }
         } catch TranscriptionError.noAudioTrack {
-            failure = .transcriptionFailed("This recording has no sound in it.")
+            failure = .transcriptionFailed("This recording has no sound in it.", retryable: false)
         } catch TranscriptionError.notAuthorized {
             failure = .speechPermissionNeeded()
         } catch {
@@ -229,7 +229,7 @@ public extension StudioDocumentModel {
                 title: "Remove more than 40% of this recording?",
                 message: "Confirm to apply the selected cuts anyway.",
                 style: .sheet,
-                primaryAction: .retry,
+                primaryAction: .confirmLargeCuts,
                 secondaryAction: .dismiss
             )
             return
