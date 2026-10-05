@@ -36,6 +36,8 @@ final class RecordingControlBar {
     /// What the current window was built for. Notch and island panels differ in level,
     /// size and movability, so switching between them needs a new window.
     private var panelDocksToNotch = false
+    /// The display the current take records, for choosing whether to dock (docs/18 REC-9).
+    private var recordedDisplayID: CGDirectDisplayID?
 
     /// Where the user last dragged the floating island, so it comes back where they put it.
     ///
@@ -77,15 +79,6 @@ final class RecordingControlBar {
 
     var isShowingPicker: Bool {
         panel != nil && model.mode == .picker
-    }
-
-    /// Notch layout is only for a live take (or its countdown) on a notched display.
-    static func shouldDockToNotch(
-        chrome: RecordingControlChrome,
-        screenHasNotch: Bool,
-        isLiveSession: Bool
-    ) -> Bool {
-        chrome == .notch && screenHasNotch && isLiveSession
     }
 
     /// - Parameter source: the All-in-One island's glass in screen space, when Record was
@@ -170,6 +163,7 @@ final class RecordingControlBar {
     func show(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         hideTask?.cancel()
         hideTask = nil
+        recordedDisplayID = controls.recordedDisplayID
         if panel != nil, panelDocksToNotch != docksToNotch(settings: settings) {
             teardownPanel()
         }
@@ -185,6 +179,7 @@ final class RecordingControlBar {
     /// countdown, then into the clock.
     func update(controls: RecordingControls, settings: AppSettings? = nil, preRoll: PreRoll? = nil) {
         guard panel != nil else { return }
+        recordedDisplayID = controls.recordedDisplayID
         guard panelDocksToNotch == docksToNotch(settings: settings) else {
             show(controls: controls, settings: settings, preRoll: preRoll)
             return
@@ -299,7 +294,11 @@ final class RecordingControlBar {
     private func docksToNotch(settings: AppSettings?) -> Bool {
         Self.shouldDockToNotch(
             chrome: settings?.recordingControlChrome ?? .island,
-            screenHasNotch: RecordingNotchScreen.isAvailable,
+            screenHasNotch: Self.notchIsRelevant(
+                notchDisplay: RecordingNotchScreen.notchScreen.flatMap { ScreenDescriptor($0)?.displayID },
+                recordedDisplay: recordedDisplayID,
+                pointerDisplay: ActiveScreen.resolve().flatMap { ScreenDescriptor($0)?.displayID }
+            ),
             isLiveSession: true
         )
     }

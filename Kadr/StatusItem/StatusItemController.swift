@@ -393,4 +393,6 @@ struct RecordingControls {
     var isTransitioning: Bool = false
     /// The take has stopped and its file is being finalised (docs/17 T-REC-4).
     var isSaving: Bool = false
+    /// The display being recorded, or nil for a window, which can move (docs/18 REC-9).
+    var recordedDisplayID: CGDirectDisplayID?
 }

@@ -268,7 +268,8 @@ extension AppDelegate {
             microphoneDropped: recording.microphoneDropped,
             notice: recording.liveNotice,
             isTransitioning: recording.isTransitioning,
-            isSaving: isSaving
+            isSaving: isSaving,
+            recordedDisplayID: recording.lastTarget.flatMap(\.displayID)
         )
     }
 

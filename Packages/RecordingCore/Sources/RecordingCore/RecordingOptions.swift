@@ -167,6 +167,14 @@ public enum RecordingTarget: Sendable, Hashable {
     case display(CGDirectDisplayID)
     case window(CGWindowID)
     case region(DisplayRect, display: CGDirectDisplayID)
+
+    /// The display this target is on, or nil for a window, which can move between them.
+    public var displayID: CGDirectDisplayID? {
+        switch self {
+        case let .display(id), let .region(_, id): id
+        case .window: nil
+        }
+    }
 }
 
 /// Where a recording is in its life.
