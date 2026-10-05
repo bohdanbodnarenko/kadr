@@ -42,7 +42,7 @@ struct AllInOneView: View {
         .onKeyPress { press in
             handleKey(press)
         }
-        .accessibilityLabel("All-in-One capture")
+        .accessibilityLabel("Capture island")
         // Not a hint: that would also be a system tooltip over the whole island.
         .accessibilityCustomContent("Usage", "Pick a capture mode by its letter, or press Return for the last one.")
         .kadrLayoutDirection()

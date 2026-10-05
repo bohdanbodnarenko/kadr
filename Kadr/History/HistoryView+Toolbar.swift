@@ -77,7 +77,7 @@ extension HistoryView {
             Button {
                 revealSelected()
             } label: {
-                Label("Reveal in Finder", systemImage: "folder")
+                Label("Show in Finder", systemImage: "folder")
             }
             .disabled(selection.isEmpty)
 
@@ -105,7 +105,8 @@ extension HistoryView {
             Button(role: .destructive) {
                 Task { await deleteSelected() }
             } label: {
-                Label("Delete", systemImage: "trash")
+                // It goes to the Trash, so it says so (docs/18 X-5 vocabulary).
+                Label("Move to Trash", systemImage: "trash")
             }
             .disabled(selection.isEmpty)
         }

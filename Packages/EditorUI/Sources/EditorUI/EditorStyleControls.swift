@@ -28,7 +28,7 @@ struct EditorSwatchStrip: View {
 
             HStack(spacing: 8) {
                 ColorPicker(
-                    "Custom colour",
+                    "Custom color",
                     selection: Binding(
                         get: { Color(selected) },
                         set: { onSelect(AnnotationColor($0)) }
@@ -44,7 +44,7 @@ struct EditorSwatchStrip: View {
                 }
                 .buttonStyle(InspectorButtonStyle(fillsWidth: false))
                 .disabled(!palette.canAdd(selected))
-                .help("Save this colour to your palette. Option-click a saved colour to remove it.")
+                .help("Save this color to your palette. Option-click a saved color to remove it.")
 
                 Spacer(minLength: 0)
             }
@@ -77,8 +77,8 @@ struct EditorSwatchStrip: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(removable ? "Option-click to remove" : "Colour")
-        .accessibilityLabel("Colour")
+        .help(removable ? "Option-click to remove" : "Color")
+        .accessibilityLabel("Color")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

@@ -71,7 +71,7 @@ struct HDROverlayTests {
     /// An unknown format is refused rather than guessed at. This is the whole fix: the old
     /// code had no notion of "a format I do not recognise", so it treated every one of them
     /// as 8-bit BGRA — which is not a wrong branch but an absent concept.
-    @Test("An unrecognised format is refused")
+    @Test("An unrecognized format is refused")
     func unknownFormatIsRefused() {
         #expect(FrameCompositor.BitmapLayout(pixelFormat: kCVPixelFormatType_420YpCbCr8Planar) == nil)
         #expect(FrameCompositor.BitmapLayout(pixelFormat: kCVPixelFormatType_OneComponent8) == nil)

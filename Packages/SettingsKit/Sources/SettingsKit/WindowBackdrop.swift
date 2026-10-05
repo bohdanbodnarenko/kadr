@@ -15,7 +15,7 @@ public enum WindowBackdrop: String, CaseIterable, SettingValue {
         switch self {
         case .white: "White"
         case .black: "Black"
-        case .gray: "Grey"
+        case .gray: "Gray"
         case .desktop: "Desktop wallpaper"
         case .custom: "Custom image"
         }

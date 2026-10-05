@@ -269,7 +269,7 @@ extension RecordingError: LocalizedError {
         case .noFramesCaptured:
             "The recording captured no frames."
         case .cancelledDuringStart:
-            "The recording was cancelled before it began."
+            "The recording was canceled before it began."
         case let .stitchFailed(reason, directory):
             if let directory {
                 "Kadr could not join the recording (\(reason)). The parts are still in \(directory)."

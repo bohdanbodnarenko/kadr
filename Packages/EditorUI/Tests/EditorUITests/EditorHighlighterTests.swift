@@ -18,7 +18,7 @@ struct EditorHighlighterTests {
     private let word = CGRect(x: 40, y: 80, width: 80, height: 20)
     private let other = CGRect(x: 200, y: 80, width: 60, height: 18)
 
-    @Test("A click on a recognised word places a highlight sized to it")
+    @Test("A click on a recognized word places a highlight sized to it")
     func clickSnapsToWord() throws {
         let model = makeModel()
         model.loadHighlightLayout(from: VisionAnalysis(words: [

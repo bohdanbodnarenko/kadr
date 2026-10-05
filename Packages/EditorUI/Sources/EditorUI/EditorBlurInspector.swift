@@ -66,7 +66,7 @@ struct EditorBlurInspector: View {
                 .frame(width: 72, height: 48)
                 .help("Where the sharp area sits")
         }
-        Button("Obscure Centre") { model.applyProgressiveBlur(.obscureCentre) }
+        Button("Obscure Center") { model.applyProgressiveBlur(.obscureCentre) }
             .buttonStyle(InspectorButtonStyle())
         Button("Tilt Shift") { model.applyProgressiveBlur(.tiltShift) }
             .buttonStyle(InspectorButtonStyle())

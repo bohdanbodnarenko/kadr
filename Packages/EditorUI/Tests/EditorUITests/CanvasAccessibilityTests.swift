@@ -17,7 +17,7 @@ struct CanvasAccessibilityTests {
     }
 
     @Test(
-        "Colour words",
+        "Color words",
         arguments: [
             (AnnotationColor(red: 1, green: 0, blue: 0), "red"),
             (AnnotationColor(red: 1, green: 0.55, blue: 0), "orange"),
@@ -35,7 +35,7 @@ struct CanvasAccessibilityTests {
         #expect(CanvasAccessibility.spokenName(of: color) == word)
     }
 
-    @Test("Labels number each kind and name the colour or the text")
+    @Test("Labels number each kind and name the color or the text")
     func labels() {
         var text = TextSpec(rect: CGRect(x: 0, y: 0, width: 80, height: 20))
         text.string = "  Click here \n"

@@ -121,7 +121,7 @@ struct AfterCaptureMatrixTests {
         }
     }
 
-    @Test("A migrated matrix always shows a card, as the old behaviour did")
+    @Test("A migrated matrix always shows a card, as the old behavior did")
     func migrationKeepsTheOverlay() {
         for action in DefaultCaptureAction.allCases {
             #expect(AfterCaptureMatrix.migrating(action)[.screenshot].contains(.overlay))

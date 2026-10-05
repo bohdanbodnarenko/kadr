@@ -53,7 +53,7 @@ struct ProjectIngestTests {
         return url
     }
 
-    @Test("A .kadr project is recognised as a project and keeps its pixel size")
+    @Test("A .kadr project is recognized as a project and keeps its pixel size")
     func projectDraft() throws {
         let directory = scratch()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -80,7 +80,7 @@ struct ProjectIngestTests {
         try? FileManager.default.removeItem(at: thumbnailSource)
     }
 
-    @Test("A plain image is recognised as an image, at its real size")
+    @Test("A plain image is recognized as an image, at its real size")
     func imageDraft() throws {
         let directory = scratch()
         defer { try? FileManager.default.removeItem(at: directory) }

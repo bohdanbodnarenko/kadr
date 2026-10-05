@@ -11,7 +11,7 @@ import Testing
 /// recording rather than a missing key.
 @Suite("HDR recording")
 struct HDRRecordingTests {
-    @Test("A standard recording carries no HDR colour tags")
+    @Test("A standard recording carries no HDR color tags")
     func standardHasNoColourTags() {
         let options = RecordingOptions(dynamicRange: .standard)
         let settings = options.videoSettings(pixelWidth: 1920, pixelHeight: 1080)

@@ -56,12 +56,12 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// Menu title (docs/03 §8.1).
     var title: String {
         switch self {
-        case .allInOne: String(localized: "All-in-One")
+        case .allInOne: String(localized: "Capture Island")
         case .captureArea: String(localized: "Capture Area")
         case .captureWindow: String(localized: "Capture Window")
         case .captureFullscreen: String(localized: "Capture Screen")
         case .captureText: String(localized: "Capture Text (OCR)")
-        case .pickColor: String(localized: "Pick Colour…")
+        case .pickColor: String(localized: "Pick Color…")
         case .captureScrolling: String(localized: "Scrolling Capture…")
         case .capturePreviousArea: String(localized: "Capture Previous Area")
         case .captureAreaAndCopy: String(localized: "Capture Area and Copy")
@@ -74,9 +74,9 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .recordSetup: String(localized: "Record…")
         case .freezeScreen: String(localized: "Freeze Screen")
         case .toggleDesktopIcons: String(localized: "Hide Desktop Icons")
-        case .closeAllOverlays: String(localized: "Close All Overlays")
-        case .saveAllOverlays: String(localized: "Save All Overlays")
-        case .hideOverlays: String(localized: "Hide Overlays")
+        case .closeAllOverlays: String(localized: "Close All Cards")
+        case .saveAllOverlays: String(localized: "Save All Cards")
+        case .hideOverlays: String(localized: "Hide Cards")
         case .focusOverlay: String(localized: "Focus Quick Access")
         case .hidePins: String(localized: "Hide Pins")
         case .pinClipboard: String(localized: "Pin Clipboard")
@@ -90,7 +90,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     var shortcutTitle: String {
         switch self {
         case .toggleDesktopIcons: "Toggle Desktop Icons"
-        case .hideOverlays: "Hide / Show Overlays"
+        case .hideOverlays: "Hide / Show Cards"
         case .hidePins: "Hide / Show Pins"
         case .pinClipboard: "Pin Clipboard"
         case .openHistory: "History"
@@ -136,7 +136,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
             ]),
             ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording, .pauseRecording]),
             ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
-            ("Overlays and Pins", [
+            ("Cards and Pins", [
                 .focusOverlay, .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
                 .togglePinClickThrough
             ]),

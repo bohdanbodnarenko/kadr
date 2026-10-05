@@ -70,7 +70,7 @@ struct EditorWatermarkInspector: View {
             range: -90 ... 90,
             format: .degrees(signed: true)
         )
-        InspectorColorRow("Colour", selection: colourBinding)
+        InspectorColorRow("Color", selection: colourBinding)
     }
 
     /// What the metrics resolve against — the canvas, since a watermark covers all of it.

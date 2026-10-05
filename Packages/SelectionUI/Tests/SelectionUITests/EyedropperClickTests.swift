@@ -53,7 +53,7 @@ struct EyedropperClickTests {
         return view
     }
 
-    @Test("A click picks the colour under the pointer")
+    @Test("A click picks the color under the pointer")
     func clickPicks() throws {
         let view = makeView()
         var picks: [ColorPick] = []

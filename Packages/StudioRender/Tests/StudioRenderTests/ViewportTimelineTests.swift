@@ -81,7 +81,7 @@ struct ViewportTimelineTests {
         let timeline = ViewportTimeline(cues: [first, second], size: size, duration: 8)
 
         let during = timeline.viewport(at: 2.5)
-        #expect(during.centre.x > 1000, "the later cue should own this moment, got \(during.centre)")
+        #expect(during.centre.x > 1000, "the later cue should own this moment, got \(during.center)")
     }
 
     @Test("The camera never zooms out past the whole frame")
@@ -232,7 +232,7 @@ struct ZoomCuePlannerTests {
 
     /// An anchor that followed the pointer would make the camera dither during the zoom —
     /// the most common way an automatic zoom looks cheap.
-    @Test("A cluster's anchor is its centre, fixed once")
+    @Test("A cluster's anchor is its center, fixed once")
     func anchorIsTheClusterCentre() throws {
         let events = [
             ClickEvent(time: 1, position: CGPoint(x: 400, y: 300)),

@@ -58,7 +58,7 @@ struct StudioCanvasTests {
         #expect(canvas == .identity)
     }
 
-    @Test("Picking a colour on a full-bleed frame opens the card so the fill shows")
+    @Test("Picking a color on a full-bleed frame opens the card so the fill shows")
     func colourRevealsTheCard() {
         var canvas = StudioCanvas.identity
         canvas.setBackdropKind(.colour)
@@ -75,7 +75,7 @@ struct StudioCanvasTests {
         #expect(canvas.paddingFraction == StudioCanvas.presenter.paddingFraction)
     }
 
-    @Test("Picking a colour on an already padded card keeps the inset")
+    @Test("Picking a color on an already padded card keeps the inset")
     func colourKeepsExistingPadding() {
         var canvas = StudioCanvas(paddingFraction: 0.1, background: .none)
         canvas.setSolid(StudioColor(red: 1, green: 0, blue: 0))
@@ -91,7 +91,7 @@ struct StudioCanvasTests {
         #expect(canvas.paddingFraction == StudioCanvas.presenter.paddingFraction)
     }
 
-    @Test("A two-colour gradient from an older session still opens")
+    @Test("A two-color gradient from an older session still opens")
     func legacyGradientDecodes() throws {
         let json = Data("""
         {"background":{"gradient":{"_0":{"red":0.1,"green":0.2,"blue":0.3},"_1":{"red":0.4,"green":0.5,"blue":0.6}}}}

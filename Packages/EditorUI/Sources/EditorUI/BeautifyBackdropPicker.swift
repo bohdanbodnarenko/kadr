@@ -22,7 +22,7 @@ struct BeautifyBackdropPicker: View {
             Button("None") { onChoose(.none) }
                 .buttonStyle(InspectorButtonStyle(fillsWidth: true))
                 .accessibilityLabel("No backdrop")
-            swatches("Colours", items: BeautifyPalette.solids.map(BeautifyBackdrop.solid))
+            swatches("Colors", items: BeautifyPalette.solids.map(BeautifyBackdrop.solid))
             swatches("Gradients", items: BeautifyPalette.gradients.map(BeautifyBackdrop.gradient))
             images
             custom
@@ -56,7 +56,7 @@ struct BeautifyBackdropPicker: View {
         case .none:
             EmptyView()
         case let .solid(colour):
-            InspectorColorRow("Custom colour", selection: Binding(
+            InspectorColorRow("Custom color", selection: Binding(
                 get: { Color(colour) },
                 set: { onChoose(.solid(AnnotationColor($0))) }
             ))
@@ -108,7 +108,7 @@ struct BeautifyBackdropPicker: View {
     private static func label(for backdrop: BeautifyBackdrop) -> String {
         switch backdrop {
         case .none: "No fill"
-        case .solid: "Solid colour"
+        case .solid: "Solid color"
         case .gradient: "Gradient"
         case .image: "Image"
         }

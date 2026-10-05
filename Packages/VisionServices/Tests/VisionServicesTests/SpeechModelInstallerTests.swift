@@ -42,7 +42,7 @@ struct SpeechModelInstallerTests {
         }
     }
 
-    @Test("An install can be cancelled")
+    @Test("An install can be canceled")
     func installIsCancellable() async {
         let task = Task {
             try await SpeechModelInstaller().install(locale: Locale(identifier: "en_US"))
@@ -54,7 +54,7 @@ struct SpeechModelInstallerTests {
     /// docs/17 T-STU-5: a cancel that reaches the task must reach the work. The download
     /// and the recogniser both run in Apple's code, so the only way to prove it without
     /// a network or a model is that the handles are kept and cancelled.
-    @Test("Cancellation reaches the download and the legacy recogniser", arguments: [
+    @Test("Cancellation reaches the download and the legacy recognizer", arguments: [
         ("SpeechModelInstaller.swift", "requestProgress.cancel()"),
         ("SpeechModelInstaller.swift", "try Task.checkCancellation()"),
         ("SpeechEngines.swift", "withTaskCancellationHandler"),

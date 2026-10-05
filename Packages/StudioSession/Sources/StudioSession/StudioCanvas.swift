@@ -175,7 +175,7 @@ public enum StudioBackdropKind: String, Sendable, CaseIterable, Identifiable {
         case .none:
             "None"
         case .colour:
-            "Colour"
+            "Color"
         case .gradient:
             "Gradient"
         case .wallpaper:

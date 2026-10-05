@@ -167,8 +167,8 @@ struct StudioFrameComposerTests { // swiftlint:disable:this type_body_length
         // Zoomed 3× into the red half, every corner is red.
         for point in [(10, 10), (390, 10), (10, 190), (390, 190), (200, 100)] {
             let colour = frame.at(point.0, point.1)
-            #expect(colour.red > 200, "expected red at \(point), got \(colour)")
-            #expect(colour.blue < 60, "expected no blue at \(point), got \(colour)")
+            #expect(colour.red > 200, "expected red at \(point), got \(color)")
+            #expect(colour.blue < 60, "expected no blue at \(point), got \(color)")
         }
     }
 

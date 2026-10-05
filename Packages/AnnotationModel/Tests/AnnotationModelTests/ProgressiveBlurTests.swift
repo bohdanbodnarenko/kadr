@@ -28,7 +28,7 @@ struct ProgressiveBlurTests {
         #expect(spec.falloffRadius - spec.focusRadius >= ProgressiveBlurSpec.minimumFalloff)
     }
 
-    @Test("A negative focus is floored at the centre")
+    @Test("A negative focus is floored at the center")
     func negativeFocus() {
         #expect(ProgressiveBlurSpec(focusRadius: -3).focusRadius == 0)
     }
@@ -41,13 +41,13 @@ struct ProgressiveBlurTests {
 
     // MARK: - Resolving against a rect
 
-    @Test("The centre resolves in the target's own coordinates")
+    @Test("The center resolves in the target's own coordinates")
     func centreResolves() {
         let mask = ProgressiveBlurMask.resolve(ProgressiveBlurSpec(), in: rect)
         #expect(mask.center == CGPoint(x: 200, y: 150))
     }
 
-    @Test("An off-centre focus lands where it was asked to")
+    @Test("An off-center focus lands where it was asked to")
     func offCentreFocus() {
         let spec = ProgressiveBlurSpec(center: CGPoint(x: 0.25, y: 0.75))
         let mask = ProgressiveBlurMask.resolve(spec, in: rect)

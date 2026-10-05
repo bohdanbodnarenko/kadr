@@ -338,7 +338,7 @@ struct QuickAccessDragTests {
 
     /// The other half of C1: dismissing at drag *start* threw the capture away when the
     /// user changed their mind mid-drag.
-    @Test("A cancelled drag leaves the card and its file alone")
+    @Test("A canceled drag leaves the card and its file alone")
     func cancelledDragKeepsTheCard() throws {
         let save = temporaryDirectory("save")
         let stage = temporaryDirectory("stage")

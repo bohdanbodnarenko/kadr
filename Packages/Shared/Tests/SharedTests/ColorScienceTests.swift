@@ -7,7 +7,7 @@ import Testing
 /// Checked against published reference values rather than against itself: the failure mode
 /// of colour maths is a plausible-looking number, and a test that only proves the code
 /// agrees with the code catches none of it.
-@Suite("Colour science")
+@Suite("Color science")
 struct ColorScienceTests {
     private func isClose(_ value: Double, _ expected: Double, _ tolerance: Double = 0.01) -> Bool {
         abs(value - expected) <= tolerance
@@ -48,7 +48,7 @@ struct ColorScienceTests {
         #expect(isClose(components.lightness, 0.5, 0.001))
     }
 
-    @Test("Greys have no hue and no saturation")
+    @Test("Grays have no hue and no saturation")
     func hslGrey() {
         let components = SampledColor(red: 0.5, green: 0.5, blue: 0.5).hsl
         #expect(components.saturation == 0)
@@ -82,7 +82,7 @@ struct ColorScienceTests {
         #expect(isClose(components.hue, 29.23, 0.5))
     }
 
-    @Test("A mid grey has lightness but no chroma")
+    @Test("A mid gray has lightness but no chroma")
     func oklchGrey() {
         let components = SampledColor(red: 0.5, green: 0.5, blue: 0.5).oklch
         #expect(isClose(components.chroma, 0, 0.002))
@@ -97,7 +97,7 @@ struct ColorScienceTests {
         #expect(isClose(ColorScience.wcagContrast(.white, .white), 1, 0.001))
     }
 
-    @Test("The ratio does not care which way round the colours are")
+    @Test("The ratio does not care which way round the colors are")
     func wcagIsSymmetric() {
         let ink = SampledColor(red8: 0x11, green8: 0x77, blue8: 0xCC)
         let paper = SampledColor(red8: 0xEE, green8: 0xEE, blue8: 0xEE)
@@ -109,7 +109,7 @@ struct ColorScienceTests {
     }
 
     /// #767676 on white is the canonical "exactly passes AA for body text" colour.
-    @Test("The classic 4.5:1 boundary colour lands on the boundary")
+    @Test("The classic 4.5:1 boundary color lands on the boundary")
     func wcagAABoundary() {
         let grey = SampledColor(red8: 0x76, green8: 0x76, blue8: 0x76)
         #expect(isClose(ColorScience.wcagContrast(grey, .white), 4.54, 0.05))
@@ -131,7 +131,7 @@ struct ColorScienceTests {
         #expect(value < 0)
     }
 
-    @Test("A colour on itself has no contrast at all")
+    @Test("A color on itself has no contrast at all")
     func apcaSameColour() {
         let colour = SampledColor(red8: 0x33, green8: 0x66, blue8: 0x99)
         #expect(ColorScience.apcaLc(text: colour, background: colour) == 0)

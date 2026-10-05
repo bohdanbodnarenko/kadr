@@ -163,7 +163,7 @@ struct RecordingIslandChromeTests {
         )
     }
 
-    @Test("The default bar sits 48 pt above the visible frame, centred")
+    @Test("The default bar sits 48 pt above the visible frame, centerd")
     func defaultPlacement() {
         let visible = CGRect(x: 0, y: 80, width: 1440, height: 820)
         let origin = RecordingControlBar.defaultOrigin(in: visible)

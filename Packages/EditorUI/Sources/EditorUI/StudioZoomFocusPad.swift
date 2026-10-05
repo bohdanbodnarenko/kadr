@@ -75,7 +75,7 @@ struct StudioZoomFocusPad: View {
             }
         }
         .frame(height: 112)
-        .help("Drag to aim the zoom. The outline is what stays on screen. Double-click centres it.")
+        .help("Drag to aim the zoom. The outline is what stays on screen. Double-click centers it.")
         .accessibilityLabel("Zoom target")
         .accessibilityHint("Drag to move the target. Double-click to center.")
     }

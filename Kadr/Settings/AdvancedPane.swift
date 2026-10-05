@@ -42,8 +42,8 @@ struct AdvancedPane: View {
             StudioStorageSection()
 
             Section {
-                Toggle("Include Kadr overlays in captures", isOn: includeOverlays)
-                Text("Off keeps cards, the recording bar and the HUD out of screenshots and recordings.")
+                Toggle("Include Kadr's own windows in captures", isOn: includeOverlays)
+                Text("Off keeps cards, the recording bar and the capture island out of screenshots and recordings.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

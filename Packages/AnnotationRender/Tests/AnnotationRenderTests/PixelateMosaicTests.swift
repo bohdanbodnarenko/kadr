@@ -136,7 +136,7 @@ struct PixelateMosaicTests {
 
     /// Whatever the sampling does, the result still has to *look* pixelated: within one
     /// cell of the grid there is exactly one colour.
-    @Test("Every whole cell is a single colour")
+    @Test("Every whole cell is a single color")
     func cellsAreFlat() {
         let bitmap = stripes()
         run(bitmap, seed: 8)
@@ -154,7 +154,7 @@ struct PixelateMosaicTests {
 
     /// Sampling must read the original pixels. Reading the buffer as it is rewritten makes
     /// one cell's colour march across the whole region.
-    @Test("One cell's colour cannot flood the region")
+    @Test("One cell's color cannot flood the region")
     func samplingReadsTheOriginal() {
         let bitmap = Bitmap(width: width, height: height)
         for y in 0 ..< height {
@@ -165,7 +165,7 @@ struct PixelateMosaicTests {
         run(bitmap, seed: 3)
 
         let distinct = Set((0 ..< height).map { bitmap.red(x: 10, y: $0) })
-        #expect(distinct.count > 2, "a gradient collapsed to one colour means cells sampled each other")
+        #expect(distinct.count > 2, "a gradient collapsed to one color means cells sampled each other")
     }
 
     @Test("A cell size larger than the region still produces one flat block")

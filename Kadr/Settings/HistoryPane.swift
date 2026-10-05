@@ -61,7 +61,7 @@ struct HistoryPane: View {
             }
 
             Section {
-                Picker("Library size limit", selection: $settings.historySizeCap) {
+                Picker("History size limit", selection: $settings.historySizeCap) {
                     ForEach(HistorySizeCap.allCases, id: \.self) { cap in
                         Text(cap.title).tag(cap)
                     }

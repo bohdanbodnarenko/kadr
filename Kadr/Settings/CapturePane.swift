@@ -124,7 +124,7 @@ struct CapturePane: View {
                 Text("Selection")
             } footer: {
                 Text("When confirm mode is on, mouse-up leaves handles until Return. ⇧-drag still "
-                    + "forces a square. The All-in-One strip has the same aspect menu.")
+                    + "forces a square. The capture island has the same aspect menu.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -212,7 +212,7 @@ struct CapturePane: View {
                             }
                         }
                     }
-                    Toggle("Precision crosshair (press C on the overlay)", isOn: $settings.capturePrecisionCrosshair)
+                    Toggle("Precision crosshair (press C while selecting)", isOn: $settings.capturePrecisionCrosshair)
                     Toggle("Snap the selection to edges Kadr finds", isOn: $settings.captureSnapsToEdges)
                 }
             } footer: {

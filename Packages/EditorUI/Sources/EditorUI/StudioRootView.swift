@@ -277,7 +277,7 @@ public struct StudioRootView: View {
                 Button("At the Pointer") { model.aimSelectedZoomAtPointer() }
                     .disabled(!model.hasPointerAtPlayhead)
                     .help("Point it where the pointer was when this zoom starts")
-                Button("Centre") { model.setZoomFocus(id, to: .centre) }
+                Button("Center") { model.setZoomFocus(id, to: .centre) }
                 Spacer(minLength: 8)
                 Text(String(format: "%.1f×", cue.magnification))
                     .font(.callout.monospacedDigit())

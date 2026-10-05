@@ -174,7 +174,7 @@ struct TeleprompterComposerView: View {
                     .controlSize(.small)
                     .disabled(!settings.teleprompterEnabled)
                 Spacer()
-                Button("Install speech model…") {
+                Button("Install Speech Model…") {
                     Task { await installSpeechModel() }
                 }
                 .controlSize(.small)

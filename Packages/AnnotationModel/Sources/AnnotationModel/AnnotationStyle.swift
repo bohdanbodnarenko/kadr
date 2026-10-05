@@ -275,7 +275,7 @@ public struct TextStyle: Codable, Hashable, Sendable {
         public var title: String {
             switch self {
             case .leading: "Left"
-            case .center: "Centre"
+            case .center: "Center"
             case .trailing: "Right"
             }
         }

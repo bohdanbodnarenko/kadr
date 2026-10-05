@@ -29,7 +29,7 @@ public enum OverlayPlacement: String, Sendable, Hashable, Codable, CaseIterable,
     public var title: String {
         switch self {
         case .topLeading, .bottomLeading: "Left"
-        case .top, .bottom: "Centre"
+        case .top, .bottom: "Center"
         case .topTrailing, .bottomTrailing: "Right"
         }
     }

@@ -87,7 +87,7 @@ extension StudioInspector {
             EmptyView()
         case let .solid(current):
             canvasSolidSwatches(current: current)
-            ColorPicker("Colour", selection: Binding(
+            ColorPicker("Color", selection: Binding(
                 get: { Color(current) },
                 set: { color in
                     model.change(coalescingAs: "canvas.fill") { $0.canvas.setSolid(StudioColor(color)) }
@@ -149,7 +149,7 @@ extension StudioInspector {
     private func canvasSolidSwatches(current: StudioColor) -> some View {
         LazyVGrid(columns: Self.swatchColumns, spacing: 6) {
             ForEach(Array(Self.solidPresets.enumerated()), id: \.offset) { _, color in
-                swatch(isSelected: color == current, label: "Canvas colour") {
+                swatch(isSelected: color == current, label: "Canvas color") {
                     model.change { $0.canvas.setSolid(color) }
                 } fill: {
                     Color(color)

@@ -6,7 +6,7 @@ import Testing
 ///
 /// The formatting is the feature: a grid that pastes into Numbers with the columns
 /// shifted, or a Markdown table that a stray `|` breaks, is worse than plain text.
-@Suite("Recognised tables")
+@Suite("Recognized tables")
 struct RecognizedTableTests {
     private let table = RecognizedTable(rows: [
         ["Name", "Status", "Owner"],

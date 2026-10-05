@@ -225,7 +225,7 @@ struct AnnotationCameraTests {
         #expect(abs(topLength - bottomLength) < 0.01)
     }
 
-    @Test("Zoom scales about the centre")
+    @Test("Zoom scales about the center")
     func zoomScalesAboutTheCentre() {
         let quad = geometry(AnnotationCameraSpec(zoom: 2)).quad
         #expect(isClose(quad.topLeft, CGPoint(x: -200, y: -150)))

@@ -104,7 +104,7 @@ struct StudioRenderPlanTests {
     /// The correction that matters: a cue's anchor is written against the whole frame, and
     /// after a crop the same numbers mean a different place. Without the translation a
     /// centred zoom drifts to the crop's edge.
-    @Test("A centred zoom stays centred through a fill reframe")
+    @Test("A centerd zoom stays centerd through a fill reframe")
     func zoomStaysCentredAcrossReframe() {
         let cue = ZoomCue(
             start: 0,
@@ -119,8 +119,8 @@ struct StudioRenderPlanTests {
         // Late enough for the spring to have settled.
         let rect = plan.sourceRect(at: 6)
         let centre = CGPoint(x: rect.midX, y: rect.midY)
-        #expect(abs(centre.x - size.width / 2) < 20, "drifted to \(centre.x)")
-        #expect(abs(centre.y - size.height / 2) < 20, "drifted to \(centre.y)")
+        #expect(abs(centre.x - size.width / 2) < 20, "drifted to \(center.x)")
+        #expect(abs(centre.y - size.height / 2) < 20, "drifted to \(center.y)")
     }
 
     /// A 9:16 crop of a 16:9 recording is already about three times closer, so applying the
@@ -171,7 +171,7 @@ struct StudioRenderPlanTests {
     /// What the overlays depend on: the anchor of a settled zoom lands in the middle of
     /// the output, so a cursor at that point is drawn in the middle rather than offset by
     /// however much the camera moved.
-    @Test("A settled zoom puts its anchor at the centre of the output")
+    @Test("A settled zoom puts its anchor at the center of the output")
     func anchorLandsAtTheCentre() {
         let anchor = CGPoint(x: 700, y: 400)
         let cue = ZoomCue(start: 0, duration: 8, magnification: 2, anchor: .fixed(anchor))
@@ -236,7 +236,7 @@ struct StudioRenderPlanTests {
         #expect(plan.outputSize == size)
     }
 
-    @Test("A padded canvas keeps the reframe aspect and centres the card")
+    @Test("A padded canvas keeps the reframe aspect and centers the card")
     func paddedCanvasGrows() {
         var padded = edit()
         padded.canvas = StudioCanvas(paddingFraction: 0.1)

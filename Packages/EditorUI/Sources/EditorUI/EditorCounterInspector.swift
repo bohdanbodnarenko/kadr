@@ -9,7 +9,7 @@ struct EditorCounterInspector: View {
     @Bindable var model: EditorDocumentModel
 
     var body: some View {
-        InspectorStackedRow("Colour") {
+        InspectorStackedRow("Color") {
             EditorSwatchStrip(
                 selected: inspectedFill,
                 onSelect: { model.applyCounterFill($0) }

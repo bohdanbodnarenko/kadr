@@ -85,7 +85,7 @@ struct EditorBeautifyInspector: View {
         InspectorToggleRow("Border", isOn: borderBinding)
         if spec.border.isEnabled {
             KadrSlider(title: "Thickness", value: borderThicknessBinding, range: 0.002 ... 0.06)
-            InspectorColorRow("Border colour", selection: borderColourBinding)
+            InspectorColorRow("Border color", selection: borderColourBinding)
         }
     }
 

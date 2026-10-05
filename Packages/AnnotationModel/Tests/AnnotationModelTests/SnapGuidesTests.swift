@@ -7,7 +7,7 @@ import Testing
 struct SnapGuidesTests {
     private let canvas = CGRect(x: 0, y: 0, width: 1000, height: 800)
 
-    @Test("Edges and centres snap within the threshold", arguments: [
+    @Test("Edges and centers snap within the threshold", arguments: [
         // Left edge 3 pt from the canvas edge.
         (CGRect(x: 3, y: 300, width: 100, height: 50), CGSize(width: -3, height: 0)),
         // Centre 2 pt right of the canvas centre (500), middle 1 pt above (400).

@@ -24,6 +24,24 @@ make lint check      # SwiftLint, SwiftFormat, layering, zero-network and size
 
 `make all` is what CI runs. A pull request should pass it locally.
 
+## Writing user-visible text
+
+Follow the vocabulary in `docs/03-features.md` (the preamble), summarised here so a reviewer can point at it.
+
+User-visible text follows these rules. Code identifiers and comments may keep older names.
+
+- **Spelling:** US English (`color`, `center`, `recognize`, `gray`, `canceled`). The development language is `en`.
+- **Capture island:** the floating panel that opens from the menu bar and ⇧⌘2. Not "All-in-One", "HUD" or "strip".
+- **Card:** one capture shown after it is taken. **Quick Access** is the feature that shows cards. **Overlay** means only things drawn onto a recording (click, key and webcam overlays). The surface you drag on to select an area is the **selection screen**.
+- **History:** the list of past captures, everywhere. Not "library".
+- **Labels:** Show in Finder · Got It · Install Speech Model… · System audio · Restart. Buttons use Title Case.
+- **Removing things:**
+  - **Move to Trash** when the file goes to the Trash.
+  - **Discard** for an unsaved take or unsaved changes.
+  - **Remove** for a reference, a setting or an item in a list; the file stays.
+  - **Delete** only when the data is gone for good.
+- **Counts:** write whole sentences per count, or use automatic grammar agreement (`^[\(n) item](inflect: true)`). Never splice "s" onto a word in code.
+
 ## What a good pull request has
 
 - One topic. Small commits with plain, descriptive messages.

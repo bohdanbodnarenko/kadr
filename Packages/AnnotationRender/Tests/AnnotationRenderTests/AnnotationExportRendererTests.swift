@@ -126,7 +126,7 @@ struct AnnotationExportRendererTests {
         #expect(image.height == 60)
     }
 
-    @Test("An expanded crop fills padding with the capture's edge colour")
+    @Test("An expanded crop fills padding with the capture's edge color")
     func expandedCropUsesEdgeColour() throws {
         guard let base = CGContext(
             data: nil,

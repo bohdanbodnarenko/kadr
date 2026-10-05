@@ -15,7 +15,7 @@ extension PinContentView {
         save.target = self
         menu.addItem(save)
 
-        let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(revealPin), keyEquivalent: "")
+        let reveal = NSMenuItem(title: "Show in Finder", action: #selector(revealPin), keyEquivalent: "")
         reveal.target = self
         menu.addItem(reveal)
 

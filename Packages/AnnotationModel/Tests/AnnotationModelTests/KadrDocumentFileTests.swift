@@ -35,7 +35,7 @@ struct ZipArchiveTests {
         #expect(read == entries)
     }
 
-    @Test("The archive starts with a local file header, so other tools recognise it")
+    @Test("The archive starts with a local file header, so other tools recognize it")
     func hasZipSignature() {
         let archive = ZipArchive.archive([ZipArchive.Entry(name: "a.txt", data: Data("hi".utf8))])
         #expect(Array(archive.prefix(4)) == [0x50, 0x4B, 0x03, 0x04])

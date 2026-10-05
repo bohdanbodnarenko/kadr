@@ -80,7 +80,7 @@ extension StudioInspector {
                     format: .multiplier
                 )
                 ColorPicker(
-                    "Colour",
+                    "Color",
                     selection: Binding(
                         get: { Color(model.edit.clickColor) },
                         set: { color in

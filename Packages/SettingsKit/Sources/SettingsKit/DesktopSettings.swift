@@ -12,7 +12,7 @@ public enum CaptureWallpaper: String, CaseIterable, SettingValue {
         switch self {
         case .none: "Keep my wallpaper"
         case .black: "Solid black"
-        case .gray: "Solid grey"
+        case .gray: "Solid gray"
         case .white: "Solid white"
         case .customImage: "Custom image"
         }

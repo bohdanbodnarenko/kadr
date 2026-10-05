@@ -32,7 +32,7 @@ struct EditorToolOptions: View {
     @ViewBuilder
     private var strokeControls: some View {
         let stroke = model.styleMemory.stroke(for: tool)
-        InspectorStackedRow("Colour") {
+        InspectorStackedRow("Color") {
             EditorSwatchStrip(selected: stroke.color, onSelect: { model.applyColor($0) })
         }
         InspectorRow("Stroke") {

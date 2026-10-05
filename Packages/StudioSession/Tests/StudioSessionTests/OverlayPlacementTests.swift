@@ -9,7 +9,7 @@ struct OverlayPlacementTests {
     private let pill = CGSize(width: 80, height: 24)
     private let margin: CGFloat = 10
 
-    @Test("Bottom centre is the default keystroke slot")
+    @Test("Bottom center is the default keystroke slot")
     func defaultsMatchTheOldHardcodedSlots() {
         let bottom = OverlayPlacement.bottom.frame(for: pill, in: card, margin: margin)
         #expect(abs(bottom.midX - card.midX) < 0.001)

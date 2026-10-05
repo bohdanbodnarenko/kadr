@@ -192,7 +192,7 @@ struct FrameCompositorTests {
         #expect(pixel(buffer, x: Self.width - margin - side / 2, y: Self.height - margin - side / 2) == .untouched)
     }
 
-    @Test("A filled click paints the centre, not a hollow ring")
+    @Test("A filled click paints the center, not a hollow ring")
     func filledClickCoversTheCentre() {
         let buffer = makeBuffer()
         let overlay = RecordingOverlay(

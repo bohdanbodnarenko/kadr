@@ -59,7 +59,7 @@ struct ExportIntegrityTests {
 
     /// A cancelled reader looks exactly like a finished one from the loop's point of view:
     /// the next sample buffer is nil either way.
-    @Test("A cancelled reader fails the render rather than truncating it")
+    @Test("A canceled reader fails the render rather than truncating it")
     func cancelledReaderIsAFailure() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }

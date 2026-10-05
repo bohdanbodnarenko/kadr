@@ -72,7 +72,7 @@ struct GeneralPane: View {
                         Button("Use Default", action: restoreDefaultSaveFolder)
                     }
                 }
-                Toggle("Ask where to save from the overlay", isOn: $settings.askForSaveDestination)
+                Toggle("Ask where to save from a card", isOn: $settings.askForSaveDestination)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Save on a card shows a folder picker instead of writing to this folder. "
                         + "After-capture “Ask where to save” does the same the moment a capture lands.")
@@ -114,13 +114,14 @@ struct GeneralPane: View {
 
             Section("Annotate") {
                 Toggle("Lock objects when the editor opens", isOn: $settings.lockCanvasByDefault)
-                Toggle("Object shadows on inserted images", isOn: $settings.objectShadowsEnabled)
-                Toggle("Keep the original file when saving annotations", isOn: $settings.keepOriginalWhenAnnotating)
+                // Directly under the toggle it explains (docs/18 X-5).
                 Text("Keeps existing annotations from moving while you draw. You can still "
                     + "toggle lock in the editor toolbar or with ⇧⌘L.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Object shadows on inserted images", isOn: $settings.objectShadowsEnabled)
+                Toggle("Keep the original file when saving annotations", isOn: $settings.keepOriginalWhenAnnotating)
             }
         }
         .settingsFormChrome()

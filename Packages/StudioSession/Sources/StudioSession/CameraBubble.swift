@@ -194,7 +194,7 @@ public enum BubblePlacement: String, Sendable, Hashable, Codable, CaseIterable {
         case .top: "Top"
         case .topTrailing: "Top Right"
         case .leading: "Left"
-        case .centre: "Centre"
+        case .centre: "Center"
         case .trailing: "Right"
         case .bottomLeading: "Bottom Left"
         case .bottom: "Bottom"

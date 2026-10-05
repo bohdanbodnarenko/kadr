@@ -34,7 +34,7 @@ func usage() -> String {
         "Run `kadr help <command>` for a command's options.",
         "CleanShot verb names are accepted as aliases, so existing scripts keep working.",
         "",
-        "Exit codes: 0 done · 1 failed · 2 cancelled · 3 unsupported · 4 no text · 64 usage · 77 not allowed."
+        "Exit codes: 0 done · 1 failed · 2 canceled · 3 unsupported · 4 no text · 64 usage · 77 not allowed."
     ])
     return lines.joined(separator: "\n")
 }

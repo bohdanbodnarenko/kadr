@@ -62,7 +62,7 @@ struct EditorTextInspector: View {
             onEditingEnded: { model.endInspectorStyleEdit() }
         )
 
-        InspectorStackedRow("Colour") {
+        InspectorStackedRow("Color") {
             EditorSwatchStrip(
                 selected: style.color,
                 onSelect: { colour in
@@ -84,7 +84,7 @@ struct EditorTextInspector: View {
         InspectorToggleRow("Background pill", isOn: pillBinding)
 
         if let background = style.backgroundColor {
-            InspectorColorRow("Pill colour", selection: Binding(
+            InspectorColorRow("Pill color", selection: Binding(
                 get: { Color(background) },
                 set: { colour in
                     var next = style

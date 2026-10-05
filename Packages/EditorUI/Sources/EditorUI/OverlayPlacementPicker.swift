@@ -62,7 +62,7 @@ struct OverlayPlacementPicker: View {
         let row = slot.isTop ? String(localized: "Top") : String(localized: "Bottom")
         let column = switch slot {
         case .topLeading, .bottomLeading: String(localized: "left")
-        case .top, .bottom: String(localized: "centre")
+        case .top, .bottom: String(localized: "center")
         case .topTrailing, .bottomTrailing: String(localized: "right")
         }
         return "\(row) \(column)"

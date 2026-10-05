@@ -126,7 +126,7 @@ struct TextLayoutTests {
 
     /// The point of the whole type: the string the field lays out is the string the
     /// exporter draws, attribute for attribute.
-    @Test("The attributed string carries the style's font and colour")
+    @Test("The attributed string carries the style's font and color")
     func attributedStringMatchesTheStyle() {
         let style = TextStyle(fontSize: 33, isBold: false, color: AnnotationColor(red: 0, green: 1, blue: 0))
         let attributed = TextLayout.attributedString(spec("Hello", style: style))

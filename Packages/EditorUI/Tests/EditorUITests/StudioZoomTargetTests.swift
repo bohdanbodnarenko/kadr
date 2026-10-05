@@ -21,7 +21,7 @@ struct StudioZoomTargetTests {
         #expect(abs(target.midX - fitted.midX) < 0.001)
     }
 
-    @Test("The target centres on the anchor when there is room")
+    @Test("The target centers on the anchor when there is room")
     func centresOnAnchor() {
         let target = StudioZoomTargetGeometry.viewport(
             anchor: CGPoint(x: 0.5, y: 0.5),
@@ -72,7 +72,7 @@ struct StudioZoomTargetTests {
         #expect(anchor == CGPoint(x: 1, y: 0))
     }
 
-    @Test("A corner dragged towards the centre zooms in")
+    @Test("A corner dragged towards the center zooms in")
     func cornerDragZoomsIn() {
         let anchor = CGPoint(x: 0.5, y: 0.5)
         let far = StudioZoomTargetGeometry.magnification(

@@ -230,7 +230,7 @@ struct RecordSetupView: View {
             ) {
                 model.settings.recordsSystemAudio.toggle()
             }
-            .accessibilityLabel("System sound")
+            .accessibilityLabel("System audio")
             .accessibilityValue(model.settings.recordsSystemAudio ? "On" : "Off")
 
             RecordingBarCircleButton(

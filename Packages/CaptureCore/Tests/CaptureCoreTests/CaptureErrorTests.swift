@@ -34,7 +34,7 @@ struct CaptureErrorMappingTests {
         #expect(error.indicatesPermissionLoss == false)
     }
 
-    @Test("Unrecognised SCK codes keep their code and message")
+    @Test("Unrecognized SCK codes keep their code and message")
     func unknownSCKCode() {
         let error = CaptureError.mapping(scError(.internalError))
         #expect(error == .captureFailed(code: SCStreamError.Code.internalError.rawValue, description: "test"))

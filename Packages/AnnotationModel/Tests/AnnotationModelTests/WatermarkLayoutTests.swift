@@ -68,7 +68,7 @@ struct WatermarkLayoutTests {
         #expect(first.y < second.y)
     }
 
-    @Test("A mark too big for a corner is centred rather than pushed off the canvas")
+    @Test("A mark too big for a corner is centerd rather than pushed off the canvas")
     func oversizedMarkIsCentred() {
         let huge = WatermarkLayout.compute(
             .signature("Kadr"),
@@ -230,7 +230,7 @@ struct BeautifyBorderTests {
         #expect(computed.cardRect.size == CGSize(width: 420, height: 320))
     }
 
-    @Test("The capture sits centred inside the ring")
+    @Test("The capture sits centerd inside the ring")
     func captureIsCentredInTheRing() {
         let computed = layout(BeautifyBorder(thickness: .points(10)))
         #expect(computed.imageRect.minX - computed.cardRect.minX == 10)

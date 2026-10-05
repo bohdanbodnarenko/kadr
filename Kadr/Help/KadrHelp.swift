@@ -126,7 +126,7 @@ enum KadrHelpTopic: String, CaseIterable, Identifiable {
         case .saveTarget:
             """
             The default folder is used for Save on a card and for after-capture Save. “Ask where \
-            to save” shows a folder picker instead. The All-in-One strip can switch this per \
+            to save” shows a folder picker instead. The capture island can switch this per \
             session without opening Settings.
             """
         case .shortcuts:

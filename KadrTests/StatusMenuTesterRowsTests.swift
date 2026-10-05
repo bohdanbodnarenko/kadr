@@ -69,7 +69,7 @@ struct StatusMenuTesterRowsTests {
         )
         defer { NSStatusBar.system.removeStatusItem(controller.statusItem) }
         let items = controller.overlaySubmenuItems().filter { !$0.isSeparatorItem }
-        #expect(items.contains { $0.title == "Show Overlays" })
+        #expect(items.contains { $0.title == "Show Cards" })
         #expect(items.contains { $0.title == "Show Pins" })
         #expect(items.allSatisfy { $0.state == .off })
     }

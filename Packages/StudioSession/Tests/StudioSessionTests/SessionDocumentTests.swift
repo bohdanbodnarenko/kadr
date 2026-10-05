@@ -396,7 +396,7 @@ struct SessionDocumentTests {
         #expect(document.audioHashCache() == nil)
     }
 
-    @Test("Hashing a file stops when its task is cancelled")
+    @Test("Hashing a file stops when its task is canceled")
     func hashingIsCancellable() async throws {
         let scratch = try scratch()
         let (session, root) = (scratch.session, scratch.root)

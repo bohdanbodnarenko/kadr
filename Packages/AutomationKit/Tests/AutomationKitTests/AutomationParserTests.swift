@@ -227,8 +227,8 @@ struct AutomationParserTests {
         #expect(throws: AutomationError.invalidValue(name: "fps", value: "999")) {
             try AutomationParser.invocation(arguments: ["record-screen", "--fps", "999"])
         }
-        #expect(throws: AutomationError.invalidValue(name: "tab", value: "colours")) {
-            try AutomationParser.invocation(arguments: ["open-settings", "--tab", "colours"])
+        #expect(throws: AutomationError.invalidValue(name: "tab", value: "colors")) {
+            try AutomationParser.invocation(arguments: ["open-settings", "--tab", "colors"])
         }
         #expect(throws: AutomationError.invalidValue(name: "delay", value: "-3")) {
             try AutomationParser.invocation(arguments: ["capture-area", "--delay", "-3"])

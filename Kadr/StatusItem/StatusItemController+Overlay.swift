@@ -15,7 +15,7 @@ extension StatusItemController {
         for item in items {
             submenu.addItem(item)
         }
-        let parent = NSMenuItem(title: "Pins & Overlays", action: nil, keyEquivalent: "")
+        let parent = NSMenuItem(title: "Pins & Cards", action: nil, keyEquivalent: "")
         parent.image = NSImage(systemSymbolName: "square.stack", accessibilityDescription: nil)
         parent.submenu = submenu
         menu.addItem(parent)
@@ -29,7 +29,7 @@ extension StatusItemController {
             items.append(makeCommandItem(.closeAllOverlays))
             // The title says what the item will do; a checkmark on top of that said it
             // twice, and contradicted it half the time (HIG › Menus, docs/17 T-SH-6).
-            let hide = makeCommandItem(.hideOverlays, title: hidden ? "Show Overlays" : "Hide Overlays")
+            let hide = makeCommandItem(.hideOverlays, title: hidden ? "Show Cards" : "Hide Cards")
             items.append(hide)
         }
         if canRestore() {

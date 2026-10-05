@@ -21,7 +21,7 @@ public enum DefaultCaptureAction: String, CaseIterable, SettingValue {
         case .copyToClipboard: "Copy to Clipboard"
         case .saveToFolder: "Save to Folder"
         case .copyAndSave: "Copy and Save"
-        case .overlayOnly: "Keep in the Overlay Only"
+        case .overlayOnly: "Keep on the Card Only"
         }
     }
 

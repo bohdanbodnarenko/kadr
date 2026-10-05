@@ -17,7 +17,7 @@ extension HistoryView {
                 Text(usedText)
             }
         }
-        .help("Space used by the History library")
+        .help("Space used by History")
     }
 
     func revealSelected() {

@@ -191,7 +191,7 @@ extension StudioInspector {
                 }
             }
         } else {
-            Button("Download Language Model…") { model.installSpeechModel() }
+            Button("Install Speech Model…") { model.installSpeechModel() }
         }
     }
 

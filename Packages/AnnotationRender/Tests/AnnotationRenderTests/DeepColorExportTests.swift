@@ -9,7 +9,7 @@ import Testing
 /// The failure this guards against is silent: an HDR or wide-gamut capture rendered into
 /// the ordinary 8-bit canvas comes out looking almost right, and the loss only shows up
 /// as banding in a gradient — long after the export.
-@Suite("Deep-colour export")
+@Suite("Deep-color export")
 struct DeepColorExportTests {
     private let width = 32
     private let height = 16
@@ -79,14 +79,14 @@ struct DeepColorExportTests {
         #expect(rendered.bitsPerComponent == 8)
     }
 
-    @Test("The capture's colour space is carried through, whatever the depth", arguments: [8, 16])
+    @Test("The capture's color space is carried through, whatever the depth", arguments: [8, 16])
     func colourSpaceIsPreserved(bits: Int) throws {
         let image = try #require(makeImage(bitsPerComponent: bits))
         let rendered = try AnnotationExportRenderer().render(baseImage: image, document: document())
         #expect(rendered.colorSpace?.name == image.colorSpace?.name)
     }
 
-    @Test("Annotations still draw on a deep-colour canvas")
+    @Test("Annotations still draw on a deep-color canvas")
     func annotationsStillDraw() throws {
         let image = try #require(makeImage(bitsPerComponent: 16))
         var document = document()

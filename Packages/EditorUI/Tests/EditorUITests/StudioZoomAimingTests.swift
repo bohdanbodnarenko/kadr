@@ -137,7 +137,7 @@ struct StudioZoomAimingTests {
         #expect(model.selectedZoom != nil, "finishing the aim keeps the zoom selected")
     }
 
-    @Test("With no pointer track there is nothing to mark, and the zoom centres")
+    @Test("With no pointer track there is nothing to mark, and the zoom centers")
     func noTelemetryFallsBackToTheCentre() throws {
         let (model, folder) = try studio()
         defer { try? FileManager.default.removeItem(at: folder) }

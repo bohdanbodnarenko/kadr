@@ -80,7 +80,7 @@ struct StudioRenderPipelineTests {
     // MARK: - Cancellation
 
     /// Cancelled before a frame could be written, with nothing at the destination yet.
-    @Test("A render cancelled before it starts leaves no file")
+    @Test("A render canceled before it starts leaves no file")
     func cancelledBeforeStart() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -98,11 +98,11 @@ struct StudioRenderPipelineTests {
         await #expect(throws: (any Error).self) {
             try await task.value
         }
-        #expect(!FileManager.default.fileExists(atPath: destination.path), "a cancelled export left a file")
+        #expect(!FileManager.default.fileExists(atPath: destination.path), "a canceled export left a file")
     }
 
     /// Cancelled while frames are moving, over a file an earlier export left there.
-    @Test("A render cancelled midway leaves the older file as it was, and no partial")
+    @Test("A render canceled midway leaves the older file as it was, and no partial")
     func cancelledMidwayOverAnOldFile() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -135,7 +135,7 @@ struct StudioRenderPipelineTests {
             #expect(try Data(contentsOf: destination) == Data("an older export".utf8))
             let partials = try FileManager.default.contentsOfDirectory(atPath: folder.path)
                 .filter { $0.contains(".partial-") }
-            #expect(partials.isEmpty, "a cancelled export left a partial movie behind")
+            #expect(partials.isEmpty, "a canceled export left a partial movie behind")
             return
         }
         // Finished before the cancellation landed: the file must then be the whole export.
@@ -214,7 +214,7 @@ struct ExportGateTests {
         #expect(order.values.count == 3)
     }
 
-    @Test("A cancelled waiter leaves the queue without taking a slot")
+    @Test("A canceled waiter leaves the queue without taking a slot")
     func cancelledWaiter() async throws {
         let gate = ExportGate(limit: 1)
         try await gate.acquire()

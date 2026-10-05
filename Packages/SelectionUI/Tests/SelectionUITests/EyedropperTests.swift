@@ -31,7 +31,7 @@ private func makeSolidImage(red: Double, green: Double, blue: Double) -> CGImage
 /// on a screen that has moved on since the freeze it would answer the wrong one.
 @Suite("Eyedropper")
 struct EyedropperTests {
-    @Test("A sampled pixel becomes the colour the maths works on")
+    @Test("A sampled pixel becomes the color the maths works on")
     func samplerProducesAColour() throws {
         let sampler = LoupeSampler(image: makeSolidImage(red: 1, green: 0, blue: 0), scale: .retina)
         let pixel = try #require(sampler.color(at: CGPoint(x: 5, y: 5)))

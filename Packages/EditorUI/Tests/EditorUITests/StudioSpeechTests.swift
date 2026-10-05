@@ -372,7 +372,7 @@ struct StudioSpeechTests {
         let reopened = try #require(StudioDocumentModel(session: studio.session))
         reopened.commitOnClose()
         await reopened.transcriptLoaded()
-        #expect(reopened.transcript == nil, "a cancelled check still delivered")
+        #expect(reopened.transcript == nil, "a canceled check still delivered")
     }
 
     /// Tidy Speech finishing first wins: the stored transcript is older by construction.

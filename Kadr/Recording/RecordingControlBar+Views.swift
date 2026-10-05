@@ -141,7 +141,7 @@ struct RecordingLiveControls: View {
 
             RecordingBarCircleButton(
                 symbol: "arrow.counterclockwise",
-                help: "Start over"
+                help: "Restart"
             ) {
                 setConfirmation(.restart)
             }
@@ -217,8 +217,8 @@ struct RecordingLiveControls: View {
                 action = String(localized: "Discard")
                 consequence = String(localized: "What you have recorded so far will be deleted.")
             case .restart:
-                question = String(localized: "Start over?")
-                action = String(localized: "Start Over")
+                question = String(localized: "Restart the recording?")
+                action = String(localized: "Restart")
                 consequence = String(
                     localized: "What you have recorded so far will be deleted, and recording starts again."
                 )

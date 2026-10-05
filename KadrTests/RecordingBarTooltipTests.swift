@@ -29,7 +29,7 @@ struct RecordingBarTooltipTests {
         #expect(model.visible?.key == "W")
 
         try? await Task.sleep(for: .milliseconds(200))
-        #expect(model.visible?.id == "b", "a cancelled hide must not clear the new pill")
+        #expect(model.visible?.id == "b", "a canceled hide must not clear the new pill")
     }
 
     @Test("Sliding with the entry first moves the pill too")
