@@ -62,6 +62,8 @@ extension AppDelegate {
         for domain in Self.ownedPreferenceDomains {
             UserDefaults.standard.removePersistentDomain(forName: domain)
         }
+        // Automation consent lives in the Keychain, not the preferences domain (docs/18 OUT-13).
+        KeychainConsentStorage().remove()
 
         // Nothing may be written back on the way out: pins flushing, the login item,
         // the settings the running process still holds in memory.
