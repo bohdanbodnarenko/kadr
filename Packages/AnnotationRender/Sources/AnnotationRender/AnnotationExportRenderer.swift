@@ -164,8 +164,12 @@ public struct AnnotationExportRenderer: Sendable {
     /// context cannot be made, because a slightly flattened export beats none.
     /// Internal, not private: the canvas assembly lives in
     /// `AnnotationExportRenderer+Canvas.swift`, and `private` is file-scoped.
+    ///
+    /// Only an RGB source keeps its own colour space: an RGBA context cannot be made in a
+    /// CMYK, grey or indexed one, so those render in sRGB rather than fail (docs/18 ED-13).
     static func makeContext(width: Int, height: Int, matching source: CGImage) -> CGContext? {
-        let space = source.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let srgb = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let space = source.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? srgb
 
         if source.bitsPerComponent > 8 {
             var info = CGImageAlphaInfo.premultipliedLast.rawValue
@@ -186,15 +190,21 @@ public struct AnnotationExportRenderer: Sendable {
             }
         }
 
-        return CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
+        // An RGB space an RGBA context still refuses (an unusual ICC profile) gets sRGB.
+        for candidate in [space, srgb] {
+            if let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: candidate,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) {
+                return context
+            }
+        }
+        return nil
     }
 
     // MARK: - Commands
