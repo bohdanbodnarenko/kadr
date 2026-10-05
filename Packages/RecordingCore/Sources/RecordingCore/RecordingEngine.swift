@@ -178,7 +178,6 @@ public actor RecordingEngine {
         }
     }
 
-
     /// Watches the recording's own clock (docs/10 R0.1).
     ///
     /// Its own channel rather than a side effect of drawing overlays. The clock was
@@ -319,24 +318,11 @@ public actor RecordingEngine {
     /// The compositing happens here, between SCK and the writer, which is what puts the
     /// click halos and keystrokes in the file and nowhere else (docs/04 §4.3).
     func consume(_ box: SampleBufferBox) async {
-        // Paused, the stream still runs: keep the held frame current, so a resume opens on
-        // the screen as it is now and not as it was at Pause (docs/18 REC-6).
-        if state == .paused, box.kind == .video {
-            lastVideoBox = box
-            return
-        }
+        guard !holdsWhilePaused(box) else { return }
         guard state == .recording, let writer else { return }
 
         if box.kind == .clock {
-            let time = recordingTime(of: box.buffer)
-            reportGeometry(of: box, at: time)
-            clockObserver?(time)
-            let hadVideo = segmentHasVideo
-            await seedHeldFrame(into: writer, at: box)
-            // Not the tick that seeded: re-appending at its time would repeat a timestamp.
-            if hadVideo {
-                stillTailEnd = CMSampleBufferGetPresentationTimeStamp(box.buffer)
-            }
+            await consumeIdleTick(box, writer: writer)
             return
         }
         if box.kind != .video {
@@ -375,6 +361,27 @@ public actor RecordingEngine {
         if !accepted, let reason = await writer.failureReason {
             noteInterruption(.writerFailed(reason))
         }
+    }
+
+    /// An idle tick: the screen did not change, so there is no picture, only the time.
+    private func consumeIdleTick(_ box: SampleBufferBox, writer: any SegmentWriting) async {
+        let time = recordingTime(of: box.buffer)
+        reportGeometry(of: box, at: time)
+        clockObserver?(time)
+        let hadVideo = segmentHasVideo
+        await seedHeldFrame(into: writer, at: box)
+        // Not the tick that seeded: re-appending at its time would repeat a timestamp.
+        if hadVideo {
+            stillTailEnd = CMSampleBufferGetPresentationTimeStamp(box.buffer)
+        }
+    }
+
+    /// Paused, the stream still runs: keep the held frame current, so a resume opens on the
+    /// screen as it is now and not as it was at Pause (docs/18 REC-6).
+    private func holdsWhilePaused(_ box: SampleBufferBox) -> Bool {
+        guard state == .paused, box.kind == .video else { return false }
+        lastVideoBox = box
+        return true
     }
 
     /// Opens a segment that has no picture yet with the last frame seen, re-timed to `box`.

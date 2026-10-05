@@ -17,7 +17,11 @@ enum RecordingPlacement {
         get { point(settings?.recordingBarOrigin ?? fallback["bar"]) }
         set {
             let text = newValue.map { NSStringFromPoint($0) } ?? ""
-            if let settings { settings.recordingBarOrigin = text } else { fallback["bar"] = text }
+            if let settings {
+                settings.recordingBarOrigin = text
+            } else {
+                fallback["bar"] = text
+            }
         }
     }
 
@@ -25,14 +29,20 @@ enum RecordingPlacement {
         get { point(settings?.cameraBubbleOrigin ?? fallback["camera"]) }
         set {
             let text = newValue.map { NSStringFromPoint($0) } ?? ""
-            if let settings { settings.cameraBubbleOrigin = text } else { fallback["camera"] = text }
+            if let settings {
+                settings.cameraBubbleOrigin = text
+            } else {
+                fallback["camera"] = text
+            }
         }
     }
 
     static var cameraDiameter: CGFloat {
         get { CGFloat(settings?.cameraBubbleDiameter ?? Double(fallback["diameter"] ?? "") ?? 160) }
         set {
-            if let settings { settings.cameraBubbleDiameter = Double(newValue) } else {
+            if let settings {
+                settings.cameraBubbleDiameter = Double(newValue)
+            } else {
                 fallback["diameter"] = String(Double(newValue))
             }
         }
@@ -41,7 +51,9 @@ enum RecordingPlacement {
     static var cameraIsCircular: Bool {
         get { settings?.cameraBubbleIsCircular ?? (fallback["circular"] != "false") }
         set {
-            if let settings { settings.cameraBubbleIsCircular = newValue } else {
+            if let settings {
+                settings.cameraBubbleIsCircular = newValue
+            } else {
                 fallback["circular"] = newValue ? "true" : "false"
             }
         }

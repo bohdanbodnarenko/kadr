@@ -274,68 +274,6 @@ struct RecordSetupView: View {
         }
     }
 
-    /// A menu like the microphone's, so choosing a camera does not hide behind a
-    /// right-click (docs/18 REC-10). C still toggles it from the keyboard.
-    private var cameraToggle: some View {
-        Menu {
-            Button {
-                if model.settings.recordingShowsWebcam {
-                    model.requestCameraToggle()
-                }
-            } label: {
-                microphoneLabel("Off", selected: !model.settings.recordingShowsWebcam)
-            }
-            Divider()
-            if model.cameras.isEmpty {
-                // No list until access is granted: this asks for it.
-                Button("Default Camera") {
-                    if !model.settings.recordingShowsWebcam {
-                        model.requestCameraToggle()
-                    }
-                }
-            }
-            cameraDeviceMenu
-        } label: {
-            RecordingBarIcon(
-                symbol: model.settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
-                isOn: model.settings.recordingShowsWebcam
-            )
-        }
-        .recordingBarMenu(tooltip: cameraHelp)
-        .disabled(cameraUnavailable)
-        .accessibilityLabel("Camera")
-        .accessibilityValue(model.settings.recordingShowsWebcam ? "On" : "Off")
-    }
-
-    private var cameraUnavailable: Bool {
-        model.cameras.isEmpty && CaptureMediaAccess.status(for: .camera) == .allowed
-    }
-
-    private var cameraDeviceMenu: some View {
-        ForEach(model.cameras) { device in
-            Button {
-                model.selectCamera(deviceID: device.uniqueID)
-            } label: {
-                if model.settings.recordingShowsWebcam,
-                   model.settings.recordingCameraDeviceID == device.uniqueID {
-                    Label(device.localizedName, systemImage: "checkmark")
-                } else {
-                    Text(device.localizedName)
-                }
-            }
-        }
-    }
-
-    private var cameraHelp: String {
-        guard model.settings.recordingShowsWebcam else {
-            return "Camera off — click to pick a camera"
-        }
-        if let match = model.cameras.first(where: { $0.uniqueID == model.settings.recordingCameraDeviceID }) {
-            return "Camera on — \(match.localizedName)"
-        }
-        return "Camera on — click to pick another"
-    }
-
     @ViewBuilder
     private var microphoneMenu: some View {
         if RecordingOptions.microphoneIsAvailable {
@@ -420,5 +358,71 @@ private extension RecordSetupView {
                     && model.settings.recordingMicrophoneDeviceID == deviceID
             )
         }
+    }
+}
+
+// MARK: - Camera
+
+extension RecordSetupView {
+    /// A menu like the microphone's, so choosing a camera does not hide behind a
+    /// right-click (docs/18 REC-10). C still toggles it from the keyboard.
+    private var cameraToggle: some View {
+        Menu {
+            Button {
+                if model.settings.recordingShowsWebcam {
+                    model.requestCameraToggle()
+                }
+            } label: {
+                microphoneLabel("Off", selected: !model.settings.recordingShowsWebcam)
+            }
+            Divider()
+            if model.cameras.isEmpty {
+                // No list until access is granted: this asks for it.
+                Button("Default Camera") {
+                    if !model.settings.recordingShowsWebcam {
+                        model.requestCameraToggle()
+                    }
+                }
+            }
+            cameraDeviceMenu
+        } label: {
+            RecordingBarIcon(
+                symbol: model.settings.recordingShowsWebcam ? "video.fill" : "video.slash.fill",
+                isOn: model.settings.recordingShowsWebcam
+            )
+        }
+        .recordingBarMenu(tooltip: cameraHelp)
+        .disabled(cameraUnavailable)
+        .accessibilityLabel("Camera")
+        .accessibilityValue(model.settings.recordingShowsWebcam ? "On" : "Off")
+    }
+
+    private var cameraUnavailable: Bool {
+        model.cameras.isEmpty && CaptureMediaAccess.status(for: .camera) == .allowed
+    }
+
+    private var cameraDeviceMenu: some View {
+        ForEach(model.cameras) { device in
+            Button {
+                model.selectCamera(deviceID: device.uniqueID)
+            } label: {
+                if model.settings.recordingShowsWebcam,
+                   model.settings.recordingCameraDeviceID == device.uniqueID {
+                    Label(device.localizedName, systemImage: "checkmark")
+                } else {
+                    Text(device.localizedName)
+                }
+            }
+        }
+    }
+
+    private var cameraHelp: String {
+        guard model.settings.recordingShowsWebcam else {
+            return "Camera off — click to pick a camera"
+        }
+        if let match = model.cameras.first(where: { $0.uniqueID == model.settings.recordingCameraDeviceID }) {
+            return "Camera on — \(match.localizedName)"
+        }
+        return "Camera on — click to pick another"
     }
 }

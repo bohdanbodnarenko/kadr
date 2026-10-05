@@ -201,31 +201,20 @@ struct RecordingCoordinatorGuardTests {
 
     /// docs/18 REC-10: only the take's own inputs count as lost.
     @Test("A disconnection loses only the take's own input", arguments: [
-        ("mic-a", true, false, String?.some("mic-a"), String?.none, 1, RecordingCoordinator.LostInput?.some(.microphone)),
-        ("mic-b", true, false, "mic-a", nil, 1, nil),
-        ("mic-a", true, false, "", nil, 1, nil),
-        ("mic-a", true, false, "", nil, 0, .microphone),
-        ("mic-a", true, false, nil, nil, 0, nil),
-        ("cam-a", false, true, nil, "cam-a", 1, .camera),
-        ("cam-b", false, true, nil, "cam-a", 1, nil)
+        (mic("mic-a"), take(mic: "mic-a"), RecordingCoordinator.LostInput?.some(.microphone)),
+        (mic("mic-b"), take(mic: "mic-a"), nil),
+        (mic("mic-a"), take(mic: ""), nil),
+        (mic("mic-a"), take(mic: "", remaining: 0), .microphone),
+        (mic("mic-a"), take(remaining: 0), nil),
+        (camera("cam-a"), take(camera: "cam-a"), .camera),
+        (camera("cam-b"), take(camera: "cam-a"), nil)
     ])
     func lostInput(
-        id: String,
-        isAudio: Bool,
-        isVideo: Bool,
-        microphone: String?,
-        camera: String?,
-        remaining: Int,
+        device: RecordingCoordinator.Disconnection,
+        take: RecordingCoordinator.TakeInputs,
         expected: RecordingCoordinator.LostInput?
     ) {
-        #expect(RecordingCoordinator.lostInput(
-            disconnectedID: id,
-            isAudio: isAudio,
-            isVideo: isVideo,
-            microphoneID: microphone,
-            cameraID: camera,
-            remainingAudioDevices: remaining
-        ) == expected)
+        #expect(RecordingCoordinator.lostInput(device, from: take) == expected)
     }
 
     /// docs/18 REC-10: after a denial macOS never prompts again, so Allow is not offered.
@@ -237,4 +226,16 @@ struct RecordingCoordinatorGuardTests {
     func allowOffered(status: AppPermissionStatus, canAsk: Bool) {
         #expect(CaptureAccessGate.canAsk(status: status) == canAsk)
     }
+}
+
+private func mic(_ id: String) -> RecordingCoordinator.Disconnection {
+    .init(uniqueID: id, isAudio: true, isVideo: false)
+}
+
+private func camera(_ id: String) -> RecordingCoordinator.Disconnection {
+    .init(uniqueID: id, isAudio: false, isVideo: true)
+}
+
+private func take(mic: String? = nil, camera: String? = nil, remaining: Int = 1) -> RecordingCoordinator.TakeInputs {
+    .init(microphoneID: mic, cameraID: camera, remainingAudioDevices: remaining)
 }

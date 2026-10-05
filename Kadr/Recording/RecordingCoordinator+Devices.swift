@@ -14,6 +14,24 @@ extension RecordingCoordinator {
         case camera
     }
 
+    /// What the take is recording from, when a device goes.
+    struct TakeInputs: Equatable {
+        /// The take's microphone, empty for the system default, nil for none.
+        var microphoneID: String?
+        /// The take's camera, nil for none.
+        var cameraID: String?
+        /// Inputs still attached; the default follows whichever is left, so it is only
+        /// lost when none is.
+        var remainingAudioDevices: Int
+    }
+
+    /// The disconnected device, as the notification describes it.
+    struct Disconnection: Equatable {
+        var uniqueID: String
+        var isAudio: Bool
+        var isVideo: Bool
+    }
+
     /// Listens for device disconnections for the coordinator's lifetime.
     ///
     /// A notification, not polling, so an idle agent still costs nothing (rule 2); it acts
@@ -34,12 +52,12 @@ extension RecordingCoordinator {
     func deviceDisconnected(uniqueID: String, isAudio: Bool, isVideo: Bool) {
         guard state == .recording || state == .paused else { return }
         let lost = Self.lostInput(
-            disconnectedID: uniqueID,
-            isAudio: isAudio,
-            isVideo: isVideo,
-            microphoneID: microphoneThisTake && !microphoneDropped ? settings.recordingMicrophoneDeviceID : nil,
-            cameraID: cameraThisTake,
-            remainingAudioDevices: RecordingDeviceCatalog.microphones().count
+            Disconnection(uniqueID: uniqueID, isAudio: isAudio, isVideo: isVideo),
+            from: TakeInputs(
+                microphoneID: microphoneThisTake && !microphoneDropped ? settings.recordingMicrophoneDeviceID : nil,
+                cameraID: cameraThisTake,
+                remainingAudioDevices: RecordingDeviceCatalog.microphones().count
+            )
         )
         switch lost {
         case .microphone:
@@ -55,25 +73,13 @@ extension RecordingCoordinator {
         }
     }
 
-    /// - Parameters:
-    ///   - microphoneID: the take's microphone, empty for the system default, nil for none.
-    ///   - cameraID: the take's camera, nil for none.
-    ///   - remainingAudioDevices: inputs still attached; the default follows whichever is
-    ///     left, so it is only lost when none is.
-    static func lostInput(
-        disconnectedID: String,
-        isAudio: Bool,
-        isVideo: Bool,
-        microphoneID: String?,
-        cameraID: String?,
-        remainingAudioDevices: Int
-    ) -> LostInput? {
-        if isAudio, let microphoneID {
-            if microphoneID == disconnectedID || (microphoneID.isEmpty && remainingAudioDevices == 0) {
+    static func lostInput(_ device: Disconnection, from take: TakeInputs) -> LostInput? {
+        if device.isAudio, let microphoneID = take.microphoneID {
+            if microphoneID == device.uniqueID || (microphoneID.isEmpty && take.remainingAudioDevices == 0) {
                 return .microphone
             }
         }
-        if isVideo, let cameraID, cameraID == disconnectedID {
+        if device.isVideo, let cameraID = take.cameraID, cameraID == device.uniqueID {
             return .camera
         }
         return nil

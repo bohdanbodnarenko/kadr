@@ -31,6 +31,7 @@ final class CameraPreviewPanel {
         get { RecordingPlacement.cameraIsCircular }
         set { RecordingPlacement.cameraIsCircular = newValue }
     }
+
     static var fillsDisplay = false
 
     private var panel: NonActivatingPanel?
