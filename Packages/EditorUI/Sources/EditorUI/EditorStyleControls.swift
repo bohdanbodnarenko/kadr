@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// One-click colour, the way CleanShot lays out style.
@@ -109,7 +110,7 @@ struct EditorCopiedToast: View {
             .padding(.vertical, 8)
             .background(.regularMaterial, in: Capsule())
             .overlay {
-                Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                Capsule().strokeBorder(KadrFill.stroke, lineWidth: 0.5)
             }
             .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }

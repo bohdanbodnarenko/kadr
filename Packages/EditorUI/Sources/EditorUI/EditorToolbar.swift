@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The tool palette, history and export controls (docs/03 §3, docs/14 UX-25).
@@ -203,7 +204,7 @@ struct EditorToolbarButton: View {
         if isOn {
             return Color.accentColor.opacity(0.16)
         }
-        return isHovering && isEnabled ? Color.primary.opacity(0.07) : .clear
+        return isHovering && isEnabled ? KadrFill.hover : .clear
     }
 }
 

@@ -82,7 +82,7 @@ struct QuickAccessPeekTabView: View {
         }
         .overlay {
             shape
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
         .compositingGroup()

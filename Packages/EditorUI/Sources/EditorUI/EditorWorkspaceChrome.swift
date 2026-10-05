@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// Neutral dotted workspace behind the capture, so a screenshot reads as a card rather
@@ -40,7 +41,7 @@ extension View {
         background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                    .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
             }
             .shadow(color: .black.opacity(0.14), radius: 14, y: 5)
     }

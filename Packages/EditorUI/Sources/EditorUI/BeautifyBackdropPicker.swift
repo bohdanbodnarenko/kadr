@@ -124,10 +124,10 @@ struct BeautifyBackdropPicker: View {
                     Image(systemName: "plus")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: 5))
                         .overlay(
                             RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                                .strokeBorder(KadrFill.stroke, lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)
