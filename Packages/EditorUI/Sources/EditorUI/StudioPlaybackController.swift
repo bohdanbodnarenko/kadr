@@ -64,6 +64,9 @@ final class StudioPlaybackController {
     @ObservationIgnored private var seekEpoch = 0
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var endObserver: (any NSObjectProtocol)?
+    /// Watches the item for a failure to play, which otherwise shows as a black preview
+    /// with no explanation (docs/18 STU P3).
+    @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     /// The playhead value this controller last wrote, so the preview can tell its own
     /// clock ticking from somebody dragging the playhead.
     @ObservationIgnored private var reportedPlayhead: TimeInterval?
@@ -242,6 +245,13 @@ final class StudioPlaybackController {
         player.replaceCurrentItem(with: item)
         composition = copy
         skimGenerator = nil
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            let detail = item.error?.localizedDescription ?? "The recording could not be decoded."
+            Task { @MainActor [weak self] in
+                self?.model?.failure = .previewFailed(detail)
+            }
+        }
 
         if model.isPlaying {
             startRolling()
@@ -263,6 +273,7 @@ final class StudioPlaybackController {
     }
 
     private func clearItem() {
+        statusObservation = nil
         removeObservers()
         seekEpoch += 1
         chase.reset()
