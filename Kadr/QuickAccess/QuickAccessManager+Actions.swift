@@ -52,6 +52,7 @@ extension QuickAccessManager {
         actions.dismiss = { [weak self] in self?.dismiss(item) }
         actions.resolveForDrag = { [weak self] in self?.resolveForDrag(item) }
         actions.dragCompleted = { [weak self] accepted in self?.dragCompleted(item, accepted: accepted) }
+        actions.pathHandedOut = { [weak self] in self?.pathHandedOutItemIDs.insert(item.id) }
         actions.pin = { [weak self] in self?.pin(item) }
         actions.pinAvailable = true
         actions.annotate = { [weak self] in self?.annotate(item) }

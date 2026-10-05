@@ -240,15 +240,16 @@ extension QuickAccessManager {
         }
     }
 
-    /// Dragging a card out counts as acting on it, so a staged file becomes a real one
-    /// and the card goes if the user asked for that (docs/03 §2).
-    /// The receiver asked for the file: finalise it and hand back where it now lives.
+    /// The receiver asked for the file: hand back where it lives now.
     ///
     /// Reading the URL back out of `items` rather than trusting the captured item is the
-    /// whole fix for docs/07 C1 — `finalizeIfStaged` *moves* the file, and the card view's
-    /// copy of the item still holds the path it had before the move.
+    /// fix for docs/07 C1 — a Save or Copy in the meantime *moves* a staged file, and the
+    /// card view's copy of the item still holds the path it had before the move.
+    ///
+    /// Not finalised: the receiver chose where its copy goes, so moving the capture into the
+    /// save folder as well left two copies, and failed outright for a drop onto the save
+    /// folder itself (docs/18 OUT-2). The copy is made straight from staging.
     func resolveForDrag(_ item: QuickAccessItem) -> URL? {
-        finalizeIfStaged(item)
         let live = items.first { $0.id == item.id } ?? item
         let url = live.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
@@ -268,6 +269,12 @@ extension QuickAccessManager {
     /// (docs/09 U0.1).
     func dragCompleted(_ item: QuickAccessItem, accepted: Bool) {
         endDrag(for: item)
+        // A receiver that took the staging path itself may keep it for longer than the
+        // 24-hour sweep (docs/18 OUT-2).
+        if pathHandedOutItemIDs.remove(item.id) != nil, accepted,
+           let live = items.first(where: { $0.id == item.id }), live.isStaged {
+            output.retainStaged(live.fileURL)
+        }
         guard accepted, settings.overlayDismissOnDrag else { return }
         dismiss(item)
     }

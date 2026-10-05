@@ -17,11 +17,14 @@ struct QuickAccessCardActions {
     /// False for files Kadr did not create, which are only ever hidden (docs/17 T-OUT-5).
     var deleteAvailable = true
     var dismiss: () -> Void = {}
-    /// Resolves the file to hand to a receiver, finalising a staged capture on the way.
-    /// Called when the drop asks for the bytes, never when the drag starts (docs/07 C1).
+    /// Resolves the file to hand to a receiver. Called when the drop asks for the bytes,
+    /// never when the drag starts (docs/07 C1).
     var resolveForDrag: @MainActor @Sendable () -> URL? = { nil }
     /// The drag ended; `true` when a receiver took the file.
     var dragCompleted: @MainActor @Sendable (Bool) -> Void = { _ in }
+    /// A receiver read the capture's path itself instead of claiming the promise
+    /// (docs/18 OUT-2).
+    var pathHandedOut: @MainActor @Sendable () -> Void = {}
     /// Turns a recording into a GIF (docs/03 §1.8). Only offered on a recording.
     var exportGIF: () -> Void = {}
     /// Re-encodes the capture smaller and copies it (docs/09 U2.4).

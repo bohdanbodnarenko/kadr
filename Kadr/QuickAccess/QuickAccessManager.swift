@@ -79,6 +79,8 @@ final class QuickAccessManager {
     @ObservationIgnored var hoveredItemID: UUID?
     /// The card currently being dragged out.
     @ObservationIgnored var draggingItemID: UUID?
+    /// Cards whose staging path a drop receiver read directly (docs/18 OUT-2).
+    @ObservationIgnored var pathHandedOutItemIDs: Set<UUID> = []
     /// The card the pointer last rested on, so a clicked card keeps the keyboard after the
     /// pointer moves off it (docs/17 T-OUT-1).
     @ObservationIgnored var lastHoveredItemID: UUID?
