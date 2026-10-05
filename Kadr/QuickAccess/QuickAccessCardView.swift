@@ -292,7 +292,8 @@ struct QuickAccessCardView: View {
                     // has not been acted on yet. Promise-aware receivers never look at it,
                     // but the many that only read `public.file-url` (browsers, Electron
                     // apps) got nothing at all without it (docs/16 OUT-6).
-                    stableFileURL: item.fileURL
+                    stableFileURL: item.fileURL,
+                    pathHandedOut: actions.pathHandedOut
                 )
             },
             dragImage: {

@@ -146,7 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
             performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
-            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) }
+            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) },
+            availableUpdate: { UpdaterManager.shared.availableUpdateVersion },
+            installUpdate: { UpdaterManager.shared.checkForUpdates() }
         )
         hud.onShowingChanged = { [weak self] in
             self?.refreshStatusItemIcon()
@@ -339,6 +341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exportDiagnostics: { [weak self] in Task { await self?.exportDiagnostics() } },
             reportProblem: { [weak self] in Task { await self?.reportProblem() } }
         )
+        UpdaterManager.shared.onAvailableUpdateChange = { [weak self] in self?.refreshStatusItemIcon() }
         attachStatusItemDrop()
         statusItemController?.applyMenuBarVisibility(settings.showsMenuBarIcon)
         statusItemController?.onMenuBarVisibilityChange = { [weak self] visible in

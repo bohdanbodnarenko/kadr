@@ -22,19 +22,24 @@ struct FilePromisePayload: Sendable {
     var completed: @MainActor @Sendable (Bool) -> Void
     /// Already-final path, for the `.fileURL` pasteboard flavour (docs/16 OUT-6).
     var stableFileURL: URL?
+    /// A receiver read `stableFileURL` itself rather than claiming the promise, so it may
+    /// keep that path (docs/18 OUT-2). Called on the main actor, before `completed`.
+    var pathHandedOut: @MainActor @Sendable () -> Void
 
     init(
         suggestedName: String,
         contentType: UTType,
         resolve: @escaping @MainActor @Sendable () -> URL?,
         completed: @escaping @MainActor @Sendable (Bool) -> Void = { _ in },
-        stableFileURL: URL? = nil
+        stableFileURL: URL? = nil,
+        pathHandedOut: @escaping @MainActor @Sendable () -> Void = {}
     ) {
         self.suggestedName = suggestedName
         self.contentType = contentType
         self.resolve = resolve
         self.completed = completed
         self.stableFileURL = stableFileURL
+        self.pathHandedOut = pathHandedOut
     }
 
     /// The payload for a file that is already where it belongs and needs no finalising.
@@ -325,6 +330,7 @@ final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
     /// Already-final path, for the `.fileURL` flavour; nil for a staged capture, which has
     /// no path to promise until the receiver asks.
     private(set) var resolvedFileURL: URL?
+    private var pathHandedOut: (@MainActor @Sendable () -> Void)?
 
     /// Built on top of `init()` rather than `init(fileType:delegate:)`, which reaches back
     /// through `init()` — a designated initializer here would trap on the way up.
@@ -333,6 +339,7 @@ final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
         let fulfiller = FilePromiseFulfiller(payload: payload)
         self.fulfiller = fulfiller
         resolvedFileURL = payload.stableFileURL
+        pathHandedOut = payload.pathHandedOut
         fileType = payload.contentType.identifier
         delegate = fulfiller
     }
@@ -347,6 +354,13 @@ final nonisolated class KadrFilePromiseProvider: NSFilePromiseProvider {
 
     override func pasteboardPropertyList(forType type: NSPasteboard.PasteboardType) -> Any? {
         if type == .fileURL, let resolvedFileURL {
+            if let pathHandedOut {
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated { pathHandedOut() }
+                } else {
+                    Task { @MainActor in pathHandedOut() }
+                }
+            }
             // NSURL's own representation, not `absoluteString`: a receiver that reads the
             // flavour as data gets what `NSURL(pasteboardPropertyList:ofType:)` expects.
             return (resolvedFileURL as NSURL).pasteboardPropertyList(forType: type)

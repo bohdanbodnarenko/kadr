@@ -141,6 +141,11 @@ struct CaptureOutput {
         }
     }
 
+    /// Keeps a staged capture that left by its path out of the sweep (docs/18 OUT-2).
+    func retainStaged(_ url: URL) {
+        exporter.retainStaged(url)
+    }
+
     /// Moves a staged capture to a path the user picked (CleanShot §6.2).
     @discardableResult
     func finalizeStaged(_ url: URL, to destination: URL) -> URL? {

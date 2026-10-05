@@ -229,6 +229,7 @@ final class NonActivatingPanel: NSPanel {
 | Updates | Sparkle 2 + DMG + Homebrew | MAS | sandbox limits, Sparkle ban, license model |
 | License | MIT | GPL | adoption; GPL neighbors remain read-only references |
 | Language mode | Swift 6.2 strict | Swift 5 mode | new codebase; approachable-concurrency defaults |
+| Hiding desktop icons | borderless wallpaper cover one level above `desktopIconWindow` | Finder `CreateDesktop` + restart | no Finder restart (interrupted copies, 250 ms settle), instant, nothing to restore after a crash; decoded at point size for the RAM budget (docs/18 SH-4) |
 
 ## 13. Reference implementations consulted
 

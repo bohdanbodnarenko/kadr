@@ -31,6 +31,8 @@ final class AllInOneHUD {
         performTool: @escaping (AllInOneTool) -> Void = { _ in },
         desktopIconsHidden: @escaping () -> Bool = { false },
         captureScreen: @escaping (FullscreenTarget) -> Void = { _ in },
+        availableUpdate: @escaping () -> String? = { nil },
+        installUpdate: @escaping () -> Void = {},
         juggler: ActivationJuggler = .shared
     ) {
         self.juggler = juggler
@@ -38,6 +40,8 @@ final class AllInOneHUD {
         model.onCaptureScreen = captureScreen
         model.onTool = performTool
         model.desktopIconsHidden = desktopIconsHidden
+        model.availableUpdate = availableUpdate
+        model.onInstallUpdate = installUpdate
     }
 
     var isShowing: Bool {
@@ -285,6 +289,9 @@ final class AllInOneModel {
     /// The Screen menu's rows: this capture's target, without touching Settings (T-CAP-5).
     @ObservationIgnored var onCaptureScreen: (FullscreenTarget) -> Void = { _ in }
     @ObservationIgnored var desktopIconsHidden: () -> Bool = { false }
+    /// A version a background check found, offered in the Tools menu (docs/18 SH-3).
+    @ObservationIgnored var availableUpdate: () -> String? = { nil }
+    @ObservationIgnored var onInstallUpdate: () -> Void = {}
 
     init(
         settings: AppSettings,
@@ -315,6 +322,12 @@ final class AllInOneModel {
     func use(_ tool: AllInOneTool) {
         onPicked()
         afterTargetIsActive { [onTool] in onTool(tool) }
+    }
+
+    /// Closes the island and hands over to the updater.
+    func installUpdate() {
+        onPicked()
+        onInstallUpdate()
     }
 
     /// Captures the screen with an explicit target, for this capture only.

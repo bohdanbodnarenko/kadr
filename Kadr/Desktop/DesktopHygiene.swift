@@ -15,27 +15,44 @@ protocol DesktopAppearanceApplying: AnyObject {
     func currentWallpaperURLs() -> [CGDirectDisplayID: URL]
     func applyWallpaper(_ url: URL, screenID: CGDirectDisplayID)
     func restoreWallpapers(_ urls: [CGDirectDisplayID: URL])
+    /// Undoes a Finder-restart hide an earlier build left behind (docs/18 SH-4).
+    func restoreLegacyIconHide()
 }
 
-/// Finder's `CreateDesktop` plus Window Manager widgets, and NSWorkspace wallpapers.
+extension DesktopAppearanceApplying {
+    func restoreLegacyIconHide() {}
+}
+
+/// A wallpaper cover over the icons, Window Manager widgets, and NSWorkspace wallpapers.
 @MainActor
 final class FinderDesktopAppearance: DesktopAppearanceApplying {
     private let logger = KadrLog.logger(.app)
+    private let cover = DesktopCover()
 
+    /// Icons are hidden by covering them, never by restarting the Finder (docs/18 SH-4).
     var iconsVisible: Bool {
-        get {
-            let defaults = UserDefaults(suiteName: "com.apple.finder")
-            if defaults?.object(forKey: "CreateDesktop") == nil {
-                return true
-            }
-            return defaults?.bool(forKey: "CreateDesktop") ?? true
-        }
+        get { !cover.isShowing }
         set {
-            let defaults = UserDefaults(suiteName: "com.apple.finder")
-            defaults?.set(newValue, forKey: "CreateDesktop")
-            defaults?.synchronize()
-            relaunchFinder()
+            if newValue {
+                cover.hide()
+            } else {
+                cover.show()
+            }
         }
+    }
+
+    /// Builds before docs/18 SH-4 hid icons with Finder's `CreateDesktop` and a restart. A
+    /// crash in one of those left the desktop empty; put it back once, here, and never
+    /// touch the Finder otherwise.
+    func restoreLegacyIconHide() {
+        let defaults = UserDefaults(suiteName: "com.apple.finder")
+        guard defaults?.object(forKey: "CreateDesktop") != nil,
+              defaults?.bool(forKey: "CreateDesktop") == false
+        else { return }
+        defaults?.removeObject(forKey: "CreateDesktop")
+        defaults?.synchronize()
+        relaunchFinder()
+        logger.notice("Restored desktop icons hidden by an earlier build")
     }
 
     var widgetsHidden: Bool {
@@ -137,6 +154,7 @@ final class DesktopHygieneController {
 
     /// Re-applies a user hide, and undoes a capture wallpaper that outlived a crash.
     func reassertOnLaunch() {
+        appearance.restoreLegacyIconHide()
         restoreLeftoverWallpaper()
         if settings.desktopIconsHidden {
             reasons.insert(.user)
@@ -165,28 +183,27 @@ final class DesktopHygieneController {
     }
 
     func beginCapture() {
+        // Wallpaper first: the icon cover shows whatever the wallpaper is when it goes up,
+        // so it must already be the capture fill.
+        applyCaptureWallpaper()
         if settings.hideDesktopDuringCapture {
             reasons.insert(.capture)
             applyHideIfNeeded()
         }
-        applyCaptureWallpaper()
     }
 
     /// Applies the capture appearance and waits for the screen to actually show it.
     ///
-    /// Hiding the icons restarts the Finder and swapping the wallpaper is asynchronous;
-    /// capturing immediately photographs the desktop as it was. The settle is skipped
-    /// entirely when nothing changed, so an ordinary capture pays nothing for it
-    /// (docs/07 H3).
+    /// The icon cover is up in the same turn; only a wallpaper swap is asynchronous, so
+    /// only that waits. An ordinary capture pays nothing (docs/07 H3, docs/18 SH-4).
     func beginCaptureAndSettle() async {
-        let changesAppearance = settings.hideDesktopDuringCapture
-            || settings.captureWallpaper != .none
+        let changesAppearance = settings.captureWallpaper != .none
         beginCapture()
         guard changesAppearance else { return }
         try? await Task.sleep(for: .milliseconds(Self.settleMilliseconds))
     }
 
-    /// Long enough for a Finder restart to repaint, short enough not to feel like lag.
+    /// Long enough for the wallpaper to repaint, short enough not to feel like lag.
     private static let settleMilliseconds = 250
 
     func endCapture() {

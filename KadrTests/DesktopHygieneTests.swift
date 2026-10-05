@@ -10,6 +10,13 @@ private final class FakeDesktop: DesktopAppearanceApplying {
     var widgetsHidden = false
     var wallpapers: [CGDirectDisplayID: URL] = [1: URL(fileURLWithPath: "/tmp/original.png")]
     var applied: [(CGDirectDisplayID, URL)] = []
+    /// Whether icons were still visible when a wallpaper was applied.
+    var iconsVisibleAtWallpaper: [Bool] = []
+    var legacyRestores = 0
+
+    func restoreLegacyIconHide() {
+        legacyRestores += 1
+    }
 
     func currentWallpaperURLs() -> [CGDirectDisplayID: URL] {
         wallpapers
@@ -18,6 +25,7 @@ private final class FakeDesktop: DesktopAppearanceApplying {
     func applyWallpaper(_ url: URL, screenID: CGDirectDisplayID) {
         wallpapers[screenID] = url
         applied.append((screenID, url))
+        iconsVisibleAtWallpaper.append(iconsVisible)
     }
 
     func restoreWallpapers(_ urls: [CGDirectDisplayID: URL]) {
@@ -52,6 +60,38 @@ struct DesktopHygieneTests {
 
         #expect(appearance2.iconsVisible == false)
         #expect(appearance2.widgetsHidden)
+    }
+
+    /// docs/18 SH-4: the icon cover pictures the wallpaper, so the capture fill goes first.
+    @Test("A capture swaps the wallpaper before covering the icons")
+    func wallpaperBeforeCover() {
+        let storeName = UUID().uuidString
+        let store = UserDefaults(suiteName: storeName) ?? .standard
+        store.removePersistentDomain(forName: storeName)
+        let appearance = FakeDesktop()
+        let settings = AppSettings(store: store)
+        settings.hideDesktopDuringCapture = true
+        settings.captureWallpaper = .black
+        let hygiene = DesktopHygieneController(settings: settings, appearance: appearance, store: store)
+
+        hygiene.beginCapture()
+        #expect(appearance.iconsVisibleAtWallpaper == [true])
+        #expect(appearance.iconsVisible == false)
+        hygiene.endCapture()
+        #expect(appearance.iconsVisible)
+    }
+
+    @Test("Launch undoes a Finder hide left by an earlier build")
+    func legacyRestoredOnLaunch() {
+        let store = UserDefaults(suiteName: UUID().uuidString) ?? .standard
+        let appearance = FakeDesktop()
+        let hygiene = DesktopHygieneController(
+            settings: AppSettings(store: store),
+            appearance: appearance,
+            store: store
+        )
+        hygiene.reassertOnLaunch()
+        #expect(appearance.legacyRestores == 1)
     }
 
     @Test("Ending a recording does not unhide a user hide")
