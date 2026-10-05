@@ -112,6 +112,16 @@ public extension StudioDocumentModel {
 
     /// Transcribes the recording and proposes cuts. Does not apply them (docs/13 T0.4).
     func tidySpeech() async {
+        await transcribe(proposingCuts: true)
+    }
+
+    /// Transcribes the recording for captions and the transcript, proposing no cuts
+    /// (docs/18 STU-4). Captions used to be reachable only through Find Cuts.
+    func transcribeOnly() async {
+        await transcribe(proposingCuts: false)
+    }
+
+    private func transcribe(proposingCuts: Bool) async {
         guard !isTranscribing else { return }
         guard await transcriber.requestAuthorization() else {
             failure = .speechPermissionNeeded()
@@ -120,7 +130,7 @@ public extension StudioDocumentModel {
 
         isTranscribing = true
         transcriptionProgress = 0
-        let task = Task { await runTidy() }
+        let task = Task { await runTidy(proposingCuts: proposingCuts) }
         transcribeTask = task
         await task.value
         transcribeTask = nil
@@ -134,7 +144,8 @@ public extension StudioDocumentModel {
         transcribeTask?.cancel()
     }
 
-    private func runTidy() async {
+    private func runTidy(proposingCuts: Bool) async {
+        let retry: StudioFailurePresentation.Operation = proposingCuts ? .transcribe : .transcribeOnly
         do {
             try Task.checkCancellation()
             let options = TranscriptionOptions(
@@ -148,7 +159,7 @@ public extension StudioDocumentModel {
                 Task { @MainActor in self?.transcriptionProgress = fraction }
             }
             try Task.checkCancellation()
-            adopt(produced)
+            adopt(produced, proposingCuts: proposingCuts)
         } catch is CancellationError {
             logger.info("Transcription cancelled")
         } catch TranscriptionError.unavailableOnDevice {
@@ -156,11 +167,13 @@ public extension StudioDocumentModel {
             if dictationSettingsNeeded {
                 failure = .transcriptionFailed(
                     "On-device dictation is not enabled for this language. Turn it on in "
-                        + "System Settings ▸ Keyboard ▸ Dictation, then try again."
+                        + "System Settings ▸ Keyboard ▸ Dictation, then try again.",
+                    retrying: retry
                 )
             } else {
                 failure = .transcriptionFailed(
-                    "There is no speech model on this Mac for your language yet."
+                    "There is no speech model on this Mac for your language yet.",
+                    retrying: retry
                 )
             }
         } catch TranscriptionError.noAudioTrack {
@@ -168,11 +181,11 @@ public extension StudioDocumentModel {
         } catch TranscriptionError.notAuthorized {
             failure = .speechPermissionNeeded()
         } catch {
-            failure = .transcriptionFailed(error.localizedDescription)
+            failure = .transcriptionFailed(error.localizedDescription, retrying: retry)
         }
     }
 
-    private func adopt(_ produced: Transcript) {
+    private func adopt(_ produced: Transcript, proposingCuts: Bool) {
         if produced.timingsLookCollapsed(relativeTo: manifest.duration) {
             failure = .transcriptionFailed(
                 "The transcript had no usable timings, so nothing was cut. "
@@ -191,6 +204,10 @@ public extension StudioDocumentModel {
         transcript = processed
         chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
         try? document.write(processed)
+        guard proposingCuts else {
+            notice = "Transcribed. Captions can be turned on in the inspector."
+            return
+        }
 
         let planner = tidyPlanner
         // Tidy only runs on an uncut recording, so the telemetry's time is the edit's.

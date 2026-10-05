@@ -28,6 +28,7 @@ struct StudioFailurePresentationTests {
         (.speechModelDownloadFailed("x"), .retry(.installSpeechModel)),
         (.transcriptionFailed("x"), .retry(.transcribe)),
         (.transcriptionFailed("x", retryable: false), .dismiss),
+        (.transcriptionFailed("x", retrying: .transcribeOnly), .retry(.transcribeOnly)),
         (
             .audioExportFailed("x", to: URL(fileURLWithPath: "/tmp/a.m4a"), format: .m4a),
             .retry(.exportAudio(URL(fileURLWithPath: "/tmp/a.m4a"), .m4a))

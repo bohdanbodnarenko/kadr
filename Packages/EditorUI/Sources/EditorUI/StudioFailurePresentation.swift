@@ -39,6 +39,7 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         case exportAudio(URL, StudioAudioExporter.Format)
         case installSpeechModel
         case transcribe
+        case transcribeOnly
     }
 
     public init(
@@ -116,13 +117,19 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         )
     }
 
-    /// - Parameter retryable: false when trying again cannot help, such as a recording
+    /// - Parameters:
+    ///   - retryable: false when trying again cannot help, such as a recording
     ///   with no sound, so the banner does not offer a Retry that fails the same way.
-    public static func transcriptionFailed(_ detail: String, retryable: Bool = true) -> Self {
+    ///   - retrying: what Retry runs: Find Cuts, or a transcription with no cuts.
+    public static func transcriptionFailed(
+        _ detail: String,
+        retryable: Bool = true,
+        retrying operation: Operation = .transcribe
+    ) -> Self {
         Self(
             title: "Kadr could not transcribe this recording.",
             message: detail,
-            primaryAction: retryable ? .retry(.transcribe) : .dismiss
+            primaryAction: retryable ? .retry(operation) : .dismiss
         )
     }
 
