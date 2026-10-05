@@ -73,17 +73,24 @@ public enum KadrDocumentFile {
         return path.first?.stringValue == "commands" && path.count > 1
     }
 
-    public static func data(for contents: Contents) throws -> Data {
+    /// The project's annotations and base-image record, without the image itself.
+    ///
+    /// Public so autosave can write the small part on every edit and the base image once
+    /// (docs/18 ED-10).
+    public static func commandsJSON(for document: AnnotationDocument) throws -> Data {
         let payload = Payload(
             version: currentVersion,
-            baseImage: encodedBaseImage(of: contents.document),
-            commands: contents.document.commands
+            baseImage: encodedBaseImage(of: document),
+            commands: document.commands
         )
         let encoder = JSONEncoder()
         // Sorted and pretty so a `.kadr` diffs usefully in version control.
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let json = try encoder.encode(payload)
+        return try encoder.encode(payload)
+    }
 
+    public static func data(for contents: Contents) throws -> Data {
+        let json = try commandsJSON(for: contents.document)
         return ZipArchive.archive([
             ZipArchive.Entry(name: baseImageEntry, data: contents.baseImagePNG, crc: contents.baseImageCRC32),
             ZipArchive.Entry(name: commandsEntry, data: json)
@@ -99,7 +106,11 @@ public enum KadrDocumentFile {
         guard let json = entries.first(where: { $0.name == commandsEntry })?.data else {
             throw FileError.missingEntry(commandsEntry)
         }
+        return try contents(commandsJSON: json, baseImagePNG: image)
+    }
 
+    /// Reassembles a project from `commandsJSON(for:)` and its base image.
+    public static func contents(commandsJSON json: Data, baseImagePNG image: Data) throws -> Contents {
         // The version first: a newer file may not decode at all, and "malformed" is the
         // wrong thing to tell someone whose file is fine (docs/18 ED-8).
         if let probe = try? JSONDecoder().decode(VersionProbe.self, from: json), probe.version > currentVersion {

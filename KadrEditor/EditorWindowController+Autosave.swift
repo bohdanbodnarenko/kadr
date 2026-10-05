@@ -17,7 +17,11 @@ extension EditorWindowController {
     /// Offers work a previous session left behind — a crash, a force quit, a power cut.
     func offerRecoveryIfAny() {
         guard let window, let recovered = autosave.read(for: documentURL) else { return }
-        guard recovered.document.commands != model.document.commands else {
+        // Orientation counts: a rotate or flip with no annotation is still unsaved work
+        // (docs/18 ED-10).
+        guard recovered.document.commands != model.document.commands
+            || recovered.document.orientation != model.document.orientation
+        else {
             autosave.discard(for: documentURL)
             return
         }
