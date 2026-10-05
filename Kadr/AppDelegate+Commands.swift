@@ -150,7 +150,7 @@ extension AppDelegate {
         switch mode {
         case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
         case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
-        case .screen: areaCapture.captureAllDisplays()
+        case .screen: areaCapture.captureAllDisplays(frontmost: frontmost)
         case .record:
             let source = allInOne.takeHandOffFrame()
             // A take is live, starting or saving: the recorder would only arm a second one
@@ -165,7 +165,7 @@ extension AppDelegate {
         case .gif: recording.beginGIFRecording()
         case .scrolling: scrollCapture.begin()
         case .ocr: areaCapture.beginOverlayCapture(mode: .area, purpose: .recognizeText, frontmost: frontmost)
-        case .color: areaCapture.beginColorPick()
+        case .color: areaCapture.beginColorPick(frontmost: frontmost)
         }
     }
 

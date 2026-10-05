@@ -143,10 +143,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hud = AllInOneHUD(
             settings: settings,
             perform: { [weak self] mode in self?.performAllInOne(mode) },
-            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
+            pickDisplay: { [weak self] id in
+                guard let self else { return }
+                areaCapture.captureDisplay(id, frontmost: allInOne.takeFrontmostBeforePresent())
+            },
             performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
-            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) },
+            captureScreen: { [weak self] target in
+                guard let self else { return }
+                areaCapture.captureFullscreen(target: target, frontmost: allInOne.takeFrontmostBeforePresent())
+            },
             availableUpdate: { UpdaterManager.shared.availableUpdateVersion },
             installUpdate: { UpdaterManager.shared.checkForUpdates() }
         )

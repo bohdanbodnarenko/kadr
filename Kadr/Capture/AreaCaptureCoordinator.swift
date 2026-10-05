@@ -388,7 +388,7 @@ final class AreaCaptureCoordinator {
     /// `F` on the overlay: the whole frozen display, still WYSIWYG (docs/03 §1.3).
     private func finishFullscreen(_ displayID: CGDirectDisplayID, freezes: [DisplayFreeze], timerSeconds: Int) {
         guard let freeze = freezes.first(where: { $0.geometry.displayID == displayID }) else {
-            captureDisplay(displayID)
+            captureDisplay(displayID, frontmost: frontmostAtHotkey)
             return
         }
         let local = freeze.geometry.localRect(for: freeze.geometry.frame)
