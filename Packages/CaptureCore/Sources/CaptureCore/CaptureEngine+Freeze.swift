@@ -25,7 +25,7 @@ public extension CaptureEngine {
 
         // macOS 15.2+: capture the display rects directly. Asking for shareable
         // content is what re-presents the screen-recording sheet on every freeze.
-        if prefersDirectRectCapture {
+        if prefersDirectRectCapture(includesCursor: options.includesCursor) {
             return try await freezeAllDisplaysDirectly(options: options)
         }
 
