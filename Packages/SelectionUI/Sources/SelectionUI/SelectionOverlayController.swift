@@ -336,6 +336,19 @@ public final class SelectionOverlayController {
         }
     }
 
+    /// Hands the overlay the windows it can pick once they arrive.
+    ///
+    /// An area overlay opens before the window list is fetched, so the hotkey-to-overlay
+    /// budget does not wait on it; W then switches to window picking with the list in place
+    /// (docs/18 CAP-1).
+    public func updatePickableWindows(_ windows: [PickableWindowDescriptor]) {
+        guard isPresented, let windowSet else { return }
+        pickableWindows = Self.mapWindows(windows, onto: freezes.values.map(\.geometry))
+        for (id, panel) in windowSet.windows {
+            panel.view.setPickableWindows(pickableWindows[id] ?? [])
+        }
+    }
+
     private func makePanel(for descriptor: ScreenDescriptor) -> SelectionPanel? {
         guard let frozen = freezes[descriptor.displayID] else { return nil }
         let panel = SelectionPanel(frozen: frozen, screen: descriptor, mode: mode, purpose: currentPurpose)

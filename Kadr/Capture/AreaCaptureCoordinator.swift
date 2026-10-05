@@ -223,30 +223,28 @@ final class AreaCaptureCoordinator {
                 // and has to be in the same range as the file (docs/06 M25).
                 await engine.setDynamicRange(settings.captureDynamicRange)
                 await CaptureExclusionPush.into(engine)
-                let freezes = try await engine.freezeAllDisplays()
+                // Fetched alongside the freeze rather than after it, and in every mode: W
+                // switches an area overlay into window picking, which needs the list too
+                // (docs/18 CAP-1, CAP-9). Started before the overlay exists, so it never
+                // lists Kadr's own panels.
+                let windowFetch = Task { try await Self.pickableWindows(from: engine) }
+                let freezes: [DisplayFreeze]
+                do {
+                    freezes = try await engine.freezeAllDisplays()
+                } catch {
+                    windowFetch.cancel()
+                    throw error
+                }
                 guard !Task.isCancelled else {
                     // Superseded after the freeze: close the interval rather than leak it.
+                    windowFetch.cancel()
                     signposter.endInterval("hotkeyToOverlay", interval)
                     return
                 }
                 permissions.noteCaptureSuccess()
 
-                let windows: [PickableWindowDescriptor] = if mode == .window {
-                    try await engine.shareableContent().windows
-                        .filter(\.isPickableWindow)
-                        .map {
-                            PickableWindowDescriptor(
-                                id: $0.id,
-                                title: $0.title,
-                                applicationName: $0.applicationName,
-                                bundleIdentifier: $0.bundleIdentifier,
-                                layer: $0.layer,
-                                globalFrame: $0.frame
-                            )
-                        }
-                } else {
-                    []
-                }
+                // Window mode opens on the list; area mode must not wait for it.
+                let windows = mode == .window ? (try? await windowFetch.value) ?? [] : []
 
                 let eyedropper = armOverlay()
                 overlay.lastRegion = lastRegion
@@ -265,11 +263,32 @@ final class AreaCaptureCoordinator {
                 }
                 hygiene?.beginCapture()
                 onArmedStateChanged?()
+                if mode != .window, let windows = try? await windowFetch.value, !Task.isCancelled {
+                    overlay.updatePickableWindows(windows)
+                }
             } catch {
                 signposter.endInterval("hotkeyToOverlay", interval)
                 handle(error)
             }
         }
+    }
+
+    /// The windows the overlay can pick, front to back.
+    private nonisolated static func pickableWindows(
+        from engine: CaptureEngine
+    ) async throws -> [PickableWindowDescriptor] {
+        try await engine.shareableContent().windows
+            .filter(\.isPickableWindow)
+            .map {
+                PickableWindowDescriptor(
+                    id: $0.id,
+                    title: $0.title,
+                    applicationName: $0.applicationName,
+                    bundleIdentifier: $0.bundleIdentifier,
+                    layer: $0.layer,
+                    globalFrame: $0.frame
+                )
+            }
     }
 
     /// Snapping, aspect lock and eyedropper callbacks, set before the overlay appears.
