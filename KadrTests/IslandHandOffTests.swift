@@ -38,6 +38,43 @@ struct IslandHandOffTests {
         #expect(handedOff == (mode == .record ? 1 : 0))
         #expect(picked == (mode == .record ? 0 : 1))
     }
+
+    /// docs/18 CAP-4: a capture starts only after the target has had its activation back.
+    @Test("A capture waits for the target before it runs")
+    func captureWaitsForTarget() async {
+        var performed: [AllInOneMode] = []
+        let model = AllInOneModel(settings: AppSettings(store: throwawayDefaults())) { performed.append($0) }
+        var waited = false
+        model.waitForTarget = {
+            #expect(performed.isEmpty, "the capture ran before the wait")
+            waited = true
+        }
+        model.pick(.area)
+        #expect(performed.isEmpty)
+        while performed.isEmpty {
+            await Task.yield()
+        }
+        #expect(waited)
+        #expect(performed == [.area])
+    }
+
+    @Test("With no target there is nothing to wait for")
+    func activationWaitWithoutTarget() async {
+        let elapsed = await ContinuousClock().measure {
+            await TargetActivation.wait(for: nil, ceiling: .seconds(60))
+        }
+        #expect(elapsed < .seconds(1))
+    }
+
+    /// A target that never activates must not hold the capture. The bound is loose because
+    /// other suites share the main actor the deadline resumes on; the point is "returns".
+    @Test("A target that never activates still lets the capture run")
+    func activationWaitIsBounded() async {
+        let elapsed = await ContinuousClock().measure {
+            await TargetActivation.wait(for: pid_t(999_999), ceiling: .milliseconds(50))
+        }
+        #expect(elapsed < .seconds(15))
+    }
 }
 
 @MainActor
