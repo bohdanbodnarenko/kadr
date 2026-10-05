@@ -24,6 +24,8 @@ struct QuickAccessCardView: View {
     var showsTrashButton = false
     /// Actions stay visible instead of appearing on hover.
     var alwaysShowActions = false
+    /// Focus Quick Access picked this card (docs/18 UX-18).
+    var requestsKeyboardFocus = false
 
     @State private var isHovering = false
     /// Sticky single-click expansion (docs/03 §2, docs/14 UX-18).
@@ -135,6 +137,16 @@ struct QuickAccessCardView: View {
             // The system ring is a rectangle around a rounded picture; the card draws its own.
             .focusEffectDisabled()
             .focused($isFocused)
+            .onChange(of: requestsKeyboardFocus, initial: true) { _, requested in
+                if requested {
+                    isFocused = true
+                }
+            }
+            .onChange(of: isFocused) { _, focused in
+                if focused {
+                    actions.keyboardFocused()
+                }
+            }
             .onHover { hovering in
                 isHovering = hovering
                 actions.setHovered(hovering)

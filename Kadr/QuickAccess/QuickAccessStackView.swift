@@ -175,7 +175,8 @@ struct QuickAccessStackView: View {
                     in: manager.items
                 ),
                 showsTrashButton: QuickAccessStackLayout.showsTrashButton(for: item),
-                alwaysShowActions: manager.settings.overlayAlwaysShowActions
+                alwaysShowActions: manager.settings.overlayAlwaysShowActions,
+                requestsKeyboardFocus: manager.keyboardFocusRequest == item.id
             )
             // Follows the finger during a swipe and springs home if it falls short
             // (docs/18 OUT-16).

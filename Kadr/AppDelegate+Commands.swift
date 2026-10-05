@@ -35,7 +35,7 @@ extension AppDelegate {
             desktopHygiene.toggleUserHide()
         case .allInOne, .captureArea, .captureWindow, .captureFullscreen, .captureText,
              .pickColor, .capturePreviousArea, .captureAreaAndCopy, .captureAreaAndSave,
-             .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
+             .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays, .focusOverlay,
              .hidePins, .pinClipboard, .togglePinClickThrough:
             break
         case .openHistory:
@@ -117,6 +117,8 @@ extension AppDelegate {
             areaCapture.saveAllOverlays()
         case .hideOverlays:
             areaCapture.toggleOverlaysHidden()
+        case .focusOverlay:
+            areaCapture.quickAccess.focusFromKeyboard()
         case .hidePins:
             areaCapture.togglePinsHidden()
         case .pinClipboard:

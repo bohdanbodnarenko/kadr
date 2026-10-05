@@ -83,6 +83,9 @@ final class QuickAccessManager {
     /// The card the pointer last rested on, so a clicked card keeps the keyboard after the
     /// pointer moves off it (docs/17 T-OUT-1).
     @ObservationIgnored var lastHoveredItemID: UUID?
+    /// The card Focus Quick Access asked to take keyboard focus; the card moves SwiftUI
+    /// focus onto itself when it sees its id (docs/18 UX-18).
+    var keyboardFocusRequest: UUID?
     @ObservationIgnored var localKeyMonitor: Any?
     /// Whether each recording card still has a studio session, so the stack does not
     /// rescan the disk on every render (docs/17 T-OUT-13).
