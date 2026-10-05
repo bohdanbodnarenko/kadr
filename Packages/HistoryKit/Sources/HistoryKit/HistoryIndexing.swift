@@ -66,10 +66,15 @@ public extension HistoryStore {
             }
         }
 
+        // The fallback for captures OCR has not reached: every word must appear in the file
+        // name or the app name, so "safari" finds Safari captures before indexing has run
+        // (docs/18 OUT-10).
         var filenameRequest = HistoryRecord.all()
         for token in tokens {
+            let pattern = likePattern(for: token)
             filenameRequest = filenameRequest.filter(
-                Column("original_filename").like(likePattern(for: token), escape: "\\")
+                Column("original_filename").like(pattern, escape: "\\")
+                    || Column("application_name").like(pattern, escape: "\\")
             )
         }
         filenameRequest = apply(filter, to: filenameRequest)
