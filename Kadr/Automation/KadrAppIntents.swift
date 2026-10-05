@@ -46,14 +46,47 @@ private func file(from response: AutomationResponse) throws -> IntentFile {
     return IntentFile(fileURL: URL(fileURLWithPath: path))
 }
 
+/// `CaptureAction` as Shortcuts can show it, so a shortcut can say "copy" or "save"
+/// rather than inherit whatever Settings says (docs/18 OUT-14).
+enum CaptureActionChoice: String, AppEnum {
+    case copy
+    case save
+    case annotate
+    case pin
+    case overlay
+
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "After Capture")
+    static let caseDisplayRepresentations: [CaptureActionChoice: DisplayRepresentation] = [
+        .copy: "Copy to Clipboard",
+        .save: "Save",
+        .annotate: "Annotate",
+        .pin: "Pin to Screen",
+        .overlay: "Show Card"
+    ]
+
+    var action: CaptureAction {
+        CaptureAction(rawValue: rawValue) ?? .overlay
+    }
+}
+
+/// Capture options carrying a shortcut's chosen action; nil keeps Settings' choice.
+private func options(_ choice: CaptureActionChoice?) -> CaptureOptions {
+    var options = CaptureOptions.none
+    options.action = choice?.action
+    return options
+}
+
 struct CaptureAreaIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture Area"
     static let description = IntentDescription("Select an area of the screen and capture it.")
     static let openAppWhenRun = false
 
+    @Parameter(title: "After Capture", description: "Leave empty to use Kadr's setting.")
+    var action: CaptureActionChoice?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        try await .result(value: file(from: run(.captureArea(.none))))
+        try await .result(value: file(from: run(.captureArea(options(action)))))
     }
 }
 
@@ -62,9 +95,12 @@ struct CaptureWindowIntent: AppIntent {
     static let description = IntentDescription("Pick a window and capture it.")
     static let openAppWhenRun = false
 
+    @Parameter(title: "After Capture", description: "Leave empty to use Kadr's setting.")
+    var action: CaptureActionChoice?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        try await .result(value: file(from: run(.captureWindow(.none))))
+        try await .result(value: file(from: run(.captureWindow(options(action)))))
     }
 }
 
@@ -73,9 +109,12 @@ struct CaptureFullscreenIntent: AppIntent {
     static let description = IntentDescription("Capture the whole screen.")
     static let openAppWhenRun = false
 
+    @Parameter(title: "After Capture", description: "Leave empty to use Kadr's setting.")
+    var action: CaptureActionChoice?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        try await .result(value: file(from: run(.captureFullscreen(.none))))
+        try await .result(value: file(from: run(.captureFullscreen(options(action)))))
     }
 }
 
@@ -84,9 +123,12 @@ struct CapturePreviousAreaIntent: AppIntent {
     static let description = IntentDescription("Re-capture the last selected area.")
     static let openAppWhenRun = false
 
+    @Parameter(title: "After Capture", description: "Leave empty to use Kadr's setting.")
+    var action: CaptureActionChoice?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        try await .result(value: file(from: run(.capturePreviousArea(.none))))
+        try await .result(value: file(from: run(.capturePreviousArea(options(action)))))
     }
 }
 
@@ -95,9 +137,12 @@ struct CaptureScrollingIntent: AppIntent {
     static let description = IntentDescription("Capture a scrolling region and stitch it.")
     static let openAppWhenRun = false
 
+    @Parameter(title: "After Capture", description: "Leave empty to use Kadr's setting.")
+    var action: CaptureActionChoice?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> {
-        try await .result(value: file(from: run(.captureScrolling(.none))))
+        try await .result(value: file(from: run(.captureScrolling(options(action)))))
     }
 }
 
@@ -178,11 +223,35 @@ struct PinImageIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        guard let url = image.fileURL else {
-            throw KadrIntentError.failed("That image is not a file on disk.")
-        }
-        _ = try await run(.pin(FileTarget(path: url.path)))
+        _ = try await run(.pin(FileTarget(path: pinnableURL().path)))
         return .result()
+    }
+
+    /// The image as a file. Shortcuts often passes images in memory — from the clipboard,
+    /// a photo or another app's output — which used to be refused outright (docs/18
+    /// OUT-14). Those go where clipboard pins keep their bytes, which survives the relaunch
+    /// a restored pin needs and is removed with the pin.
+    @MainActor
+    private func pinnableURL() throws -> URL {
+        if let url = image.fileURL {
+            return url
+        }
+        guard let directory = AppDelegate.shared.areaCaptureStorage?.pins.clipboardDirectory else {
+            throw KadrIntentError.failed("Kadr could not read that image.")
+        }
+        let name = (image.filename as NSString).lastPathComponent
+        let base = name.isEmpty ? "Pinned Image" : (name as NSString).deletingPathExtension
+        let given = (name as NSString).pathExtension
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory
+                .appendingPathComponent("\(base) \(UUID().uuidString)")
+                .appendingPathExtension(given.isEmpty ? "png" : given)
+            try image.data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            throw KadrIntentError.failed("Kadr could not read that image.")
+        }
     }
 }
 

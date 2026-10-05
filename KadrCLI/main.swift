@@ -31,7 +31,7 @@ func usage() -> String {
     }
     lines.append(contentsOf: [
         "",
-        "Options are documented per command in docs/AUTOMATION.md.",
+        "Run `kadr help <command>` for a command's options.",
         "CleanShot verb names are accepted as aliases, so existing scripts keep working.",
         "",
         "Exit codes: 0 done · 1 failed · 2 cancelled · 3 unsupported · 4 no text · 64 usage · 77 not allowed."
@@ -40,6 +40,17 @@ func usage() -> String {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+
+// `kadr help <command>`: one command's options, built from the parser's own table
+// (docs/18 OUT-14).
+if arguments.count == 2, arguments.first == "help" {
+    guard let verb = AutomationVerb.canonical(for: arguments[1]) else {
+        complain("Unknown command “\(arguments[1])”. Run `kadr help` for the list.")
+        exit(AutomationResponse.usageExitCode)
+    }
+    print(AutomationHelp.text(for: verb))
+    exit(0)
+}
 
 if arguments.isEmpty || arguments.first == "help" || arguments.first == "--help" || arguments.first == "-h" {
     print(usage())
