@@ -83,7 +83,13 @@ extension ScrollCaptureCoordinator {
             }
             NSWorkspace.shared.activateFileViewerSelecting([folder])
         } catch {
-            logger.error("Could not export frames: \(error.localizedDescription, privacy: .public)")
+            // The user chose this from the stitch failure; the frames are their way out,
+            // so a failure here must not look like success (docs/18 X-2).
+            FailurePresenter.report(
+                "Kadr could not export the frames.",
+                detail: error.localizedDescription,
+                logger: logger
+            )
         }
     }
 
