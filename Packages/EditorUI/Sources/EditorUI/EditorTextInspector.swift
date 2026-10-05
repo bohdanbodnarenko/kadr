@@ -41,6 +41,11 @@ struct EditorTextInspector: View {
 
         InspectorSegmented([false, true], selection: weightBinding, title: { $0 ? "Bold" : "Regular" })
 
+        // The renderer has drawn both since docs/03 named them; nothing could set them
+        // (docs/18 ED-11).
+        InspectorToggleRow("Italic", isOn: styleFlag(\.isItalic))
+        InspectorToggleRow("Underline", isOn: styleFlag(\.isUnderline))
+
         KadrSlider(
             title: "Size",
             value: Binding(
@@ -123,6 +128,17 @@ struct EditorTextInspector: View {
             set: { isBold in
                 var next = style
                 next.isBold = isBold
+                model.applyTextStyle(next)
+            }
+        )
+    }
+
+    private func styleFlag(_ flag: WritableKeyPath<TextStyle, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { style[keyPath: flag] },
+            set: { value in
+                var next = style
+                next[keyPath: flag] = value
                 model.applyTextStyle(next)
             }
         )

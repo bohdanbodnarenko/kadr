@@ -13,6 +13,7 @@ extension EditorAppDelegate {
         main.addItem(makeFileMenuItem())
         main.addItem(makeEditMenuItem())
         main.addItem(makeViewMenuItem())
+        main.addItem(makeToolsMenuItem())
         main.addItem(makeClipMenuItem())
         main.addItem(makeWindowMenuItem())
         main.addItem(makeHelpMenuItem())
@@ -156,6 +157,11 @@ extension EditorAppDelegate {
             keyEquivalent: "v"
         )
         editMenu.addItem(
+            withTitle: String(localized: "Delete"),
+            action: #selector(EditorWindowController.delete(_:)),
+            keyEquivalent: ""
+        )
+        editMenu.addItem(
             withTitle: String(localized: "Select All"),
             action: #selector(EditorWindowController.selectAll(_:)),
             keyEquivalent: "a"
@@ -200,11 +206,14 @@ extension EditorAppDelegate {
     private func makeViewMenuItem() -> NSMenuItem {
         let viewItem = NSMenuItem()
         let viewMenu = NSMenu(title: String(localized: "View"))
-        viewMenu.addItem(
+        // ⌥⌘I, the shortcut the toolbar's tooltip names and every Apple inspector uses; the
+        // menu owns it so the two can never disagree again (docs/18 ED-11).
+        let inspector = viewMenu.addItem(
             withTitle: String(localized: "Show Inspector"),
             action: #selector(EditorWindowController.toggleInspector(_:)),
             keyEquivalent: "i"
         )
+        inspector.keyEquivalentModifierMask = [.command, .option]
         viewMenu.addItem(.separator())
         viewMenu.addItem(
             withTitle: String(localized: "Zoom In"),
