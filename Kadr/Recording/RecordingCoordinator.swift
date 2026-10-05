@@ -113,6 +113,8 @@ final class RecordingCoordinator {
     @ObservationIgnored var terminationCompletion: (() -> Void)?
     /// Why the engine asked us to stop, if it did (docs/16 REC-1).
     @ObservationIgnored var pendingInterruption: String?
+    /// The recorded second the free space was last checked at (docs/18 REC-8).
+    @ObservationIgnored var lastDiskCheckSecond: Int?
     @ObservationIgnored var engineEventsTask: Task<Void, Never>?
     /// Sleep and wake, for the coordinator's lifetime (docs/18 REC-5).
     @ObservationIgnored var sleepTasks: [Task<Void, Never>] = []

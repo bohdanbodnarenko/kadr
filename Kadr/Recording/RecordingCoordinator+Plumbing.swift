@@ -133,6 +133,7 @@ extension RecordingCoordinator {
 
     func startTicking() {
         stopTicking()
+        lastDiskCheckSecond = nil
         microphonePeakMax = 0
         lastAudibleTime = nil
         audioMeter = AudioMeter()
@@ -163,6 +164,7 @@ extension RecordingCoordinator {
             lastAudibleTime = elapsed
         }
         onAudioLevel?(audioMeter.peak)
+        checkDiskSpaceIfDue()
         if RecordingTickPolicy.shouldNotify(previous: before, next: tickDisplay) {
             onStateChanged?()
         }
@@ -171,6 +173,23 @@ extension RecordingCoordinator {
     /// What the tick can change that somebody can see, other than the meter.
     private var tickDisplay: RecordingTickDisplay {
         RecordingTickDisplay(wholeSeconds: Int(elapsed), microphoneIsSilent: microphoneIsSilent)
+    }
+
+    /// Stops and saves before the disk fills, from the tick the take already has rather
+    /// than a timer of its own (docs/18 REC-8, rule 2).
+    private func checkDiskSpaceIfDue() {
+        let second = Int(elapsed)
+        guard state == .recording,
+              RecordingDiskSpace.isCheckDue(atWholeSecond: second, lastChecked: lastDiskCheckSecond)
+        else { return }
+        lastDiskCheckSecond = second
+        guard let volume = RecordingDiskSpace.availableCapacity(of: InterruptedRecordingStore.inProgressRoot()),
+              RecordingDiskSpace.mustStop(availableBytes: volume.bytes)
+        else { return }
+        logger.error("Stopping the recording: \(volume.bytes, privacy: .public) bytes free")
+        handleEngineEvent(.writerFailed(
+            String(localized: "“\(volume.name)” is almost full, so Kadr stopped recording.")
+        ))
     }
 
     func stopTicking() {

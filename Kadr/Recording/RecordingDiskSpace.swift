@@ -10,6 +10,26 @@ nonisolated enum RecordingDiskSpace {
     /// About two minutes of the heaviest recording Kadr makes.
     static let minimumBytes: Int64 = 1_500_000_000
 
+    /// Free space below which a running take stops and saves (docs/18 REC-8).
+    ///
+    /// Enough for the writer to finish its fragment and the stitch to start; a take left
+    /// to run into a full disk ends in a writer failure with a torn last segment.
+    static let stopMarginBytes: Int64 = 750_000_000
+
+    /// How often, in recorded seconds, a running take looks at the free space.
+    static let checkIntervalSeconds = 10
+
+    /// Whether a take at `second` should check now. Second zero is covered by the start.
+    static func isCheckDue(atWholeSecond second: Int, lastChecked: Int?) -> Bool {
+        guard second > 0, second % checkIntervalSeconds == 0 else { return false }
+        return lastChecked != second
+    }
+
+    /// Whether `availableBytes` is too little to keep recording.
+    static func mustStop(availableBytes: Int64) -> Bool {
+        availableBytes < stopMarginBytes
+    }
+
     struct Shortage: LocalizedError, Equatable {
         let volumeName: String
         let availableBytes: Int64
