@@ -368,7 +368,8 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         do {
             switch action {
             case .copy, .copyFlattened, .copyWithoutAnnotations:
-                guard copyToClipboard(image) else {
+                let annotations = action == .copy ? model.encodedSelection() : nil
+                guard copyToClipboard(image, annotations: annotations) else {
                     model.failExport(action.exportAction, message: "The clipboard rejected the image.")
                     return
                 }

@@ -56,7 +56,7 @@ public struct StudioRootView: View {
         .overlay(alignment: .top) { failureBanner }
         .sheet(item: sheetFailure) { failure in
             StudioFailureSheet(failure: failure) { action in
-                handleFailureAction(action, for: failure)
+                handleFailureAction(action)
             }
         }
     }
@@ -374,34 +374,30 @@ public struct StudioRootView: View {
     private var failureBanner: some View {
         if let failure = model.failure, failure.style == .inlineBanner {
             StudioFailureBanner(failure: failure) { action in
-                handleFailureAction(action, for: failure)
+                handleFailureAction(action)
             }
             .padding(.top, model.notice == nil ? 10 : 52)
             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
     }
 
-    private func handleFailureAction(
-        _ action: StudioFailurePresentation.Action,
-        for failure: StudioFailurePresentation
-    ) {
+    private func handleFailureAction(_ action: StudioFailurePresentation.Action) {
+        // Every action answers the banner, so it goes first.
+        model.failure = nil
         switch action {
         case .dismiss:
-            model.failure = nil
-        case .retry:
-            model.failure = nil
-            if failure.title.contains("40%") {
-                model.applyPendingCuts(confirmingLargeRemoval: true)
-            }
+            break
+        case let .retry(operation):
+            Task { await model.retry(operation) }
+        case .confirmLargeCuts:
+            model.applyPendingCuts(confirmingLargeRemoval: true)
         case .openSpeechSettings:
             if let url = URL(
                 string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
             ) {
                 NSWorkspace.shared.open(url)
             }
-            model.failure = nil
         case .chooseExportLocation:
-            model.failure = nil
             model.showsExportOptions = true
         }
     }

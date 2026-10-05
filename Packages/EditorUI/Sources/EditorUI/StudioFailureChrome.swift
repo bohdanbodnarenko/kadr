@@ -45,6 +45,7 @@ struct StudioFailureBanner: View {
         switch action {
         case .dismiss: "Dismiss"
         case .retry: "Retry"
+        case .confirmLargeCuts: "Apply Cuts"
         case .openSpeechSettings: "Open Settings"
         case .chooseExportLocation: "Choose Another Location"
         }
@@ -85,7 +86,8 @@ struct StudioFailureSheet: View {
     private func primaryTitle(for action: StudioFailurePresentation.Action) -> String {
         switch action {
         case .dismiss: "OK"
-        case .retry: "Continue"
+        case .retry: "Retry"
+        case .confirmLargeCuts: "Apply Cuts"
         case .openSpeechSettings: "Open Settings"
         case .chooseExportLocation: "Choose Location"
         }

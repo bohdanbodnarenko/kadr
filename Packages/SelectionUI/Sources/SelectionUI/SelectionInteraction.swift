@@ -152,9 +152,18 @@ public struct SelectionInteraction: Equatable, Sendable {
         return snapping.snapped(rect).intersection(bounds)
     }
 
+    /// The smallest side a fresh drag must reach to count as a selection, in points.
+    ///
+    /// A click with a point or two of travel is a twitch, not a request for a 2×2 capture
+    /// that replaces the clipboard (docs/18 CAP-3, docs/03 §1.1).
+    public static let minimumSide: CGFloat = 4
+
     public mutating func end() {
         guard phase == .dragging else { return }
-        phase = (rect?.isEmpty == false) ? .selected : .idle
+        let isLargeEnough = rect.map {
+            $0.width >= Self.minimumSide && $0.height >= Self.minimumSide
+        } ?? false
+        phase = isLargeEnough ? .selected : .idle
         if phase == .idle {
             rect = nil
         }

@@ -238,7 +238,13 @@ final class OnboardingModel {
         do {
             try loginItem.setEnabled(enabled)
         } catch {
-            logger.error("Could not set the login item: \(error.localizedDescription, privacy: .public)")
+            FailurePresenter.report(
+                enabled
+                    ? "Kadr could not add itself to your login items."
+                    : "Kadr could not remove itself from your login items.",
+                detail: error.localizedDescription,
+                logger: logger
+            )
         }
     }
 

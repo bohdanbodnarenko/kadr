@@ -75,13 +75,18 @@ extension EditorWindowController {
         NSWorkspace.shared.open(url, configuration: configuration)
     }
 
+    /// Writes the flattened image, plus the selected annotations as a second type when there
+    /// are any, so other apps always get pixels and Kadr's own paste gets objects (ED-2).
     @discardableResult
-    func copyToClipboard(_ image: CGImage) -> Bool {
+    func copyToClipboard(_ image: CGImage, annotations: Data? = nil) -> Bool {
         guard let data = try? ImageEncoder().encode(image, options: exportEncodingOptions) else {
             return false
         }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(data, forType: .png)
+        if let annotations {
+            NSPasteboard.general.setData(annotations, forType: .kadrAnnotations)
+        }
         logger.info("Copied the flattened capture")
         return true
     }
@@ -239,6 +244,7 @@ extension EditorWindowController {
             let anchor = NSRect(x: view.bounds.midX, y: view.bounds.maxY - 12, width: 1, height: 1)
             picker.show(relativeTo: anchor, of: view, preferredEdge: .minY)
         } catch {
+            model.failExport(.share, message: error.localizedDescription)
             logger.error("Share from editor failed: \(error.localizedDescription, privacy: .public)")
         }
     }

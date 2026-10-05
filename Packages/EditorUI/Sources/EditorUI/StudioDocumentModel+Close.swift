@@ -17,10 +17,16 @@ public extension StudioDocumentModel {
     ///
     /// Also where the studio lets go of what it started: the transcript check stops reading
     /// the footage, and the filmstrip forgets this recording's decoders and tiles.
-    func commitOnClose() {
+    ///
+    /// - Returns: why the commit failed, if it did, so the window can say so rather than
+    ///   close as if the edit were safe (docs/18 X-5a). The draft is flushed first either
+    ///   way, so a failed commit is offered for recovery at the next open.
+    @discardableResult
+    func commitOnClose() -> (any Error)? {
         transcriptLoadTask?.cancel()
         transcriptLoadTask = nil
         flushDraft()
+        var failure: (any Error)?
         do {
             try document.commit(edit)
             // Only once the edit is on disk: until then undo can still reach a replaced
@@ -28,11 +34,12 @@ public extension StudioDocumentModel {
             session.purgeUnusedImports(keeping: edit)
         } catch {
             logger.error("Could not commit the studio edit: \(error.localizedDescription, privacy: .public)")
+            failure = error
         }
-        purgeStagedRenders()
         let path = session.screenURL.path
         Task.detached(priority: .utility) {
             await StudioThumbnailStore.shared.purge(path: path)
         }
+        return failure
     }
 }

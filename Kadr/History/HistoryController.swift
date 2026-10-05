@@ -33,6 +33,8 @@ final class HistoryController {
     private let retentionAtLaunch: HistoryRetention
     /// Warned once per launch that the size cap stopped short (docs/17 T-OUT-8).
     private var hasWarnedAboutCap = false
+    /// Said once per launch that the database could not open (docs/18 X-5a).
+    private var hasReportedOpenFailure = false
     private let logger = KadrLog.logger(.history)
     private let signposter = KadrLog.signposter(.history)
     private var window: HistoryWindowController?
@@ -363,7 +365,18 @@ final class HistoryController {
     /// Updates the library name so search and the grid agree with a project title.
     func rename(_ record: HistoryRecord, to filename: String) async {
         await openIfNeeded()
-        try? await store?.rename(id: record.id, to: filename)
+        do {
+            try await store?.rename(id: record.id, to: filename)
+        } catch {
+            // The grid keeps the old name: showing a rename the library never took would
+            // make search and the grid disagree (docs/18 X-5a).
+            FailurePresenter.report(
+                "Kadr could not rename this capture in History.",
+                detail: error.localizedDescription,
+                logger: logger
+            )
+            return
+        }
         if let index = records.firstIndex(where: { $0.id == record.id }) {
             records[index].originalFilename = filename
         }
@@ -434,7 +447,7 @@ final class HistoryController {
             await opened.releaseMemory()
         } catch {
             openTask = nil
-            logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
+            reportOpenFailure(error)
         }
     }
 
@@ -458,5 +471,22 @@ final class HistoryController {
         // A capture just landed, so the agent is awake anyway: a good moment to read it
         // (docs/03 §5 — the index never wakes the agent by itself).
         startIndexingIfAllowed()
+    }
+}
+
+private extension HistoryController {
+    /// Said once per launch: every History read retries the open, and a banner per attempt
+    /// would bury the screen (docs/18 X-5a; the rebuild is OUT-3).
+    func reportOpenFailure(_ error: any Error) {
+        guard !hasReportedOpenFailure else {
+            logger.error("Could not open history: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        hasReportedOpenFailure = true
+        FailurePresenter.report(
+            "Kadr could not open your History. Captures are still saved, but History stays empty.",
+            detail: error.localizedDescription,
+            logger: logger
+        )
     }
 }

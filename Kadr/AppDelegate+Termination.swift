@@ -57,13 +57,21 @@ extension AppDelegate {
                         automation.perform(command) { [weak self] response in
                             guard response.status != .ok else { return }
                             let message = response.message ?? response.status.rawValue
-                            self?.logger.error("URL command failed: \(message, privacy: .public)")
+                            guard let logger = self?.logger else { return }
+                            // The caller is often a script with nobody watching its exit
+                            // code; the person who ran it should still hear (docs/18 X-5a).
+                            FailurePresenter.report(
+                                "A Kadr automation command failed.",
+                                detail: message,
+                                logger: logger
+                            )
                         }
                     }
                 )
             } catch {
                 let message = (error as? AutomationError)?.localizedDescription ?? error.localizedDescription
-                logger.error("Could not run \(url.absoluteString, privacy: .public): \(message, privacy: .public)")
+                logger.error("Could not run \(url.absoluteString, privacy: .private): \(message, privacy: .public)")
+                FailurePresenter.present(message: "Kadr could not run that automation command. \(message)")
             }
         }
     }

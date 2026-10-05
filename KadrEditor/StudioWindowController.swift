@@ -68,7 +68,25 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
     /// agent then offered to "recover" a recording nobody lost.
     func commitForQuit() {
         model.stopPlayback()
-        model.commitOnClose()
+        if let error = model.commitOnClose() {
+            Self.presentCommitFailure(error, name: model.session.displayName)
+        }
+    }
+
+    /// Says a closing window's edit did not reach disk (docs/18 X-5a).
+    ///
+    /// App-modal because the window is already going; a sheet would have nothing to hang
+    /// from. The draft was written first, so the edit is not lost, and the alert says where
+    /// it will turn up.
+    static func presentCommitFailure(_ error: any Error, name: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Kadr could not save the edit to “\(name)”."
+        alert.informativeText = "\(error.localizedDescription)\n\n"
+            + "Your changes are kept as a draft, and Kadr offers to recover them the next time "
+            + "you open this recording."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     /// Brings an already-open window forward rather than opening a second one over the
@@ -304,10 +322,14 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         // Committing is what makes this a *clean* close rather than a disappearance. The
         // agent offers to recover sessions that have a draft and no commit, so a window
         // that closes without one leaves its recording looking interrupted forever.
-        model.commitOnClose()
+        let commitFailure = model.commitOnClose()
+        let name = model.session.displayName
         hostingView = nil
         window?.contentView = nil
         window = nil
+        if let commitFailure {
+            Self.presentCommitFailure(commitFailure, name: name)
+        }
         onClose?()
     }
 }

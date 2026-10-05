@@ -66,7 +66,7 @@ public struct EditorRootView: View {
             EditorToolbar(
                 model: model,
                 isInspectorPresented: $model.isInspectorPresented,
-                onExport: handleExport,
+                onExport: onExport,
                 onAutoRedact: redactionAssist == nil ? nil : { Task { await runAutoRedact() } },
                 onRemoveBackground: subjectLift == nil ? nil : { Task { await runSubjectLift() } },
                 onDelete: onDelete
@@ -140,23 +140,6 @@ public struct EditorRootView: View {
             EditorCropChrome(model: model)
                 .padding(.bottom, 14)
         }
-    }
-
-    private func handleExport(_ action: ExportAction) {
-        if action == .copy, copyAnnotationsIfSelected() {
-            model.requestCopyToast()
-            return
-        }
-        onExport(action)
-    }
-
-    /// ⌘C copies selected annotations rather than flattening the capture (CleanShot 4.4).
-    @discardableResult
-    private func copyAnnotationsIfSelected() -> Bool {
-        guard let data = model.encodedSelection() else { return false }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setData(data, forType: .kadrAnnotations)
-        return true
     }
 
     private func runAutoRedact() async {

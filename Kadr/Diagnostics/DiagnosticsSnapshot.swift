@@ -117,34 +117,48 @@ nonisolated enum DiagnosticsRedaction {
         return text.replacingOccurrences(of: home, with: "~")
     }
 
-    /// A preference value as short, redacted text. Data blobs (window frames, bookmarks,
-    /// encoded shortcuts) are reported by size only: a bookmark embeds a full path, and
-    /// the bytes themselves would tell a reader nothing.
-    static func describe(_ value: Any, home: String = NSHomeDirectory()) -> String {
-        let text: String = switch value {
+    /// A preference value as text that can never carry what the user wrote or where
+    /// their files are (docs/18 SH-1).
+    ///
+    /// The report promises "no captures or file names", and the preferences domain holds
+    /// the teleprompter script, the backdrop file, the save folder and consented app names.
+    /// So only values that cannot be personal are shown: booleans, numbers, and short
+    /// enum-like tokens (`"vertical"`, `"png"`). Every other string, path, URL and
+    /// collection says only that it is set; blobs give their size.
+    static func describe(_ value: Any) -> String {
+        switch value {
+        case let number as NSNumber:
+            CFGetTypeID(number) == CFBooleanGetTypeID() ? (number.boolValue ? "true" : "false") : number.stringValue
         case let data as Data:
             "<\(data.count) bytes>"
-        case let url as URL:
-            url.isFileURL ? url.path : url.absoluteString
+        case let string as String:
+            isEnumToken(string) ? string : "<set>"
         case let array as [Any]:
-            "[" + array.map { describe($0, home: home) }.joined(separator: ", ") + "]"
+            "<\(array.count) items>"
         case let dictionary as [String: Any]:
-            "{" + dictionary.keys.sorted().map { "\($0): \(describe(dictionary[$0] ?? "", home: home))" }
-                .joined(separator: ", ") + "}"
+            "<\(dictionary.count) entries>"
         default:
-            String(describing: value)
+            "<set>"
         }
-        return redactingHome(text, home: home)
+    }
+
+    /// A short identifier with no spaces, dots or separators: a raw enum value, never a
+    /// sentence, a file name, a bundle identifier or a path.
+    static func isEnumToken(_ string: String) -> Bool {
+        guard (1 ... 32).contains(string.count) else { return false }
+        return string.unicodeScalars.allSatisfy {
+            CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "_" || $0 == "-"
+        }
     }
 
     /// Kadr's own preferences, with the system's bookkeeping left out.
     ///
     /// `persistentDomain` holds only what has been written, which for Kadr means what
     /// the user changed or what a migration recorded — the "non-default settings".
-    static func settings(from domain: [String: Any], home: String = NSHomeDirectory()) -> [String: String] {
+    static func settings(from domain: [String: Any]) -> [String: String] {
         var result: [String: String] = [:]
         for (key, value) in domain where !isSystemBookkeeping(key) {
-            result[key] = describe(value, home: home)
+            result[key] = describe(value)
         }
         return result
     }

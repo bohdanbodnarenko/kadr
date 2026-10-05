@@ -101,21 +101,45 @@ struct DiagnosticsTests {
         #expect(DiagnosticsRedaction.redactingHome(input, home: "/Users/tester") == expected)
     }
 
-    @Test("Settings are described without their contents where the contents are a path or a blob")
+    @Test("Settings show switches, numbers and enum values, and only that the rest is set")
     func settingsDescription() {
         let domain: [String: Any] = [
             "saveFolder": "/Users/tester/Desktop",
             "bookmark": Data(repeating: 1, count: 48),
             "showsMenuBarIcon": true,
+            "overlayDuration": 6,
+            "scrollAxis": "vertical",
             "NSWindow Frame Settings": "1 2 3 4",
             "recentFolders": ["/Users/tester/A", "/tmp/B"]
         ]
-        let settings = DiagnosticsRedaction.settings(from: domain, home: "/Users/tester")
-        #expect(settings["saveFolder"] == "~/Desktop")
+        let settings = DiagnosticsRedaction.settings(from: domain)
+        #expect(settings["saveFolder"] == "<set>")
         #expect(settings["bookmark"] == "<48 bytes>")
         #expect(settings["showsMenuBarIcon"] == "true")
-        #expect(settings["recentFolders"] == "[~/A, /tmp/B]")
+        #expect(settings["overlayDuration"] == "6")
+        #expect(settings["scrollAxis"] == "vertical")
+        #expect(settings["recentFolders"] == "<2 items>")
         #expect(settings["NSWindow Frame Settings"] == nil, "AppKit's bookkeeping is noise in a report")
+    }
+
+    /// docs/18 SH-1: what the user wrote or named never reaches a diagnostics summary.
+    @Test("Personal strings never appear in the summary", arguments: [
+        "Hi, I'm Sam and today we'll look at the new dashboard.",
+        "/Users/tester/Pictures/backdrop.heic",
+        "backdrop.png",
+        "com.tinyspeck.slackmacgap",
+        "file:///Users/tester/Desktop/",
+        "Kadr {date} at {time}"
+    ])
+    func personalStringsRedacted(value: String) {
+        let settings = DiagnosticsRedaction.settings(from: [
+            "teleprompterScript": value,
+            "nested": ["consented": [value]]
+        ])
+        for description in settings.values {
+            #expect(!description.contains(value))
+        }
+        #expect(settings["teleprompterScript"] == "<set>")
     }
 
     @Test("Crash reports are Kadr's own and nobody else's", arguments: [

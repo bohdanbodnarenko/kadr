@@ -15,7 +15,10 @@ final class ScrollCaptureHUD {
     private let settings: AppSettings
     private let anchor: ScreenRect
     private var panel: NonActivatingPanel?
-    /// Escape cancels and Return finishes, with the page behind still in the user's hands.
+    /// Return and Escape both finish, with the page behind still in the user's hands. Escape
+    /// does not discard: the user is working in that page, and an Esc meant for its find bar
+    /// or cookie banner must not destroy a long capture (docs/18 CAP-2). Discarding is the
+    /// Cancel button's job alone.
     private let keys = TransientHotKeys()
 
     private static let width: CGFloat = 240
@@ -57,7 +60,7 @@ final class ScrollCaptureHUD {
         panel.orderFrontRegardless()
         self.panel = panel
         keys.start([
-            .escape: { [weak self] in self?.coordinator.cancel() },
+            .escape: { [weak self] in self?.coordinator.stop() },
             .returnKey: { [weak self] in self?.coordinator.stop() },
             .enter: { [weak self] in self?.coordinator.stop() }
         ])
@@ -65,6 +68,10 @@ final class ScrollCaptureHUD {
 
     /// Swaps the controls for a progress note while the helper works.
     func showStitching() {
+        // The keys are for the capture, not for the stitch: left live, Return would miss
+        // the alert's default button and Esc would act on frames it is offering to export
+        // (docs/18 CAP-7).
+        keys.stop()
         guard let hosting = panel?.contentView as? NSHostingView<ScrollCaptureHUDView> else { return }
         hosting.rootView.isStitching = true
     }
@@ -197,6 +204,7 @@ struct ScrollCaptureHUDView: View {
             return "Kadr is scrolling. It stops on its own when the page runs out. "
                 + "\(coordinator.frameCount) frames so far."
         }
-        return "\(direction) the content, then press Stop. \(coordinator.frameCount) frames so far."
+        return "\(direction) the content, then press Stop (Return or Esc). "
+            + "\(coordinator.frameCount) frames so far."
     }
 }
