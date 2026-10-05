@@ -472,7 +472,8 @@ public extension StudioDocumentModel {
             outputPath: destination.path,
             pixelSize: output.pixelSize,
             settingsDigest: RenderStamp.digest(of: snapshot.settings),
-            inputsDigest: snapshot.inputsDigest
+            inputsDigest: snapshot.inputsDigest,
+            outputIdentity: .of(path: destination.path)
         ))
     }
 
