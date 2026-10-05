@@ -176,7 +176,8 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         )
         window.title = documentURL.lastPathComponent
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
-        window.representedURL = documentURL
+        // Never the `.kadr`, which holds the un-redacted original (docs/18 ED-3).
+        window.representedURL = proxyURL
         window.isDocumentEdited = model.hasUnsavedChanges
         window.contentView = hosting
         window.delegate = self
