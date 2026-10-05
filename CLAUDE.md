@@ -59,6 +59,7 @@ Kadr.xcworkspace          open this, not the .xcodeproj
 Kadr.xcodeproj            the agent app target `Kadr` (LSUIElement, macOS 14+)
 Kadr/                     agent app sources (AppKit shell only)
 KadrTests/                agent app unit tests
+KadrEditorTests/          editor app tests, hosted in KadrEditor.app (`make test-editor`)
 Packages/<Module>/        16 local SPM packages, docs/04 §2
 Scripts/                  check-layering.sh, check-size.sh
 .github/workflows/ci.yml  packages (matrix) · app build · lint + checks

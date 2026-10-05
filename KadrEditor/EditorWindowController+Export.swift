@@ -97,7 +97,13 @@ extension EditorWindowController {
     static let projectPixelsNoticeKey = "editorProjectPixelsNoticeShown"
 
     static func containsRedactions(_ commands: [AnnotationCommand]) -> Bool {
-        commands.contains { if case .redaction = $0 { true } else { false } }
+        commands.contains {
+            if case .redaction = $0 {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     func addToLibrary(_ url: URL) {
@@ -161,7 +167,9 @@ extension EditorWindowController {
         }
         markClean()
         rebind(to: targets.document)
-        if targets.project != nil { noteProjectKeepsOriginalPixels() }
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
         logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .public)")
         CaptureSavedNotice.post(.init(original: original, saved: targets.flattened, previousHash: previousHash))
     }
@@ -249,7 +257,9 @@ extension EditorWindowController {
         markClean()
         chosenSaveTargets = targets
         rebind(to: targets.document)
-        if targets.project != nil { noteProjectKeepsOriginalPixels() }
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
     }
 
     func printImage(_ image: CGImage) {

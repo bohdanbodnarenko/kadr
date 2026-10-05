@@ -51,6 +51,8 @@ jobs:
         run: make build
       - name: Test the agent app
         run: make test-app
+      - name: Test the editor app
+        run: make test-editor
       # The archive, not the build product: `xcodebuild build` plus a strip is not what
       # ships, and measuring it reported 16 MB for a release that downloads at 12.9 MB.
       - name: App bundle size budget (PRD §8)

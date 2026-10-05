@@ -42,7 +42,7 @@ STAMP := CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) KADR_GIT_COMMIT=$(GIT_COMMIT)
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
 .PHONY: help build build-editor release install uninstall run test test-packages test-package \
-        test-app dmg lint format format-fix check check-layering check-size size-gate perf packages packages-json \
+        test-app test-editor dmg lint format format-fix check check-layering check-size size-gate perf packages packages-json \
         all clean
 
 help: ## Show the available commands
@@ -97,7 +97,7 @@ dmg: ## Notarized DMG and appcast entry (VERSION=0.9.0 [CHANNEL=beta])
 
 # MARK: - Testing
 
-test: test-packages test-app ## Run every test
+test: test-packages test-app test-editor ## Run every test
 
 test-packages: ## Run every package's tests
 	@for package in $(PACKAGES); do \
@@ -122,6 +122,14 @@ test-app: ## Run the agent app's tests
 	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
 		-only-testing:KadrTests $(STAMP) $(UNSIGNED) \
+		| { grep -E '✔|✘|Test run|error:' || true; }
+
+# Same shape as test-app, hosted in the editor: save, rebind, open routing and the menus
+# are seams no package test reaches (docs/18 X-6).
+test-editor: ## Run the editor app's tests
+	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(EDITOR_SCHEME) -configuration Debug \
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
+		-only-testing:KadrEditorTests $(STAMP) $(UNSIGNED) \
 		| { grep -E '✔|✘|Test run|error:' || true; }
 
 # MARK: - Static checks
