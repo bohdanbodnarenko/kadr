@@ -128,10 +128,11 @@ struct EditorToolOptions: View {
                 title: "Strength",
                 value: Binding(
                     get: { Double(style.density) },
-                    set: { model.applyRedactionStyle(style.withDensity(CGFloat($0))) }
+                    set: { model.applyRedactionStyleLive(style.withDensity(CGFloat($0))) }
                 ),
                 range: 0.15 ... 1,
-                format: .percent
+                format: .percent,
+                onEditingEnded: { model.endInspectorStyleEdit() }
             )
         }
     }

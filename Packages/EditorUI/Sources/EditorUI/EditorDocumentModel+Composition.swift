@@ -52,4 +52,16 @@ public extension EditorDocumentModel {
             commands[index] = .image(spec)
         }
     }
+
+    /// Applies a slider edit to the selected image. Successive calls amend one undo step
+    /// until `endInspectorStyleEdit`, so a long drag neither evicts earlier history nor
+    /// makes ⌘Z walk back tick by tick (docs/18 ED-4).
+    func updateSelectedImageLive(_ transform: (inout ImageSpec) -> Void) {
+        guard let id = selectedImage?.id else { return }
+        rewriteSelectionLive { command in
+            guard command.id == id, case var .image(spec) = command else { return command }
+            transform(&spec)
+            return .image(spec)
+        }
+    }
 }

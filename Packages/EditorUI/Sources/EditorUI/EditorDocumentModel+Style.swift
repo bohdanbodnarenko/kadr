@@ -184,6 +184,13 @@ public extension EditorDocumentModel {
         rewriteSelection { $0.applying(redactionStyle: style) }
     }
 
+    /// The Strength slider: every tick amends one undo step until `endInspectorStyleEdit`
+    /// (docs/18 ED-4).
+    func applyRedactionStyleLive(_ style: RedactionStyle) {
+        styleMemory.lastRedactionStyle = style
+        rewriteSelectionLive { $0.applying(redactionStyle: style) }
+    }
+
     func applyCounterNumbering(_ numbering: CounterNumbering) {
         endInspectorStyleEdit()
         styleMemory.lastCounterNumbering = numbering
@@ -276,7 +283,7 @@ public extension EditorDocumentModel {
     /// A stroke-width slider fires on every mouse-moved event. Routing those through
     /// `perform` would fill the undo stack in a single drag and freeze the canvas while
     /// each tick rebuilt history.
-    private func rewriteSelectionLive(_ transform: (AnnotationCommand) -> AnnotationCommand) {
+    internal func rewriteSelectionLive(_ transform: (AnnotationCommand) -> AnnotationCommand) {
         let selection = document.selection
         guard !selection.isEmpty else { return }
         if !document.isGestureOpen {

@@ -22,6 +22,7 @@ extension EditorWindowController {
         do {
             try writeProject(to: destination, addToHistory: true)
             rebind(to: destination)
+            noteProjectKeepsOriginalPixels()
             logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
         } catch {
             model.failExport(.save, message: error.localizedDescription)
@@ -51,12 +52,58 @@ extension EditorWindowController {
 
     /// Points the window, its title and its proxy icon at `url`, so the next ⌘S, the
     /// title bar and a drag of the proxy icon all mean the file just written (T-ED-1).
+    ///
+    /// The proxy icon is the flattened image, never the `.kadr`: the project holds the
+    /// untouched base pixels, so dragging it into Mail would send what the user blurred
+    /// (docs/18 ED-3). With no flattened image on disk there is no proxy at all.
     func rebind(to url: URL) {
         guard url != documentURL else { return }
         autosave.discard(for: documentURL)
         documentURL = url
-        window?.setTitleWithRepresentedFilename(url.path)
-        window?.representedURL = url
+        window?.title = url.lastPathComponent
+        window?.representedURL = proxyURL
+    }
+
+    /// What the title-bar proxy hands out: the image the user sees, redactions burned in.
+    var proxyURL: URL? {
+        Self.proxyURL(for: documentURL, existingImage: capturedImageURL)
+    }
+
+    /// `document` itself when it is an image; otherwise the image beside the project, if
+    /// one exists. Never a `.kadr` (docs/18 ED-3).
+    static func proxyURL(for document: URL, existingImage: URL?) -> URL? {
+        guard document.pathExtension.lowercased() == KadrDocumentFile.fileExtension else { return document }
+        return existingImage
+    }
+
+    /// Says once, the first time a project with redactions is written, that the project
+    /// keeps the original pixels and the flattened image is the one to share (docs/18 ED-3).
+    func noteProjectKeepsOriginalPixels() {
+        guard Self.containsRedactions(model.document.commands),
+              !UserDefaults.standard.bool(forKey: Self.projectPixelsNoticeKey),
+              let window
+        else { return }
+        UserDefaults.standard.set(true, forKey: Self.projectPixelsNoticeKey)
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "The project keeps the original pixels."
+        alert.informativeText = "Redactions are burned into the saved image, which is the file to share. "
+            + "The .kadr project keeps the unredacted capture so you can edit the redactions later; "
+            + "don't send the project to anyone who shouldn't see what's under them."
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window) { _ in }
+    }
+
+    static let projectPixelsNoticeKey = "editorProjectPixelsNoticeShown"
+
+    static func containsRedactions(_ commands: [AnnotationCommand]) -> Bool {
+        commands.contains {
+            if case .redaction = $0 {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     func addToLibrary(_ url: URL) {
@@ -120,6 +167,9 @@ extension EditorWindowController {
         }
         markClean()
         rebind(to: targets.document)
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
         logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .public)")
         CaptureSavedNotice.post(.init(original: original, saved: targets.flattened, previousHash: previousHash))
     }
@@ -197,6 +247,7 @@ extension EditorWindowController {
             try writeProject(to: url)
             chosenSaveTargets = nil
             rebind(to: url)
+            noteProjectKeepsOriginalPixels()
             return
         }
         try write(image, to: targets.flattened)
@@ -206,6 +257,9 @@ extension EditorWindowController {
         markClean()
         chosenSaveTargets = targets
         rebind(to: targets.document)
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
     }
 
     func printImage(_ image: CGImage) {

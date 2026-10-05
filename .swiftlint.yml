@@ -6,6 +6,7 @@ included:
   - Kadr
   - KadrTests
   - KadrEditor
+  - KadrEditorTests
   - HelperTools
   - KadrCLI
   - Packages

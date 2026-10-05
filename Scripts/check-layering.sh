@@ -38,7 +38,7 @@ note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
 # the XPC helper and the `kadr` CLI. Sparkle's own sources (once vendored) are never in
 # these paths.
 swift_sources() {
-    find Kadr KadrTests KadrEditor HelperTools KadrCLI Packages/*/Sources Packages/*/Tests \
+    find Kadr KadrTests KadrEditor KadrEditorTests HelperTools KadrCLI Packages/*/Sources Packages/*/Tests \
         -name '*.swift' -not -path '*/.build/*' 2>/dev/null | sort
 }
 

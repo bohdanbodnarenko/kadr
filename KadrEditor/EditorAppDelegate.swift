@@ -71,7 +71,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     ///
     /// Only files from outside: a capture the agent just took is already Kadr's, and
     /// copying it again would leave two of everything.
-    private func imported(_ url: URL) -> URL? {
+    func imported(_ url: URL, handoff: EditorHandoff = EditorHandoff()) -> URL? {
         guard url.pathExtension.lowercased() != StylePresetTransfer.pathExtension else { return nil }
         // A project is the user's own document: edited where it is, so saving it writes
         // back to the file they double-clicked, not to a hidden copy (T-ED-9).
@@ -79,7 +79,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
         // A capture the agent handed over is edited in place, so ⌘S and Move to Trash act
         // on the file the user sees (docs/18 ED-1).
-        guard !EditorHandoff().consume(url) else { return nil }
+        guard !handoff.consume(url) else { return nil }
         return CaptureImporter().copyIntoLibrary(url)
     }
 
