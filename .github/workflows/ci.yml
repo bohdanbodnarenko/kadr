@@ -67,6 +67,10 @@ jobs:
         run: make size-gate
       - name: Linked frameworks contain no networking (docs/03 §9)
         run: make check-layering
+      - name: Build the editor app
+        run: make build-editor
+      - name: String Catalogs match the source (docs/18 X-4)
+        run: make check-strings
       - name: Performance budgets (PRD §8)
         run: Scripts/check-perf.sh --idle-seconds 30 --json perf-results.json
       - name: Publish the measured budgets

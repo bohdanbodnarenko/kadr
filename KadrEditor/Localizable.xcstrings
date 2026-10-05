@@ -7,13 +7,25 @@
     "Actual Size" : {
 
     },
+    "Add Zoom" : {
+
+    },
     "Annotation editor" : {
+
+    },
+    "Bring All to Front" : {
 
     },
     "Bring Forward" : {
 
     },
     "Bring to Front" : {
+
+    },
+    "Clear Menu" : {
+
+    },
+    "Clip" : {
 
     },
     "Close" : {
@@ -31,10 +43,19 @@
     "Decrease Tool Size" : {
 
     },
+    "Delete" : {
+
+    },
+    "Delete Clip or Zoom" : {
+
+    },
     "Duplicate" : {
 
     },
     "Edit" : {
+
+    },
+    "Export Video…" : {
 
     },
     "File" : {
@@ -70,13 +91,19 @@
     "Kadr Help" : {
 
     },
-    "Keyboard shortcuts" : {
-
-    },
     "Keyboard Shortcuts" : {
 
     },
+    "Keyboard shortcuts" : {
+
+    },
     "Lock Objects" : {
+
+    },
+    "Minimize" : {
+
+    },
+    "Open Recent" : {
 
     },
     "Open…" : {
@@ -96,6 +123,9 @@
           }
         }
       }
+    },
+    "Play/Pause" : {
+
     },
     "Print…" : {
 
@@ -136,6 +166,12 @@
     "Show Inspector" : {
 
     },
+    "Show in Finder" : {
+
+    },
+    "Split Clip at Playhead" : {
+
+    },
     "Studio" : {
       "comment" : "The video editor for screen recordings.",
       "extractionState" : "manual",
@@ -148,10 +184,25 @@
         }
       }
     },
+    "Tools" : {
+
+    },
+    "Trim End to Playhead" : {
+
+    },
+    "Trim Start to Playhead" : {
+
+    },
     "Undo" : {
 
     },
     "View" : {
+
+    },
+    "Window" : {
+
+    },
+    "Zoom" : {
 
     },
     "Zoom In" : {
