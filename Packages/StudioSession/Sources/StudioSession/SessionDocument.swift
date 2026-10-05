@@ -337,7 +337,7 @@ public struct SessionDocument: Sendable {
                 try? FileManager.default.removeItem(at: backup)
                 try FileManager.default.moveItem(at: url, to: backup)
                 backups.append(backup)
-                logger.error("Moved an unreadable \(url.lastPathComponent, privacy: .public) aside")
+                logger.error("Moved an unreadable \(url.lastPathComponent, privacy: .private) aside")
             } catch {
                 logger.error("Could not move an unreadable edit aside: \(error.localizedDescription, privacy: .public)")
             }

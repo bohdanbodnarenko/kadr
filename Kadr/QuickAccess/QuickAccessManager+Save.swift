@@ -171,7 +171,7 @@ extension QuickAccessManager {
                 named: Self.saveFilename(for: item),
                 into: settings.saveFolder
             )
-            logger.info("Saved a copy as \(copy.lastPathComponent, privacy: .public)")
+            logger.info("Saved a copy as \(copy.lastPathComponent, privacy: .private)")
             return true
         } catch {
             logger.error("Could not save a copy: \(error.localizedDescription, privacy: .public)")

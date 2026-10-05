@@ -132,7 +132,7 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
             }
             do {
                 let written = try await trimmer.trim(movieAt: fileURL, to: range, destination: destination)
-                logger.info("Wrote \(written.lastPathComponent, privacy: .public)")
+                logger.info("Wrote \(written.lastPathComponent, privacy: .private)")
                 NSWorkspace.shared.activateFileViewerSelecting([written])
             } catch {
                 present(error)

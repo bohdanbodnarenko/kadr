@@ -43,7 +43,7 @@ extension QuickAccessManager {
                 ))
                 guard let path = result.path else { return }
                 let gifURL = URL(fileURLWithPath: path)
-                logger.info("Exported \(gifURL.lastPathComponent, privacy: .public)")
+                logger.info("Exported \(gifURL.lastPathComponent, privacy: .private)")
                 presentExternalFile(at: gifURL, origin: .capture)
                 NSWorkspace.shared.activateFileViewerSelecting([gifURL])
             } catch {

@@ -59,7 +59,7 @@ extension AppDelegate {
             do {
                 try fileManager.removeItem(at: url)
             } catch {
-                logger.error("Could not remove \(url.lastPathComponent, privacy: .public)")
+                logger.error("Could not remove \(url.lastPathComponent, privacy: .private)")
             }
         }
         for domain in Self.ownedPreferenceDomains {

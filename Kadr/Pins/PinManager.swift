@@ -73,7 +73,7 @@ final class PinManager {
         // the right size rather than one texture for the default size and another 120 ms
         // later for the real one.
         guard let panel = PinPanel(fileURL: fileURL, scale: scale, frame: pendingRestore?.frame) else {
-            logger.error("Could not pin \(fileURL.lastPathComponent, privacy: .public)")
+            logger.error("Could not pin \(fileURL.lastPathComponent, privacy: .private)")
             return false
         }
 

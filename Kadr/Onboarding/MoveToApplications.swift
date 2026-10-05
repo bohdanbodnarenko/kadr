@@ -108,7 +108,7 @@ enum MoveToApplications {
         // A copy made in code keeps the quarantine flag, and a quarantined app that Finder
         // did not move is translocated again — straight back to where this started.
         removeQuarantine(under: destination)
-        logger.notice("Moved Kadr to \(folder.path, privacy: .public)")
+        logger.notice("Moved Kadr to \(folder.path, privacy: .private)")
         return destination
     }
 

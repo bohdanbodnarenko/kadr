@@ -176,7 +176,7 @@ extension RecordingCoordinator {
     private func finished(with result: RecordingResult) async {
         let exportGIF = wantsGIFExport
         resetAfterStopping()
-        logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .public)")
+        logger.info("Recording saved: \(result.fileURL.lastPathComponent, privacy: .private)")
 
         // The card goes up before the session is assembled. Linking the footage and writing
         // the sidecar takes a moment, and making the user wait for it would put a delay

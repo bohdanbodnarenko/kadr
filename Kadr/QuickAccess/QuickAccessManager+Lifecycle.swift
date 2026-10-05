@@ -253,7 +253,7 @@ extension QuickAccessManager {
         let live = items.first { $0.id == item.id } ?? item
         let url = live.fileURL
         guard FileManager.default.fileExists(atPath: url.path) else {
-            logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .public)")
+            logger.error("Dragged capture is gone: \(url.lastPathComponent, privacy: .private)")
             return nil
         }
         // A History card's file is named by its hash; the receiver gets the name the card

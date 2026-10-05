@@ -59,7 +59,7 @@ struct CaptureImporter {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let destination = Self.availableURL(for: url, in: directory)
             try FileManager.default.copyItem(at: url, to: destination)
-            logger.info("Imported \(destination.lastPathComponent, privacy: .public)")
+            logger.info("Imported \(destination.lastPathComponent, privacy: .private)")
             return destination
         } catch {
             logger.error("Could not import an image: \(error.localizedDescription, privacy: .public)")
