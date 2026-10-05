@@ -31,6 +31,8 @@ extension AppDelegate {
             scrollCapture.begin()
         case .recordRegion, .recordDisplay, .stopRecording, .recordSetup:
             performRecording(command)
+        case .pauseRecording:
+            togglePauseFromShortcut()
         case .toggleDesktopIcons:
             desktopHygiene.toggleUserHide()
         case .allInOne, .captureArea, .captureWindow, .captureFullscreen, .captureText,
@@ -278,7 +280,8 @@ extension AppDelegate {
             microphoneDropped: recording.microphoneDropped,
             notice: recording.liveNotice,
             isTransitioning: recording.isTransitioning,
-            isSaving: isSaving
+            isSaving: isSaving,
+            recordedDisplayID: recording.lastTarget.flatMap(\.displayID)
         )
     }
 
@@ -376,6 +379,16 @@ extension AppDelegate {
         // is that nothing starts until the user says so.
         case .recordSetup: recordSetup.toggle()
         default: break
+        }
+    }
+
+    /// Pause and Resume without reaching for the bar (docs/18 REC-11). Outside a running
+    /// take there is nothing to pause, so the key says so rather than starting anything.
+    private func togglePauseFromShortcut() {
+        switch recording.state {
+        case .recording: recording.pause()
+        case .paused: recording.resume()
+        default: NSSound.beep()
         }
     }
 

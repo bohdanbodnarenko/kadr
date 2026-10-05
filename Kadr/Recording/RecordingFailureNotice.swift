@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import RecordingCore
 
 /// Surfaces recording failures that used to be log-only (docs/16 REC-3).
@@ -13,7 +14,7 @@ enum RecordingFailureNotice {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Recording could not start"
-        alert.informativeText = error.localizedDescription
+        alert.informativeText = message(for: error)
         alert.addButton(withTitle: "OK")
         attachShowInFinder(to: alert, error: error)
         NSApp.activate()
@@ -24,7 +25,7 @@ enum RecordingFailureNotice {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Recording could not finish"
-        alert.informativeText = error.localizedDescription
+        alert.informativeText = message(for: error)
         alert.addButton(withTitle: "OK")
         attachShowInFinder(to: alert, error: error)
         NSApp.activate()
@@ -39,6 +40,35 @@ enum RecordingFailureNotice {
         alert.addButton(withTitle: "OK")
         NSApp.activate()
         alert.runModal()
+    }
+
+    /// What to tell the user, in place of the framework's own wording where Kadr knows a
+    /// plainer one (docs/18 REC P3). "The operation could not be completed (AVFoundation
+    /// error -11807)" tells nobody that the disk is full.
+    nonisolated static func message(for error: any Error) -> String {
+        let nsError = error as NSError
+        let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError
+        for candidate in [nsError, underlying].compactMap(\.self) {
+            if let plain = plainMessage(domain: candidate.domain, code: candidate.code) {
+                return plain
+            }
+        }
+        return error.localizedDescription
+    }
+
+    nonisolated static func plainMessage(domain: String, code: Int) -> String? {
+        switch (domain, code) {
+        case (AVFoundationErrorDomain, AVError.Code.diskFull.rawValue),
+             (NSCocoaErrorDomain, NSFileWriteOutOfSpaceError):
+            String(localized: "The disk is full. Free up some space, then record again.")
+        case (AVFoundationErrorDomain, AVError.Code.deviceNotConnected.rawValue),
+             (AVFoundationErrorDomain, AVError.Code.deviceWasDisconnected.rawValue):
+            String(localized: "A camera or microphone was disconnected.")
+        case (NSCocoaErrorDomain, NSFileWriteNoPermissionError):
+            String(localized: "Kadr is not allowed to write to the save folder. Choose another in Settings ▸ General.")
+        default:
+            nil
+        }
     }
 
     private static func attachShowInFinder(to alert: NSAlert, error: any Error) {

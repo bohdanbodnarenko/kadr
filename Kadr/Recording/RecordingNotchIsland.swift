@@ -38,6 +38,13 @@ struct RecordingNotchIsland: View {
             .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
             .overlay { RecordingBarTooltipLayer(tooltip: tooltip, edge: .bottom) }
             .background { RecordingNotchHoverTracking { setHovering($0) } }
+            // Hover is not the only way in: a click on the compact shell opens the row,
+            // so Stop and Pause are reachable when hover never fires (docs/18 REC-11, UX-16).
+            .contentShape(shape)
+            .onTapGesture {
+                guard !layout.showsRow else { return }
+                expandFromClick()
+            }
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .named(RecordingBarCoordinateSpace.panel))
             } action: { frame in
@@ -45,6 +52,7 @@ struct RecordingNotchIsland: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Recording controls")
+            .accessibilityAction(named: "Show Controls") { expandFromClick() }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .coordinateSpace(.named(RecordingBarCoordinateSpace.panel))
             .environment(tooltip)
@@ -221,6 +229,13 @@ struct RecordingNotchIsland: View {
     }
 
     // MARK: - Hover
+
+    /// Opens the row and keeps it open while the pointer stays; leaving collapses it as
+    /// hover would.
+    private func expandFromClick() {
+        collapseTask?.cancel()
+        model.notchExpanded = true
+    }
 
     private func setHovering(_ hovering: Bool) {
         collapseTask?.cancel()

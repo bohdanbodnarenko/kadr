@@ -25,6 +25,11 @@ final class CameraFileRecorder {
     /// toggle-off does not start a session that was already cancelled.
     private var previewGeneration = 0
 
+    /// The preview bubble's frame on screen, while it shows.
+    var previewFrame: NSRect? {
+        preview.screenFrame
+    }
+
     /// Whether the machine has a camera at all, asked before offering to use one.
     static var hasCamera: Bool {
         AVCaptureDevice.default(for: .video) != nil

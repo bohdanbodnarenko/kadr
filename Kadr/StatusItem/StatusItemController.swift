@@ -269,6 +269,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             systemSymbolName: controls.isPaused ? "play.circle" : "pause.circle",
             accessibilityDescription: nil
         )
+        pause.setShortcut(for: CaptureCommand.pauseRecording.shortcutName)
         menu.addItem(pause)
 
         let restart = NSMenuItem(
@@ -393,4 +394,6 @@ struct RecordingControls {
     var isTransitioning: Bool = false
     /// The take has stopped and its file is being finalised (docs/17 T-REC-4).
     var isSaving: Bool = false
+    /// The display being recorded, or nil for a window, which can move (docs/18 REC-9).
+    var recordedDisplayID: CGDirectDisplayID?
 }

@@ -113,9 +113,14 @@ final class RecordingCoordinator {
     @ObservationIgnored var terminationCompletion: (() -> Void)?
     /// Why the engine asked us to stop, if it did (docs/16 REC-1).
     @ObservationIgnored var pendingInterruption: String?
+    /// The recorded second the free space was last checked at (docs/18 REC-8).
+    @ObservationIgnored var lastDiskCheckSecond: Int?
     @ObservationIgnored var engineEventsTask: Task<Void, Never>?
     /// Sleep and wake, for the coordinator's lifetime (docs/18 REC-5).
     @ObservationIgnored var sleepTasks: [Task<Void, Never>] = []
+    @ObservationIgnored var deviceLossTask: Task<Void, Never>?
+    /// The camera this take records, or nil (docs/18 REC-10).
+    @ObservationIgnored var cameraThisTake: String?
     /// This pause was Kadr's, for sleep; wake says so (docs/18 REC-5).
     @ObservationIgnored var pausedForSleep = false
     /// Disables transport while start/pause/resume/stop is in flight (docs/16 REC-17).
@@ -153,6 +158,7 @@ final class RecordingCoordinator {
         studio = StudioSessionRecorder(camera: camera)
         listenForEngineEvents()
         listenForSleep()
+        listenForDeviceLoss()
     }
 
     /// Stream death and writer failure must stop the take and keep the footage
@@ -167,11 +173,18 @@ final class RecordingCoordinator {
     }
 
     func handleEngineEvent(_ event: RecordingEngineEvent) {
-        guard state == .recording || state == .paused else { return }
         let message: String = switch event {
         case let .streamStopped(reason), let .writerFailed(reason):
             reason
         }
+        // The stream can die after the engine started but before this take claimed
+        // `.recording`. Dropping it left a take that looked live with nothing filming; it
+        // is held and replayed once the start completes (docs/18 REC-7).
+        if state == .starting {
+            pendingInterruption = message
+            return
+        }
+        guard state == .recording || state == .paused else { return }
         pendingInterruption = message
         liveNotice = "Saving what was captured…"
         stop()
@@ -351,8 +364,10 @@ final class RecordingCoordinator {
         }
 
         let camera = cameraDeviceID ?? settings.recordingCameraDeviceID
+        let recordsCamera = settings.recordingShowsWebcam && !camera.isEmpty
+        cameraThisTake = recordsCamera ? camera : nil
         studio.start(
-            recordsCamera: settings.recordingShowsWebcam && !camera.isEmpty,
+            recordsCamera: recordsCamera,
             cameraDeviceID: camera,
             pointConverter: converter,
             pointPixelScale: Self.pointPixelScale(for: target, windowDisplay: windowHighlightDisplayID),

@@ -33,4 +33,26 @@ struct RecordingDiskSpaceTests {
     func realVolume() {
         #expect(RecordingDiskSpace.availableCapacity(of: FileManager.default.temporaryDirectory) != nil)
     }
+
+    /// docs/18 REC-8: the running take checks every ten recorded seconds, once each.
+    @Test("A running take checks the disk every ten seconds, once", arguments: [
+        (0, nil as Int?, false),
+        (5, nil, false),
+        (10, nil, true),
+        (10, 10, false),
+        (20, 10, true)
+    ])
+    func checkCadence(second: Int, lastChecked: Int?, due: Bool) {
+        #expect(RecordingDiskSpace.isCheckDue(atWholeSecond: second, lastChecked: lastChecked) == due)
+    }
+
+    @Test("A take stops below the margin", arguments: [
+        (Int64(100_000_000), true),
+        (749_999_999, true),
+        (750_000_000, false),
+        (10_000_000_000, false)
+    ])
+    func stopMargin(bytes: Int64, stops: Bool) {
+        #expect(RecordingDiskSpace.mustStop(availableBytes: bytes) == stops)
+    }
 }

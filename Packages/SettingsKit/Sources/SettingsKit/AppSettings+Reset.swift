@@ -13,6 +13,7 @@ public extension AppSettings {
         resetCapture()
         resetRecording()
         resetChrome()
+        resetPlacement()
     }
 
     private func resetGeneral() {

@@ -215,9 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // written into the recording as something the user did (docs/09 U3.2). Asked for at
         // the moment of a click: the notch shell grows under the pointer and the floating
         // bar can be dragged, so a cached rect is the shape it had a moment ago.
-        created.studio.chromeOnScreen = { [weak self] in
-            guard let self else { return [] }
-            return [recordingControlBar.screenFrame, menuBarItemFrame].compactMap(\.self)
+        created.studio.chromeOnScreen = { [weak self, weak created] in
+            self?.recordingChrome(teleprompter: created?.teleprompter) ?? []
         }
         recordingStorage = created
         return created
@@ -358,6 +357,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SingleInstance.yieldIfAnotherIsRunning(beforeQuitting: { isYieldingToAnotherInstance = true }) {
             return
         }
+        // Before the recorder or camera bubble can open, so both come back where they were.
+        RecordingPlacement.settings = settings
         // Before anything attaches to this path: hotkeys, the CLI port, permissions
         // (docs/17 T-SH-2).
         let moving = MoveToApplications.offerIfNeeded { [weak self] in
@@ -474,5 +475,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing Settings must not quit the agent.
         false
+    }
+}
+
+extension AppDelegate {
+    /// Kadr's own controls on screen during a take. The prompter and the camera bubble are
+    /// Kadr's too: dragging or nudging them is not a click in the app being demonstrated
+    /// (docs/18 REC-11).
+    func recordingChrome(teleprompter: TeleprompterController?) -> [CGRect] {
+        [
+            recordingControlBar.screenFrame,
+            menuBarItemFrame,
+            teleprompter?.screenFrame,
+            cameraRecorder.previewFrame
+        ].compactMap(\.self)
     }
 }

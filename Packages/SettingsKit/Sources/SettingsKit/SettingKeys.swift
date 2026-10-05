@@ -195,6 +195,10 @@ public enum SettingKeys {
     public static let teleprompterDocksUnderCamera = SettingKey("teleprompter.docksUnderCamera", default: false)
     /// Where the panel was left, so it comes back where the reader put it.
     public static let teleprompterFrame = SettingKey("teleprompter.frame", default: "")
+    public static let recordingBarOrigin = SettingKey("recording.bar.origin", default: "")
+    public static let cameraBubbleOrigin = SettingKey("recording.camera.origin", default: "")
+    public static let cameraBubbleDiameter = SettingKey("recording.camera.diameter", default: 160.0)
+    public static let cameraBubbleIsCircular = SettingKey("recording.camera.circular", default: true)
     /// Keep the display's HDR range in recordings (macOS 15+, docs/06 M25).
     public static let recordingDynamicRange = SettingKey(
         "recording.dynamicRange",

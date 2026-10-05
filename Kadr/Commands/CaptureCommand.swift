@@ -27,6 +27,9 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// A command of its own as well as the toggle on the two record hotkeys, because the
     /// user who cannot remember which one they started with still needs a way out.
     case stopRecording
+    /// Pauses a running take, or resumes a paused one (docs/18 REC-11). No default key:
+    /// a global shortcut is taken from every app, and only blind-fired commands get one.
+    case pauseRecording
     /// Opens record mode rather than starting a recording (docs/03 §1.4).
     case recordSetup
     case freezeScreen
@@ -65,6 +68,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .recordRegion: String(localized: "Record Region…")
         case .recordDisplay: String(localized: "Record Screen")
         case .stopRecording: String(localized: "Stop Recording")
+        case .pauseRecording: String(localized: "Pause / Resume Recording")
         case .recordSetup: String(localized: "Record…")
         case .freezeScreen: String(localized: "Freeze Screen")
         case .toggleDesktopIcons: String(localized: "Hide Desktop Icons")
@@ -127,7 +131,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
                 .captureScrolling, .captureText, .pickColor, .capturePreviousArea,
                 .captureAreaAndCopy, .captureAreaAndSave
             ]),
-            ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording]),
+            ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording, .pauseRecording]),
             ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
             ("Overlays and Pins", [
                 .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,

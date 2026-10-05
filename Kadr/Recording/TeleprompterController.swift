@@ -50,6 +50,12 @@ final class TeleprompterController {
         panel != nil
     }
 
+    /// The script's frame on screen, so dragging or scrolling it is not written into the
+    /// recording's telemetry as something the user did (docs/18 REC-11).
+    var screenFrame: NSRect? {
+        panel?.frame
+    }
+
     // MARK: - Lifecycle
 
     /// Puts the prompter up, if the user has one to read.
@@ -72,6 +78,7 @@ final class TeleprompterController {
             settings.teleprompterDocksUnderCamera ? nil : savedFrame,
             dockUnderCamera: settings.teleprompterDocksUnderCamera
         )
+        panel.onNudge = { [weak self] words in self?.nudge(by: words) }
         panel.orderFrontRegardless()
         self.panel = panel
 
@@ -122,6 +129,17 @@ final class TeleprompterController {
         isPaused = false
         startedAt = Date()
         follower?.resume()
+    }
+
+    /// Moves the script by hand and carries on scrolling from there (docs/18 REC-11).
+    func nudge(by words: Double) {
+        guard let panel else { return }
+        position = max(0, position + words)
+        startedFrom = position
+        if !isPaused {
+            startedAt = Date()
+        }
+        panel.position = position
     }
 
     // MARK: - Scrolling
