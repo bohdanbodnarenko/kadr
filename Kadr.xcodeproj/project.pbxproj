@@ -828,7 +828,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -867,7 +867,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1000,7 +1000,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -1021,7 +1021,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
