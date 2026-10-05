@@ -287,7 +287,7 @@ struct SelectionKeyboardTests {
     func resizeFloor() {
         var selection = interaction()
         selection.begin(at: CGPoint(x: 10, y: 10))
-        selection.drag(to: CGPoint(x: 12, y: 12))
+        selection.drag(to: CGPoint(x: 15, y: 15))
         selection.end()
         for _ in 0 ..< 10 {
             selection.resize(.left)
@@ -383,5 +383,26 @@ struct SelectionGlobalRectTests {
             scale: .retina
         )
         #expect(interaction().globalRect(on: display) == nil)
+    }
+}
+
+@Suite("Minimum drag size")
+struct SelectionMinimumDragTests {
+    @Test("A drag below the minimum on either side is no selection", arguments: [
+        (CGPoint(x: 101, y: 101), false),
+        (CGPoint(x: 103, y: 103), false),
+        (CGPoint(x: 300, y: 102), false),
+        (CGPoint(x: 102, y: 300), false),
+        (CGPoint(x: 104, y: 104), true),
+        (CGPoint(x: 300, y: 250), true)
+    ])
+    func minimumSide(to point: CGPoint, selects: Bool) {
+        var selection = interaction()
+        selection.begin(at: CGPoint(x: 100, y: 100))
+        selection.drag(to: point)
+        selection.end()
+
+        #expect((selection.phase == .selected) == selects)
+        #expect((selection.rect != nil) == selects)
     }
 }
