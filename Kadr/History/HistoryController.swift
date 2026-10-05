@@ -56,7 +56,7 @@ final class HistoryController {
     }
 
     /// The open in flight, shared by everyone who asks before it finishes.
-    @ObservationIgnored private var openTask: Task<HistoryStore, any Error>?
+    @ObservationIgnored private var openTask: Task<HistoryStore.Opening, any Error>?
 
     /// What the History window's search field holds, and the indexer behind it
     /// (docs/03 §5 P3).
@@ -440,18 +440,24 @@ final class HistoryController {
             await drainPending()
             return
         }
+        // Recovering: an unreadable database is set aside and rebuilt from the sidecars
+        // instead of leaving History empty for good (docs/18 OUT-3).
         let opening = openTask ?? Task.detached(priority: .utility) {
-            try HistoryStore.openApplicationSupport(tuning: .agent)
+            try await HistoryStore.openApplicationSupportRecovering(tuning: .agent)
         }
         openTask = opening
         do {
-            let opened = try await opening.value
+            let result = try await opening.value
+            let opened = result.store
             guard store == nil else {
                 // Another caller finished the launch work while this one waited.
                 await drainPending()
                 return
             }
             store = opened
+            if result.setAside != nil {
+                reportRecovery(count: result.recoveredCount)
+            }
             await applyAutomaticRetention(on: opened)
             recent = try await visible(opened.recent(limit: Self.menuStripCount))
             usage = try await opened.storageUsage()
@@ -497,9 +503,26 @@ private extension HistoryController {
         }
         hasReportedOpenFailure = true
         FailurePresenter.report(
-            "Kadr could not open your History. Captures are still saved, but History stays empty.",
+            "Kadr could not open or rebuild your History. Captures are still saved, but History stays empty.",
             detail: error.localizedDescription,
-            logger: logger
+            logger: logger,
+            retryTitle: String(localized: "Rebuild Library"),
+            retry: { [weak self] in
+                guard let self else { return }
+                hasReportedOpenFailure = false
+                Task { await self.openIfNeeded() }
+            }
         )
+    }
+
+    /// Says the library was rebuilt, once, so a History that comes back with fewer
+    /// captures (one whose file is gone) is not a mystery.
+    func reportRecovery(count: Int) {
+        logger.notice("History database was unreadable; rebuilt \(count, privacy: .public) records")
+        FailurePresenter.present(FeedbackStatus(
+            kind: .warning,
+            message: String(localized: "History could not be read, so Kadr rebuilt it: \(count) captures recovered.")
+                + " " + String(localized: "The unreadable file was kept beside it.")
+        ))
     }
 }
