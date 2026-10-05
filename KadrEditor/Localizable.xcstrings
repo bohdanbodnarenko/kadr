@@ -172,6 +172,12 @@
     "Split Clip at Playhead" : {
 
     },
+    "Still running: %@. Closing stops it and deletes any partly written file." : {
+
+    },
+    "Still running: %@. Closing stops them and deletes any partly written file." : {
+
+    },
     "Studio" : {
       "comment" : "The video editor for screen recordings.",
       "extractionState" : "manual",

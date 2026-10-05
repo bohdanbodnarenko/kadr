@@ -170,7 +170,7 @@ struct StudioZoomLane: View {
         }
         .buttonStyle(.plain)
         .offset(x: span.lowerBound * scale)
-        .help("Suggested zoom — \(clicks) click\(clicks == 1 ? "" : "s") here. Click to add it.")
+        .help(Text("Suggested zoom — ^[\(clicks) click](inflect: true) here. Click to add it.", bundle: .module))
         .accessibilityLabel(Text("Suggested zoom at \(StudioClock.precise(span.lowerBound))", bundle: .module))
         .accessibilityHint(Text("Adds this zoom", bundle: .module))
         .contextMenu {

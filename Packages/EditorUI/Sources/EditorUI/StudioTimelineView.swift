@@ -407,7 +407,7 @@ struct StudioTimelineView: View {
     private func speedLabel(_ speed: Double) -> String {
         speed == speed.rounded()
             ? "\(Int(speed))×"
-            : String(format: "%.1f×", speed)
+            : StudioMultiplier.text(speed)
     }
 }
 

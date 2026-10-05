@@ -34,7 +34,7 @@ extension StudioTimelineView {
             .disabled(zoom <= 1.0001)
 
             if zoom > 1.0001 {
-                Text(String(format: "%.1f×", zoom))
+                Text(StudioMultiplier.text(zoom))
                     .font(.system(size: 10, weight: .medium).monospacedDigit())
                     .foregroundStyle(.secondary)
                     .padding(.leading, 2)

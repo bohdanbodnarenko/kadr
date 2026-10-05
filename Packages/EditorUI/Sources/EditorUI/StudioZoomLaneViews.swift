@@ -22,7 +22,7 @@ struct StudioZoomBlockLabel: View {
                     .font(.system(size: 9, weight: .semibold))
                     .accessibilityHidden(true)
             }
-            Text(String(format: "%.1f×", cue.magnification))
+            Text(StudioMultiplier.text(cue.magnification))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
             if showsDetail {

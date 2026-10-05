@@ -300,10 +300,11 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
         let alert = NSAlert()
         alert.messageText = "Stop work on “\(sender.title)”?"
-        alert.informativeText = Self.list(operations).prefix(1).uppercased()
-            + Self.list(operations).dropFirst()
-            + (operations.count == 1 ? " is" : " are")
-            + " still running. Closing now stops it, and any partly-written file is deleted."
+        // Whole sentences per count, so the verb agrees in any language (docs/18 X-4).
+        let running = Self.list(operations)
+        alert.informativeText = operations.count == 1
+            ? String(localized: "Still running: \(running). Closing stops it and deletes any partly written file.")
+            : String(localized: "Still running: \(running). Closing stops them and deletes any partly written file.")
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Stop and Close")
         alert.addButton(withTitle: "Keep Working")

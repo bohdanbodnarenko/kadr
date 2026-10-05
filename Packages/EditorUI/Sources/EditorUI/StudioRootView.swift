@@ -279,7 +279,7 @@ public struct StudioRootView: View {
                     .help(Text("Point it where the pointer was when this zoom starts", bundle: .module))
                 Button(String(localized: "Center", bundle: .module)) { model.setZoomFocus(id, to: .centre) }
                 Spacer(minLength: 8)
-                Text(String(format: "%.1f×", cue.magnification))
+                Text(StudioMultiplier.text(cue.magnification))
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Button(String(localized: "Play", bundle: .module)) { model.previewZoom(id) }

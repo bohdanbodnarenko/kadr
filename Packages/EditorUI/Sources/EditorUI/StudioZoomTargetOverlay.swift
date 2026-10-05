@@ -41,7 +41,7 @@ struct StudioZoomTargetOverlay: View {
             .contentShape(Rectangle())
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text("Zoom target", bundle: .module))
-            .accessibilityValue(String(format: "%.1f×", cue.magnification))
+            .accessibilityValue(StudioMultiplier.text(cue.magnification))
         }
     }
 
@@ -64,7 +64,7 @@ struct StudioZoomTargetOverlay: View {
             .frame(width: target.width, height: target.height)
             .position(x: target.midX, y: target.midY)
             .overlay {
-                Text(String(format: "%.1f×", magnification))
+                Text(StudioMultiplier.text(magnification))
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)

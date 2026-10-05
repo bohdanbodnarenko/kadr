@@ -905,15 +905,8 @@
     "Suggested zoom at %@" : {
 
     },
-    "Suggested zoom — %lld click%@ here. Click to add it." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Suggested zoom — %1$lld click%2$@ here. Click to add it."
-          }
-        }
-      }
+    "Suggested zoom — ^[%lld click](inflect: true) here. Click to add it." : {
+
     },
     "Text" : {
 

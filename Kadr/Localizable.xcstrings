@@ -2105,6 +2105,21 @@
     "Zoom" : {
 
     },
+    "^[%lld Capture](inflect: true)" : {
+
+    },
+    "^[%lld Screenshot](inflect: true)" : {
+
+    },
+    "^[%lld character](inflect: true)" : {
+
+    },
+    "^[%lld code](inflect: true)" : {
+
+    },
+    "^[%lld word](inflect: true)" : {
+
+    },
     "and everything you capture until then are deleted with their files." : {
 
     },
