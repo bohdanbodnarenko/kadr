@@ -15,7 +15,7 @@ Details:
 - Dimmed backdrop with a clear "hole" over the selection (even-odd fill).
 - A drag shorter than 4 pt on either side is a click, not a selection: the overlay stays up and nothing is captured.
 - While selecting: hold **Space** to move the selection; **arrow keys** nudge by 1 px (⇧ = 10 px); type numbers to set exact W×H; **⌥-drag** resizes from center; **aspect lock** via ⇧-drag; **Esc** cancels. **F** captures this display at full size (not while the eyedropper is on). Idle overlay shows a teaching line (drag / W for a window / F for this display) at the bottom centre of the display under the pointer only, clear of the drag; hide it in Settings → Capture.
-- After mouse-up but before commit (optional "confirm mode", off by default): handles for resize, Enter/click-outside to commit.
+- After mouse-up but before commit (optional "confirm mode", off by default): handles for resize, Enter/click-outside to commit; the teaching line says so while it waits.
 - **Remember last region**: hotkey "capture previous area" (P1) repeats the exact last rect on the same display instantly, no UI. Opening area capture on that display also draws the last rect as a dashed ghost until a new drag starts.
 - **Snapping (P2):** selection edges snap to detected window frames and screen edges (from `SCShareableContent` window geometry); toggleable.
 - Freeze-frame means moving content (video, animations) is captured exactly as seen at hotkey time — this doubles as CleanShot's "Freeze screen" feature for free.

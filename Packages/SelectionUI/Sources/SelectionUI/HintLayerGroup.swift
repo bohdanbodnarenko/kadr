@@ -35,7 +35,8 @@ final class HintLayerGroup {
             purpose: context.purpose,
             mode: context.mode,
             phase: context.phase,
-            isEyedropper: context.isEyedropper
+            isEyedropper: context.isEyedropper,
+            confirmsSelection: context.confirmsSelection
         ) else {
             container.isHidden = true
             return
@@ -80,6 +81,7 @@ struct CaptureHintContext {
     var phase: SelectionInteraction.Phase
     var isEyedropper: Bool
     var isEnabled: Bool
+    var confirmsSelection = false
 }
 
 /// The overlay's teaching lines, as copy rather than layers so they can be tested.
@@ -88,7 +90,8 @@ enum CaptureHintCopy {
         purpose: SelectionPurpose,
         mode: SelectionOverlayView.Mode,
         phase: SelectionInteraction.Phase,
-        isEyedropper: Bool
+        isEyedropper: Bool,
+        confirmsSelection: Bool = false
     ) -> String? {
         if isEyedropper {
             return "Click to copy  ·  F changes format  ·  X compares  ·  E leaves"
@@ -97,6 +100,11 @@ enum CaptureHintCopy {
         case .window:
             return windowCopy(purpose)
         case .area:
+            // Confirm mode waits on a drawn selection with nothing on screen saying how to
+            // finish it (docs/14 UX-17C).
+            if confirmsSelection, phase == .selected {
+                return "Return to capture  ·  drag a corner to resize  ·  Esc to cancel"
+            }
             return areaCopy(purpose, phase: phase)
         }
     }
