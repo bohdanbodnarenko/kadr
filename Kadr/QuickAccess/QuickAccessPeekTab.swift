@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SettingsKit
 import SwiftUI
 
@@ -53,7 +54,7 @@ struct QuickAccessPeekTabView: View {
                         HStack(spacing: 3) {
                             Text("Show")
                             Image(systemName: corner.isBottom ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(KadrType.font(KadrType.micro, weight: .bold))
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)

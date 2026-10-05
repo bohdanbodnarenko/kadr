@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -19,7 +20,7 @@ struct StudioZoomBlockLabel: View {
         HStack(spacing: 3) {
             if showsDetail {
                 Image(systemName: focus.symbol)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(KadrType.font(KadrType.micro, weight: .semibold))
                     .accessibilityHidden(true)
             }
             Text(String(format: "%.1f×", cue.magnification))
@@ -68,7 +69,7 @@ struct StudioZoomSuggestionLabel: View {
                 )
             if width >= 22 {
                 Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(KadrType.font(KadrType.micro, weight: .bold))
                     .foregroundStyle(Color.orange.opacity(isHovering ? 1 : 0.7))
             }
         }
@@ -109,7 +110,7 @@ struct StudioZoomAddGhost: View {
                         .lineLimit(1)
                 } else if width >= 16 {
                     Image(systemName: "plus")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(KadrType.font(KadrType.micro, weight: .bold))
                         .foregroundStyle(Color.orange)
                 }
             }

@@ -39,7 +39,8 @@ enum RecordingBarMetrics {
     /// Hairline that defines the glass edge against a background of the same brightness.
     /// Stronger under Increase Contrast (docs/18 X-3).
     static var edge: Color {
-        Color(nsColor: .labelColor).opacity(KadrFill.opacity(.stroke, increaseContrast: KadrAccessibility.increaseContrast))
+        let opacity = KadrFill.opacity(.stroke, increaseContrast: KadrAccessibility.increaseContrast)
+        return Color(nsColor: .labelColor).opacity(opacity)
     }
 
     static let recordTint = Color(nsColor: .systemRed)
@@ -47,6 +48,7 @@ enum RecordingBarMetrics {
     static var hoverFill: Color {
         Color(nsColor: .labelColor).opacity(KadrAccessibility.increaseContrast ? 0.2 : 0.11)
     }
+
     static let hoverDiameter: CGFloat = 32
 
     /// Picker → countdown → live. Enough travel to read as one bar changing shape rather

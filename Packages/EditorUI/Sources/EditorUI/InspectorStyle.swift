@@ -48,6 +48,7 @@ enum InspectorControlPalette {
     static var border: Color {
         KadrFill.stroke
     }
+
     static let separator = Color(nsColor: .separatorColor).opacity(0.6)
 }
 

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Recording controls that grow out of the MacBook notch (macos-notch-ui).
@@ -161,7 +162,7 @@ struct RecordingNotchIsland: View {
 
             if model.isPaused {
                 Image(systemName: "pause.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(KadrType.font(KadrType.micro, weight: .bold))
                     .foregroundStyle(.white.opacity(0.75))
             } else if model.preRoll == nil {
                 // The one thing about a recording in progress worth a glance: whether

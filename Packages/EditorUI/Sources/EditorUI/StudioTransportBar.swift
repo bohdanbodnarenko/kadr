@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -301,7 +302,7 @@ private struct StudioSuggestedZoomsButton: View {
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
                         Text("\(min(count, 99))")
-                            .font(.system(size: 8, weight: .bold).monospacedDigit())
+                            .font(KadrType.numeric(KadrType.micro, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 3)
                             .frame(minWidth: 12, minHeight: 12)

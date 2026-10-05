@@ -87,3 +87,9 @@ custom_rules:
     message: "Use String(localized:) for menu titles so they appear in the catalog."
     included: ".*(AppMenu|EditorAppDelegate\\+Menu)\\.swift"
     severity: warning
+  sub_minimum_font_size:
+    name: "Sub-minimum font size"
+    regex: '(\.system\(size:|ofSize:)\s*[0-9](\.[0-9]+)?\s*[,)]'
+    message: "Nothing in Kadr's chrome is set below 10 pt. Use KadrType.micro or larger (docs/18 X-1)."
+    excluded: ".*Tests/.*"
+    severity: error
