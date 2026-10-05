@@ -165,7 +165,7 @@ struct RecordingNotchIsland: View {
                 )
             }
 
-            if model.microphoneIsSilent, model.preRoll == nil {
+            if model.microphoneIsSilent || model.microphoneDropped, model.preRoll == nil {
                 Image(systemName: "mic.slash.fill")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.orange)
@@ -194,6 +194,9 @@ struct RecordingNotchIsland: View {
     private var statusLabel: String {
         if model.preRoll != nil {
             return KadrText.string("Countdown")
+        }
+        if model.microphoneDropped {
+            return KadrText.string("Recording — no microphone")
         }
         if model.microphoneIsSilent {
             return KadrText.string("Recording — microphone is silent")

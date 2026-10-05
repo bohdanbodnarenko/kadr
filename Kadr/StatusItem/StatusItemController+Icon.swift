@@ -5,6 +5,7 @@ import Shared
 extension StatusItemController {
     func showIdleIcon() {
         showsRecordingIcon = false
+        updateMenuBarVisibility()
         apply(StatusItemAppearance(
             symbol: "camera.viewfinder",
             accessibilityDescription: "Kadr",
@@ -43,6 +44,7 @@ extension StatusItemController {
     /// rendered monochrome like everything else in the menu bar.
     func showRecordingIcon(elapsed: String, isPaused: Bool) {
         showsRecordingIcon = true
+        updateMenuBarVisibility()
         apply(StatusItemAppearance(
             symbol: isPaused ? "pause.circle.fill" : "record.circle",
             accessibilityDescription: "Recording",
@@ -165,7 +167,20 @@ extension StatusItemController {
     }
 
     func applyMenuBarVisibility(_ visible: Bool) {
-        statusItem.isVisible = visible
+        userWantsMenuBarIcon = visible
+        updateMenuBarVisibility()
+    }
+
+    /// What the item should show as: the user's choice, or forced on while recording.
+    var desiredMenuBarVisibility: Bool {
+        userWantsMenuBarIcon || showsRecordingIcon
+    }
+
+    private func updateMenuBarVisibility() {
+        let desired = desiredMenuBarVisibility
+        if statusItem.isVisible != desired {
+            statusItem.isVisible = desired
+        }
     }
 
     private static let menuBarVisibilityChanged = Notification.Name("app.kadr.menuBarVisibility")
@@ -196,7 +211,10 @@ extension StatusItemController {
         visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] item, _ in
             let visible = item.isVisible
             Task { @MainActor in
-                self?.onMenuBarVisibilityChange?(visible)
+                // Only the user's own drag counts. Kadr showing the item for a recording,
+                // or applying the setting, must not write the setting back (docs/18 REC-2).
+                guard let self, visible != self.desiredMenuBarVisibility else { return }
+                self.onMenuBarVisibilityChange?(visible)
             }
         }
     }

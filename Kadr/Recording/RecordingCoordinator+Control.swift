@@ -219,6 +219,7 @@ extension RecordingCoordinator {
         overrides = .none
         startedByAutomation = false
         wantsGIFExport = false
+        microphoneDropped = false
     }
 
     func cancel() {

@@ -150,6 +150,7 @@ extension RecordingCoordinator {
         overrides = .none
         startedByAutomation = false
         wantsGIFExport = false
+        microphoneDropped = false
         isTransitioning = false
         if state == .starting {
             state = .idle

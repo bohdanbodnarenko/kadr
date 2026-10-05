@@ -115,6 +115,9 @@ extension RecordingCoordinator {
         guard let notice = startNotice else { return }
         startNotice = nil
         liveNotice = notice
+        // The notice is caption text on a bar nobody is reading while they talk; VoiceOver
+        // users would otherwise never hear it at all (docs/18 REC-1).
+        FeedbackAnnouncement.post(notice)
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard let self, liveNotice == notice else { return }

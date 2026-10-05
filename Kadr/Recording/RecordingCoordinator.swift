@@ -85,6 +85,11 @@ final class RecordingCoordinator {
 
     /// Whether the resolved options for this take record the microphone.
     @ObservationIgnored var microphoneThisTake = false
+    /// The take asked for a microphone and is recording without one. Shown for the whole
+    /// take, not only as the five-second notice (docs/18 REC-1).
+    var microphoneDropped = false {
+        didSet { onStateChanged?() }
+    }
     /// A device the take had to go without, shown on the bar once it is rolling.
     @ObservationIgnored var startNotice: String?
     /// Loudest microphone sample so far this take, for the silent-mic notice.
@@ -275,6 +280,7 @@ final class RecordingCoordinator {
         // What this take really records, not what the settings asked for (T-REC-9).
         microphoneThisTake = options.recordsMicrophone
         startNotice = resolved.notice
+        microphoneDropped = resolved.droppedMicrophone
         if let notice = resolved.notice {
             logger.info("\(notice, privacy: .public)")
         }

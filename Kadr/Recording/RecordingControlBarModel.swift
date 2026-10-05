@@ -25,6 +25,7 @@ final class RecordingControlBarModel {
     /// `RecordingLiveAudioMeter` reads `meter.level`, so only it redraws.
     @ObservationIgnored let meter = RecordingAudioMeterModel()
     var microphoneIsSilent = false
+    var microphoneDropped = false
     var notice: String?
     var isTransitioning = false
     var picker: RecordSetupModel?
@@ -69,7 +70,7 @@ final class RecordingControlBarModel {
     var notchLayout: RecordingNotchLayout {
         RecordingNotchLayout(
             hardware: notchMetrics,
-            isExpanded: notchExpanded || preRoll != nil || confirmation != nil
+            isExpanded: notchExpanded || preRoll != nil || confirmation != nil || notice != nil
                 || AccessibilityChrome.voiceOverEnabled,
             isVisible: notchVisible
         )
@@ -94,6 +95,9 @@ final class RecordingControlBarModel {
         meter.set(controls.audioLevel)
         if microphoneIsSilent != controls.microphoneIsSilent {
             microphoneIsSilent = controls.microphoneIsSilent
+        }
+        if microphoneDropped != controls.microphoneDropped {
+            microphoneDropped = controls.microphoneDropped
         }
         if notice != controls.notice {
             notice = controls.notice

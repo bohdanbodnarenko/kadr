@@ -120,4 +120,23 @@ struct RecordingCoordinatorGuardTests {
         #expect(unwanted.cameraDeviceID.isEmpty)
         #expect(unwanted.notice == nil)
     }
+
+    /// docs/18 REC-1: a microphone the take must go without is flagged for the whole take,
+    /// and its notice wins over a camera's.
+    @Test("A missing microphone is flagged and named first")
+    func missingMicrophoneIsFlagged() {
+        let resolved = RecordingInputResolver.resolve(
+            options: RecordingOptions(
+                capturesSystemAudio: false,
+                capturesMicrophone: true,
+                microphoneDeviceID: "unplugged-\(UUID().uuidString)"
+            ),
+            cameraDeviceID: "",
+            wantsCamera: true,
+            defaultCamera: { nil }
+        )
+        #expect(resolved.droppedMicrophone)
+        #expect(!resolved.options.capturesMicrophone)
+        #expect(resolved.notice == "Microphone unavailable — recording without it.")
+    }
 }

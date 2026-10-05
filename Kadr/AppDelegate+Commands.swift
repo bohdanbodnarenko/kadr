@@ -1,5 +1,6 @@
 import AppKit
 import AutomationKit
+import KeyboardShortcuts
 import os
 import RecordingCore
 import SelectionUI
@@ -211,7 +212,11 @@ extension AppDelegate {
     /// "an optional floating stop button" — but on by default, since the app shipped with
     /// no on-screen way to stop at all and that is what people hit first.
     func refreshRecordingControlBar() {
-        guard settings.recordingShowsControlBar else {
+        // With the bar off, Stop lives in the menu bar and on the stop shortcut. With no
+        // shortcut bound either, the bar shows anyway: a take must always have an on-screen
+        // Stop (docs/18 REC-2).
+        let hasStopShortcut = KeyboardShortcuts.getShortcut(for: .stopRecording) != nil
+        guard settings.recordingShowsControlBar || !hasStopShortcut else {
             recordingControlBar.dismiss()
             return
         }
@@ -260,6 +265,7 @@ extension AppDelegate {
             restart: { [weak self] in self?.recording.restart() },
             audioLevel: recording.audioMeter.peak,
             microphoneIsSilent: recording.microphoneIsSilent,
+            microphoneDropped: recording.microphoneDropped,
             notice: recording.liveNotice,
             isTransitioning: recording.isTransitioning,
             isSaving: isSaving
