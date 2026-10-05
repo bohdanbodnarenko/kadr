@@ -13,8 +13,8 @@ public enum RecordingCodec: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .hevc: "HEVC (smaller)"
-        case .h264: "H.264 (most compatible)"
+        case .hevc: String(localized: "HEVC (smaller)", bundle: .module)
+        case .h264: String(localized: "H.264 (most compatible)", bundle: .module)
         }
     }
 
@@ -33,7 +33,7 @@ public enum RecordingFrameRate: Int, CaseIterable, Sendable {
     case sixty = 60
 
     public var title: String {
-        "\(rawValue) fps"
+        String(localized: "\(rawValue) fps", bundle: .module)
     }
 
     /// The preset closest to a requested rate.

@@ -10,11 +10,11 @@ public enum CaptureWallpaper: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .none: "Keep my wallpaper"
-        case .black: "Solid black"
-        case .gray: "Solid gray"
-        case .white: "Solid white"
-        case .customImage: "Custom image"
+        case .none: String(localized: "Keep my wallpaper", bundle: .module)
+        case .black: String(localized: "Solid black", bundle: .module)
+        case .gray: String(localized: "Solid gray", bundle: .module)
+        case .white: String(localized: "Solid white", bundle: .module)
+        case .customImage: String(localized: "Custom image", bundle: .module)
         }
     }
 }

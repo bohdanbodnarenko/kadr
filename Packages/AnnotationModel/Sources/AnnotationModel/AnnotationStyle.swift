@@ -117,12 +117,12 @@ public enum ArrowHead: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .filled: "Filled"
-        case .open: "Open"
-        case .concave: "Concave"
-        case .dot: "Dot"
-        case .bar: "Bar"
-        case .diamond: "Diamond"
+        case .filled: String(localized: "Filled", bundle: .module)
+        case .open: String(localized: "Open", bundle: .module)
+        case .concave: String(localized: "Concave", bundle: .module)
+        case .dot: String(localized: "Dot", bundle: .module)
+        case .bar: String(localized: "Bar", bundle: .module)
+        case .diamond: String(localized: "Diamond", bundle: .module)
         }
     }
 }
@@ -147,9 +147,9 @@ public enum ShapeKind: Codable, Hashable, Sendable {
 
         public var title: String {
             switch self {
-            case .rectangle: "Rectangle"
-            case .rounded: "Rounded"
-            case .ellipse: "Ellipse"
+            case .rectangle: String(localized: "Rectangle", bundle: .module)
+            case .rounded: String(localized: "Rounded", bundle: .module)
+            case .ellipse: String(localized: "Ellipse", bundle: .module)
             }
         }
 
@@ -187,9 +187,9 @@ public enum RedactionKind: String, CaseIterable, Hashable, Sendable {
 
     public var title: String {
         switch self {
-        case .blur: "Blur"
-        case .pixelate: "Pixelate"
-        case .erase: "Erase"
+        case .blur: String(localized: "Blur", bundle: .module)
+        case .pixelate: String(localized: "Pixelate", bundle: .module)
+        case .erase: String(localized: "Erase", bundle: .module)
         }
     }
 }
@@ -274,9 +274,9 @@ public struct TextStyle: Codable, Hashable, Sendable {
 
         public var title: String {
             switch self {
-            case .leading: "Left"
-            case .center: "Center"
-            case .trailing: "Right"
+            case .leading: String(localized: "Left", bundle: .module)
+            case .center: String(localized: "Center", bundle: .module)
+            case .trailing: String(localized: "Right", bundle: .module)
             }
         }
 
@@ -373,19 +373,19 @@ public enum CounterBadgeSize: String, Codable, Hashable, Sendable, CaseIterable 
 
     public var title: String {
         switch self {
-        case .small: "Small"
-        case .medium: "Medium"
-        case .large: "Large"
-        case .extraLarge: "Extra Large"
+        case .small: String(localized: "Small", bundle: .module)
+        case .medium: String(localized: "Medium", bundle: .module)
+        case .large: String(localized: "Large", bundle: .module)
+        case .extraLarge: String(localized: "Extra Large", bundle: .module)
         }
     }
 
     public var shortTitle: String {
         switch self {
-        case .small: "S"
-        case .medium: "M"
-        case .large: "L"
-        case .extraLarge: "XL"
+        case .small: String(localized: "S", bundle: .module)
+        case .medium: String(localized: "M", bundle: .module)
+        case .large: String(localized: "L", bundle: .module)
+        case .extraLarge: String(localized: "XL", bundle: .module)
         }
     }
 
@@ -420,9 +420,9 @@ public enum CounterNumbering: String, Codable, Hashable, Sendable, CaseIterable 
     public var title: String {
         switch self {
         case .arabic: "1, 2, 3"
-        case .roman: "I, II, III"
-        case .latinUpper: "A, B, C"
-        case .latinLower: "a, b, c"
+        case .roman: String(localized: "I, II, III", bundle: .module)
+        case .latinUpper: String(localized: "A, B, C", bundle: .module)
+        case .latinLower: String(localized: "a, b, c", bundle: .module)
         }
     }
 

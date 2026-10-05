@@ -11,10 +11,10 @@ public enum HistoryItemKind: String, Sendable, Codable, CaseIterable, Hashable {
 
     public var title: String {
         switch self {
-        case .image: "Images"
-        case .video: "Recordings"
-        case .scrolling: "Scrolling"
-        case .project: "Projects"
+        case .image: String(localized: "Images", bundle: .module)
+        case .video: String(localized: "Recordings", bundle: .module)
+        case .scrolling: String(localized: "Scrolling", bundle: .module)
+        case .project: String(localized: "Projects", bundle: .module)
         }
     }
 
@@ -161,10 +161,10 @@ public enum HistorySort: String, Sendable, Hashable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .newest: "Newest"
-        case .oldest: "Oldest"
-        case .largest: "Largest"
-        case .name: "Name"
+        case .newest: String(localized: "Newest", bundle: .module)
+        case .oldest: String(localized: "Oldest", bundle: .module)
+        case .largest: String(localized: "Largest", bundle: .module)
+        case .name: String(localized: "Name", bundle: .module)
         }
     }
 }

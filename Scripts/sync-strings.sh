@@ -22,13 +22,20 @@ check=false
 intermediates="${KADR_INTERMEDIATES:-build/Build/Intermediates.noindex}"
 status=0
 
-# catalog : where the build that compiled its sources left their strings. EditorUI has a
-# catalog of its own, read through Bundle.module, so the editor's chrome is translatable
-# without the app knowing its strings.
-for pair in \
-    "Kadr/Localizable.xcstrings:Kadr.build/Debug/Kadr.build" \
-    "KadrEditor/Localizable.xcstrings:Kadr.build/Debug/KadrEditor.build" \
-    "Packages/EditorUI/Sources/EditorUI/Resources/Localizable.xcstrings:EditorUI.build/Debug/EditorUI-t.build"; do
+# catalog : where the build that compiled its sources left their strings. A package with
+# a catalog of its own (read through Bundle.module) is found by its Resources folder, so a
+# package that gains one is covered without editing this list.
+pairs=(
+    "Kadr/Localizable.xcstrings:Kadr.build/Debug/Kadr.build"
+    "KadrEditor/Localizable.xcstrings:Kadr.build/Debug/KadrEditor.build"
+)
+for catalog in Packages/*/Sources/*/Resources/Localizable.xcstrings; do
+    [[ -e "$catalog" ]] || continue
+    package="$(echo "$catalog" | cut -d/ -f2)"
+    pairs+=("$catalog:$package.build/Debug/$package-t.build")
+done
+
+for pair in "${pairs[@]}"; do
     catalog="${pair%%:*}"
     target="${pair##*:}"
     stringsdata=()

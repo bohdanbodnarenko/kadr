@@ -24,18 +24,18 @@ public enum CardAction: String, CaseIterable, Sendable, Codable {
 
     public var title: String {
         switch self {
-        case .copy: "Copy"
-        case .save: "Save"
-        case .saveAs: "Save As"
-        case .annotate: "Annotate"
-        case .pin: "Pin"
-        case .recognizeText: "Copy Text"
-        case .trim: "Trim"
-        case .studio: "Studio"
-        case .exportGIF: "Export GIF"
-        case .compress: "Compress"
-        case .share: "Share"
-        case .delete: "Delete"
+        case .copy: String(localized: "Copy", bundle: .module)
+        case .save: String(localized: "Save", bundle: .module)
+        case .saveAs: String(localized: "Save As", bundle: .module)
+        case .annotate: String(localized: "Annotate", bundle: .module)
+        case .pin: String(localized: "Pin", bundle: .module)
+        case .recognizeText: String(localized: "Copy Text", bundle: .module)
+        case .trim: String(localized: "Trim", bundle: .module)
+        case .studio: String(localized: "Studio", bundle: .module)
+        case .exportGIF: String(localized: "Export GIF", bundle: .module)
+        case .compress: String(localized: "Compress", bundle: .module)
+        case .share: String(localized: "Share", bundle: .module)
+        case .delete: String(localized: "Delete", bundle: .module)
         }
     }
 
@@ -81,11 +81,11 @@ public enum CardSlot: String, CaseIterable, Sendable, Codable {
 
     public var title: String {
         switch self {
-        case .topLeading: "Top left"
-        case .topTrailing: "Top right"
-        case .bottomLeading: "Bottom left"
-        case .bottomTrailing: "Bottom right"
-        case .column: "Action row"
+        case .topLeading: String(localized: "Top left", bundle: .module)
+        case .topTrailing: String(localized: "Top right", bundle: .module)
+        case .bottomLeading: String(localized: "Bottom left", bundle: .module)
+        case .bottomTrailing: String(localized: "Bottom right", bundle: .module)
+        case .column: String(localized: "Action row", bundle: .module)
         }
     }
 

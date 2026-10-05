@@ -18,10 +18,10 @@ public enum DefaultCaptureAction: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .copyToClipboard: "Copy to Clipboard"
-        case .saveToFolder: "Save to Folder"
-        case .copyAndSave: "Copy and Save"
-        case .overlayOnly: "Keep on the Card Only"
+        case .copyToClipboard: String(localized: "Copy to Clipboard", bundle: .module)
+        case .saveToFolder: String(localized: "Save to Folder", bundle: .module)
+        case .copyAndSave: String(localized: "Copy and Save", bundle: .module)
+        case .overlayOnly: String(localized: "Keep on the Card Only", bundle: .module)
         }
     }
 
@@ -50,8 +50,8 @@ extension CompressedImageFormat: SettingValue {}
 extension ScrollAxis: SettingValue {
     public var title: String {
         switch self {
-        case .vertical: "Vertical"
-        case .horizontal: "Horizontal"
+        case .vertical: String(localized: "Vertical", bundle: .module)
+        case .horizontal: String(localized: "Horizontal", bundle: .module)
         }
     }
 }
@@ -69,8 +69,8 @@ public enum SelfTimer: Int, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .off: "Off"
-        default: "\(rawValue) seconds"
+        case .off: String(localized: "Off", bundle: .module)
+        default: String(localized: "\(rawValue) seconds", bundle: .module)
         }
     }
 }
@@ -86,10 +86,10 @@ public enum OverlayCorner: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .bottomLeft: "Bottom Left"
-        case .bottomRight: "Bottom Right"
-        case .topLeft: "Top Left"
-        case .topRight: "Top Right"
+        case .bottomLeft: String(localized: "Bottom Left", bundle: .module)
+        case .bottomRight: String(localized: "Bottom Right", bundle: .module)
+        case .topLeft: String(localized: "Top Left", bundle: .module)
+        case .topRight: String(localized: "Top Right", bundle: .module)
         }
     }
 
@@ -116,8 +116,8 @@ public enum OverlayTimeout: Int, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .never: "Never"
-        default: "After \(rawValue) seconds"
+        case .never: String(localized: "Never", bundle: .module)
+        default: String(localized: "After \(rawValue) seconds", bundle: .module)
         }
     }
 }
@@ -131,7 +131,7 @@ public enum RecordingQuality: Int, CaseIterable, SettingValue {
     case sixty = 60
 
     public var title: String {
-        "\(rawValue) fps"
+        String(localized: "\(rawValue) fps", bundle: .module)
     }
 }
 
@@ -144,8 +144,8 @@ public enum RecordingControlChrome: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .island: "Floating island"
-        case .notch: "Menu bar notch"
+        case .island: String(localized: "Floating island", bundle: .module)
+        case .notch: String(localized: "Menu bar notch", bundle: .module)
         }
     }
 }
@@ -156,8 +156,8 @@ public enum RecordingVideoCodec: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .hevc: "HEVC (smaller files)"
-        case .h264: "H.264 (most compatible)"
+        case .hevc: String(localized: "HEVC (smaller files)", bundle: .module)
+        case .h264: String(localized: "H.264 (most compatible)", bundle: .module)
         }
     }
 }
@@ -172,9 +172,9 @@ public enum RecordingKeystrokePosition: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .bottomCentre: "Bottom"
-        case .bottomLeading: "Bottom Left"
-        case .topCentre: "Top"
+        case .bottomCentre: String(localized: "Bottom", bundle: .module)
+        case .bottomLeading: String(localized: "Bottom Left", bundle: .module)
+        case .topCentre: String(localized: "Top", bundle: .module)
         }
     }
 }
@@ -188,10 +188,10 @@ public enum RecordingWebcamCorner: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .bottomTrailing: "Bottom Right"
-        case .bottomLeading: "Bottom Left"
-        case .topTrailing: "Top Right"
-        case .topLeading: "Top Left"
+        case .bottomTrailing: String(localized: "Bottom Right", bundle: .module)
+        case .bottomLeading: String(localized: "Bottom Left", bundle: .module)
+        case .topTrailing: String(localized: "Top Right", bundle: .module)
+        case .topLeading: String(localized: "Top Left", bundle: .module)
         }
     }
 }
@@ -206,8 +206,8 @@ public enum CaptureSelectionAspect: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .free: "Free"
-        case .square: "Square"
+        case .free: String(localized: "Free", bundle: .module)
+        case .square: String(localized: "Square", bundle: .module)
         case .fourThree: "4:3"
         case .sixteenNine: "16:9"
         case .nineSixteen: "9:16"
@@ -233,9 +233,9 @@ public enum FullscreenTarget: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .activeDisplay: "Active display"
-        case .allDisplays: "All displays"
-        case .allDisplaysStitched: "All displays, stitched"
+        case .activeDisplay: String(localized: "Active display", bundle: .module)
+        case .allDisplays: String(localized: "All displays", bundle: .module)
+        case .allDisplaysStitched: String(localized: "All displays, stitched", bundle: .module)
         }
     }
 }
