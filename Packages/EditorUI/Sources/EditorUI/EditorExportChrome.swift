@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// Export progress and failure chrome for the annotation editor (docs/14 UX-26).
@@ -40,8 +41,11 @@ struct EditorExportChrome: View {
 
     private func exportFailure(_ failure: EditorExportFailure) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            // The shared failure look, so an editor failure reads like the agent's and the
+            // studio's (docs/18 X-2).
+            Image(systemName: FeedbackKind.error.symbolName)
+                .foregroundStyle(FeedbackKind.error.tint)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(failure.title)
                     .font(.callout.weight(.semibold))

@@ -44,7 +44,8 @@ let package = Package(
                 .product(name: "StudioSession", package: "StudioSession"),
                 .product(name: "StudioRender", package: "StudioRender"),
                 .product(name: "MediaExport", package: "MediaExport"),
-                .product(name: "SettingsKit", package: "SettingsKit")
+                .product(name: "SettingsKit", package: "SettingsKit"),
+                .product(name: "ControlKit", package: "ControlKit")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )

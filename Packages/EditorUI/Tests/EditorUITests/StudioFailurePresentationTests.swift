@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import Testing
 @testable import EditorUI
@@ -36,5 +37,12 @@ struct StudioFailurePresentationTests {
     ])
     func retryCarriesOperation(failure: StudioFailurePresentation, expected: StudioFailurePresentation.Action) {
         #expect(failure.primaryAction == expected)
+    }
+
+    @Test("Actionable failures are errors; explanations are warnings")
+    func feedbackKind() {
+        #expect(StudioFailurePresentation.copyEditedFailed("x").kind == .error)
+        #expect(StudioFailurePresentation.onlyClipLeft().kind == .warning)
+        #expect(StudioFailurePresentation.speechPermissionNeeded().kind == .error)
     }
 }

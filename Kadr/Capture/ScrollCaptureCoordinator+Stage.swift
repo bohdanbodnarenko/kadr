@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import ControlKit
 import OverlayKit
 import Shared
 

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import os
 import OverlayKit

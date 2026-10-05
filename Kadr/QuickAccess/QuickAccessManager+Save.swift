@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import MediaExport
 import os
 import SettingsKit
