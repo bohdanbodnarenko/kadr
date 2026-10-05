@@ -174,8 +174,19 @@ public final class StudioDocumentModel {
     /// and ⌘E, which arrive through the responder chain — can reach them. A menu item is
     /// the one place a keyboard command works whatever the window's layout happens to be,
     /// and the transport bar's controls move between three arrangements.
-    public var isInspectorPresented = true
+    ///
+    /// The inspector's state is remembered across windows and launches (docs/18 STU-12):
+    /// someone who hides it to get a bigger preview should not hide it every time.
+    public var isInspectorPresented = StudioDocumentModel.rememberedInspectorPresented {
+        didSet { UserDefaults.standard.set(isInspectorPresented, forKey: Self.inspectorPresentedKey) }
+    }
     public var showsExportOptions = false
+
+    static let inspectorPresentedKey = "studio.inspector.presented"
+
+    static var rememberedInspectorPresented: Bool {
+        UserDefaults.standard.object(forKey: inspectorPresentedKey) as? Bool ?? true
+    }
 
     /// Set when something went wrong that the user should see.
     public var failure: StudioFailurePresentation? {

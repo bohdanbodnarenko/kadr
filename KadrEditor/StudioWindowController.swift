@@ -15,6 +15,9 @@ import UniformTypeIdentifiers
 /// would keep tens of megabytes for a window nobody can see.
 @MainActor
 final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemValidation {
+    /// One saved frame for every studio window.
+    static let frameAutosaveName = "KadrStudioWindow"
+
     enum OpenError: LocalizedError {
         case notASession(URL)
 
@@ -129,9 +132,17 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             defer: false
         )
         window.title = model.session.displayName
+        // The title-bar proxy hands out the original recording; the edit leaves through
+        // Export, Copy and Share (docs/18 STU-12).
+        window.representedURL = model.session.screenURL
         window.contentView = hosting
         window.delegate = self
-        window.center()
+        // Where the user last left a studio window, rather than centred at the factory
+        // size every time (docs/18 STU-12).
+        if !window.setFrameUsingName(Self.frameAutosaveName) {
+            window.center()
+        }
+        window.setFrameAutosaveName(Self.frameAutosaveName)
         window.isReleasedWhenClosed = false
         model.session.markOpened()
         self.window = window
