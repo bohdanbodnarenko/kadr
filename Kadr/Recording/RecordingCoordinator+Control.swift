@@ -85,6 +85,9 @@ extension RecordingCoordinator {
             }
             pausedAt = nil
             state = .recording
+            if liveNotice == Self.sleepNotice {
+                liveNotice = nil
+            }
             teleprompter.resume()
             studio.resumeCamera()
             // The sidecar's clock needs no nudge here. It comes from the engine, which

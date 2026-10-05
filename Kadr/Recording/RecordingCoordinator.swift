@@ -113,6 +113,10 @@ final class RecordingCoordinator {
     /// Why the engine asked us to stop, if it did (docs/16 REC-1).
     @ObservationIgnored var pendingInterruption: String?
     @ObservationIgnored var engineEventsTask: Task<Void, Never>?
+    /// Sleep and wake, for the coordinator's lifetime (docs/18 REC-5).
+    @ObservationIgnored var sleepTasks: [Task<Void, Never>] = []
+    /// This pause was Kadr's, for sleep; wake says so (docs/18 REC-5).
+    @ObservationIgnored var pausedForSleep = false
     /// Disables transport while start/pause/resume/stop is in flight (docs/16 REC-17).
     var isTransitioning = false {
         didSet { onStateChanged?() }
@@ -147,6 +151,7 @@ final class RecordingCoordinator {
         self.hygiene = hygiene
         studio = StudioSessionRecorder(camera: camera)
         listenForEngineEvents()
+        listenForSleep()
     }
 
     /// Stream death and writer failure must stop the take and keep the footage
