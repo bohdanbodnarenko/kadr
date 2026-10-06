@@ -65,7 +65,9 @@ public final class AnnotationCanvasView: NSView {
     }()
 
     let contentHost = CALayer()
-    let baseLayer = CALayer()
+    /// Tiled above a size threshold, so a very tall capture never asks for one texture
+    /// bigger than the GPU allows (docs/18 ED-13).
+    let baseLayer = BaseImageLayer()
     let annotationLayer = CALayer()
     let compositeSpotlightLayer = CALayer()
     let watermarkLayer = WatermarkLayer()
@@ -150,8 +152,8 @@ public final class AnnotationCanvasView: NSView {
         drawingHost.addSublayer(backdropLayer)
         drawingHost.addSublayer(shadowLayer)
 
-        baseLayer.contents = baseImage
         baseLayer.magnificationFilter = .trilinear
+        baseLayer.image = baseImage
         contentHost.addSublayer(baseLayer)
         drawingHost.addSublayer(contentHost)
         drawingHost.addSublayer(compositeSpotlightLayer)
@@ -451,7 +453,7 @@ public final class AnnotationCanvasView: NSView {
         guard spec != liftedFrom else { return }
         liftedFrom = spec
         displayedImage = spec.map { subjectLift.apply($0, to: baseImage) } ?? baseImage
-        baseLayer.contents = displayedImage
+        baseLayer.image = displayedImage
         // Previews of the old pixels are wrong now; the old source takes them with it.
         redactionSource = RedactionPreviewSource(image: displayedImage, scale: imageScale)
         observeRedactionPreviews()
