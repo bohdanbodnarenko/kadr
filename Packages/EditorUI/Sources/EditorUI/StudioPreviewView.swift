@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import ControlKit
 import Foundation
 import StudioRender
 import StudioSession
@@ -112,9 +113,9 @@ private struct StudioPreviewSkim: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 160, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
                         .shadow(radius: 8)
-                        .padding(12)
+                        .padding(KadrSpace.large)
                 }
                 Spacer()
             }

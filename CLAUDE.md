@@ -61,6 +61,7 @@ Kadr.xcodeproj            the agent app target `Kadr` (LSUIElement, macOS 14+)
 Kadr/                     agent app sources (AppKit shell only)
 KadrTests/                agent app unit tests
 KadrEditorTests/          editor app tests, hosted in KadrEditor.app (`make test-editor`)
+KadrUITests/              editor UI tests, run on their own (`make test-ui`)
 Packages/<Module>/        16 local SPM packages, docs/04 §2
 Scripts/                  check-layering.sh, check-size.sh
 .github/workflows/ci.yml  packages (matrix) · app build · lint + checks
@@ -98,6 +99,10 @@ make all             # what CI runs
 ```
 
 One package at a time: `make test-package PACKAGE=Shared`.
+
+`make test-ui` runs the editor's UI tests (`KadrUITests`). They launch the real editor and
+drive it through the accessibility API, so they need a logged-in session with the test
+runner allowed under Accessibility. They are deliberately not part of `make test` or CI.
 
 Do not add a command here that is not a target. Four copies of the build line — this file,
 `ci.yml`, and whatever was in a shell history — is how they drift.

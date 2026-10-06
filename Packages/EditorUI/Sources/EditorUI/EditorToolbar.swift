@@ -50,10 +50,18 @@ struct EditorToolbar: View {
                 .disabled(model.isFindingRedactions || model.isExporting || isCropping)
             }
             moreMenu
-            EditorToolbarButton(symbol: "doc.on.doc", help: "Copy", accessibilityLabel: "Copy") {
+            EditorToolbarButton(
+                symbol: "doc.on.doc",
+                help: String(localized: "Copy — or drag to hand the image to another app", bundle: .module),
+                accessibilityLabel: "Copy"
+            ) {
                 onExport(.copy)
             }
+            .accessibilityIdentifier(EditorAccessibilityID.copy)
             .disabled(model.isExporting || isCropping)
+            // Dragging Copy hands over the flattened image, rendered when dropped: the
+            // title-bar proxy is the file on disk, which may predate the edits (docs/18 ED-3).
+            .onDrag { model.flattenedImageItemProvider() ?? NSItemProvider() }
             EditorToolbarDivider()
             // Beside Save, the other end of "done with this capture". It asks before it
             // moves anything, so it can sit this close to the commit button.
@@ -71,6 +79,7 @@ struct EditorToolbar: View {
                 onExport(.save)
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(EditorAccessibilityID.save)
             .disabled(model.isExporting || isCropping)
             .help(Text("Save", bundle: .module))
             EditorToolbarButton(
@@ -161,24 +170,74 @@ private struct EditorToolGroup: View {
                     symbol: tool.symbolName,
                     help: "\(tool.title) (\(String(tool.shortcut).uppercased()))",
                     isOn: tool == selected,
-                    accessibilityLabel: tool.title
+                    accessibilityLabel: LocalizedStringKey(tool.title)
                 ) {
                     onSelect(tool)
                 }
             }
         }
-        .padding(2)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(KadrSpace.xxs)
+        .background(
+            Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous)
+        )
     }
 }
 
 /// The toolbar's one control shape: a 28-pt target with a hover wash and an accent state.
 struct EditorToolbarButton: View {
     let symbol: String
-    let help: String
+    let help: Text
     var isOn = false
-    var accessibilityLabel: String?
+    var accessibilityLabel: Text?
     let action: () -> Void
+
+    init(
+        symbol: String,
+        help: LocalizedStringKey,
+        isOn: Bool = false,
+        accessibilityLabel: LocalizedStringKey? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.init(
+            symbol: symbol,
+            helpText: Text(help, bundle: .module),
+            isOn: isOn,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
+    }
+
+    @_disfavoredOverload
+    init(
+        symbol: String,
+        help: some StringProtocol,
+        isOn: Bool = false,
+        accessibilityLabel: LocalizedStringKey? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.init(
+            symbol: symbol,
+            helpText: Text(help),
+            isOn: isOn,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
+    }
+
+    private init(
+        symbol: String,
+        helpText: Text,
+        isOn: Bool,
+        accessibilityLabel: LocalizedStringKey?,
+        action: @escaping () -> Void
+    ) {
+        self.symbol = symbol
+        help = helpText
+        self.isOn = isOn
+        self.accessibilityLabel = accessibilityLabel.map { Text($0, bundle: .module) }
+        self.action = action
+    }
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var isHovering = false
@@ -186,11 +245,11 @@ struct EditorToolbarButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: KadrType.title, weight: .medium))
                 .foregroundStyle(isOn ? Color.accentColor : Color.primary)
                 .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(fill))
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous).fill(fill))
+                .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.35)
@@ -213,6 +272,6 @@ private struct EditorToolbarDivider: View {
         Rectangle()
             .fill(Color(nsColor: .separatorColor))
             .frame(width: 1, height: 18)
-            .padding(.horizontal, 2)
+            .padding(.horizontal, KadrSpace.xxs)
     }
 }

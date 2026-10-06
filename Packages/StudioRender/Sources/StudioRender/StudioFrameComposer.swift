@@ -91,7 +91,8 @@ public struct StudioFrameComposer: Sendable {
         self.plan = plan
         self.edit = edit
         self.pointPixelScale = max(pointPixelScale, 0.0001)
-        self.transcript = transcript
+        // Captions say what the user corrected, not what the engine heard (docs/18 Phase 4).
+        self.transcript = transcript.applying(corrections: edit.transcriptCorrections)
         // Rebased once, here (docs/10 R0.2). The sidecar is written in source time and
         // every method below is called with an edited-time playhead; converting at the
         // boundary is what stops the two being confused anywhere past it, and is why the

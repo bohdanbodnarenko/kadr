@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -27,9 +28,12 @@ struct OverlayPlacementPicker: View {
                 }
             }
             .padding(3)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(
+                .quaternary.opacity(0.4),
+                in: RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
+            )
             .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                     .strokeBorder(.separator, lineWidth: 0.5)
             }
             .frame(width: 78, height: 46)
@@ -46,7 +50,7 @@ struct OverlayPlacementPicker: View {
         return Button {
             selection = slot
         } label: {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
+            RoundedRectangle(cornerRadius: KadrRadius.small, style: .continuous)
                 .fill(isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())

@@ -65,8 +65,8 @@ struct StudioInspector: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .background(.bar)
     }
 
@@ -128,7 +128,7 @@ struct StudioInspector: View {
             } header: {
                 Text("Clip \(clipPosition)", bundle: .module)
             } footer: {
-                Text("Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap.", bundle: .module)
+                Text("From 0.25× slow motion to 8×. Audio stays in sync and keeps its pitch.", bundle: .module)
             }
         }
     }

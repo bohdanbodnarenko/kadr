@@ -122,11 +122,11 @@ struct BeautifyBackdropPicker: View {
             LazyVGrid(columns: Self.columns, spacing: 6) {
                 Button(action: pickImage) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: KadrType.body, weight: .semibold))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: 5))
+                        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: KadrRadius.medium))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: KadrRadius.medium)
                                 .strokeBorder(KadrFill.stroke, lineWidth: 1)
                         )
                 }
@@ -188,10 +188,10 @@ struct BeautifySwatch: View {
     var isSelected: Bool
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 5)
+        RoundedRectangle(cornerRadius: KadrRadius.medium)
             .fill(fill)
             .overlay(
-                RoundedRectangle(cornerRadius: 5)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .strokeBorder(
                         isSelected ? Color.accentColor : Color.primary.opacity(0.12),
                         lineWidth: isSelected ? 2 : 1
@@ -235,7 +235,7 @@ struct BeautifyAlignmentPicker: View {
                         Button {
                             alignment = position
                         } label: {
-                            RoundedRectangle(cornerRadius: 3)
+                            RoundedRectangle(cornerRadius: KadrRadius.small)
                                 .fill(position == alignment ? Color.accentColor : Color.primary.opacity(0.08))
                                 .frame(width: 18, height: 14)
                         }

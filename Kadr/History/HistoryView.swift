@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import StudioSession
 import SwiftUI
@@ -170,26 +171,14 @@ struct HistoryView: View {
                                 // (docs/03 §6, docs/09 U0.1).
                                 .overlay(
                                     FilePromiseDragView(
-                                        payload: {
-                                            FilePromisePayload(
-                                                suggestedName: record.originalFilename,
-                                                contentType: UTType(filenameExtension:
-                                                    (record.originalFilename as NSString).pathExtension) ?? .png,
-                                                // Under its real name, never the library's
-                                                // hash (docs/17 T-OUT-10).
-                                                resolve: {
-                                                    controller.markAccessed(record)
-                                                    return controller.namedURL(for: record)
-                                                },
-                                                stableFileURL: controller.namedURL(for: record)
-                                            )
-                                        },
+                                        payload: { promise(for: record) },
                                         dragImage: {
                                             controller.thumbnail(for: record, maxPixelSize: 160)
                                                 .map { NSImage(cgImage: $0, size: .zero) }
                                         },
                                         onTap: { handleTap(record.id) },
-                                        onDoubleTap: { openDefault(record) }
+                                        onDoubleTap: { openDefault(record) },
+                                        companions: { dragCompanions(for: record) }
                                     )
                                 )
                                 .contextMenu { cellMenu(record) }
@@ -206,7 +195,7 @@ struct HistoryView: View {
                                 }
                             }
                         }
-                        .padding(16)
+                        .padding(KadrSpace.xl)
                     }
                 }
             }
@@ -363,8 +352,8 @@ struct HistoryView: View {
                 .foregroundStyle(.secondary)
         }
         .font(.callout)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.xl)
+        .padding(.vertical, KadrSpace.medium)
     }
 
     func deleteSelected() async {

@@ -1,3 +1,4 @@
+import ControlKit
 import Shared
 import SwiftUI
 
@@ -98,14 +99,14 @@ struct EditorRedactionReviewStrip: View {
             }
             .controlSize(.small)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, KadrSpace.medium)
+        .padding(.vertical, KadrSpace.xs)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: KadrRadius.medium)
                 .fill(Color.orange.opacity(0.12))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: KadrRadius.medium)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 .foregroundStyle(.orange)
         )

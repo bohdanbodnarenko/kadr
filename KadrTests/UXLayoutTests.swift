@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import Testing
@@ -30,14 +31,13 @@ struct UXLayoutTests {
         }
     }
 
-    @Test("1.4× and 2× expanded strings stay inside the compact HUD width budget")
-    func expandedLabelsFitCompactHUD() {
-        let titles = AllInOneMode.allCases.map(\.title)
-        for title in titles {
-            let expanded = Pseudolocalization.expand(title, factor: 1.4)
-            let doubled = Pseudolocalization.expand(title, factor: 2.0)
-            #expect(expanded.count > title.count)
-            #expect(doubled.count > expanded.count)
+    @Test("Every mode title, doubled by the pseudolanguage, fits the compact island")
+    func doubledLabelsFitCompactHUD() {
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        for title in AllInOneMode.allCases.map(\.title) {
+            let doubled = Pseudolocalization.doubled(title)
+            let width = (doubled as NSString).size(withAttributes: [.font: font]).width
+            #expect(width < UXLayoutContract.compactHUDWidth, "“\(doubled)” is \(width) pt wide")
         }
         #expect(UXLayoutContract.compactHUDWidth <= 1024)
     }

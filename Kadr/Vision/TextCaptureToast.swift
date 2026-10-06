@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import Shared
 import SwiftUI
@@ -48,7 +49,8 @@ final class TextCaptureToast {
                     edit()
                 }
             },
-            onDismiss: { [weak self] in self?.dismiss() }
+            onDismiss: { [weak self] in self?.dismiss() },
+            onHover: { [weak self] inside in self?.pointerInside(inside) }
         ).frame(width: Self.width))
         hosting.sizingOptions = .intrinsicContentSize
         // Sized to what it has to say: a fixed 190 points left a band of empty material
@@ -68,11 +70,29 @@ final class TextCaptureToast {
         panel.orderFrontRegardless()
         self.panel = panel
 
-        // A toast that never goes away is litter; this one is transient by design.
+        scheduleDismiss()
+    }
+
+    /// A toast that never goes away is litter; this one is transient by design.
+    private func scheduleDismiss() {
+        dismissTask?.cancel()
         dismissTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             self?.dismiss()
+        }
+    }
+
+    /// Holds still while the pointer is on it, so a result being read — or a Copy as Table
+    /// being reached for — does not vanish under the pointer (WCAG 2.2.1, docs/17 T-CAP-12).
+    /// The five seconds start again when the pointer leaves.
+    private func pointerInside(_ inside: Bool) {
+        guard panel != nil else { return }
+        if inside {
+            dismissTask?.cancel()
+            dismissTask = nil
+        } else {
+            scheduleDismiss()
         }
     }
 
@@ -93,8 +113,14 @@ private struct TextCaptureToastView: View {
     let lineCount: Int
     let onEdit: (() -> Void)?
     let onDismiss: () -> Void
+    let onHover: (Bool) -> Void
 
     var body: some View {
+        content
+            .onHover(perform: onHover)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(title, systemImage: "text.viewfinder")
@@ -177,9 +203,9 @@ private struct TextCaptureToastView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
-        .padding(12)
+        .padding(KadrSpace.large)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.panel))
     }
 
     private func copy(_ string: String) {

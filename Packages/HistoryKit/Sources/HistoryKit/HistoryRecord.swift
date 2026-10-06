@@ -51,6 +51,8 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
     /// Where the capture was saved outside the library, when Kadr knows (schema v2,
     /// docs/18 OUT-6). Nil for captures from before v2 and for ones never saved.
     public var originalPath: String?
+    /// A bookmark to the same file (schema v3), which survives a move or rename.
+    public var originalBookmark: Data?
 
     public init(
         id: UUID = UUID(),
@@ -65,7 +67,8 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
         lastAccessedAt: Date,
         byteSize: Int64,
         originalFilename: String,
-        originalPath: String? = nil
+        originalPath: String? = nil,
+        originalBookmark: Data? = nil
     ) {
         self.id = id
         self.contentHash = contentHash
@@ -80,6 +83,7 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
         self.byteSize = byteSize
         self.originalFilename = originalFilename
         self.originalPath = originalPath
+        self.originalBookmark = originalBookmark
     }
 
     public var pixelSize: PixelSize {

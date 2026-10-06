@@ -87,6 +87,9 @@ final class SelectionOverlayView: NSView {
     var isActiveDisplay = true
     /// When true, mouse-up leaves handles until Enter commits (docs/03 §1.1, docs/14 UX-17C).
     var confirmsSelection = false
+    /// The cursor regions last handed to AppKit, so a redraw re-registers them only when
+    /// they changed rather than on every mouse move.
+    var appliedCursorPlan: SelectionCursorPlan?
     /// `F` captures this display from area mode (docs/03 §1.3).
     var onCaptureDisplay: (() -> Void)?
 
@@ -248,7 +251,11 @@ final class SelectionOverlayView: NSView {
     }
 
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .crosshair)
+        let plan = cursorPlan
+        appliedCursorPlan = plan
+        for region in plan.regions {
+            addCursorRect(region.rect, cursor: region.shape.cursor)
+        }
     }
 
     // MARK: - Mouse
@@ -386,6 +393,9 @@ final class SelectionOverlayView: NSView {
     ///
     /// One transaction per event, no layout pass, no view redraw: this is the hot path.
     func redraw() {
+        if cursorPlan != appliedCursorPlan {
+            window?.invalidateCursorRects(for: self)
+        }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }

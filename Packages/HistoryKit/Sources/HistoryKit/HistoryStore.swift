@@ -113,7 +113,8 @@ public actor HistoryStore {
             lastAccessedAt: draft.capturedAt,
             byteSize: byteSize,
             originalFilename: draft.originalFilename,
-            originalPath: draft.originalURL?.standardizedFileURL.path
+            originalPath: draft.originalURL?.standardizedFileURL.path,
+            originalBookmark: draft.originalURL.flatMap { try? $0.bookmarkData() }
         )
         try HistorySidecar.write(record, to: layout.sidecarURL(id: record.id))
         try await insert(record)

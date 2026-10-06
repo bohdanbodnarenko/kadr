@@ -24,6 +24,10 @@ public enum StudioPlaybackKey: Equatable, Sendable {
     /// Home and End.
     case seekToStart
     case seekToEnd
+    /// I and O set the in and out marks; ⌥X clears both (docs/18 T-STU-11).
+    case markIn
+    case markOut
+    case clearMarks
 
     /// What an event means, or nil for "not ours — let it keep travelling".
     ///
@@ -54,7 +58,44 @@ public enum StudioPlaybackKey: Equatable, Sendable {
         case kVK_End:
             return option ? nil : .seekToEnd
         default:
-            return nil
+            return markKey(keyCode: keyCode, option: option)
+        }
+    }
+
+    /// I, O and ⌥X, which mark rather than move (docs/18 T-STU-11).
+    private static func markKey(keyCode: Int, option: Bool) -> StudioPlaybackKey? {
+        switch keyCode {
+        case kVK_ANSI_I: option ? nil : .markIn
+        case kVK_ANSI_O: option ? nil : .markOut
+        case kVK_ANSI_X: option ? .clearMarks : nil
+        default: nil
+        }
+    }
+}
+
+@MainActor
+public extension StudioDocumentModel {
+    /// Does what a playback key means. Marks go to their own switch so each stays short.
+    func perform(_ key: StudioPlaybackKey) {
+        switch key {
+        case .markIn: markIn()
+        case .markOut: markOut()
+        case .clearMarks: clearMarks()
+        default: performTransport(key)
+        }
+    }
+
+    private func performTransport(_ key: StudioPlaybackKey) {
+        switch key {
+        case .togglePlayback: togglePlayback()
+        case let .step(frames): step(frames: frames)
+        case let .skip(seconds): step(seconds: seconds)
+        case .shuttleReverse: shuttle(.reverse)
+        case .shuttleStop: shuttle(.stop)
+        case .shuttleForward: shuttle(.forward)
+        case .seekToStart: seekToStart()
+        case .seekToEnd: seekToEnd()
+        case .markIn, .markOut, .clearMarks: break
         }
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import Shared
 import SwiftUI
@@ -83,8 +84,8 @@ private struct TextCaptureReviewView: View {
             TextEditor(text: $text)
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                .padding(KadrSpace.small)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: KadrRadius.large))
 
             HStack(spacing: 12) {
                 Text(summary)

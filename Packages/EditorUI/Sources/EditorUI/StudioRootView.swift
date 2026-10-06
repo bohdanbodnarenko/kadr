@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -101,11 +102,11 @@ public struct StudioRootView: View {
                 .buttonStyle(.borderless)
                 .help(Text("Dismiss", bundle: .module))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
-            .shadow(radius: 6, y: 2)
+            .padding(.horizontal, KadrSpace.large)
+            .padding(.vertical, KadrSpace.medium)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
+            .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
+            .kadrShadow(.banner)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
             .onHover { isHoveringNotice = $0 }
@@ -136,7 +137,7 @@ public struct StudioRootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
+        .animation(motion(KadrMotion.settle), value: model.transcript == nil)
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.
@@ -170,7 +171,7 @@ public struct StudioRootView: View {
             }
             .frame(minHeight: 36)
         }
-        .padding(12)
+        .padding(KadrSpace.large)
         .background(.bar)
         // The transport's keys are not declared here. ⌘K, ⌘I and ⌘E are menu commands and
         // Space and the arrows come through the window's responder chain

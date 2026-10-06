@@ -1,33 +1,32 @@
 import Foundation
 
-/// Localization and pseudolocalization for the agent (docs/14 UX-01).
+/// Localization for the agent, and how to see the app in a pseudolanguage (docs/14 UX-01,
+/// docs/18 X-4).
 ///
-/// Capture terms such as “pin”, “overlay”, “studio”, and “flatten” live in the string
-/// catalog with translator comments. Launch with `-KadrPseudolocalize` to expand every
-/// resolved string to roughly 1.4× so layout can be tested without a second locale.
+/// Kadr has no pseudolocalization of its own. It used to wrap the strings that went through
+/// this type in "⟦…⟧", which reached about 8% of the UI. The system's pseudolanguage reaches
+/// every string that comes out of a bundle, SwiftUI's and AppKit's included:
+///
+/// - `make run-pseudo` launches with `-NSDoubleLocalizedStrings YES`, which doubles every
+///   localized string ("Cancel Cancel"), the stress case for layout.
+/// - `make run-rtl` launches with `-AppleTextDirection YES -NSForceRightToLeftWritingDirection
+///   YES`, which lays the app out right to left in English.
 enum KadrText {
-    nonisolated static let pseudolocalizeArgument = "-KadrPseudolocalize"
-    nonisolated static let pseudolocalize2xArgument = "-KadrPseudolocalize2x"
-    nonisolated static let rtlArgument = "-KadrRTL"
+    /// The Foundation default behind the double-length pseudolanguage.
+    nonisolated static let doubleLengthDefault = "NSDoubleLocalizedStrings"
+    /// The Foundation default that forces right-to-left writing direction.
+    nonisolated static let rightToLeftDefault = "NSForceRightToLeftWritingDirection"
 
     nonisolated static var isPseudolocalized: Bool {
-        let arguments = ProcessInfo.processInfo.arguments
-        return arguments.contains(pseudolocalizeArgument) || arguments.contains(pseudolocalize2xArgument)
+        UserDefaults.standard.bool(forKey: doubleLengthDefault)
     }
 
     nonisolated static var isRightToLeft: Bool {
-        ProcessInfo.processInfo.arguments.contains(rtlArgument)
-    }
-
-    nonisolated static var expansionFactor: Double {
-        if ProcessInfo.processInfo.arguments.contains(pseudolocalize2xArgument) {
-            return 2.0
-        }
-        return isPseudolocalized ? 1.4 : 1.0
+        UserDefaults.standard.bool(forKey: rightToLeftDefault)
     }
 
     nonisolated static func string(_ value: String.LocalizationValue) -> String {
-        expand(String(localized: value))
+        String(localized: value)
     }
 
     /// A string with a count in it, agreeing in number through automatic grammar agreement:
@@ -35,23 +34,16 @@ enum KadrText {
     /// agree the way its own language does. Splicing an "s" on in code can do neither
     /// (docs/18 X-4).
     nonisolated static func counted(_ value: String.LocalizationValue) -> String {
-        expand(String(AttributedString(localized: value).characters))
-    }
-
-    nonisolated static func expand(_ value: String) -> String {
-        guard isPseudolocalized else { return value }
-        return Pseudolocalization.expand(value, factor: expansionFactor)
+        String(AttributedString(localized: value).characters)
     }
 }
 
 enum Pseudolocalization {
-    /// Expansion that wraps every label that may wrap, without inventing extra words
-    /// that would hide clipping of the real copy. 1.4× is the layout default; 2× is
-    /// the stress case in docs/14 §6.
-    nonisolated static func expand(_ value: String, factor: Double = 1.4) -> String {
-        let extra = max(Int((Double(value.count) * max(factor - 1, 0)).rounded()), 1)
-        let pad = String(repeating: "·", count: extra)
-        return "⟦\(value) \(pad)⟧"
+    /// What the double-length pseudolanguage renders a string as: the string, a space, and
+    /// the string again. Layout tests measure against this rather than toggling the default,
+    /// which Foundation reads once per process.
+    nonisolated static func doubled(_ value: String) -> String {
+        "\(value) \(value)"
     }
 }
 

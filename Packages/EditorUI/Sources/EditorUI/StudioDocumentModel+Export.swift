@@ -73,7 +73,7 @@ public extension StudioDocumentModel {
 
     /// The studio's own window, found through the share anchor or a window titled for
     /// this recording.
-    private var studioWindowContentView: NSView? {
+    internal var studioWindowContentView: NSView? {
         if let window = shareAnchorView?.window {
             return window.contentView
         }
@@ -226,8 +226,16 @@ public extension StudioDocumentModel {
     /// `edit` again after the `await` stamped the render with whatever the user had
     /// changed in the meantime — so the next export of the *new* edit reused the old
     /// file — and timed the captions against clips the movie does not have.
-    internal func exportSnapshot(settings: StudioExportSettings? = nil) -> StudioExportSnapshot {
-        StudioExportSnapshot(
+    /// - Parameter range: an edited-time range to export alone, from the in and out marks.
+    internal func exportSnapshot(
+        settings: StudioExportSettings? = nil,
+        range: ClosedRange<TimeInterval>? = nil
+    ) -> StudioExportSnapshot {
+        var edit = edit
+        if let range {
+            edit.clips = edit.clips.keepingEdited(range)
+        }
+        return StudioExportSnapshot(
             edit: edit,
             transcript: transcript,
             settings: settings ?? exportSettings,
@@ -293,7 +301,7 @@ public extension StudioDocumentModel {
         // Copying rather than handing over the old path: the user picked *this*
         // destination, and telling them the export succeeded while pointing at a file
         // somewhere else is not the same thing as exporting.
-        let snapshot = exportSnapshot()
+        let snapshot = exportSnapshot(range: marks.exportRange(duration: edit.duration))
         if reuseRenderedFile(for: snapshot, at: destination) {
             writeCaptions(for: snapshot, beside: destination)
             notice = "That edit was already exported, so Kadr copied the finished file."

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import SwiftUI
 
@@ -125,11 +126,11 @@ struct CoachKeycap: View {
 
     var body: some View {
         Text(key)
-            .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
-            .padding(.horizontal, 6)
+            .font(.system(size: KadrType.caption, weight: .semibold, design: .rounded).monospacedDigit())
+            .padding(.horizontal, KadrSpace.small)
             .frame(minWidth: 22, minHeight: 20)
-            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.quaternary))
-            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.separator))
+            .background(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous).fill(.quaternary))
+            .overlay(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous).strokeBorder(.separator))
             .fixedSize()
     }
 }
@@ -147,7 +148,7 @@ struct CoachRow: View {
                     CoachKeycap(key: key)
                 } else if let symbol {
                     Image(systemName: symbol)
-                        .font(.system(size: 13))
+                        .font(.system(size: KadrType.title))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -167,7 +168,7 @@ struct CoachCloseButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: KadrType.micro, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 18, height: 18)
                 .contentShape(Rectangle())

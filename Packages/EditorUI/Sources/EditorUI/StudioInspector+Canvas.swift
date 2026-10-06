@@ -185,7 +185,7 @@ extension StudioInspector {
         action: @escaping () -> Void,
         @ViewBuilder fill: () -> some ShapeStyle
     ) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
         return Button(action: action) {
             shape
                 .fill(fill())
@@ -200,7 +200,7 @@ extension StudioInspector {
         }
         .buttonStyle(.plain)
         .frame(height: 22)
-        .padding(2)
+        .padding(KadrSpace.xxs)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }

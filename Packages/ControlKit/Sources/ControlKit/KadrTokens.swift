@@ -71,6 +71,14 @@ public enum KadrMotion {
     public static let state = Animation.spring(duration: 0.24, bounce: 0)
     /// Something moving or resizing.
     public static let layout = Animation.spring(duration: 0.32, bounce: 0)
+    /// A button or row answering the pointer: hover, press.
+    public static let press = Animation.snappy(duration: 0.12)
+    /// A small piece of chrome appearing or switching: a toast, a section, a crop bar.
+    public static let snap = Animation.snappy(duration: 0.2)
+    /// A panel or stack settling into a new arrangement.
+    public static let settle = Animation.smooth(duration: 0.3, extraBounce: 0)
+    /// A bar changing mode, with the slight give that tells the eye it moved.
+    public static let panel = Animation.spring(response: 0.34, dampingFraction: 0.86)
     /// What replaces motion under Reduce Motion: a short fade.
     public static let reduced = Animation.easeOut(duration: 0.12)
 
@@ -131,5 +139,45 @@ public enum KadrFill {
     /// A hairline's width: thicker under Increase Contrast.
     public static var strokeWidth: CGFloat {
         KadrAccessibility.increaseContrast ? 1.5 : 1
+    }
+}
+
+/// Shadows. Four depths instead of 19 hand-tuned ones, so chrome at the same height casts the
+/// same shadow everywhere.
+public enum KadrShadow: Sendable {
+    /// Keeps a white glyph legible over a picture.
+    case glyph
+    /// A banner or a button floating over content.
+    case banner
+    /// A popover-like panel inside a window.
+    case raised
+    /// A panel floating over other apps: cards, the peek tab, the island. A wide soft shadow
+    /// for depth plus a tight one that defines the edge.
+    case floating
+}
+
+private struct KadrShadowModifier: ViewModifier {
+    let shadow: KadrShadow
+
+    func body(content: Content) -> some View {
+        switch shadow {
+        case .glyph:
+            content.shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+        case .banner:
+            content.shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+        case .raised:
+            content.shadow(color: .black.opacity(0.16), radius: 13, y: 4)
+        case .floating:
+            content
+                .shadow(color: .black.opacity(0.24), radius: 18, y: 8)
+                .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        }
+    }
+}
+
+public extension View {
+    /// One of the shared shadow depths (docs/18 X-1).
+    func kadrShadow(_ shadow: KadrShadow) -> some View {
+        modifier(KadrShadowModifier(shadow: shadow))
     }
 }

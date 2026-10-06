@@ -40,6 +40,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Application Support, and a deleted capture should not leave its annotations
         // behind (docs/07 H5, M7).
         EditorAutosave().sweepOrphans()
+        observeKeyWindowForMenuScope()
         // The editor's own hangs and crashes, kept beside the agent's (docs/18 T-DIAG-2).
         EditorMetricKitCollector.shared.start()
         // Copies of Finder-opened images are only for the window that edits them, and stale
@@ -49,6 +50,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Studio Copy leaves its render behind so the clipboard outlives the window; a day
         // later nobody is pasting it (docs/18 STU-1).
         Task.detached(priority: .utility) { StudioDocumentModel.sweepStagedRenders() }
+        restoreWindowsAfterLaunch()
 
         // Opened with no document — the agent always passes one, so this is a developer
         // launching the editor directly.
@@ -153,6 +155,11 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         true
     }
 
+    /// Windows still open here are the ones a quit — not a last-window close — took away.
+    func applicationWillTerminate(_ notification: Notification) {
+        rememberOpenWindowsForNextLaunch()
+    }
+
     /// ⌘Q asks about unsaved edits and running exports before anything goes (T-ED-7,
     /// docs/11 S0.4).
     ///
@@ -244,6 +251,23 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             guard proceed else { return false }
         }
         return true
+    }
+
+    /// The captures open in annotation windows now, for restoration (docs/18 T-ED-7).
+    var openAnnotationDocuments: [URL] {
+        windows.map(\.documentURL)
+    }
+
+    /// Every window that can come back at the next launch: annotation windows and studio
+    /// sessions alike. A session reopens through `open(_:)` like any `.kadrrec`
+    /// (docs/18 T-ED-7).
+    var restorableDocuments: [URL] {
+        openAnnotationDocuments + studioWindows.map(\.sessionDirectory)
+    }
+
+    /// Opens a file the way a launch or Finder would, for restoration.
+    func openDocument(_ url: URL) {
+        open(url)
     }
 
     private func open(_ url: URL) {

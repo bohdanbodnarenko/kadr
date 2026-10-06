@@ -232,7 +232,7 @@ final class AreaCaptureCoordinator {
                 let windowFetch = Task { try await Self.pickableWindows(from: engine) }
                 let freezes: [DisplayFreeze]
                 do {
-                    freezes = try await engine.freezeAllDisplays()
+                    freezes = try await engine.freezeAllDisplays(options: freezeOptions(for: purpose))
                 } catch {
                     windowFetch.cancel()
                     throw error

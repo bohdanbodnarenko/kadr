@@ -1,3 +1,4 @@
+import ControlKit
 import KeyboardShortcuts
 import SwiftUI
 
@@ -187,7 +188,7 @@ struct KadrHelpTopicView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 400, alignment: .leading)
-        .padding(16)
+        .padding(KadrSpace.xl)
         .accessibilityElement(children: .combine)
     }
 }

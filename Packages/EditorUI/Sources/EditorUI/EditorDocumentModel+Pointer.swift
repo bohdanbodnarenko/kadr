@@ -85,6 +85,12 @@ public extension EditorDocumentModel {
             dragSelection(to: point, from: origin, modifiers: modifiers)
             return
         }
+        // A drag that started on a locked annotation: say why it does not move, rather
+        // than drawing a marquee over it (docs/18 T-ED-12).
+        if pressedLockedAnnotation {
+            showsLockedNotice = true
+            return
+        }
 
         if tool == .select {
             marquee = CGRect(
@@ -118,6 +124,7 @@ public extension EditorDocumentModel {
             // open it does nothing, so every exit from this method leaves history tidy.
             commitResize()
             document.endGesture()
+            pressedLockedAnnotation = false
             dragOrigin = nil
             dragStartCommands = [:]
             dragDependents = []
@@ -174,7 +181,10 @@ public extension EditorDocumentModel {
         else { return false }
 
         document.selection = [hit.id]
-        guard !isCanvasLocked else { return true }
+        guard !isCanvasLocked else {
+            pressedLockedAnnotation = true
+            return true
+        }
         dragStartCommands = [hit.id: hit]
         captureArrowDependents()
         isMovingSelection = true
@@ -203,7 +213,10 @@ public extension EditorDocumentModel {
             document.selection = [hit.id]
         }
 
-        guard !isCanvasLocked else { return }
+        guard !isCanvasLocked else {
+            pressedLockedAnnotation = true
+            return
+        }
 
         isMovingSelection = !document.selection.isEmpty
         guard isMovingSelection else { return }

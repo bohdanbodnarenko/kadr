@@ -1,4 +1,5 @@
 import AutomationKit
+import ControlKit
 import SettingsKit
 import SwiftUI
 
@@ -223,8 +224,8 @@ private struct SettingsSidebarFooter: View {
             .foregroundStyle(.tertiary)
             .fontDesign(.monospaced)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 8)
+            .padding(.horizontal, KadrSpace.small)
+            .padding(.vertical, KadrSpace.medium)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 6, trailing: 0))
     }
@@ -273,7 +274,7 @@ extension SettingsTab {
         switch self {
         case .general: String(localized: "General")
         case .permissions: String(localized: "Permissions")
-        case .overlay: String(localized: "Overlay")
+        case .overlay: String(localized: "Quick Access")
         case .capture: String(localized: "Capture")
         case .recording: String(localized: "Recording")
         case .history: String(localized: "History")

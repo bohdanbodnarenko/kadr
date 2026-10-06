@@ -1,3 +1,4 @@
+import AppKit
 import ControlKit
 import SettingsKit
 import SwiftUI
@@ -17,6 +18,11 @@ struct CardLayoutEditor: View {
     @State private var previewKind: CaptureKind = .screenshot
     @State private var focusedSlot: CardSlot = .column
     @State private var selectedAction: CardAction?
+    /// The list-based arrangement is the way in for VoiceOver and the keyboard; for
+    /// everyone else it doubled the pane, so it starts folded unless one of those is on
+    /// (docs/18 SH P3, docs/14 UX-12).
+    @State private var showsKeyboardArrangement = NSApp?.isFullKeyboardAccessEnabled == true
+        || NSWorkspace.shared.isVoiceOverEnabled
 
     private var layout: CardLayout {
         settings.cardLayout
@@ -57,7 +63,7 @@ struct CardLayoutEditor: View {
     private var mockCard: some View {
         VStack(spacing: 6) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: KadrRadius.large)
                     .fill(Color.secondary.opacity(0.15))
                     .frame(height: 90)
                     .overlay(
@@ -79,14 +85,14 @@ struct CardLayoutEditor: View {
                         cornerWell(.bottomTrailing)
                     }
                 }
-                .padding(6)
+                .padding(KadrSpace.small)
             }
             columnWell
         }
-        .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(KadrSpace.medium)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.panel))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: KadrRadius.panel)
                 .strokeBorder(KadrFill.stroke)
         )
     }
@@ -97,7 +103,7 @@ struct CardLayoutEditor: View {
             if let placed {
                 chip(placed, in: slot)
             } else {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(dash: [3, 3]))
                     .frame(width: 26, height: 26)
             }
@@ -114,7 +120,7 @@ struct CardLayoutEditor: View {
                 chip(action, in: .column)
             }
             if layout.column.count < CardLayout.columnCapacity {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(dash: [3, 3]))
                     .frame(width: 26, height: 26)
             }
@@ -133,7 +139,7 @@ struct CardLayoutEditor: View {
             .frame(width: 26, height: 26)
             .background(
                 selectedAction == action ? Color.accentColor.opacity(0.35) : Color.accentColor.opacity(0.18),
-                in: RoundedRectangle(cornerRadius: 6)
+                in: RoundedRectangle(cornerRadius: KadrRadius.medium)
             )
             .draggable(action.rawValue) {
                 Image(systemName: action.systemImage)
@@ -155,10 +161,13 @@ struct CardLayoutEditor: View {
     // MARK: - Keyboard arrangement (docs/14 UX-12)
 
     private var keyboardArrangement: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Keyboard arrangement")
-                .font(.headline)
+        DisclosureGroup("Arrange with the Keyboard", isExpanded: $showsKeyboardArrangement) {
+            keyboardArrangementControls
+        }
+    }
 
+    private var keyboardArrangementControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Picker("Slot", selection: $focusedSlot) {
                 ForEach(CardSlot.allCases, id: \.self) { slot in
                     Text(slot.title).tag(slot)
@@ -250,7 +259,10 @@ struct CardLayoutEditor: View {
                     ForEach(available, id: \.self) { action in
                         Image(systemName: action.systemImage)
                             .frame(width: 26, height: 26)
-                            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                            .background(
+                                Color.secondary.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: KadrRadius.medium)
+                            )
                             .draggable(action.rawValue) {
                                 Image(systemName: action.systemImage)
                             }

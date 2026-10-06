@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// The emoji strip the sticker tool places (docs/03 §3 P2).
@@ -14,7 +15,7 @@ struct EmojiStickerPicker: View {
                         .font(.system(size: 20))
                         .frame(maxWidth: .infinity, minHeight: 28)
                         .background(
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: KadrRadius.medium)
                                 .fill(emoji == selected ? Color.accentColor.opacity(0.18) : Color.clear)
                         )
                 }

@@ -236,6 +236,8 @@ public final class StudioDocumentModel {
     public var tidyShortensPauses = true
     /// The J/K/L speed: −2, −1, 0, 1 or 2 (docs/17 T-STU-11).
     @ObservationIgnored var shuttleSpeed = 0
+    /// In and out marks, for exporting part of the edit (docs/18 T-STU-11).
+    public var marks = StudioMarks()
 
     /// Which pending cuts are selected to apply. All on by default.
     public var selectedCutIDs: Set<UUID> = []

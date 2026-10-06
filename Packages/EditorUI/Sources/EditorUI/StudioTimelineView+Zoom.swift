@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 extension StudioTimelineView {
@@ -35,9 +36,9 @@ extension StudioTimelineView {
 
             if zoom > 1.0001 {
                 Text(StudioMultiplier.text(zoom))
-                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .font(.system(size: KadrType.micro, weight: .medium).monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 2)
+                    .padding(.leading, KadrSpace.xxs)
             }
 
             Spacer(minLength: 0)
@@ -52,9 +53,9 @@ extension StudioTimelineView {
     ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: KadrType.caption, weight: .medium))
                 .frame(width: 26, height: 22)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
         }
         .buttonStyle(.borderless)
         .help(help)

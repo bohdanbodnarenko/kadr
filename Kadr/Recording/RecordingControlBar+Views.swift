@@ -1,3 +1,4 @@
+import ControlKit
 import KeyboardShortcuts
 import OverlayKit
 import SettingsKit
@@ -91,7 +92,7 @@ struct RecordingLiveControls: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, KadrSpace.small)
             }
 
             if model.isSaving {
@@ -111,20 +112,20 @@ struct RecordingLiveControls: View {
     private var transport: some View {
         HStack(spacing: RecordingBarMetrics.controlSpacing) {
             RecordingLiveAudioMeter(meter: model.meter)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, KadrSpace.small)
 
             if model.microphoneIsSilent {
                 Text("Mic silent")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
-                    .padding(.trailing, 6)
+                    .padding(.trailing, KadrSpace.small)
                     .help("The microphone is on but nothing is reaching it. Check mute and the input.")
                     .accessibilityLabel("Microphone is silent")
             } else if model.microphoneDropped {
                 Image(systemName: "mic.slash.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
-                    .padding(.trailing, 6)
+                    .padding(.trailing, KadrSpace.small)
                     .help("This take is recording without a microphone.")
                     .accessibilityLabel("No microphone")
             }
@@ -177,11 +178,11 @@ struct RecordingLiveControls: View {
         let copy = ConfirmationCopy(confirmation)
         return HStack(spacing: 8) {
             Text(copy.question)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: KadrType.title, weight: .medium))
                 .foregroundStyle(RecordingBarMetrics.activeTint)
                 .lineLimit(1)
                 .fixedSize()
-                .padding(.horizontal, 6)
+                .padding(.horizontal, KadrSpace.small)
 
             Button("Keep Recording") {
                 setConfirmation(nil)
@@ -199,7 +200,7 @@ struct RecordingLiveControls: View {
             .buttonStyle(RecordingBarCapsuleButtonStyle(isDestructive: true))
             .accessibilityHint(copy.consequence)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, KadrSpace.xs)
         .frame(height: RecordingBarMetrics.controlSize)
         .help(copy.consequence)
         .accessibilityElement(children: .contain)
@@ -233,11 +234,11 @@ struct RecordingLiveControls: View {
             ProgressView()
                 .controlSize(.small)
             Text("Saving…")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: KadrType.title, weight: .medium))
                 .foregroundStyle(RecordingBarMetrics.activeTint)
                 .fixedSize()
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, KadrSpace.medium)
         .frame(height: RecordingBarMetrics.controlSize)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Saving the recording")
@@ -283,8 +284,8 @@ struct RecordingLiveControls: View {
                     .accessibilityLabel(notice)
             }
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 2)
+        .padding(.leading, KadrSpace.medium)
+        .padding(.trailing, KadrSpace.xxs)
         .frame(height: RecordingBarMetrics.controlSize)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

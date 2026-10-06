@@ -14,8 +14,8 @@ import SwiftUI
 /// 700×540 is the tested floor: a 200 pt sidebar plus the widest pane's controls, and tall
 /// enough for the longest visible group without the form scrolling on arrival.
 enum SettingsWindowGeometry {
-    static let minimumWidth: CGFloat = 700
-    static let minimumHeight: CGFloat = 540
+    static let minimumWidth: CGFloat = UXLayoutContract.settingsMinimum.width
+    static let minimumHeight: CGFloat = UXLayoutContract.settingsMinimum.height
 
     static var minimumSize: NSSize {
         NSSize(width: minimumWidth, height: minimumHeight)

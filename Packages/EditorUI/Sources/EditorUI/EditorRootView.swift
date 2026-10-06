@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import Shared
 import SwiftUI
 
@@ -75,6 +76,10 @@ public struct EditorRootView: View {
             workspace
                 .inspector(isPresented: $model.isInspectorPresented) {
                     EditorInspector(model: model)
+                        // Named so VoiceOver says where it is, not just "group" (docs/18 UX-02).
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel(Text("Inspector", bundle: .module))
+                        .accessibilityIdentifier(EditorAccessibilityID.inspector)
                         .inspectorColumnWidth(
                             min: EditorWindowGeometry.inspectorMinWidth,
                             ideal: EditorWindowGeometry.inspectorWidth,
@@ -88,7 +93,7 @@ public struct EditorRootView: View {
                     .transition(EditorMotion.transition(.scale(scale: 0.92).combined(with: .opacity)))
             }
         }
-        .editorAnimation(.snappy(duration: 0.2), value: model.showsCopiedToast)
+        .editorAnimation(KadrMotion.snap, value: model.showsCopiedToast)
         .frame(minWidth: EditorWindowGeometry.minSize.width, minHeight: EditorWindowGeometry.minSize.height)
         .editorLayoutDirection()
         .onChange(of: model.tool) { _, tool in
@@ -128,13 +133,13 @@ public struct EditorRootView: View {
                 onChooseAnotherLocation: onChooseExportLocation,
                 onFind: { Task { await runFind() } }
             )
-            .padding(.top, 12)
-            .padding(.horizontal, 16)
+            .padding(.top, KadrSpace.large)
+            .padding(.horizontal, KadrSpace.xl)
         }
         .overlay(alignment: .bottomLeading) {
             EditorZoomControl(session: canvasSession)
-                .padding(.leading, 16)
-                .padding(.bottom, 16)
+                .padding(.leading, KadrSpace.xl)
+                .padding(.bottom, KadrSpace.xl)
         }
         .overlay(alignment: .bottom) {
             EditorCropChrome(model: model)

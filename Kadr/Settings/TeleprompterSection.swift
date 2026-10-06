@@ -20,7 +20,7 @@ struct TeleprompterSection: View {
                     if settings.teleprompterScript.isEmpty {
                         Text("Type or paste what you plan to say.")
                             .foregroundStyle(.tertiary)
-                            .padding(.top, 8)
+                            .padding(.top, KadrSpace.medium)
                             .padding(.leading, 5)
                             .allowsHitTesting(false)
                     }

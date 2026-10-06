@@ -32,7 +32,7 @@ struct StudioZoomBlockLabel: View {
                 let visible = isHovering && !isDragging
                 Button(action: remove) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.system(size: KadrType.caption))
                 }
                 .buttonStyle(.plain)
                 .opacity(visible ? 1 : 0)
@@ -60,9 +60,9 @@ struct StudioZoomSuggestionLabel: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .fill(Color.orange.opacity(isHovering ? 0.22 : 0.08))
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .strokeBorder(
                     Color.orange.opacity(isHovering ? 0.9 : 0.55),
                     style: StrokeStyle(lineWidth: 1, dash: [3, 2])
@@ -98,13 +98,13 @@ struct StudioZoomAddGhost: View {
            let span = model.zoomPlacement(at: time) {
             let width = (span.high - span.low) * scale
             ZStack {
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .fill(Color.orange.opacity(0.14))
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .strokeBorder(Color.orange.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
                 if width >= 58 {
                     Label(String(localized: "Add zoom", bundle: .module), systemImage: "plus")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: KadrType.micro, weight: .semibold))
                         .foregroundStyle(Color.orange)
                         .labelStyle(.titleAndIcon)
                         .lineLimit(1)
@@ -145,7 +145,7 @@ struct StudioTimelineTrackHeaders: View {
                     model.addOrSelectZoom(at: model.playhead)
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: KadrType.micro, weight: .bold))
                         .frame(width: 18, height: 18)
                         .background(Circle().fill(Color.orange.opacity(0.18)))
                         .foregroundStyle(Color.orange)
@@ -159,10 +159,10 @@ struct StudioTimelineTrackHeaders: View {
             Text("Clips", bundle: .module)
                 .frame(height: clipHeight, alignment: .center)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(.system(size: KadrType.caption, weight: .medium))
         .foregroundStyle(.secondary)
         .padding(.top, topInset)
-        .padding(.trailing, 8)
+        .padding(.trailing, KadrSpace.medium)
         .frame(width: Self.width, alignment: .topLeading)
     }
 }

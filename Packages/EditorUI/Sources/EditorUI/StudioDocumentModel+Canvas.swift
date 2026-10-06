@@ -13,8 +13,9 @@ public extension StudioDocumentModel {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.message = "Choose an image to fill the area around the recording."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        importWallpaper(from: url)
+        presentPanel(panel) { [weak self] url in
+            self?.importWallpaper(from: url)
+        }
     }
 
     /// Copies `url` into the session and uses it as the canvas fill.

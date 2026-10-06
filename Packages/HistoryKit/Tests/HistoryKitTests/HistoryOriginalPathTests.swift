@@ -39,6 +39,30 @@ struct HistoryOriginalPathTests {
         #expect(updated.originalPath == elsewhere.standardizedFileURL.path)
     }
 
+    @Test("A renamed original is still found through its bookmark, and survives a rebuild")
+    func renamedOriginal() async throws {
+        let root = try makeHistoryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try HistoryStore.open(root: root)
+        let record = try await store.ingest(ingestDraft(seed: 4))
+        let saved = try writeTestImage(seed: 4)
+        try await store.setOriginalPath(saved, forContentHash: record.contentHash)
+
+        let renamed = saved.deletingLastPathComponent()
+            .appendingPathComponent("Renamed \(UUID().uuidString).png")
+        try FileManager.default.moveItem(at: saved, to: renamed)
+        defer { try? FileManager.default.removeItem(at: renamed) }
+
+        let updated = try #require(try await store.record(id: record.id))
+        #expect(updated.originalBookmark != nil)
+        #expect(store.originalFile(for: updated)?.standardizedFileURL.resolvingSymlinksInPath()
+            == renamed.standardizedFileURL.resolvingSymlinksInPath())
+
+        _ = try await store.rebuild()
+        let rebuilt = try #require(try await store.record(id: record.id))
+        #expect(rebuilt.originalBookmark == updated.originalBookmark)
+    }
+
     @Test("A version 1 sidecar, with no original path, still decodes")
     func oldSidecarDecodes() throws {
         let json = """

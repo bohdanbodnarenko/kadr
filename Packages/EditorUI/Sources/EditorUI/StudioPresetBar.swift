@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -91,9 +92,12 @@ struct StudioPresetBar: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, KadrSpace.medium)
             .padding(.vertical, 5)
-            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(
+                .quaternary.opacity(0.45),
+                in: RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
+            )
         }
         .menuStyle(.button)
         .help(Text("Apply a saved look. Cuts and zooms are left alone.", bundle: .module))
@@ -128,9 +132,9 @@ struct StudioPresetBar: View {
     private func barIcon(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: KadrType.caption, weight: .medium))
                 .frame(width: 24, height: 22)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
         }
         .buttonStyle(.borderless)
         .help(help)

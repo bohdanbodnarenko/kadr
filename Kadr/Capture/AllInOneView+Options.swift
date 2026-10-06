@@ -3,29 +3,32 @@ import SettingsKit
 import SwiftUI
 
 extension AllInOneView {
+    /// Where the next screenshot goes (docs/03 §2). Writes the after-capture matrix, not
+    /// the card's own Save setting, which this menu used to flip by mistake (T-CAP-12).
     var saveTargetMenu: some View {
-        Menu {
-            Button {
-                model.settings.askForSaveDestination = false
-            } label: {
-                saveTargetLabel("Save to default folder", selected: !model.settings.askForSaveDestination)
-            }
-            Button {
-                model.settings.askForSaveDestination = true
-            } label: {
-                saveTargetLabel("Ask where to save", selected: model.settings.askForSaveDestination)
+        let current = model.settings.afterCapture.screenshotSaveTarget
+        return Menu {
+            ForEach(ScreenshotSaveTarget.allCases, id: \.self) { target in
+                Button {
+                    model.settings.afterCapture.screenshotSaveTarget = target
+                } label: {
+                    saveTargetLabel(target.title, selected: current == target)
+                }
             }
         } label: {
-            RecordingBarIcon(
-                symbol: model.settings.askForSaveDestination ? "folder.badge.questionmark" : "folder",
-                isOn: model.settings.askForSaveDestination
-            )
+            RecordingBarIcon(symbol: Self.saveTargetSymbol(current), isOn: current != .none)
         }
         .recordingBarMenu(tooltip: saveTargetHelp)
         .accessibilityLabel("Save target")
-        .accessibilityValue(
-            model.settings.askForSaveDestination ? "Ask where to save" : "Default folder"
-        )
+        .accessibilityValue(current.title)
+    }
+
+    static func saveTargetSymbol(_ target: ScreenshotSaveTarget) -> String {
+        switch target {
+        case .folder: "folder"
+        case .ask: "folder.badge.questionmark"
+        case .none: "rectangle.on.rectangle"
+        }
     }
 
     var recordingAudioMenu: some View {
@@ -117,10 +120,11 @@ extension AllInOneView {
     }
 
     var saveTargetHelp: String {
-        if model.settings.askForSaveDestination {
-            return "Ask where to save — click to use the default folder"
+        switch model.settings.afterCapture.screenshotSaveTarget {
+        case .folder: String(localized: "Screenshots save to \(model.settings.saveFolder.lastPathComponent)")
+        case .ask: String(localized: "Kadr asks where to save each screenshot")
+        case .none: String(localized: "Screenshots stay on their card until you save them")
         }
-        return "Save to \(model.settings.saveFolder.lastPathComponent)"
     }
 
     var recordingAudioSymbol: String {

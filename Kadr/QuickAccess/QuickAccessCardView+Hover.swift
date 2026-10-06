@@ -1,3 +1,4 @@
+import ControlKit
 import SettingsKit
 import SwiftUI
 
@@ -70,7 +71,7 @@ extension QuickAccessCardView {
             .padding(Self.barPadding)
             .background(Capsule().fill(CardGlass.fill))
             .overlay(Capsule().strokeBorder(CardGlass.edge, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.28), radius: 6, y: 2)
+            .kadrShadow(.banner)
         }
     }
 

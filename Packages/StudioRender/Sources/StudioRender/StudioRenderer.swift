@@ -71,6 +71,8 @@ public struct StudioRenderer: Sendable {
         public var targetQuality: Double?
         /// AAC bits per second, or nil for the channel count's default.
         public var audioBitRate: Int?
+        /// The colour space frames are rendered and tagged in (docs/18 Phase 4).
+        public var colorSpace: StudioColorSpace
 
         public init(
             codec: AVVideoCodecType = .hevc,
@@ -82,7 +84,8 @@ public struct StudioRenderer: Sendable {
             maxLongestEdge: Int? = nil,
             audioChannelCount: Int = 2,
             targetQuality: Double? = nil,
-            audioBitRate: Int? = nil
+            audioBitRate: Int? = nil,
+            colorSpace: StudioColorSpace = .sRGB
         ) {
             self.codec = codec
             self.frameRate = frameRate
@@ -94,6 +97,7 @@ public struct StudioRenderer: Sendable {
             self.audioChannelCount = audioChannelCount == 1 ? 1 : 2
             self.targetQuality = targetQuality.map { min(max($0, 0.05), 1) }
             self.audioBitRate = audioBitRate
+            self.colorSpace = colorSpace
         }
 
         var aacSettings: [String: Any] {

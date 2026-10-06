@@ -94,10 +94,10 @@ struct TeleprompterComposerView: View {
             editor
             footer
         }
-        .padding(12)
+        .padding(KadrSpace.large)
         .frame(width: 360)
         .background(card)
-        .padding(8)
+        .padding(KadrSpace.medium)
         .fixedSize()
         .onExitCommand(perform: onClose)
     }
@@ -105,7 +105,7 @@ struct TeleprompterComposerView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("Teleprompter")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: KadrType.title, weight: .semibold))
             Spacer()
             Toggle("Show while recording", isOn: $settings.teleprompterEnabled)
                 .toggleStyle(.switch)
@@ -118,7 +118,7 @@ struct TeleprompterComposerView: View {
                 )
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: KadrType.caption, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: 22, height: 22)
                     .contentShape(Circle())
@@ -133,17 +133,17 @@ struct TeleprompterComposerView: View {
             TextEditor(text: $settings.teleprompterScript)
                 .font(.body)
                 .scrollContentBackground(.hidden)
-                .padding(4)
+                .padding(KadrSpace.xs)
             if settings.teleprompterScript.isEmpty {
                 Text("Type or paste what you plan to say.")
                     .foregroundStyle(.tertiary)
-                    .padding(.top, 12)
+                    .padding(.top, KadrSpace.large)
                     .padding(.leading, 9)
                     .allowsHitTesting(false)
             }
         }
         .frame(height: 140)
-        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous))
     }
 
     private var footer: some View {
@@ -200,7 +200,7 @@ struct TeleprompterComposerView: View {
                         lineWidth: 0.8
                     )
             }
-            .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
+            .kadrShadow(.floating)
     }
 
     private var readingTime: String {

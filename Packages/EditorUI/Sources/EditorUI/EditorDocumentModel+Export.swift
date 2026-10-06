@@ -50,11 +50,26 @@ public extension EditorDocumentModel {
     /// Marks an export as finished, however it finished.
     func endExport() {
         runningExport = nil
+        exportCancellation = nil
+    }
+
+    /// Whether the running export can be stopped from its progress chip.
+    var canCancelExport: Bool {
+        runningExport != nil && exportCancellation != nil
+    }
+
+    /// Stops the running export. Its result, if the render still finishes, is dropped:
+    /// nothing reaches the clipboard or the disk after Cancel (docs/18 §4.1 P3).
+    func cancelExport() {
+        guard runningExport != nil else { return }
+        exportCancellation?()
+        endExport()
     }
 
     /// Reports an export that did not happen. The chrome offers Retry from here.
     func failExport(_ action: EditorExportAction, message: String) {
         runningExport = nil
+        exportCancellation = nil
         exportFailure = EditorExportFailure(action: action, message: message)
     }
 

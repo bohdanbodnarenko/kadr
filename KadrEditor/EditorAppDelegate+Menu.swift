@@ -1,4 +1,5 @@
 import AppKit
+import EditorUI
 
 extension EditorAppDelegate {
     /// A minimal menu bar: the commands a `.regular` app is expected to have.
@@ -100,14 +101,13 @@ extension EditorAppDelegate {
             keyEquivalent: ""
         )
         fileMenu.addItem(.separator())
-        // Studio only: an annotation window has no `exportMovie:`, so the item greys itself
-        // out there rather than needing to be built per window kind.
+        // Studio only: hidden while an annotation window is key (docs/18 ED-11).
         fileMenu.addItem(
             withTitle: String(localized: "Export Video…"),
             action: #selector(StudioWindowController.exportMovie(_:)),
             keyEquivalent: "e"
-        )
-        fileMenu.addItem(.separator())
+        ).scoped(to: .studio)
+        fileMenu.addItem(NSMenuItem.separator().scoped(to: .studio))
         fileMenu.addItem(
             withTitle: String(localized: "Print…"),
             action: #selector(EditorWindowController.printDocument(_:)),
@@ -192,6 +192,7 @@ extension EditorAppDelegate {
             action: #selector(EditorWindowController.sendToBack(_:)),
             keyEquivalent: ""
         )
+        editMenu.addItem(makeAlignMenuItem())
         editMenu.addItem(.separator())
         let lock = editMenu.addItem(
             withTitle: String(localized: "Lock Objects"),
@@ -201,6 +202,50 @@ extension EditorAppDelegate {
         lock.keyEquivalentModifierMask = [.command, .shift]
         editItem.submenu = editMenu
         return editItem
+    }
+
+    /// Align and Distribute: one action each, the case carried in the item's tag
+    /// (docs/18 ED-7).
+    private func makeAlignMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: String(localized: "Align"), action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: String(localized: "Align"))
+        let groups: [[(SelectionArrangement.Alignment, String)]] = [
+            [
+                (.left, String(localized: "Left Edges")),
+                (.centerX, String(localized: "Horizontal Centers")),
+                (.right, String(localized: "Right Edges"))
+            ],
+            [
+                (.top, String(localized: "Top Edges")),
+                (.middle, String(localized: "Vertical Centers")),
+                (.bottom, String(localized: "Bottom Edges"))
+            ]
+        ]
+        for group in groups {
+            for (alignment, title) in group {
+                let entry = menu.addItem(
+                    withTitle: title,
+                    action: #selector(EditorWindowController.alignSelection(_:)),
+                    keyEquivalent: ""
+                )
+                entry.tag = alignment.rawValue
+            }
+            menu.addItem(.separator())
+        }
+        let axes: [(SelectionArrangement.Axis, String)] = [
+            (.horizontal, String(localized: "Distribute Horizontally")),
+            (.vertical, String(localized: "Distribute Vertically"))
+        ]
+        for (axis, title) in axes {
+            let entry = menu.addItem(
+                withTitle: title,
+                action: #selector(EditorWindowController.distributeSelection(_:)),
+                keyEquivalent: ""
+            )
+            entry.tag = axis.rawValue
+        }
+        item.submenu = menu
+        return item
     }
 
     private func makeViewMenuItem() -> NSMenuItem {
@@ -309,7 +354,7 @@ extension EditorAppDelegate {
             keyEquivalent: ""
         )
         clipItem.submenu = clipMenu
-        return clipItem
+        return clipItem.scoped(to: .studio)
     }
 
     /// Minimize, Zoom, the window list and Bring All to Front (T-ED-2). AppKit appends the

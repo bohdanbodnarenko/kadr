@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -50,6 +51,8 @@ struct StudioTimelineView: View {
     @State var creating: (start: TimeInterval, end: TimeInterval)?
     /// The clip edge being trimmed, and where it was when the drag began.
     @State var trimOrigin: (id: Clip.ID, edge: TimeInterval)?
+    /// The content stretch worth drawing while zoomed (docs/18 STU-15); nil draws it all.
+    @State var visibleWindow: ClosedRange<CGFloat>?
     /// Edited time under the pointer, for the split marker and hover-C.
     ///
     /// Read from the model's playhead clock rather than kept in `@State`: a state write on
@@ -151,6 +154,7 @@ struct StudioTimelineView: View {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: zoom > 1) {
                     bands(scale: scale, width: width)
+                        .reportsTimelineScrollOrigin()
                         .overlay(alignment: .topLeading) {
                             PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
                                 .id(Self.playheadAnchor)
@@ -174,6 +178,14 @@ struct StudioTimelineView: View {
                         }
                 }
                 .coordinateSpace(name: PlayheadFollower.viewportSpace)
+                .onPreferenceChange(TimelineScrollOriginKey.self) { leading in
+                    let window = zoom > 1
+                        ? StudioTimelineWindow.visibleRange(origin: leading, viewportWidth: viewport)
+                        : nil
+                    if window != visibleWindow {
+                        visibleWindow = window
+                    }
+                }
                 .onChange(of: zoom) {
                     if zoom <= 1 {
                         scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
@@ -230,6 +242,9 @@ struct StudioTimelineView: View {
         .contentShape(Rectangle())
         .onContinuousHover { phase in
             hover(phase, scale: scale)
+        }
+        .overlay(alignment: .topLeading) {
+            StudioTimelineMarks(marks: model.marks, duration: model.edit.duration, scale: scale, height: bandsHeight)
         }
         .overlay(alignment: .topLeading) {
             StudioTimelinePlayhead(
@@ -313,6 +328,14 @@ struct StudioTimelineView: View {
         }
     }
 
+    /// The visible window in one clip lane's own coordinates (docs/18 STU-15).
+    private func laneWindow(index: Int, scale: CGFloat) -> ClosedRange<CGFloat>? {
+        visibleWindow.map { window in
+            let laneX = model.editedStart(ofClipAt: index) * scale + CGFloat(index) * 2
+            return (window.lowerBound - laneX) ... (window.upperBound - laneX)
+        }
+    }
+
     private func clipLane(_ clip: Clip, index: Int, scale: CGFloat) -> some View {
         // `currentClipIndex` rather than `clipIndex(at: playhead)`: it changes when the
         // playhead crosses a cut, not on every tick.
@@ -320,25 +343,26 @@ struct StudioTimelineView: View {
             || (model.selectedClip == nil && model.currentClipIndex == index)
         let width = max(clip.editedDuration * scale - 2, 3)
         return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .fill(Color.accentColor.opacity(selected ? 0.55 : 0.28))
             ClipFilmstripLane(
                 url: model.session.screenURL,
                 clip: clip,
                 width: width,
-                height: clipHeight
+                height: clipHeight,
+                visible: laneWindow(index: index, scale: scale)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .clipShape(RoundedRectangle(cornerRadius: KadrRadius.small))
             .opacity(0.9)
             if selected {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .strokeBorder(Color.accentColor, lineWidth: 1.5)
             }
             if clip.speed != 1 {
                 Text(speedLabel(clip.speed))
                     .font(.caption.monospacedDigit().weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, KadrSpace.small)
+                    .padding(.vertical, KadrSpace.xxs)
                     .foregroundStyle(.white)
                     .background(.black.opacity(0.45), in: Capsule())
                     .padding(.leading, 10)
@@ -433,7 +457,7 @@ struct StudioTimelineRuler: View {
                             .fill(Color.secondary.opacity(0.4))
                             .frame(width: 1, height: 4)
                         Text(StudioTimelineView.tickLabel(time, step: step))
-                            .font(.system(size: 10).monospacedDigit())
+                            .font(.system(size: KadrType.micro).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     .fixedSize()

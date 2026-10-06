@@ -177,7 +177,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             backing: .buffered,
             defer: false
         )
-        window.title = documentURL.lastPathComponent
+        Self.applyContract(to: window, hosting: hosting, title: documentURL.lastPathComponent)
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
         // Never the `.kadr`, which holds the un-redacted original (docs/18 ED-3).
         window.representedURL = proxyURL
@@ -216,6 +216,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
         offerRecoveryIfAny()
         trackChangesForAutosave()
+        provideFlattenedDragOut()
     }
 
     // MARK: - Unsaved work (docs/07 M7)
@@ -305,6 +306,17 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         }
     }
 
+    /// The title, the window floor and the accessible name every annotation window shares.
+    private static func applyContract(to window: NSWindow, hosting: NSView, title: String) {
+        window.title = title
+        // The floor the layout contract promises; without it the window could be dragged
+        // smaller than the toolbar and inspector fit in (docs/14 UX-05).
+        window.contentMinSize = EditorWindowGeometry.minSize
+        // The hosting view is the group VoiceOver lands in first; unnamed, the audit
+        // flags it and VoiceOver reads only "group" (docs/18 UX-02).
+        hosting.setAccessibilityLabel(String(localized: "Annotation editor"))
+    }
+
     func windowWillClose(_ notification: Notification) {
         autosaveTask?.cancel()
         autosaveTask = nil
@@ -344,7 +356,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         let includeAnnotations = action != .copyWithoutAnnotations
         let renderer = renderer
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let image = try renderer.render(
                     baseImage: baseImage,
@@ -353,11 +365,14 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                     exportScale: exportScale
                 )
                 await MainActor.run {
-                    guard let self else { return }
+                    // Cancelled while rendering: the result goes nowhere, and a newer export
+                    // may already own the chrome (docs/18 §4.1 P3).
+                    guard let self, !Task.isCancelled else { return }
                     self.finishRenderedExport(action, image: image)
                 }
             } catch {
                 await MainActor.run { [weak self] in
+                    guard !Task.isCancelled else { return }
                     self?.model.failExport(exportAction, message: error.localizedDescription)
                     self?.logger.error(
                         "Export failed: \(error.localizedDescription, privacy: .public)"
@@ -365,6 +380,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 }
             }
         }
+        model.exportCancellation = { task.cancel() }
     }
 
     private func finishRenderedExport(_ action: EditorRootView.ExportAction, image: CGImage) {

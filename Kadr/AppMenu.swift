@@ -127,6 +127,13 @@ final class AppMenu: NSObject, NSMenuItemValidation {
             keyEquivalent: ","
         )
         appMenu.addItem(.separator())
+        // Every Mac app's menu has one; History and Settings have text fields that the
+        // system's text services should reach (docs/18 SH P3).
+        let services = NSMenu(title: String(localized: "Services"))
+        let servicesItem = appMenu.addItem(withTitle: String(localized: "Services"), action: nil, keyEquivalent: "")
+        servicesItem.submenu = services
+        NSApp.servicesMenu = services
+        appMenu.addItem(.separator())
         appMenu.addItem(
             withTitle: String(localized: "Hide Kadr"),
             action: #selector(NSApplication.hide(_:)),

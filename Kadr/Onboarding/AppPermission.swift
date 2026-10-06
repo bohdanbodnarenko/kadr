@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import AVFoundation
+import ControlKit
 import CoreGraphics
 import SwiftUI
 
@@ -188,11 +189,11 @@ struct AppPermissionBadge: View {
 
     var body: some View {
         Text(permission.requirementLabel)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.system(size: KadrType.micro, weight: .semibold))
             .textCase(.uppercase)
             .foregroundStyle(permission.isRequired ? Color.accentColor : Color.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, KadrSpace.small)
+            .padding(.vertical, KadrSpace.xxs)
             .background(
                 Capsule().fill(
                     (permission.isRequired ? Color.accentColor : Color.secondary).opacity(0.14)
@@ -249,7 +250,7 @@ struct AppPermissionRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(KadrSpace.large)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
@@ -291,14 +292,14 @@ struct AppPermissionRow: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 Text(permission.displayTitle)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: KadrType.title, weight: .semibold))
                 AppPermissionBadge(permission: permission)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isHeader)
             .accessibilityLabel("\(permission.displayTitle), \(permission.requirementLabel)")
             Text(permission.explanation)
-                .font(.system(size: 12))
+                .font(.system(size: KadrType.body))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
