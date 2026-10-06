@@ -290,4 +290,22 @@ struct EditorAutosaveTests {
             .appendingPathComponent("kadr-absent-\(UUID().uuidString)")
         #expect(EditorAutosave(directory: missing).sweepOrphans() == 0)
     }
+
+    @Test("The launch recovery list names captures with work, and only those that exist")
+    func pendingRecoveries() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let autosave = EditorAutosave(directory: folder)
+        let kept = folder.appendingPathComponent("b-kept.png")
+        let gone = folder.appendingPathComponent("a-gone.png")
+        let contents = makeContents(makeModel().document)
+        try autosave.write(contents, for: kept)
+        try autosave.write(contents, for: gone)
+
+        let pending = autosave.pendingRecoveries { $0.lastPathComponent != gone.lastPathComponent }
+
+        #expect(pending.map(\.lastPathComponent) == ["b-kept.png"])
+        autosave.discard(for: kept)
+        #expect(autosave.pendingRecoveries { _ in true }.map(\.lastPathComponent) == ["a-gone.png"])
+    }
 }

@@ -82,6 +82,9 @@
     "Discard Changes" : {
 
     },
+    "Discard Edits" : {
+
+    },
     "Distribute Horizontally" : {
 
     },
@@ -175,6 +178,12 @@
     "Kadr has unsaved changes to “%@”." : {
 
     },
+    "Kadr kept unsaved edits for %lld captures." : {
+
+    },
+    "Kadr kept unsaved edits for “%@”." : {
+
+    },
     "Keep Working" : {
 
     },
@@ -203,6 +212,9 @@
 
     },
     "Moving and snapping" : {
+
+    },
+    "Not Now" : {
 
     },
     "OK" : {
@@ -260,6 +272,12 @@
 
     },
     "Redo" : {
+
+    },
+    "Reopen" : {
+
+    },
+    "Reopen it to review the edits, or discard them." : {
 
     },
     "Restore" : {
@@ -413,6 +431,9 @@
 
     },
     "Zoom Out" : {
+
+    },
+    "and %lld more" : {
 
     },
     "⇧⌘L locks the annotations already on the canvas, so drawing over them cannot move them by accident. Commands that would change a locked object are greyed out until you unlock." : {

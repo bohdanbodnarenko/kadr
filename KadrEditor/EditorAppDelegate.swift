@@ -50,6 +50,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Studio Copy leaves its render behind so the clipboard outlives the window; a day
         // later nobody is pasting it (docs/18 STU-1).
         Task.detached(priority: .utility) { StudioDocumentModel.sweepStagedRenders() }
+        restoreWindowsAfterLaunch()
 
         // Opened with no document — the agent always passes one, so this is a developer
         // launching the editor directly.
@@ -154,6 +155,11 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         true
     }
 
+    /// Windows still open here are the ones a quit — not a last-window close — took away.
+    func applicationWillTerminate(_ notification: Notification) {
+        rememberOpenWindowsForNextLaunch()
+    }
+
     /// ⌘Q asks about unsaved edits and running exports before anything goes (T-ED-7,
     /// docs/11 S0.4).
     ///
@@ -245,6 +251,16 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             guard proceed else { return false }
         }
         return true
+    }
+
+    /// The captures open in annotation windows now, for restoration (docs/18 T-ED-7).
+    var openAnnotationDocuments: [URL] {
+        windows.map(\.documentURL)
+    }
+
+    /// Opens a file the way a launch or Finder would, for restoration.
+    func openDocument(_ url: URL) {
+        open(url)
     }
 
     private func open(_ url: URL) {
