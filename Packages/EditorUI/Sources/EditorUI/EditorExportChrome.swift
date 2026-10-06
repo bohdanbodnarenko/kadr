@@ -21,6 +21,9 @@ struct EditorExportChrome: View {
             if model.isLiftingSubject {
                 subjectLiftProgress
             }
+            if model.showsLockedNotice, model.isCanvasLocked {
+                lockedNotice
+            }
         }
     }
 
@@ -30,12 +33,19 @@ struct EditorExportChrome: View {
                 .controlSize(.small)
             Text(action.progressTitle)
                 .font(.callout)
+                .accessibilityAddTraits(.updatesFrequently)
             Spacer(minLength: 0)
+            if model.canCancelExport {
+                Button(String(localized: "Cancel", bundle: .module)) {
+                    model.cancelExport()
+                }
+                .controlSize(.small)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .editorFloatingCard()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(action.progressTitle)
     }
 
@@ -100,6 +110,39 @@ struct EditorExportChrome: View {
             if model.highlighterFallback == message {
                 model.highlighterFallback = nil
             }
+        }
+    }
+
+    /// Why a drag on an annotation did nothing (docs/18 T-ED-12).
+    private var lockedNotice: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.fill")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text(String(localized: "Objects are locked.", bundle: .module))
+                .font(.callout)
+            Spacer(minLength: 0)
+            Button(String(localized: "Unlock", bundle: .module)) {
+                model.isCanvasLocked = false
+            }
+            .controlSize(.small)
+            Button {
+                model.showsLockedNotice = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(String(localized: "Dismiss", bundle: .module))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .editorFloatingCard()
+        .help(String(localized: "Unlock with ⇧⌘L or the lock in the toolbar", bundle: .module))
+        .onAppear {
+            AccessibilityNotification.Announcement(
+                String(localized: "Objects are locked.", bundle: .module)
+            ).post()
         }
     }
 

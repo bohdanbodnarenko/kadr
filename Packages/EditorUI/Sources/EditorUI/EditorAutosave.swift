@@ -133,6 +133,26 @@ public struct EditorAutosave: Sendable {
     /// Deletes autosaves whose capture no longer exists, and returns how many went.
     ///
     /// Without this, deleting a capture leaves its annotations in Application Support
+    /// Captures with recoverable edits whose files still exist, by name, for the editor's
+    /// launch-time recovery list (docs/18 T-ED-7). Each window still asks before restoring.
+    public func pendingRecoveries(
+        captureExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }
+    ) -> [URL] {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        return contents
+            .filter { $0.pathExtension == "origin" }
+            .compactMap { note -> URL? in
+                guard let path = (try? Data(contentsOf: note)).flatMap({ String(data: $0, encoding: .utf8) })
+                else { return nil }
+                let capture = URL(fileURLWithPath: path)
+                return captureExists(capture) && hasAutosave(for: capture) ? capture : nil
+            }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
     /// indefinitely — the same "deleted means deleted" problem the library had (docs/07 H5).
     @discardableResult
     public func sweepOrphans(

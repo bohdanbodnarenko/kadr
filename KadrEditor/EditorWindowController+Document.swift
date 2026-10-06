@@ -45,6 +45,10 @@ extension EditorWindowController {
             true
         case #selector(showInFinder(_:)):
             FileManager.default.fileExists(atPath: documentURL.path) && !editsImportedCopy
+        case #selector(alignSelection(_:)):
+            model.canAlignSelection
+        case #selector(distributeSelection(_:)):
+            model.canDistributeSelection
         default:
             nil
         }

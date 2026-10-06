@@ -4,6 +4,9 @@
     "%@\n\n" : {
 
     },
+    "A moving selection snaps its edges and centre to the canvas and to other annotations, and a guide line shows what it snapped to. Hold ⌘ while dragging to place it freely. Arrow keys nudge by a point; a run of nudges undoes as one step. ⌥-drag leaves the original where it is and drags a copy." : {
+
+    },
     "About Kadr Editor" : {
 
     },
@@ -13,7 +16,22 @@
     "Add Zoom" : {
 
     },
+    "Align" : {
+
+    },
+    "Align and distribute" : {
+
+    },
     "Annotation editor" : {
+
+    },
+    "Annotations stay editable" : {
+
+    },
+    "Blur, pixelate and erase" : {
+
+    },
+    "Bottom Edges" : {
 
     },
     "Bring All to Front" : {
@@ -29,6 +47,9 @@
 
     },
     "Clear Menu" : {
+
+    },
+    "Click to select, drag on empty canvas to select everything inside the box, ⌘-click to add or remove one annotation and ⇧-click to add one. ⌘A selects everything." : {
 
     },
     "Clip" : {
@@ -61,6 +82,15 @@
     "Discard Changes" : {
 
     },
+    "Discard Edits" : {
+
+    },
+    "Distribute Horizontally" : {
+
+    },
+    "Distribute Vertically" : {
+
+    },
     "Don't Save" : {
 
     },
@@ -70,10 +100,25 @@
     "Edit" : {
 
     },
+    "Edit ▸ Align lines the selection up on a shared edge or centre; a single annotation aligns to the canvas. Distribute leaves equal gaps between three or more and keeps the outermost two in place. Bring Forward (⌘]) and Send Backward (⌘[) change which annotation is on top." : {
+
+    },
+    "Editing a recording" : {
+
+    },
+    "Editor" : {
+
+    },
     "Export Video…" : {
 
     },
+    "Export renders the current edit. Copy and Share render an MP4 up to 1080p; the original recording is in the overflow menu. An export that fails or is cancelled leaves any earlier file where it was." : {
+
+    },
     "Export the edited recording." : {
+
+    },
+    "Exporting" : {
 
     },
     "File" : {
@@ -103,6 +148,9 @@
     "Hide Others" : {
 
     },
+    "Horizontal Centers" : {
+
+    },
     "If you don’t review your documents, all your changes will be lost." : {
 
     },
@@ -130,6 +178,12 @@
     "Kadr has unsaved changes to “%@”." : {
 
     },
+    "Kadr kept unsaved edits for %lld captures." : {
+
+    },
+    "Kadr kept unsaved edits for “%@”." : {
+
+    },
     "Keep Working" : {
 
     },
@@ -139,7 +193,13 @@
     "Keyboard shortcuts" : {
 
     },
+    "Left Edges" : {
+
+    },
     "Lock Objects" : {
+
+    },
+    "Lock objects" : {
 
     },
     "Minimize" : {
@@ -149,6 +209,12 @@
 
     },
     "Move “%@” to the Trash?" : {
+
+    },
+    "Moving and snapping" : {
+
+    },
+    "Not Now" : {
 
     },
     "OK" : {
@@ -164,6 +230,9 @@
 
     },
     "Paste" : {
+
+    },
+    "Pick a tool from the toolbar or the Tools menu, or press its letter while the canvas has the keyboard. After a one-shot tool lands — an arrow, a shape, a text box, a blur — the pointer goes back to Select so you can move what you just drew. Pencil, highlighter and counters stay armed. The inspector (⌥⌘I) holds the colour, size and style of the selection or of the armed tool." : {
 
     },
     "Pin" : {
@@ -196,16 +265,28 @@
     "Recording studio" : {
 
     },
+    "Redactions are burned into the exported pixels, not laid over them, so nobody can peel them off the file. A .kadr project keeps the original pixels so the redaction stays editable; share the flattened image, not the project." : {
+
+    },
     "Redactions are burned into the saved image, which is the file to share. " : {
 
     },
     "Redo" : {
 
     },
+    "Reopen" : {
+
+    },
+    "Reopen it to review the edits, or discard them." : {
+
+    },
     "Restore" : {
 
     },
     "Review Changes…" : {
+
+    },
+    "Right Edges" : {
 
     },
     "Save" : {
@@ -226,7 +307,16 @@
     "Save your changes to “%@”?" : {
 
     },
+    "Saving and sharing" : {
+
+    },
     "Select All" : {
+
+    },
+    "Selecting" : {
+
+    },
+    "Selecting and arranging" : {
 
     },
     "Send Backward" : {
@@ -238,6 +328,12 @@
     "Services" : {
 
     },
+    "Share sends the flattened image through the macOS share sheet, and Pin floats it above your windows. Dragging the file icon in the title bar hands the flattened image to another app. Nothing is uploaded: Kadr never sends a capture anywhere." : {
+
+    },
+    "Share, pin and drag" : {
+
+    },
     "Show All" : {
 
     },
@@ -245,6 +341,12 @@
 
     },
     "Show in Finder" : {
+
+    },
+    "Space plays and pauses. J, K and L step back, stop and play; arrow keys move the playhead, ⇧-arrows trim, ⌥-arrows take larger steps. ⌘K splits at the playhead. Delete removes the selected clip or zoom, with Undo." : {
+
+    },
+    "Speech" : {
 
     },
     "Split Clip at Playhead" : {
@@ -274,6 +376,9 @@
         }
       }
     },
+    "The capture underneath never changes. Every arrow, shape, text box and blur is an object you can select, move, restyle or delete later, and undo goes back as far as you need. The picture is flattened only when you copy, save or share it." : {
+
+    },
     "The editor closed before these annotations were saved." : {
 
     },
@@ -283,7 +388,16 @@
     "The project keeps the original pixels." : {
 
     },
+    "The studio edits a copy of the timeline, never the recorded file. Split, trim and delete clips on the timeline; add zooms that follow your clicks; crop and set a backdrop. Undo covers every change." : {
+
+    },
     "Tools" : {
+
+    },
+    "Top Edges" : {
+
+    },
+    "Transcribe makes a transcript and captions on this Mac. Find Cuts proposes pauses and filler words to remove, and nothing is cut until you apply the proposal." : {
 
     },
     "Trim End to Playhead" : {
@@ -296,6 +410,9 @@
 
     },
     "Undo" : {
+
+    },
+    "Vertical Centers" : {
 
     },
     "View" : {
@@ -314,6 +431,24 @@
 
     },
     "Zoom Out" : {
+
+    },
+    "and %lld more" : {
+
+    },
+    "annotated" : {
+
+    },
+    "⇧⌘L locks the annotations already on the canvas, so drawing over them cannot move them by accident. Commands that would change a locked object are greyed out until you unlock." : {
+
+    },
+    "⌘C copies the image as you see it, annotations included. With annotations selected, they are copied too, so pasting into another Kadr window gives editable objects. Copy without annotations is in the toolbar's Copy menu." : {
+
+    },
+    "⌘S saves beside the capture, or over it when Keep the original file is off in Settings ▸ General, and writes a .kadr project next to it so the capture stays editable. ⇧⌘S chooses a format and quality. Move to Trash removes the capture and its project together." : {
+
+    },
+    "⌘Z and ⇧⌘Z undo and redo. ⌘C copies, ⌘S saves, ⇧⌘S saves as, ⌥⌘S saves the project. ⌥⌘I shows or hides the inspector. ⌘= and ⌘- zoom the canvas, ⌘1 fits it and ⌘0 shows actual size. ⌘D duplicates the selection, Delete removes it. ` and + or - change the armed tool's size." : {
 
     }
   },

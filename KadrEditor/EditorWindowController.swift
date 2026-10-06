@@ -216,6 +216,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
         offerRecoveryIfAny()
         trackChangesForAutosave()
+        provideFlattenedDragOut()
     }
 
     // MARK: - Unsaved work (docs/07 M7)
@@ -344,7 +345,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         let includeAnnotations = action != .copyWithoutAnnotations
         let renderer = renderer
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let image = try renderer.render(
                     baseImage: baseImage,
@@ -353,11 +354,14 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                     exportScale: exportScale
                 )
                 await MainActor.run {
-                    guard let self else { return }
+                    // Cancelled while rendering: the result goes nowhere, and a newer export
+                    // may already own the chrome (docs/18 §4.1 P3).
+                    guard let self, !Task.isCancelled else { return }
                     self.finishRenderedExport(action, image: image)
                 }
             } catch {
                 await MainActor.run { [weak self] in
+                    guard !Task.isCancelled else { return }
                     self?.model.failExport(exportAction, message: error.localizedDescription)
                     self?.logger.error(
                         "Export failed: \(error.localizedDescription, privacy: .public)"
@@ -365,6 +369,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 }
             }
         }
+        model.exportCancellation = { task.cancel() }
     }
 
     private func finishRenderedExport(_ action: EditorRootView.ExportAction, image: CGImage) {

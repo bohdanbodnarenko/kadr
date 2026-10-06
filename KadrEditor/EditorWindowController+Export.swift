@@ -1,4 +1,5 @@
 import AnnotationModel
+import AnnotationRender
 import AppKit
 import CoreGraphics
 import CryptoKit
@@ -279,7 +280,13 @@ extension EditorWindowController {
         let operation = NSPrintOperation(view: view, printInfo: printInfo)
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
-        operation.run()
+        // A sheet on this window, not an app-modal panel: printing one capture should not
+        // freeze every other editor window (docs/18 §4.1 P3).
+        if let window {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
     }
 
     func pinImage(_ image: CGImage) {
@@ -317,8 +324,16 @@ extension EditorWindowController {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
         panel.prompt = String(localized: "Insert")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        insertImportedImage(from: url)
+        // A sheet, so other editor windows stay usable while this one picks a file.
+        guard let window else {
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            insertImportedImage(from: url)
+            return
+        }
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.insertImportedImage(from: url)
+        }
     }
 
     func insertImageFromClipboard() {
@@ -350,6 +365,28 @@ extension EditorWindowController {
     /// in the user's folder after every pin or share (T-ED-12). The same name is reused, so
     /// repeating the action replaces the file rather than adding one, and the system clears
     /// the temporary folder.
+    /// Lets the toolbar's Copy button be dragged out as the flattened image, rendered at
+    /// drop time with the current edits and export size (docs/18 ED-3).
+    func provideFlattenedDragOut() {
+        model.flattenedDragName = documentURL.deletingPathExtension().lastPathComponent
+        model.flattenedFileRenderer = { [weak self] in
+            guard let self else { throw CocoaError(.userCancelled) }
+            let baseImage = baseImage
+            let document = model.document
+            let exportScale = model.exportScale
+            let renderer = renderer
+            let image = try await Task.detached(priority: .userInitiated) {
+                try renderer.render(
+                    baseImage: baseImage,
+                    document: document,
+                    includeAnnotations: true,
+                    exportScale: exportScale
+                )
+            }.value
+            return try writeExportPNG(image, suffix: String(localized: "annotated"))
+        }
+    }
+
     func writeExportPNG(_ image: CGImage, suffix: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("Kadr Editor", isDirectory: true)
