@@ -26,19 +26,28 @@ enum StudioFilmstrip {
 
     private static let timescale: CMTimeScale = 600
 
-    /// How many tiles a lane of `width` points draws, never more than `maximumTiles`.
+    /// How many tiles a lane of `width` points is divided into.
     ///
     /// A 30-minute recording at full timeline zoom is a lane hundreds of thousands of
-    /// points wide, and one tile per 36 points was thousands of views laid out and decoded
-    /// eagerly (docs/18 STU-15). Past the cap each tile stretches; the picture is a guide to
-    /// where you are, not a frame-accurate strip.
-    static func tileCount(forWidth width: CGFloat) -> Int {
+    /// points wide (docs/18 STU-15). A lane that draws only its visible window
+    /// (`windowed`) keeps one tile per 36 points however long it is, because only the
+    /// tiles on screen are decoded; one that draws everything stops at `maximumTiles` and
+    /// stretches each tile instead.
+    static func tileCount(forWidth width: CGFloat, windowed: Bool = false) -> Int {
         guard width.isFinite else { return 1 }
-        return min(max(1, Int((width / tileWidth).rounded(.down))), maximumTiles)
+        let natural = max(1, Int((width / tileWidth).rounded(.down)))
+        return min(natural, windowed ? maximumWindowedTiles : maximumTiles)
     }
 
-    /// The most tiles one clip's lane draws.
+    /// The most tiles a lane that draws everything holds.
     static let maximumTiles = 240
+    /// A sanity bound for a windowed lane: well past a long recording at full zoom.
+    static let maximumWindowedTiles = 200_000
+
+    /// The midpoint of tile `index` of `count` equal slices — one entry of `sampleTimes`.
+    static func sampleTime(index: Int, count: Int, start: TimeInterval, duration: TimeInterval) -> TimeInterval {
+        start + duration * (Double(index) + 0.5) / Double(max(count, 1))
+    }
 
     /// Decodes the frames at `times`. A missing file or a cancelled task yields `[]`
     /// rather than throwing — the lane is still a clip without a picture in it.
