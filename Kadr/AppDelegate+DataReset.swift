@@ -7,7 +7,7 @@ import Shared
 /// Reset All Settings and Remove All Kadr Data (docs/17 T-SH-8, T-DIAG-4).
 extension AppDelegate {
     /// The bundle identifiers whose preferences Kadr owns.
-    static let ownedPreferenceDomains = ["app.kadr.Kadr", "app.kadr.Kadr.Editor"]
+    static let ownedPreferenceDomains = ["com.bohdanbodnarenko.kadr", "com.bohdanbodnarenko.kadr.Editor"]
 
     /// Makes what is on screen match the settings again after a reset.
     ///
@@ -34,7 +34,7 @@ extension AppDelegate {
         desktopHygiene.setUserHide(false)
         desktopHygiene.prepareForTermination()
 
-        for editor in NSRunningApplication.runningApplications(withBundleIdentifier: "app.kadr.Kadr.Editor") {
+        for editor in NSRunningApplication.runningApplications(withBundleIdentifier: "com.bohdanbodnarenko.kadr.Editor") {
             editor.terminate()
         }
         _ = CLIInstaller().uninstall()
@@ -48,10 +48,10 @@ extension AppDelegate {
             fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
                 .appendingPathComponent("Kadr", isDirectory: true),
             fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?
-                .appendingPathComponent("app.kadr.Kadr", isDirectory: true),
-            library?.appendingPathComponent("Saved Application State/app.kadr.Kadr.savedState", isDirectory: true),
+                .appendingPathComponent("com.bohdanbodnarenko.kadr", isDirectory: true),
+            library?.appendingPathComponent("Saved Application State/com.bohdanbodnarenko.kadr.savedState", isDirectory: true),
             library?.appendingPathComponent(
-                "Saved Application State/app.kadr.Kadr.Editor.savedState",
+                "Saved Application State/com.bohdanbodnarenko.kadr.Editor.savedState",
                 isDirectory: true
             )
         ].compactMap(\.self)

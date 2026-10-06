@@ -1,7 +1,7 @@
 import Foundation
 import Shared
 
-/// The typed key set. Names are namespaced so `defaults read app.kadr.Kadr` stays legible.
+/// The typed key set. Names are namespaced so `defaults read com.bohdanbodnarenko.kadr` stays legible.
 public enum SettingKeys {
     public static let schemaVersion = SettingKey("settings.schemaVersion", default: 0)
     /// Whether the user has been through onboarding (docs/03 §8.2).

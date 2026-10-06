@@ -5,7 +5,7 @@ import Testing
 struct KadrLogTests {
     @Test("Subsystem matches the bundle identifier reserved in docs/00")
     func subsystem() {
-        #expect(KadrLog.subsystem == "app.kadr.Kadr")
+        #expect(KadrLog.subsystem == "com.bohdanbodnarenko.kadr")
     }
 
     @Test("Category raw values are stable log identifiers")

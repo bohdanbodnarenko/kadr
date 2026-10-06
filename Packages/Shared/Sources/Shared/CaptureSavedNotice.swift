@@ -7,7 +7,7 @@ import Foundation
 /// leaves the Mac (CLAUDE.md rule 1). Paths ride in `object` as JSON, matching
 /// `CaptureDeletionNotice`.
 public enum CaptureSavedNotice {
-    public static let name = Notification.Name("app.kadr.capture.saved")
+    public static let name = Notification.Name("com.bohdanbodnarenko.kadr.capture.saved")
 
     public struct Paths: Equatable, Sendable {
         /// Where the capture was when the editor opened it.

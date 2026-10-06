@@ -28,7 +28,7 @@ struct InfoPlistTests {
         }
 
         let info = Bundle.main.infoDictionary ?? [:]
-        if info["CFBundleIdentifier"] as? String == "app.kadr.Kadr" {
+        if info["CFBundleIdentifier"] as? String == "com.bohdanbodnarenko.kadr" {
             // Screen capture is not in this list, and cannot be: macOS has no app-supplied
             // usage string for Screen Recording. The system writes its own prompt, and
             // Xcode silently dropped the build setting that pretended otherwise, so it
@@ -50,7 +50,7 @@ struct InfoPlistTests {
     @Test("The built agent carries Sparkle's feed and key, and its build identity")
     func agentUpdateKeys() throws {
         let info = Bundle.main.infoDictionary ?? [:]
-        guard info["CFBundleIdentifier"] as? String == "app.kadr.Kadr" else { return }
+        guard info["CFBundleIdentifier"] as? String == "com.bohdanbodnarenko.kadr" else { return }
 
         let feed = try #require(info["SUFeedURL"] as? String)
         let url = try #require(URL(string: feed))
@@ -84,14 +84,14 @@ struct InfoPlistTests {
             (type["LSItemContentTypes"] as? [String]) ?? []
         }
         #expect(identifiers.contains("public.png"))
-        #expect(identifiers.contains("app.kadr.project"))
-        #expect(identifiers.contains("app.kadr.recording-session"))
-        #expect(identifiers.contains("app.kadr.preset"))
+        #expect(identifiers.contains("com.bohdanbodnarenko.kadr.project"))
+        #expect(identifiers.contains("com.bohdanbodnarenko.kadr.recording-session"))
+        #expect(identifiers.contains("com.bohdanbodnarenko.kadr.preset"))
 
         let exported = try #require(dict["UTExportedTypeDeclarations"] as? [[String: Any]])
         let exportedIDs = exported.compactMap { $0["UTTypeIdentifier"] as? String }
-        #expect(exportedIDs.contains("app.kadr.preset"))
-        #expect(exportedIDs.contains("app.kadr.project"))
-        #expect(exportedIDs.contains("app.kadr.recording-session"))
+        #expect(exportedIDs.contains("com.bohdanbodnarenko.kadr.preset"))
+        #expect(exportedIDs.contains("com.bohdanbodnarenko.kadr.project"))
+        #expect(exportedIDs.contains("com.bohdanbodnarenko.kadr.recording-session"))
     }
 }

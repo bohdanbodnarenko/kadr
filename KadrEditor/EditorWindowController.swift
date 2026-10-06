@@ -185,7 +185,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
-        let autosaveName = "app.kadr.Kadr.Editor.window"
+        let autosaveName = "com.bohdanbodnarenko.kadr.Editor.window"
         if !window.setFrameUsingName(autosaveName) {
             let screen = window.screen?.visibleFrame
                 ?? NSScreen.main?.visibleFrame

@@ -110,7 +110,7 @@ public struct AutomationEnvelope: Codable, Hashable, Sendable {
 /// user, and Kadr links no networking (CLAUDE.md rule 1). It also needs no launchd
 /// registration, which an `NSXPCListener(machServiceName:)` would.
 public enum AutomationPort {
-    public static let agent = "app.kadr.Kadr.automation"
+    public static let agent = "com.bohdanbodnarenko.kadr.automation"
 
     /// Message IDs on the wire. One for the request, one for the answer.
     public enum MessageID {

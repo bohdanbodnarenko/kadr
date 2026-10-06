@@ -331,7 +331,7 @@ private final class WebcamCapture: NSObject, AVCaptureVideoDataOutputSampleBuffe
     private let session = AVCaptureSession()
     // OS-required handler queue (CLAUDE.md rule 5): the sample-buffer delegate needs one,
     // and the blocking `startRunning`/`stopRunning` are kept on the same serial queue.
-    private let queue = DispatchQueue(label: "app.kadr.recording.webcam")
+    private let queue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.recording.webcam")
     private let onFrame: @Sendable (CGImage?) -> Void
     private let logger = KadrLog.logger(.recording)
 

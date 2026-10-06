@@ -117,8 +117,16 @@ public final class ActivationJuggler {
     /// stale state that left the user's app unfocused after every island capture (T-CAP-3).
     public nonisolated static func isReturnable(bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier else { return true }
-        return !bundleIdentifier.hasPrefix("app.kadr.")
+        return !isKadrProcess(bundleIdentifier)
     }
+
+    /// The agent is `com.bohdanbodnarenko.kadr` itself; the editor, helper and CLI hang
+    /// below it. A bare prefix with the dot would miss the agent.
+    public nonisolated static func isKadrProcess(_ bundleIdentifier: String) -> Bool {
+        bundleIdentifier == kadrBundlePrefix || bundleIdentifier.hasPrefix(kadrBundlePrefix + ".")
+    }
+
+    public nonisolated static let kadrBundlePrefix = "com.bohdanbodnarenko.kadr"
 
     /// The frontmost app right now, if Kadr may return focus to it.
     public static func returnTarget(

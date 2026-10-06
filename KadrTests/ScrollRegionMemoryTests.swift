@@ -9,7 +9,7 @@ struct ScrollRegionMemoryTests {
     /// A store of its own per test, removed afterwards: a test that leaves a preferences
     /// file behind on the developer's Mac is a test that litters.
     private func withStore(_ body: (UserDefaults) -> Void) {
-        let name = "app.kadr.tests.scroll.\(UUID().uuidString)"
+        let name = "com.bohdanbodnarenko.kadr.tests.scroll.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: name) else {
             Issue.record("no defaults suite")
             return

@@ -93,7 +93,7 @@ public final class PermissionCoordinator {
     /// remembered across launches because the prompt, too, is once per install.
     public private(set) var lastRequestShowedSystemPrompt = false
     @ObservationIgnored private let defaults: UserDefaults
-    static let hasRequestedKey = "app.kadr.hasRequestedScreenRecording"
+    static let hasRequestedKey = "com.bohdanbodnarenko.kadr.hasRequestedScreenRecording"
 
     /// Whether the onboarding probe loop is running. It is the only poll in the app.
     public var isProbing: Bool {

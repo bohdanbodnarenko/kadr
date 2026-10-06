@@ -182,7 +182,7 @@ extension QuickAccessManager {
         return ActiveScreen.resolve(displayID: items.first?.displayID)
     }
 
-    nonisolated static let editorBundleIdentifier = "app.kadr.Kadr.Editor"
+    nonisolated static let editorBundleIdentifier = "com.bohdanbodnarenko.kadr.Editor"
 
     /// Captures a card's unsaved state for the quit prompt (docs/09 U2.1).
     ///

@@ -8,7 +8,7 @@ import Foundation
 /// next build will be published, and a release starts off it. Once the user flips the
 /// switch their answer is kept.
 nonisolated struct UpdateChannelPreference {
-    static let key = "app.kadr.receiveBetaUpdates"
+    static let key = "com.bohdanbodnarenko.kadr.receiveBetaUpdates"
     /// The channel name in `<sparkle:channel>`; `Scripts/update-appcast.sh --channel beta`
     /// writes the same string.
     static let betaChannel = "beta"

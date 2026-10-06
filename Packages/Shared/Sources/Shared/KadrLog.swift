@@ -8,7 +8,7 @@ import os
 public enum KadrLog {
     /// One subsystem for every process in the app family, so an Instruments trace of
     /// the agent, the editor and the XPC helper reads as one story.
-    public static let subsystem = "app.kadr.Kadr"
+    public static let subsystem = "com.bohdanbodnarenko.kadr"
 
     /// Log categories, one per architectural area of docs/04 §1.
     public enum Category: String, CaseIterable, Sendable {

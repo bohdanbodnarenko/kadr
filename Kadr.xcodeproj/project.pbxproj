@@ -712,7 +712,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrEditorTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.EditorTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -732,7 +732,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -753,7 +753,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrEditorTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.EditorTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -773,7 +773,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -943,7 +943,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr;
 				KADR_APPCAST_URL = "https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml";
 				KADR_GIT_COMMIT = unknown;
 				KADR_SPARKLE_PUBLIC_ED_KEY = "";
@@ -982,7 +982,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr;
 				KADR_APPCAST_URL = "https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml";
 				KADR_GIT_COMMIT = unknown;
 				KADR_SPARKLE_PUBLIC_ED_KEY = "";
@@ -1006,7 +1006,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1027,7 +1027,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1058,7 +1058,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Editor;
 				PRODUCT_NAME = KadrEditor;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1088,7 +1088,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Editor;
 				PRODUCT_NAME = KadrEditor;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1111,7 +1111,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1132,7 +1132,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1149,7 +1149,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.cli;
 				PRODUCT_MODULE_NAME = KadrCLI;
 				PRODUCT_NAME = kadr;
 				SKIP_INSTALL = YES;
@@ -1167,7 +1167,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MARKETING_VERSION = 0.9.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.cli;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr.cli;
 				PRODUCT_MODULE_NAME = KadrCLI;
 				PRODUCT_NAME = kadr;
 				SKIP_INSTALL = YES;

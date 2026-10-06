@@ -162,7 +162,7 @@ struct WindowPickModeTests {
                 id: 42,
                 title: "Test",
                 applicationName: "Tester",
-                bundleIdentifier: "app.kadr.tests",
+                bundleIdentifier: "com.bohdanbodnarenko.kadr.tests",
                 globalFrame: DisplayRect(x: 10, y: 10, width: 100, height: 100)
             )]
         ) { _ in }

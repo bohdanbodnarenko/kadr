@@ -5,7 +5,7 @@ import Shared
 
 /// Export Diagnostics, Report a Problem and the launch record (docs/17 T-DIAG-1, T-DIAG-4).
 extension AppDelegate {
-    static let lastLaunchedBuildKey = "app.kadr.lastLaunchedBuild"
+    static let lastLaunchedBuildKey = "com.bohdanbodnarenko.kadr.lastLaunchedBuild"
 
     /// Logs the version at `.notice`, so it survives in the unified log, and notes an
     /// upgrade — the hook a later "What's New" will hang off.

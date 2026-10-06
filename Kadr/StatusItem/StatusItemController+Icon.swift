@@ -217,7 +217,7 @@ extension StatusItemController {
         }
     }
 
-    private static let menuBarVisibilityChanged = Notification.Name("app.kadr.menuBarVisibility")
+    private static let menuBarVisibilityChanged = Notification.Name("com.bohdanbodnarenko.kadr.menuBarVisibility")
 
     static func postMenuBarVisibility(_ visible: Bool) {
         NotificationCenter.default.post(name: menuBarVisibilityChanged, object: nil, userInfo: ["visible": visible])

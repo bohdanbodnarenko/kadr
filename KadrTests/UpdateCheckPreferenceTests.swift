@@ -12,7 +12,7 @@ import Testing
 @Suite("Update check preference")
 struct UpdateCheckPreferenceTests {
     private func makeDefaults() -> (UserDefaults, String) {
-        let suite = "app.kadr.tests.updates.\(UUID().uuidString)"
+        let suite = "com.bohdanbodnarenko.kadr.tests.updates.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suite) else {
             fatalError("Could not create a defaults suite for the test")
         }

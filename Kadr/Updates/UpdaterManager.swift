@@ -199,7 +199,7 @@ final class UpdaterManager: NSObject {
 
     private func scheduleCoalescedCheck() {
         activity?.invalidate()
-        let scheduler = NSBackgroundActivityScheduler(identifier: "app.kadr.Kadr.update-check")
+        let scheduler = NSBackgroundActivityScheduler(identifier: "com.bohdanbodnarenko.kadr.update-check")
         scheduler.repeats = true
         scheduler.interval = 24 * 60 * 60
         scheduler.tolerance = 6 * 60 * 60

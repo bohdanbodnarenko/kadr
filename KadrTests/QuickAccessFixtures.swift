@@ -43,7 +43,7 @@ func makeCapture() -> Capture {
             pointRect: DisplayRect(x: 0, y: 0, width: 10, height: 5),
             pixelSize: PixelSize(width: 20, height: 10),
             colorSpaceName: nil,
-            frontmostApp: AppIdentity(name: "Tester", bundleIdentifier: "app.kadr.tests")
+            frontmostApp: AppIdentity(name: "Tester", bundleIdentifier: "com.bohdanbodnarenko.kadr.tests")
         )
     )
 }

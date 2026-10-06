@@ -12,8 +12,8 @@ import Shared
 final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     // OS-required handler queues (CLAUDE.md rule 5): `SCStream.addStreamOutput` takes a
     // dispatch queue per output type.
-    let queue = DispatchQueue(label: "app.kadr.recording.samples", qos: .userInitiated)
-    let audioQueue = DispatchQueue(label: "app.kadr.recording.audio", qos: .userInitiated)
+    let queue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.recording.samples", qos: .userInitiated)
+    let audioQueue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.recording.audio", qos: .userInitiated)
     /// Last rect the geometry probe logged, so it reports moves rather than frames.
     private var lastProbedRect: CGRect?
     private let videoContinuation: AsyncStream<SampleBufferBox>.Continuation
@@ -143,7 +143,7 @@ final class StreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     ///
     /// **To settle it:** run a window recording, drag the window from one side of the
     /// display to the other, and read the log —
-    /// `log stream --predicate 'subsystem == "app.kadr"' --info | grep geometry-probe`.
+    /// `log stream --predicate 'subsystem == "com.bohdanbodnarenko.kadr"' --info | grep geometry-probe`.
     /// If `content` stays near the origin while `screen` moves, `contentRect` is surface
     /// space: switch the two consumers to `.screenRect` (with a 14.0 fallback to
     /// `contentRect`) and rebuild the `WindowSpaceTests` fixtures around the real answer.

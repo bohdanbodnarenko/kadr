@@ -37,7 +37,7 @@
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>app.kadr.project</string>
+				<string>com.bohdanbodnarenko.kadr.project</string>
 			</array>
 		</dict>
 		<dict>
@@ -64,7 +64,7 @@
 			<true/>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>app.kadr.recording-session</string>
+				<string>com.bohdanbodnarenko.kadr.recording-session</string>
 			</array>
 		</dict>
 		<dict>
@@ -76,7 +76,7 @@
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>app.kadr.preset</string>
+				<string>com.bohdanbodnarenko.kadr.preset</string>
 			</array>
 		</dict>
 	</array>
@@ -93,7 +93,7 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>app.kadr.project</string>
+			<string>com.bohdanbodnarenko.kadr.project</string>
 			<key>UTTypeDescription</key>
 			<string>Kadr Project</string>
 			<key>UTTypeConformsTo</key>
@@ -111,7 +111,7 @@
 		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>app.kadr.recording-session</string>
+			<string>com.bohdanbodnarenko.kadr.recording-session</string>
 			<key>UTTypeDescription</key>
 			<string>Kadr Recording</string>
 			<key>UTTypeConformsTo</key>
@@ -128,7 +128,7 @@
 		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>app.kadr.preset</string>
+			<string>com.bohdanbodnarenko.kadr.preset</string>
 			<key>UTTypeDescription</key>
 			<string>Kadr Look</string>
 			<key>UTTypeConformsTo</key>

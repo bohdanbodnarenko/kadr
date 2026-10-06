@@ -104,10 +104,10 @@ fi
 
 # The app logs its own launch intervals; read them back rather than timing
 # the launch from outside, which would include Finder and dyld.
-STATUS_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+STATUS_MS=$(/usr/bin/log show --predicate 'subsystem == "com.bohdanbodnarenko.kadr"' \
     --last 2m --info --style compact 2>/dev/null \
     | sed -n 's/.*Status item ready in \([0-9.]*\) ms.*/\1/p' | tail -1)
-LAUNCH_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+LAUNCH_MS=$(/usr/bin/log show --predicate 'subsystem == "com.bohdanbodnarenko.kadr"' \
     --last 2m --info --style compact 2>/dev/null \
     | sed -n 's/.*Hotkeys armed in \([0-9.]*\) ms.*/\1/p' | tail -1)
 
@@ -143,7 +143,7 @@ fi
 
 # Hotkey to overlay (< 100 ms, PRD §8). Needs a Screen Recording grant and a capture
 # taken during the run, so a missing reading is a note, not a failure (docs/18 CAP-9).
-OVERLAY_MS=$(/usr/bin/log show --predicate 'subsystem == "app.kadr.Kadr"' \
+OVERLAY_MS=$(/usr/bin/log show --predicate 'subsystem == "com.bohdanbodnarenko.kadr"' \
     --last 10m --info --style compact 2>/dev/null \
     | sed -n 's/.*Overlay presented in \([0-9.]*\) ms.*/\1/p' | tail -1)
 if [ -z "$OVERLAY_MS" ]; then

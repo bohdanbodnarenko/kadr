@@ -12,7 +12,7 @@ import Shared
 ///
 /// The zip holds:
 /// - `system.json` — `DiagnosticsSnapshot`;
-/// - `kadr.log` — the last 24 hours of `app.kadr.Kadr` log entries this process can read;
+/// - `kadr.log` — the last 24 hours of `com.bohdanbodnarenko.kadr` log entries this process can read;
 /// - `DiagnosticReports/` — crash and hang reports for Kadr, the editor and the helper;
 /// - `MetricKit/` — the payloads `MetricKitCollector` kept.
 nonisolated enum DiagnosticsExporter {

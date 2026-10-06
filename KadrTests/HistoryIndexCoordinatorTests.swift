@@ -15,7 +15,7 @@ import Testing
 @Suite("History index gating")
 struct HistoryIndexCoordinatorTests {
     private func makeSettings() -> AppSettings {
-        let suite = "app.kadr.tests.index.\(UUID().uuidString)"
+        let suite = "com.bohdanbodnarenko.kadr.tests.index.\(UUID().uuidString)"
         // A private domain, so a test can never touch the developer's real preferences.
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         return AppSettings(store: defaults)

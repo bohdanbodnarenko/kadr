@@ -11,7 +11,7 @@ import Foundation
 public struct StylePresetTransfer: Codable, Sendable, Hashable {
     public static let currentVersion = 1
     public static let pathExtension = "kadrpreset"
-    public static let typeIdentifier = "app.kadr.preset"
+    public static let typeIdentifier = "com.bohdanbodnarenko.kadr.preset"
     public static let maximumByteCount = 256 * 1024
 
     public var version: Int

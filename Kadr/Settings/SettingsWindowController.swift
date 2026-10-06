@@ -125,7 +125,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // AppKit would otherwise release the window out from under ARC on close.
         window.isReleasedWhenClosed = false
         window.center()
-        window.setFrameAutosaveName("app.kadr.Kadr.settings")
+        window.setFrameAutosaveName("com.bohdanbodnarenko.kadr.settings")
 
         self.window = window
         hostingView = hosting.view
@@ -143,7 +143,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
-    static let lastTabKey = "app.kadr.settings.lastTab"
+    static let lastTabKey = "com.bohdanbodnarenko.kadr.settings.lastTab"
 
     static func lastTab(in defaults: UserDefaults) -> SettingsTab {
         defaults.string(forKey: lastTabKey).flatMap(SettingsTab.init(rawValue:)) ?? .general

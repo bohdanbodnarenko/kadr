@@ -7,7 +7,7 @@ import Testing
 @Suite("Shared preferences", .serialized)
 struct SharedPreferencesTests {
     private static func withDomain(_ body: (String, UserDefaults) throws -> Void) throws {
-        let domain = "app.kadr.Kadr.SharedPreferencesTests.\(UUID().uuidString)"
+        let domain = "com.bohdanbodnarenko.kadr.SharedPreferencesTests.\(UUID().uuidString)"
         let writer = try #require(UserDefaults(suiteName: domain))
         defer { writer.removePersistentDomain(forName: domain) }
         try body(domain, writer)
@@ -15,8 +15,8 @@ struct SharedPreferencesTests {
 
     @Test("The agent domain is the agent's bundle identifier")
     func agentDomain() {
-        #expect(SharedPreferences.agentDomain == "app.kadr.Kadr")
-        #expect(SharedPreferences().domain == "app.kadr.Kadr")
+        #expect(SharedPreferences.agentDomain == "com.bohdanbodnarenko.kadr")
+        #expect(SharedPreferences().domain == "com.bohdanbodnarenko.kadr")
     }
 
     @Test(

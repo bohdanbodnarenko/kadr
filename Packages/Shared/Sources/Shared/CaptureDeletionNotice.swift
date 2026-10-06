@@ -10,7 +10,7 @@ import Foundation
 /// the Mac (CLAUDE.md rule 1). The paths ride in `object` as a JSON string rather than in
 /// `userInfo`, which the system strips for sandboxed senders and receivers.
 public enum CaptureDeletionNotice {
-    public static let name = Notification.Name("app.kadr.capture.movedToTrash")
+    public static let name = Notification.Name("com.bohdanbodnarenko.kadr.capture.movedToTrash")
 
     public struct Paths: Equatable, Sendable {
         /// Where the capture was, which is what an overlay card points at.

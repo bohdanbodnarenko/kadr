@@ -376,7 +376,7 @@ final class VisionService: NSObject, VisionServiceProtocol, @unchecked Sendable 
 final class IdleTerminator: @unchecked Sendable {
     static let shared = IdleTerminator()
 
-    private let queue = DispatchQueue(label: "app.kadr.helper.idle")
+    private let queue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.helper.idle")
     private var activeTransactions = 0
     private var idleWork: DispatchWorkItem?
     private let logger = KadrLog.logger(.capture)

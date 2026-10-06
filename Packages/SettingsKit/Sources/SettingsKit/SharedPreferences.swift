@@ -3,8 +3,8 @@ import Foundation
 
 /// The agent's preferences, read from any Kadr process (docs/17 §5 theme 6).
 ///
-/// Settings are written by the agent into its own domain, `app.kadr.Kadr`. The editor is a
-/// separate app (`app.kadr.Kadr.Editor`), so `UserDefaults.standard` there is a different
+/// Settings are written by the agent into its own domain, `com.bohdanbodnarenko.kadr`. The editor is a
+/// separate app (`com.bohdanbodnarenko.kadr.Editor`), so `UserDefaults.standard` there is a different
 /// domain, and reading an agent key from it silently returns the default (T-ED-3). Every
 /// cross-process read of an agent-owned key goes through this type instead.
 ///
@@ -12,7 +12,7 @@ import Foundation
 /// search list; it is not a direct read of another application's standard domain.
 public struct SharedPreferences: Sendable {
     /// The agent's bundle identifier, which is also its preferences domain.
-    public static let agentDomain = "app.kadr.Kadr"
+    public static let agentDomain = "com.bohdanbodnarenko.kadr"
 
     public let domain: String
 

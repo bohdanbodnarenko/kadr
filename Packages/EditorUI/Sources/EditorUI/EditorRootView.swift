@@ -206,5 +206,5 @@ public struct EditorRootView: View {
 
 public extension NSPasteboard.PasteboardType {
     /// Annotation objects copied from the editor (CleanShot 4.4).
-    static let kadrAnnotations = NSPasteboard.PasteboardType("app.kadr.annotations.json")
+    static let kadrAnnotations = NSPasteboard.PasteboardType("com.bohdanbodnarenko.kadr.annotations.json")
 }

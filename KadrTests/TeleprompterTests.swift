@@ -17,7 +17,7 @@ import Testing
 struct TeleprompterTests {
     /// Its own defaults suite per test, so one test's script is not another's.
     private func settings() -> AppSettings {
-        let suite = UserDefaults(suiteName: "app.kadr.tests.teleprompter.\(UUID().uuidString)")
+        let suite = UserDefaults(suiteName: "com.bohdanbodnarenko.kadr.tests.teleprompter.\(UUID().uuidString)")
         return AppSettings(store: suite ?? .standard)
     }
 

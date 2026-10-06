@@ -83,8 +83,8 @@ ask you to reproduce something, this keeps them (it needs your password; undo it
 second command when you are done):
 
 ```sh
-sudo log config --subsystem app.kadr.Kadr --mode "level:info,persist:info"
-sudo log config --subsystem app.kadr.Kadr --reset
+sudo log config --subsystem com.bohdanbodnarenko.kadr --mode "level:info,persist:info"
+sudo log config --subsystem com.bohdanbodnarenko.kadr --reset
 ```
 
 ## 5. Known issues

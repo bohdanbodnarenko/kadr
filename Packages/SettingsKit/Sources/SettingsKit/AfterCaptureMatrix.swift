@@ -156,7 +156,7 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
 
 /// Stored as two integers rather than as JSON.
 ///
-/// `defaults read app.kadr.Kadr` should stay legible, and a raw option-set bitmask is
+/// `defaults read com.bohdanbodnarenko.kadr` should stay legible, and a raw option-set bitmask is
 /// already about as opaque as a preference gets — wrapping it in an encoded blob as well
 /// would make it unreadable and un-editable from the command line.
 extension AfterCaptureMatrix: SettingValue {

@@ -15,7 +15,7 @@ import Foundation
 /// suppresses it), so any value there was put there by Kadr, not chosen by the user.
 struct UpdateCheckPreference {
     /// Kadr's own key.
-    static let key = "app.kadr.automaticUpdateChecks"
+    static let key = "com.bohdanbodnarenko.kadr.automaticUpdateChecks"
     /// Sparkle's key, which Kadr writes `false` to and never reads.
     static let sparkleKey = "SUEnableAutomaticChecks"
     /// On by default, with a visible switch (PRD §9).

@@ -6,8 +6,8 @@ import AppKit
 /// other kind used to sit there greyed out — a Clip menu over a screenshot, a Tools menu
 /// over a recording — so they are hidden instead while that kind of window is key.
 enum EditorMenuScope: String {
-    case annotation = "app.kadr.menu.annotation-only"
-    case studio = "app.kadr.menu.studio-only"
+    case annotation = "com.bohdanbodnarenko.kadr.menu.annotation-only"
+    case studio = "com.bohdanbodnarenko.kadr.menu.studio-only"
 
     var identifier: NSUserInterfaceItemIdentifier {
         NSUserInterfaceItemIdentifier(rawValue)
