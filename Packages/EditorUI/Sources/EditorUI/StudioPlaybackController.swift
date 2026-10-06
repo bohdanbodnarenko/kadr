@@ -301,6 +301,28 @@ final class StudioPlaybackController {
         }
     }
 
+    /// Plays backwards at `speed` (J, docs/18 T-STU-11), when the item can.
+    ///
+    /// - Returns: false when the item is not ready or cannot play in reverse, so the caller
+    ///   falls back to stepping back. AVFoundation plays reverse silently.
+    @discardableResult
+    func playReverse(speed: Float) -> Bool {
+        guard let model, model.edit.duration > 0,
+              let item = player?.currentItem, item.canPlayReverse
+        else { return false }
+        rate = -max(abs(speed), 1)
+        guard model.playhead > 0.05 else { return true }
+        if model.isPlaying {
+            player?.rate = rate
+            return true
+        }
+        model.isPlaying = true
+        skim(at: nil)
+        update()
+        startRolling()
+        return true
+    }
+
     func play() {
         guard let model, !model.isPlaying, model.edit.duration > 0 else { return }
         // Playing from the end means playing from the start. Anything else leaves the user
@@ -391,13 +413,18 @@ final class StudioPlaybackController {
         let seconds = time.seconds
         guard seconds.isFinite else { return }
         report(seconds)
+        if rate < 0, seconds <= 0.01 {
+            reachedEnd()
+        }
     }
 
+    /// The end the player was heading for: the last frame forwards, the first in reverse.
     private func reachedEnd() {
         guard let model, model.isPlaying else { return }
         removeObservers()
         player?.pause()
-        report(model.edit.duration)
+        report(rate < 0 ? 0 : model.edit.duration)
+        rate = 1
         model.isPlaying = false
     }
 
