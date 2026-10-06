@@ -50,7 +50,7 @@ APPCAST="appcast.xml"
 # The feed host is the owner's decision (T-REL-4). This default is the historical one;
 # override it with KADR_APPCAST_URL once the public host exists. It is checked for
 # reachability below, so a private repository's 404 fails here, not on testers' Macs.
-FEED_URL="${KADR_APPCAST_URL:-https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml}"
+FEED_URL="${KADR_APPCAST_URL:-https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml}"
 PUBLIC_KEY="${KADR_SPARKLE_PUBLIC_ED_KEY:-}"
 TEAM_ID="${KADR_TEAM_ID:-}"
 

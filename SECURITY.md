@@ -18,8 +18,8 @@ by you.
 
 Please report privately, not in a public issue:
 
-- Use GitHub's **Report a vulnerability** (Security ▸ Advisories) on this repository, or
-- email **security@kadr.app** <!-- PLACEHOLDER: replace with the owner's real address -->.
+- Use GitHub's **Report a vulnerability** button on this repository's
+  [Security tab](https://github.com/bohdanbodnarenko/kadr/security/advisories/new).
 
 Include the Kadr version and build (Settings ▸ Updates), the macOS version, and steps to
 reproduce. We aim to acknowledge within three working days and to ship a fix for anything

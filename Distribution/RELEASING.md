@@ -16,7 +16,7 @@ These are deliberately not in the repository. `release.sh` refuses to run withou
 |---|---|---|
 | Apple team ID | `KADR_TEAM_ID` in the environment | Substituted into `Distribution/ExportOptions.plist` (`__KADR_TEAM_ID__`) for `-exportArchive`. |
 | Sparkle public EdDSA key | `KADR_SPARKLE_PUBLIC_ED_KEY` in the environment | Passed as a build setting and written to `SUPublicEDKey` by `Config/Kadr-Info.plist`. Empty in local builds. |
-| Feed URL | `KADR_APPCAST_URL` in the environment (optional) | Written to `SUFeedURL`. The default is `raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml`, which only works once that repository is public — `release.sh` checks the URL answers before building. |
+| Feed URL | `KADR_APPCAST_URL` in the environment (optional) | Written to `SUFeedURL`. The default is `raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml`, which only works once that repository is public — `release.sh` checks the URL answers before building. |
 
 ## One-time setup
 

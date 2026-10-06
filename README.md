@@ -14,7 +14,7 @@ Testers start with [TESTING.md](TESTING.md).
 ## Install
 
 Download the latest DMG from the
-[Releases](https://github.com/kadr-app/kadr/releases) page, open it and drag Kadr
+[Releases](https://github.com/bohdanbodnarenko/kadr/releases) page, open it and drag Kadr
 into Applications. Kadr updates itself through Sparkle; Settings ▸ Updates has the
 switch and a Check Now button. Requires macOS 14 or later. (A Homebrew cask,
 `brew install --cask kadr`, follows the first public release.)
