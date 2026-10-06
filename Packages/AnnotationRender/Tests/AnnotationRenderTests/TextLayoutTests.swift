@@ -144,4 +144,16 @@ struct TextLayoutTests {
     func emptyAttributedString() {
         #expect(TextLayout.attributedString(spec("")).length == 0)
     }
+
+    @Test("Concurrent lookups of one style resolve to one cached font")
+    func concurrentLookupsShareOneFont() async {
+        let style = TextStyle(fontName: "Helvetica Neue", fontSize: 31, isBold: true, isItalic: true)
+        let identifiers = await withTaskGroup(of: ObjectIdentifier.self) { group in
+            for _ in 0 ..< 32 {
+                group.addTask { ObjectIdentifier(TextLayout.font(for: style)) }
+            }
+            return await group.reduce(into: Set<ObjectIdentifier>()) { $0.insert($1) }
+        }
+        #expect(identifiers.count == 1)
+    }
 }
