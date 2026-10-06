@@ -385,9 +385,6 @@
     "Arrange with the Keyboard" : {
 
     },
-    "Ask where to save" : {
-
-    },
     "Ask where to save from a card" : {
 
     },
@@ -755,9 +752,6 @@
     "Default Camera" : {
 
     },
-    "Default folder" : {
-
-    },
     "Delete" : {
 
     },
@@ -1102,6 +1096,9 @@
 
     },
     "Kadr Help" : {
+
+    },
+    "Kadr asks where to save each screenshot" : {
 
     },
     "Kadr blocked %@, which you didn't allow" : {
@@ -1777,6 +1774,12 @@
 
     },
     "Screen access is off. Practice works without it, and the menu bar icon is always there." : {
+
+    },
+    "Screenshots save to %@" : {
+
+    },
+    "Screenshots stay on their card until you save them" : {
 
     },
     "Scroll Myself" : {
