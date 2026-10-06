@@ -168,7 +168,7 @@ private struct EditorToolGroup: View {
                     symbol: tool.symbolName,
                     help: "\(tool.title) (\(String(tool.shortcut).uppercased()))",
                     isOn: tool == selected,
-                    accessibilityLabel: tool.title
+                    accessibilityLabel: LocalizedStringKey(tool.title)
                 ) {
                     onSelect(tool)
                 }
@@ -185,10 +185,57 @@ private struct EditorToolGroup: View {
 /// The toolbar's one control shape: a 28-pt target with a hover wash and an accent state.
 struct EditorToolbarButton: View {
     let symbol: String
-    let help: String
+    let help: Text
     var isOn = false
-    var accessibilityLabel: String?
+    var accessibilityLabel: Text?
     let action: () -> Void
+
+    init(
+        symbol: String,
+        help: LocalizedStringKey,
+        isOn: Bool = false,
+        accessibilityLabel: LocalizedStringKey? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.init(
+            symbol: symbol,
+            helpText: Text(help, bundle: .module),
+            isOn: isOn,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
+    }
+
+    @_disfavoredOverload
+    init(
+        symbol: String,
+        help: some StringProtocol,
+        isOn: Bool = false,
+        accessibilityLabel: LocalizedStringKey? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.init(
+            symbol: symbol,
+            helpText: Text(help),
+            isOn: isOn,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
+    }
+
+    private init(
+        symbol: String,
+        helpText: Text,
+        isOn: Bool,
+        accessibilityLabel: LocalizedStringKey?,
+        action: @escaping () -> Void
+    ) {
+        self.symbol = symbol
+        help = helpText
+        self.isOn = isOn
+        self.accessibilityLabel = accessibilityLabel.map { Text($0, bundle: .module) }
+        self.action = action
+    }
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var isHovering = false

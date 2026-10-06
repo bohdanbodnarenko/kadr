@@ -10,7 +10,7 @@ import SwiftUI
 /// beside "Shadow" — so whether it is on reads with the section folded, turning it on opens
 /// the section to its controls, and turning it off folds them away.
 struct EditorInspectorSection<Content: View, Accessory: View>: View {
-    let title: String
+    let title: Text
     /// Stored under this key, so the choice survives closing the window.
     let key: String
     var isEnabled: Binding<Bool>?
@@ -22,14 +22,14 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
     @State private var isHeaderHovering = false
 
     init(
-        title: String,
+        title: LocalizedStringKey,
         key: String,
         startsOpen: Bool = true,
         isEnabled: Binding<Bool>? = nil,
         @ViewBuilder accessory: @escaping () -> Accessory,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        self.title = title
+        self.title = Text(title, bundle: .module)
         self.key = key
         self.isEnabled = isEnabled
         self.accessory = accessory
@@ -61,7 +61,7 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
         HStack(spacing: 4) {
             Button(action: toggleOpen) {
                 HStack(spacing: 0) {
-                    Text(title)
+                    title
                         .font(.inspectorHeader)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -73,20 +73,20 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
             .buttonStyle(.plain)
             .accessibilityLabel(title)
             .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
-            .accessibilityHint(Text("Shows or hides the \(title.lowercased()) controls", bundle: .module))
+            .accessibilityHint(Text("Shows or hides this section’s controls", bundle: .module))
             .accessibilityAddTraits(.isHeader)
 
             accessory()
 
             if let isEnabled {
-                Toggle(title, isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { isEnabled.wrappedValue },
                     set: { setEnabled($0, binding: isEnabled) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .padding(.leading, KadrSpace.xs)
+                )) { title }
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .padding(.leading, KadrSpace.xs)
             }
 
             Button(action: toggleOpen) {
@@ -127,7 +127,7 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
 
 extension EditorInspectorSection where Accessory == EmptyView {
     init(
-        title: String,
+        title: LocalizedStringKey,
         key: String,
         startsOpen: Bool = true,
         isEnabled: Binding<Bool>? = nil,
