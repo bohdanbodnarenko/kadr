@@ -50,7 +50,7 @@ export PATH := $(CURDIR)/$(TOOLS):$(PATH)
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
 .PHONY: help build build-editor release install uninstall run test test-packages test-package \
-        test-app test-editor test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
+        test-app test-editor test-ui test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
         check-size check-strings strings size-gate perf packages packages-json all clean
 
 help: ## Show the available commands
@@ -151,6 +151,14 @@ test-editor: ## Run the editor app's tests
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
 		-only-testing:KadrEditorTests $(STAMP) $(UNSIGNED) \
 		| { grep -E '✔|✘|Test run|error:' || true; }
+
+# UI tests launch the real editor and drive it through the accessibility API, so they
+# need a logged-in session with the runner allowed under Accessibility. Not part of
+# `make test` or CI for that reason.
+test-ui: ## Run the editor's UI tests (needs a logged-in session; not in CI)
+	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme KadrUITests -configuration Debug \
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) $(STAMP) \
+		| { grep -E 'Test Case|passed|failed|error:|Accessibility audit' || true; }
 
 # MARK: - Static checks
 

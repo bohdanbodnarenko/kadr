@@ -139,6 +139,7 @@ public final class AnnotationCanvasView: NSView {
         registerForDraggedTypes(Self.acceptedDropTypes)
 
         wantsLayer = true
+        setAccessibilityIdentifier(EditorAccessibilityID.canvas)
         guard let root = layer else { return }
         root.backgroundColor = NSColor.clear.cgColor
         root.isOpaque = false

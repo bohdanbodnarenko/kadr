@@ -177,10 +177,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             backing: .buffered,
             defer: false
         )
-        window.title = documentURL.lastPathComponent
-        // The floor the layout contract promises; without it the window could be dragged
-        // smaller than the toolbar and inspector fit in (docs/14 UX-05).
-        window.contentMinSize = EditorWindowGeometry.minSize
+        Self.applyContract(to: window, hosting: hosting, title: documentURL.lastPathComponent)
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
         // Never the `.kadr`, which holds the un-redacted original (docs/18 ED-3).
         window.representedURL = proxyURL
@@ -307,6 +304,17 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
                 completion(false)
             }
         }
+    }
+
+    /// The title, the window floor and the accessible name every annotation window shares.
+    private static func applyContract(to window: NSWindow, hosting: NSView, title: String) {
+        window.title = title
+        // The floor the layout contract promises; without it the window could be dragged
+        // smaller than the toolbar and inspector fit in (docs/14 UX-05).
+        window.contentMinSize = EditorWindowGeometry.minSize
+        // The hosting view is the group VoiceOver lands in first; unnamed, the audit
+        // flags it and VoiceOver reads only "group" (docs/18 UX-02).
+        hosting.setAccessibilityLabel(String(localized: "Annotation editor"))
     }
 
     func windowWillClose(_ notification: Notification) {

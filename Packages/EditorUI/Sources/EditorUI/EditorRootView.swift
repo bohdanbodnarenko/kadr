@@ -75,6 +75,10 @@ public struct EditorRootView: View {
             workspace
                 .inspector(isPresented: $model.isInspectorPresented) {
                     EditorInspector(model: model)
+                        // Named so VoiceOver says where it is, not just "group" (docs/18 UX-02).
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel(Text("Inspector", bundle: .module))
+                        .accessibilityIdentifier(EditorAccessibilityID.inspector)
                         .inspectorColumnWidth(
                             min: EditorWindowGeometry.inspectorMinWidth,
                             ideal: EditorWindowGeometry.inspectorWidth,
