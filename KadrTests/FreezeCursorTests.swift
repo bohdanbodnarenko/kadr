@@ -1,6 +1,6 @@
-@testable import Kadr
 import SelectionUI
 import Testing
+@testable import Kadr
 
 /// "Include the pointer" reaches an area capture through its freeze (docs/17 T-CAP-12).
 @Suite("Pointer in the freeze")

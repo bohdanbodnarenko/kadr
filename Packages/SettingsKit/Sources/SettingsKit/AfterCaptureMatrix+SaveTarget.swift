@@ -28,8 +28,12 @@ public extension AfterCaptureMatrix {
     /// so copy, card, pin and annotate stay as the user arranged them.
     var screenshotSaveTarget: ScreenshotSaveTarget {
         get {
-            if screenshot.contains(.promptSave) { return .ask }
-            if screenshot.contains(.save) { return .folder }
+            if screenshot.contains(.promptSave) {
+                return .ask
+            }
+            if screenshot.contains(.save) {
+                return .folder
+            }
             return .none
         }
         set {
