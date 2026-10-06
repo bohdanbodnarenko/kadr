@@ -24,6 +24,9 @@ struct StudioTranscriptPanel: View {
     /// The words the search finds, in order, and which one is current (docs/18 STU-10).
     @State private var matchIDs: [String] = []
     @State private var matchIndex: Int?
+    /// The word being corrected, and the text typed for it.
+    @State private var correcting: TranscriptWord?
+    @State private var correctionDraft = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -38,6 +41,20 @@ struct StudioTranscriptPanel: View {
             }
         }
         .padding(10)
+        .alert(
+            Text("Correct Word", bundle: .module),
+            isPresented: Binding(get: { correcting != nil }, set: { if !$0 { correcting = nil } }),
+            presenting: correcting
+        ) { word in
+            TextField(String(localized: "Word", bundle: .module), text: $correctionDraft)
+            Button(String(localized: "Correct", bundle: .module)) {
+                model.correctWord(word, to: correctionDraft)
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(String(localized: "Cancel", bundle: .module), role: .cancel) {}
+        } message: { word in
+            Text("Heard as “\(word.text)”. Captions and exports use the correction.", bundle: .module)
+        }
         .onDeleteCommand(perform: cutSelection)
         .onExitCommand { clearSelection() }
         // Arrow keys walk the words, ⇧ extends the selection (docs/14 UX-34).
@@ -126,12 +143,17 @@ struct StudioTranscriptPanel: View {
                                 marks: TranscriptMarks(
                                     fillers: model.transcriptFillerWords,
                                     matches: chunk.ids.intersection(matchIDs),
-                                    currentMatch: currentMatchID.flatMap { chunk.ids.contains($0) ? $0 : nil }
+                                    currentMatch: currentMatchID.flatMap { chunk.ids.contains($0) ? $0 : nil },
+                                    corrections: model.edit.transcriptCorrections
                                 ),
                                 actions: TranscriptChipActions(
                                     onSelect: handleTap,
                                     onCutSentence: { model.cutSentence(containing: $0) },
-                                    onRestore: { model.restoreWords([$0]) }
+                                    onRestore: { model.restoreWords([$0]) },
+                                    onCorrect: { word in
+                                        correctionDraft = model.edit.transcriptCorrections[word.id] ?? word.text
+                                        correcting = word
+                                    }
                                 )
                             )
                             .equatable()
@@ -344,153 +366,5 @@ private struct TranscriptPlayheadFollower: View {
             .onChange(of: active?.id, initial: true) {
                 onChange(active)
             }
-    }
-}
-
-/// What a chip does when used. A reference-free bundle so chips can compare by value.
-private struct TranscriptChipActions {
-    let onSelect: (TranscriptWord) -> Void
-    let onCutSentence: (TranscriptWord) -> Void
-    let onRestore: (TranscriptWord) -> Void
-}
-
-/// What marks the words carry besides cut, selected and active.
-private struct TranscriptMarks: Equatable {
-    var fillers: Set<String>
-    var matches: Set<String>
-    var currentMatch: String?
-}
-
-/// Wrapping word chips. A custom layout rather than a single `Text` so a click lands on
-/// a word rather than a character offset we would then have to map back.
-///
-/// `Equatable` over what it draws, ignoring the actions: SwiftUI cannot compare closures,
-/// and without this every parent render re-ran the body for every word.
-private struct FlowWords: View, Equatable {
-    let words: [TranscriptWord]
-    let clips: ClipTimeline
-    let selectedIDs: Set<String>
-    let activeID: String?
-    let marks: TranscriptMarks
-    let actions: TranscriptChipActions
-
-    nonisolated static func == (lhs: FlowWords, rhs: FlowWords) -> Bool {
-        lhs.activeID == rhs.activeID
-            && lhs.selectedIDs == rhs.selectedIDs
-            && lhs.marks == rhs.marks
-            && lhs.clips == rhs.clips
-            && lhs.words == rhs.words
-    }
-
-    var body: some View {
-        FlexibleWordWrap(words: words) { word in
-            TranscriptChip(
-                word: word,
-                isCut: !clips.containsSourceTime((word.start + word.end) / 2),
-                isFiller: marks.fillers.contains(word.normalized),
-                isSelected: selectedIDs.contains(word.id),
-                isActive: word.id == activeID,
-                match: marks.currentMatch == word.id ? .current : marks.matches.contains(word.id) ? .other : nil,
-                actions: actions
-            )
-            .equatable()
-        }
-    }
-}
-
-/// One word. `Equatable` for the same reason as `FlowWords`.
-private struct TranscriptChip: View, Equatable {
-    let word: TranscriptWord
-    let isCut: Bool
-    let isFiller: Bool
-    let isSelected: Bool
-    let isActive: Bool
-    let match: Match?
-    let actions: TranscriptChipActions
-
-    enum Match: Equatable {
-        case current
-        case other
-    }
-
-    nonisolated static func == (lhs: TranscriptChip, rhs: TranscriptChip) -> Bool {
-        lhs.word == rhs.word
-            && lhs.isCut == rhs.isCut
-            && lhs.isFiller == rhs.isFiller
-            && lhs.isSelected == rhs.isSelected
-            && lhs.isActive == rhs.isActive
-            && lhs.match == rhs.match
-    }
-
-    var body: some View {
-        Button {
-            actions.onSelect(word)
-        } label: {
-            Text(word.text)
-                .underline(isFiller && !isCut, pattern: .dot, color: .orange)
-                .strikethrough(isCut, color: .secondary.opacity(0.6))
-                .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 1)
-                .background(background, in: RoundedRectangle(cornerRadius: 4))
-                // Shape as well as tint (docs/14 UX-34): selected words are outlined and
-                // the spoken word carries a bar, so neither depends on telling two
-                // accent shades apart.
-                .overlay {
-                    if isSelected || match == .current {
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(isSelected ? Color.accentColor : Color.orange, lineWidth: 1.5)
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    if isActive, !isCut {
-                        Capsule().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 3)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .id(word.id)
-        .accessibilityLabel(word.text)
-        .accessibilityValue(accessibilityState)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint(Text("Seek to this word. Shift-click to select a range.", bundle: .module))
-        .contextMenu {
-            if isCut {
-                Button(String(localized: "Restore Word", bundle: .module)) { actions.onRestore(word) }
-            } else {
-                Button(String(localized: "Cut This Sentence", bundle: .module)) { actions.onCutSentence(word) }
-            }
-        }
-    }
-
-    private var accessibilityState: String {
-        var states: [String] = []
-        if isCut {
-            states.append("cut")
-        }
-        if isFiller, !isCut {
-            states.append("filler")
-        }
-        if isActive {
-            states.append("playing")
-        }
-        if match != nil {
-            states.append("search match")
-        }
-        return states.joined(separator: ", ")
-    }
-
-    private var background: Color {
-        if isSelected {
-            Color.accentColor.opacity(isCut ? 0.12 : 0.24)
-        } else if isActive, !isCut {
-            Color.accentColor.opacity(0.2)
-        } else if match != nil {
-            Color.yellow.opacity(match == .current ? 0.45 : 0.25)
-        } else if isFiller, !isCut {
-            Color.orange.opacity(0.16)
-        } else {
-            Color.clear
-        }
     }
 }
