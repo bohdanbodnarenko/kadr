@@ -155,6 +155,11 @@ public final class EditorDocumentModel {
     /// main actor and the window still takes input.
     public internal(set) var runningExport: EditorExportAction?
 
+    /// Renders the flattened image to a file for drag-out, set by the host (docs/18 ED-3).
+    @ObservationIgnored public var flattenedFileRenderer: (@MainActor () async throws -> URL)?
+    /// The name a dragged-out image is given.
+    @ObservationIgnored public var flattenedDragName: String?
+
     /// Stops the running export, set by whoever started it (docs/18 §4.1 P3).
     @ObservationIgnored public var exportCancellation: (@MainActor () -> Void)?
 

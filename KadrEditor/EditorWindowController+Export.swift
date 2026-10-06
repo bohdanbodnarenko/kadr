@@ -1,4 +1,5 @@
 import AnnotationModel
+import AnnotationRender
 import AppKit
 import CoreGraphics
 import CryptoKit
@@ -364,6 +365,28 @@ extension EditorWindowController {
     /// in the user's folder after every pin or share (T-ED-12). The same name is reused, so
     /// repeating the action replaces the file rather than adding one, and the system clears
     /// the temporary folder.
+    /// Lets the toolbar's Copy button be dragged out as the flattened image, rendered at
+    /// drop time with the current edits and export size (docs/18 ED-3).
+    func provideFlattenedDragOut() {
+        model.flattenedDragName = documentURL.deletingPathExtension().lastPathComponent
+        model.flattenedFileRenderer = { [weak self] in
+            guard let self else { throw CocoaError(.userCancelled) }
+            let baseImage = baseImage
+            let document = model.document
+            let exportScale = model.exportScale
+            let renderer = renderer
+            let image = try await Task.detached(priority: .userInitiated) {
+                try renderer.render(
+                    baseImage: baseImage,
+                    document: document,
+                    includeAnnotations: true,
+                    exportScale: exportScale
+                )
+            }.value
+            return try writeExportPNG(image, suffix: String(localized: "annotated"))
+        }
+    }
+
     func writeExportPNG(_ image: CGImage, suffix: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("Kadr Editor", isDirectory: true)

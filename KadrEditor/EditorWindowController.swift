@@ -216,6 +216,7 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
 
         offerRecoveryIfAny()
         trackChangesForAutosave()
+        provideFlattenedDragOut()
     }
 
     // MARK: - Unsaved work (docs/07 M7)

@@ -50,10 +50,17 @@ struct EditorToolbar: View {
                 .disabled(model.isFindingRedactions || model.isExporting || isCropping)
             }
             moreMenu
-            EditorToolbarButton(symbol: "doc.on.doc", help: "Copy", accessibilityLabel: "Copy") {
+            EditorToolbarButton(
+                symbol: "doc.on.doc",
+                help: String(localized: "Copy — or drag to hand the image to another app", bundle: .module),
+                accessibilityLabel: "Copy"
+            ) {
                 onExport(.copy)
             }
             .disabled(model.isExporting || isCropping)
+            // Dragging Copy hands over the flattened image, rendered when dropped: the
+            // title-bar proxy is the file on disk, which may predate the edits (docs/18 ED-3).
+            .onDrag { model.flattenedImageItemProvider() ?? NSItemProvider() }
             EditorToolbarDivider()
             // Beside Save, the other end of "done with this capture". It asks before it
             // moves anything, so it can sit this close to the commit button.
