@@ -170,7 +170,20 @@ public final class EditorDocumentModel {
 
     /// When on, existing annotations stay put so drawing tools do not accidentally grab
     /// them (CleanShot §8.1, docs/03 §3 P2).
-    public var isCanvasLocked = false
+    public var isCanvasLocked = false {
+        didSet {
+            if !isCanvasLocked {
+                showsLockedNotice = false
+            }
+        }
+    }
+
+    /// Says why a drag on a locked annotation did nothing, until unlocked or dismissed
+    /// (docs/18 T-ED-12). It used to draw a marquee instead, with no hint of the lock.
+    public var showsLockedNotice = false
+
+    /// The current press landed on an annotation while locked.
+    @ObservationIgnored var pressedLockedAnnotation = false
 
     /// Whether the inspector column is visible (docs/14 UX-28).
     public var isInspectorPresented = true

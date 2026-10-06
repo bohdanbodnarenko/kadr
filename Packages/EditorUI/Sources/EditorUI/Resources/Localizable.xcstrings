@@ -608,6 +608,9 @@
     "Numbering" : {
 
     },
+    "Objects are locked." : {
+
+    },
     "Obscure Center" : {
 
     },
@@ -972,6 +975,12 @@
 
     },
     "Trim clip start" : {
+
+    },
+    "Unlock" : {
+
+    },
+    "Unlock with ⇧⌘L or the lock in the toolbar" : {
 
     },
     "Use as Default" : {
