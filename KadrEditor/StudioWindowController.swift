@@ -135,6 +135,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             defer: false
         )
         window.title = model.session.displayName
+        window.contentMinSize = EditorWindowGeometry.studioMinSize
         // The title-bar proxy hands out the original recording; the edit leaves through
         // Export, Copy and Share (docs/18 STU-12).
         window.representedURL = model.session.screenURL

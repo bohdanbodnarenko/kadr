@@ -7,7 +7,11 @@ import Foundation
 /// after it is centered. The window should hug a small capture and back off to the screen
 /// for a 5K one, then the canvas fits inside whatever is left.
 public enum EditorWindowGeometry {
+    /// The editor's floor. Mirrors `UXLayoutContract.editorMinimum` in the agent, which the
+    /// editor cannot import; `KadrEditorTests` pins the two together (docs/14 UX-05).
     public static let minSize = CGSize(width: 760, height: 580)
+    /// The studio window's floor, from the same contract (`studioMinimum`).
+    public static let studioMinSize = CGSize(width: 820, height: 520)
     /// The inspector's resting width, and how far the user may drag it.
     ///
     /// An ideal rather than a fixed size now that the inspector is the system's own column:

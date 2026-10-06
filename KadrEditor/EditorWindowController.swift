@@ -178,6 +178,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             defer: false
         )
         window.title = documentURL.lastPathComponent
+        // The floor the layout contract promises; without it the window could be dragged
+        // smaller than the toolbar and inspector fit in (docs/14 UX-05).
+        window.contentMinSize = EditorWindowGeometry.minSize
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
         // Never the `.kadr`, which holds the un-redacted original (docs/18 ED-3).
         window.representedURL = proxyURL
