@@ -273,7 +273,7 @@ extension SettingsTab {
         switch self {
         case .general: String(localized: "General")
         case .permissions: String(localized: "Permissions")
-        case .overlay: String(localized: "Overlay")
+        case .overlay: String(localized: "Quick Access")
         case .capture: String(localized: "Capture")
         case .recording: String(localized: "Recording")
         case .history: String(localized: "History")
