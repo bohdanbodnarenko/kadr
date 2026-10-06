@@ -53,7 +53,7 @@ enum RecordingBarMetrics {
 
     /// Picker → countdown → live. Enough travel to read as one bar changing shape rather
     /// than two bars swapping.
-    static let modeChange = Animation.spring(response: 0.34, dampingFraction: 0.86)
+    static let modeChange = KadrMotion.panel
 
     static var tooltipAnimation: Animation {
         AccessibilityChrome.reduceMotion ? KadrMotion.reduced : KadrMotion.hover

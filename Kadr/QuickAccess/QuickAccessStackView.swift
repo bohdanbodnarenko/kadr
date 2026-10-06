@@ -48,7 +48,7 @@ struct QuickAccessStackView: View {
 
     /// Slow enough to read, quick enough not to be in the way. No bounce: cards carry a
     /// picture of the user's work, and overshoot on a thumbnail reads as a wobble.
-    static let animation = Animation.smooth(duration: 0.3, extraBounce: 0)
+    static let animation = KadrMotion.settle
 
     @State private var isReflowing = false
     @State private var reflowReset: Task<Void, Never>?

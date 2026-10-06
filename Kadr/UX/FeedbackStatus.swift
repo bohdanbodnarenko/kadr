@@ -171,7 +171,7 @@ struct FeedbackBanner: View {
                 onDismiss()
             }
         }
-        .kadrAnimation(.snappy(duration: 0.2), value: status.id)
+        .kadrAnimation(KadrMotion.snap, value: status.id)
     }
 
     private var symbol: String {

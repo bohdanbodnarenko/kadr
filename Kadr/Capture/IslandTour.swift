@@ -95,7 +95,7 @@ final class IslandTourModel {
     func move(by delta: Int) -> Bool {
         let next = index + delta
         guard steps.indices.contains(next) else { return false }
-        withAnimation(AccessibilityChrome.animation(.smooth(duration: 0.28))) {
+        withAnimation(AccessibilityChrome.animation(KadrMotion.settle)) {
             index = next
         }
         return true

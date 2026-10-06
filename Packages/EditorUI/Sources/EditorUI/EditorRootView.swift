@@ -89,7 +89,7 @@ public struct EditorRootView: View {
                     .transition(EditorMotion.transition(.scale(scale: 0.92).combined(with: .opacity)))
             }
         }
-        .editorAnimation(.snappy(duration: 0.2), value: model.showsCopiedToast)
+        .editorAnimation(KadrMotion.snap, value: model.showsCopiedToast)
         .frame(minWidth: EditorWindowGeometry.minSize.width, minHeight: EditorWindowGeometry.minSize.height)
         .editorLayoutDirection()
         .onChange(of: model.tool) { _, tool in

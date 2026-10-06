@@ -116,8 +116,7 @@ extension View {
                     lineWidth: 0.8
                 )
             }
-            .shadow(color: .black.opacity(0.32), radius: 22, y: 8)
-            .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
+            .kadrShadow(.floating)
         }
     }
 

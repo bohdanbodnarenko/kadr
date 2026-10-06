@@ -106,7 +106,7 @@ public struct StudioRootView: View {
             .padding(.vertical, KadrSpace.medium)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
             .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
-            .shadow(radius: 6, y: 2)
+            .kadrShadow(.banner)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
             .onHover { isHoveringNotice = $0 }
@@ -137,7 +137,7 @@ public struct StudioRootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .animation(motion(.snappy(duration: 0.3)), value: model.transcript == nil)
+        .animation(motion(KadrMotion.settle), value: model.transcript == nil)
     }
 
     /// Honours Reduce Motion everywhere one animation is asked for.

@@ -107,7 +107,7 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
     }
 
     private var motion: Animation? {
-        reduceMotion ? nil : .snappy(duration: 0.2)
+        reduceMotion ? nil : KadrMotion.snap
     }
 
     private func toggleOpen() {

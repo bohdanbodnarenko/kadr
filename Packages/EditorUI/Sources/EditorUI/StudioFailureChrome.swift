@@ -33,7 +33,7 @@ struct StudioFailureBanner: View {
         .padding(.vertical, KadrSpace.medium)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
         .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
-        .shadow(radius: 6, y: 2)
+        .kadrShadow(.banner)
         .padding(.horizontal, 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(failure.title). \(failure.message)")

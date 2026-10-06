@@ -43,7 +43,7 @@ extension View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(0.14), radius: 14, y: 5)
+            .kadrShadow(.raised)
     }
 }
 
@@ -124,7 +124,7 @@ struct EditorWorkspaceBanners: View {
             }
         }
         .frame(maxWidth: 560)
-        .editorAnimation(.snappy(duration: 0.22), value: model.hasRedactionReviewChrome)
+        .editorAnimation(KadrMotion.snap, value: model.hasRedactionReviewChrome)
     }
 }
 
@@ -139,7 +139,7 @@ struct EditorCropChrome: View {
                     .transition(EditorMotion.transition(.move(edge: .bottom).combined(with: .opacity)))
             }
         }
-        .editorAnimation(.snappy(duration: 0.22), value: model.tool == .crop)
+        .editorAnimation(KadrMotion.snap, value: model.tool == .crop)
     }
 }
 

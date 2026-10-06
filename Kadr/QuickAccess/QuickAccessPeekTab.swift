@@ -87,8 +87,7 @@ struct QuickAccessPeekTabView: View {
                 .allowsHitTesting(false)
         }
         .compositingGroup()
-        .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
-        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+        .kadrShadow(.floating)
         .onHover { hovering in
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
                 isHovering = hovering
@@ -117,7 +116,7 @@ struct QuickAccessPeekTabView: View {
                     RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                .kadrShadow(.glyph)
                 .rotationEffect(.degrees(Double(index) * -7), anchor: .bottom)
                 .offset(x: CGFloat(index) * -3)
             }

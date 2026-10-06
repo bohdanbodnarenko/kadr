@@ -128,7 +128,7 @@ struct QuickAccessCardView: View {
     /// screen. The slide is the one worth watching.
     private var chromeAnimation: Animation? {
         guard !reduceMotion, !suppressHoverChrome else { return nil }
-        return .snappy(duration: 0.16)
+        return KadrMotion.press
     }
 
     var body: some View {
@@ -259,8 +259,7 @@ struct QuickAccessCardView: View {
         // Flattened first, so the shadow is cast by the rounded result rather than by the
         // square image inside it.
         .compositingGroup()
-        .shadow(color: .black.opacity(0.24), radius: 18, y: 8)
-        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        .kadrShadow(.floating)
         .overlay {
             if isFocused {
                 RoundedRectangle(cornerRadius: Self.cornerRadius + 3, style: .continuous)
@@ -287,7 +286,7 @@ struct QuickAccessCardView: View {
                 Circle()
                     .strokeBorder(Color.white, lineWidth: 1.5)
             )
-            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+            .kadrShadow(.glyph)
             .padding(9)
             .accessibilityLabel("Newest capture")
             .help("Your most recent capture")

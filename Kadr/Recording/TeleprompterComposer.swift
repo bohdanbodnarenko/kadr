@@ -200,7 +200,7 @@ struct TeleprompterComposerView: View {
                         lineWidth: 0.8
                     )
             }
-            .shadow(color: .black.opacity(0.28), radius: 18, y: 6)
+            .kadrShadow(.floating)
     }
 
     private var readingTime: String {

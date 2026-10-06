@@ -115,7 +115,7 @@ struct EditorCopiedToast: View {
             .overlay {
                 Capsule().strokeBorder(KadrFill.stroke, lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+            .kadrShadow(.raised)
     }
 }
 
