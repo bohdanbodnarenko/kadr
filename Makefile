@@ -49,7 +49,7 @@ export PATH := $(CURDIR)/$(TOOLS):$(PATH)
 
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
-.PHONY: help build build-editor release install uninstall run test test-packages test-package \
+.PHONY: help build build-editor release install uninstall run run-pseudo run-rtl test test-packages test-package \
         test-app test-editor test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
         check-size check-strings strings size-gate perf packages packages-json all clean
 
@@ -95,6 +95,12 @@ uninstall: ## Remove the installed app
 
 run: install ## Install and launch
 	@open "$(INSTALL_DIR)/$(SCHEME).app"
+
+run-pseudo: install ## Launch in the double-length pseudolanguage, for layout checks
+	@open -n "$(INSTALL_DIR)/$(SCHEME).app" --args -NSDoubleLocalizedStrings YES
+
+run-rtl: install ## Launch laid out right to left, in English
+	@open -n "$(INSTALL_DIR)/$(SCHEME).app" --args -AppleTextDirection YES -NSForceRightToLeftWritingDirection YES
 
 # The distributable: archive, export with Developer ID, notarize, DMG, appcast. One
 # definition, like every other command here (docs/17 T-REL-3). Needs the owner's

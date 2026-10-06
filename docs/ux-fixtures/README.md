@@ -5,9 +5,8 @@ release-like agent and editor build before visual PRs.
 
 ## Launch arguments
 
-    /Applications/Kadr.app/Contents/MacOS/Kadr -KadrPseudolocalize
-    /Applications/Kadr.app/Contents/MacOS/Kadr -KadrPseudolocalize2x
-    /Applications/Kadr.app/Contents/MacOS/Kadr -KadrRTL
+    make run-pseudo    # -NSDoubleLocalizedStrings YES
+    make run-rtl       # -AppleTextDirection YES -NSForceRightToLeftWritingDirection YES
 
 ## Matrix
 
@@ -23,8 +22,8 @@ For each major surface, save minimum / regular / large widths at 1× and 2×:
 - Editor tools, crop, inspector, export progress, Help
 - Studio with and without transcript, crop, export
 
-Also capture `-KadrPseudolocalize` and `-KadrPseudolocalize2x` at the declared
-minimum size, and `-KadrRTL` on Settings, All-in-One, editor, and studio.
+Also capture `make run-pseudo` at the declared minimum size, and `make run-rtl` on
+Settings, the capture island, the editor and the studio.
 
 ## Runtime validation (docs/14 §6)
 
