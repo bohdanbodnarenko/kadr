@@ -19,4 +19,13 @@ extension AreaCaptureCoordinator {
                 )
             }
     }
+
+    /// Whether the pointer belongs in the freeze an overlay crops from.
+    nonisolated static func freezeIncludesCursor(
+        setting: Bool,
+        purpose: SelectionPurpose,
+        eyedropper: Bool
+    ) -> Bool {
+        setting && (purpose == .capture || purpose == .inspect) && !eyedropper
+    }
 }

@@ -230,9 +230,18 @@ final class AreaCaptureCoordinator {
                 // (docs/18 CAP-1, CAP-9). Started before the overlay exists, so it never
                 // lists Kadr's own panels.
                 let windowFetch = Task { try await Self.pickableWindows(from: engine) }
+                // An area capture is cropped out of the freeze, so "Include the pointer"
+                // has to reach it here or it never reaches the file (docs/17 T-CAP-12).
+                // Not for Capture Text or the eyedropper: the pointer would be read as
+                // text, or sampled as the colour.
+                let freezeOptions = FreezeOptions(includesCursor: Self.freezeIncludesCursor(
+                    setting: includesCursor,
+                    purpose: purpose,
+                    eyedropper: startsInEyedropperMode
+                ))
                 let freezes: [DisplayFreeze]
                 do {
-                    freezes = try await engine.freezeAllDisplays()
+                    freezes = try await engine.freezeAllDisplays(options: freezeOptions)
                 } catch {
                     windowFetch.cancel()
                     throw error
