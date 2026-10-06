@@ -24,6 +24,10 @@ public enum StudioPlaybackKey: Equatable, Sendable {
     /// Home and End.
     case seekToStart
     case seekToEnd
+    /// I and O set the in and out marks; ⌥X clears both (docs/18 T-STU-11).
+    case markIn
+    case markOut
+    case clearMarks
 
     /// What an event means, or nil for "not ours — let it keep travelling".
     ///
@@ -53,6 +57,12 @@ public enum StudioPlaybackKey: Equatable, Sendable {
             return option ? nil : .seekToStart
         case kVK_End:
             return option ? nil : .seekToEnd
+        case kVK_ANSI_I:
+            return option ? nil : .markIn
+        case kVK_ANSI_O:
+            return option ? nil : .markOut
+        case kVK_ANSI_X:
+            return option ? .clearMarks : nil
         default:
             return nil
         }

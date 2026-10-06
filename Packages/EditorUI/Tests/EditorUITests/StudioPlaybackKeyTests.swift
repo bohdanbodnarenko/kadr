@@ -52,6 +52,10 @@ struct StudioPlaybackKeyTests {
         Case(name: "L shuttles on", keyCode: kVK_ANSI_L, modifiers: [], expected: .shuttleForward),
         Case(name: "Home goes to the start", keyCode: kVK_Home, modifiers: [.function], expected: .seekToStart),
         Case(name: "End goes to the end", keyCode: kVK_End, modifiers: [.function], expected: .seekToEnd),
+        Case(name: "I marks in", keyCode: kVK_ANSI_I, modifiers: [], expected: .markIn),
+        Case(name: "O marks out", keyCode: kVK_ANSI_O, modifiers: [], expected: .markOut),
+        Case(name: "option-X clears the marks", keyCode: kVK_ANSI_X, modifiers: .option, expected: .clearMarks),
+        Case(name: "a bare X is not a mark key", keyCode: kVK_ANSI_X, modifiers: [], expected: nil),
         Case(name: "command-L is the menu's", keyCode: kVK_ANSI_L, modifiers: .command, expected: nil),
         Case(name: "an unrelated key falls through", keyCode: kVK_ANSI_Q, modifiers: [], expected: nil)
     ])

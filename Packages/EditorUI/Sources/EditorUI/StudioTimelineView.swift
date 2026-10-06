@@ -232,6 +232,9 @@ struct StudioTimelineView: View {
             hover(phase, scale: scale)
         }
         .overlay(alignment: .topLeading) {
+            StudioTimelineMarks(marks: model.marks, duration: model.edit.duration, scale: scale, height: bandsHeight)
+        }
+        .overlay(alignment: .topLeading) {
             StudioTimelinePlayhead(
                 clock: model.playheadClock,
                 scale: scale,

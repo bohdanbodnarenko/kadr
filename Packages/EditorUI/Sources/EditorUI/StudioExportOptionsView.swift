@@ -59,6 +59,17 @@ struct StudioExportOptionsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            if let range = model.marks.range(duration: model.edit.duration) {
+                Toggle(isOn: $model.marks.exportsRangeOnly) {
+                    Text(
+                        "Only the marked range (\(StudioInspector.clock(range.lowerBound))–\(StudioInspector.clock(range.upperBound)))",
+                        bundle: .module
+                    )
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
             if let sizeHint {
                 Text(sizeHint)
                     .font(.caption.monospacedDigit())

@@ -227,6 +227,9 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         case .shuttleForward: model.shuttle(.forward)
         case .seekToStart: model.seekToStart()
         case .seekToEnd: model.seekToEnd()
+        case .markIn: model.markIn()
+        case .markOut: model.markOut()
+        case .clearMarks: model.clearMarks()
         }
         return true
     }
