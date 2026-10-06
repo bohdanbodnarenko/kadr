@@ -8,6 +8,10 @@ import PackageDescription
 
 let package = Package(
     name: "HistoryKit",
+    // Display titles are localized from this package's own catalog, through
+    // Bundle.module (docs/18 X-4). Only the agent and editor link it, so the
+    // resource bundle always ships beside the code.
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "HistoryKit", targets: ["HistoryKit"])
@@ -30,6 +34,7 @@ let package = Package(
                 .product(name: "MediaExport", package: "MediaExport"),
                 .product(name: "GRDB", package: "GRDB.swift")
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import ControlKit
 import os
 import SettingsKit
 import Shared
@@ -37,8 +38,16 @@ extension ScrollCaptureCoordinator {
     func startAutoScroll(in rect: DisplayRect, on display: DisplayGeometry) {
         guard AutoScroller.isTrusted else {
             // Asking now rather than at launch is the whole policy (docs/04 §3.2). The
-            // grant only takes effect next time, so this run stays assisted.
-            explainAccessibility()
+            // grant only takes effect next time, so this run stays assisted — and the ask
+            // is a banner, not a modal: a modal took activation from the page mid-capture
+            // and stopped the user scrolling it (docs/17 T-CAP-10).
+            FailurePresenter.present(FeedbackStatus(
+                kind: .warning,
+                message: "Auto Scroll needs Accessibility permission. Keep scrolling by hand; "
+                    + "once allowed, it works from the next capture.",
+                recoveryTitle: "Allow…",
+                recovery: { AutoScroller.requestTrust() }
+            ))
             return
         }
 

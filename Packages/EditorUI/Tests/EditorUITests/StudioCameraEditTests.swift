@@ -169,6 +169,26 @@ struct StudioCameraEditTests {
         #expect(studio.edit.clips.clips.count == 2)
     }
 
+    /// docs/18 STU-11: the trash and Delete share one rule — the selection only.
+    @Test("With nothing selected, Trash deletes nothing; with a clip selected, that clip")
+    func deleteTimelineSelectionNeedsASelection() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let studio = try model(in: folder)
+        studio.playhead = 4
+        studio.splitAtPlayhead()
+        studio.selectedClip = nil
+        studio.selectedZoom = nil
+        #expect(!studio.canDeleteTimelineSelection)
+        studio.deleteTimelineSelection()
+        #expect(studio.edit.clips.clips.count == 2)
+
+        studio.selectedClip = studio.edit.clips.clips[0].id
+        #expect(studio.canDeleteTimelineSelection)
+        studio.deleteTimelineSelection()
+        #expect(studio.edit.clips.clips.count == 1)
+    }
+
     @Test("Resetting zooms clears the cues and leaves the clips")
     func resetZoomsLeavesClips() throws {
         let folder = scratch()

@@ -114,6 +114,9 @@ public final class EditorDocumentModel {
     /// The canvas consumes this on mouse-up. Placing the box is not the end of the
     /// gesture — typing is — so the text tool stays armed until that editor commits.
     public internal(set) var pendingTextEditID: AnnotationID?
+    /// A text box placed by the text tool and not yet committed: placing it and typing into
+    /// it fold into one undo step when the editor commits (docs/18 ED-5).
+    @ObservationIgnored var freshTextID: AnnotationID?
 
     /// Auto-redaction review. These sit outside the document until the user accepts
     /// (docs/03 §3, docs/06 M18) — detecting a secret must not blur it on its own.
@@ -187,6 +190,15 @@ public final class EditorDocumentModel {
     /// Arrows bound to the dragged annotations, precomputed at gesture start (docs/16 ED-5).
     var dragDependents: Set<AnnotationID> = []
     var isMovingSelection = false
+    /// Snapping for the current move (docs/18 ED-7): the boxes it can land on, how close
+    /// counts (image points, set by the canvas from its zoom), and the guides to draw.
+    @ObservationIgnored var snapTargets: [CGRect] = []
+    @ObservationIgnored public var snapThreshold: CGFloat = 6
+    @ObservationIgnored public internal(set) var snapGuides: [SnapGuides.Guide] = []
+    /// ⌥ was held when the move began: the first movement drags copies.
+    @ObservationIgnored var duplicatesOnDrag = false
+    /// The last nudge's selection and where it left history, for coalescing.
+    @ObservationIgnored var lastNudge: (selection: Set<AnnotationID>, position: Int)?
     /// The handle currently being dragged, if this gesture is a resize rather than a move.
     var resizeHandle: SelectionHandle?
     var resizeStartBounds: CGRect?
@@ -374,8 +386,17 @@ public final class EditorDocumentModel {
     }
 
     /// Arrow-key nudging (docs/03 §3).
+    /// Arrow-key nudges of the same selection, with nothing else in between, are one undo
+    /// step: holding → for a second is one move, not thirty (docs/18 T-ED-12).
     public func nudgeSelection(dx: CGFloat, dy: CGFloat) {
+        let previous = lastNudge
+        let before = document.historyPosition
         moveSelection(by: CGSize(width: dx, height: dy))
+        guard document.historyPosition != before else { return }
+        if previous?.selection == document.selection, previous?.position == before {
+            document.foldLastStep()
+        }
+        lastNudge = (document.selection, document.historyPosition)
     }
 
     public func deleteSelection() {

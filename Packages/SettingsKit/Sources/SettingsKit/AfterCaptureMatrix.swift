@@ -43,14 +43,14 @@ public struct AfterCaptureActions: OptionSet, Hashable, Sendable, Codable {
 
     public var title: String {
         switch self {
-        case .overlay: "Show a card"
-        case .copy: "Copy to the clipboard"
-        case .save: "Save to the folder"
-        case .promptSave: "Ask where to save"
-        case .annotate: "Open for annotation"
-        case .pin: "Pin to the screen"
-        case .openEditor: "Open in the studio"
-        default: "Several actions"
+        case .overlay: String(localized: "Show a card", bundle: .module)
+        case .copy: String(localized: "Copy to the clipboard", bundle: .module)
+        case .save: String(localized: "Save to the folder", bundle: .module)
+        case .promptSave: String(localized: "Ask where to save", bundle: .module)
+        case .annotate: String(localized: "Open for annotation", bundle: .module)
+        case .pin: String(localized: "Pin to the screen", bundle: .module)
+        case .openEditor: String(localized: "Open in the studio", bundle: .module)
+        default: String(localized: "Several actions", bundle: .module)
         }
     }
 
@@ -78,8 +78,8 @@ public enum CaptureKind: String, CaseIterable, Sendable, Codable {
 
     public var title: String {
         switch self {
-        case .screenshot: "Screenshots"
-        case .recording: "Recordings"
+        case .screenshot: String(localized: "Screenshots", bundle: .module)
+        case .recording: String(localized: "Recordings", bundle: .module)
         }
     }
 }
@@ -133,6 +133,13 @@ public struct AfterCaptureMatrix: Hashable, Sendable, Codable {
     /// user has ever made about this and throwing it away to show them a new pane would be
     /// rude. Every old case has an exact equivalent; the overlay is added throughout
     /// because the old behaviour always showed a card.
+    /// The single old-style action this matrix is exactly equivalent to, or nil when the
+    /// user has tuned the matrix past what one radio choice can say. Read by onboarding so
+    /// it shows the real behaviour instead of the retired setting (docs/18 SH-6).
+    public var equivalentDefaultAction: DefaultCaptureAction? {
+        DefaultCaptureAction.allCases.first { Self.migrating($0) == self }
+    }
+
     public static func migrating(_ action: DefaultCaptureAction) -> AfterCaptureMatrix {
         let screenshot: AfterCaptureActions = switch action {
         case .copyToClipboard: [.overlay, .copy]

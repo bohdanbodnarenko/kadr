@@ -143,10 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hud = AllInOneHUD(
             settings: settings,
             perform: { [weak self] mode in self?.performAllInOne(mode) },
-            pickDisplay: { [weak self] id in self?.areaCapture.captureDisplay(id) },
+            pickDisplay: { [weak self] id in self?.captureIslandDisplay(id) },
             performTool: { [weak self] tool in self?.performAllInOneTool(tool) },
             desktopIconsHidden: { [weak self] in self?.desktopHygiene.isHidingIcons ?? false },
-            captureScreen: { [weak self] target in self?.areaCapture.captureFullscreen(target: target) }
+            captureScreen: { [weak self] target in self?.captureIslandScreen(target) },
+            availableUpdate: { UpdaterManager.shared.availableUpdateVersion },
+            installUpdate: { UpdaterManager.shared.checkForUpdates() }
         )
         hud.onShowingChanged = { [weak self] in
             self?.refreshStatusItemIcon()
@@ -213,9 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // written into the recording as something the user did (docs/09 U3.2). Asked for at
         // the moment of a click: the notch shell grows under the pointer and the floating
         // bar can be dragged, so a cached rect is the shape it had a moment ago.
-        created.studio.chromeOnScreen = { [weak self] in
-            guard let self else { return [] }
-            return [recordingControlBar.screenFrame, menuBarItemFrame].compactMap(\.self)
+        created.studio.chromeOnScreen = { [weak self, weak created] in
+            self?.recordingChrome(teleprompter: created?.teleprompter) ?? []
         }
         recordingStorage = created
         return created
@@ -283,13 +284,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func recoverInterruptedFootageThenSweep() {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            var unrecoverable: [URL] = []
             let count = await RecordingCrashRecovery.recover(
                 saveFolder: settings.saveFolder,
-                present: { [weak self] url in self?.areaCapture.showRecording(at: url) }
+                present: { [weak self] url in self?.areaCapture.showRecording(at: url) },
+                unrecoverable: { unrecoverable.append($0) }
             )
             if count > 0 {
                 RecordingCrashRecovery.announce(count)
             }
+            RecordingCrashRecovery.announceUnrecoverable(unrecoverable)
             StudioSessionRecorder.sweep()
             unfinishedRecordings.refresh()
         }
@@ -336,6 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exportDiagnostics: { [weak self] in Task { await self?.exportDiagnostics() } },
             reportProblem: { [weak self] in Task { await self?.reportProblem() } }
         )
+        UpdaterManager.shared.onAvailableUpdateChange = { [weak self] in self?.refreshStatusItemIcon() }
         attachStatusItemDrop()
         statusItemController?.applyMenuBarVisibility(settings.showsMenuBarIcon)
         statusItemController?.onMenuBarVisibilityChange = { [weak self] visible in
@@ -352,6 +357,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if SingleInstance.yieldIfAnotherIsRunning(beforeQuitting: { isYieldingToAnotherInstance = true }) {
             return
         }
+        // Before the recorder or camera bubble can open, so both come back where they were.
+        RecordingPlacement.settings = settings
         // Before anything attaches to this path: hotkeys, the CLI port, permissions
         // (docs/17 T-SH-2).
         let moving = MoveToApplications.offerIfNeeded { [weak self] in
@@ -380,21 +387,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Clear staged captures the user never acted on (docs/03 §2). Once, at launch —
         // never on a timer.
         CaptureOutput(settings: settings).sweepStaging()
+        // Frames from a scrolling capture that crashed mid-way (docs/18 §4.2 P3).
+        Task.detached(priority: .utility) { ScrollCaptureSession.sweepOrphanedFrames() }
         recoverInterruptedFootageThenSweep()
 
         // Open the library after the status item is up, so SQLite cannot eat into the
         // launch budget (PRD §8). Retention (including session-only wipe) runs here.
         history.start()
         history.onPin = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             _ = areaCapture.quickAccess.pinFile(at: url)
         }
         history.onAnnotate = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             areaCapture.quickAccess.annotateFile(at: url)
         }
         history.onCopyText = { [weak self] record in
-            guard let self, let url = history.fileURL(for: record) else { return }
+            guard let self, let url = history.preferredFileURL(for: record) else { return }
             areaCapture.quickAccess.recognizeText(at: url)
         }
 
@@ -466,5 +475,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing Settings must not quit the agent.
         false
+    }
+}
+
+extension AppDelegate {
+    /// Kadr's own controls on screen during a take. The prompter and the camera bubble are
+    /// Kadr's too: dragging or nudging them is not a click in the app being demonstrated
+    /// (docs/18 REC-11).
+    func recordingChrome(teleprompter: TeleprompterController?) -> [CGRect] {
+        [
+            recordingControlBar.screenFrame,
+            menuBarItemFrame,
+            teleprompter?.screenFrame,
+            cameraRecorder.previewFrame
+        ].compactMap(\.self)
     }
 }

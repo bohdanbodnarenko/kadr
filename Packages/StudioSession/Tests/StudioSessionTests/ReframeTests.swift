@@ -52,7 +52,7 @@ struct ReframeTests {
 
     /// The interesting part of a screen recording is rarely dead centre — a sidebar-heavy
     /// app puts it well left.
-    @Test("The crop can be biased away from the centre")
+    @Test("The crop can be biased away from the center")
     func bias() {
         let left = Reframe(aspect: .nineSixteen, horizontalBias: 0).sourceRect(for: landscape)
         let right = Reframe(aspect: .nineSixteen, horizontalBias: 1).sourceRect(for: landscape)
@@ -373,7 +373,7 @@ struct StudioEditTests {
         #expect(preset.matches(applied))
     }
 
-    @Test("A preset carries ripple colour")
+    @Test("A preset carries ripple color")
     func presetCarriesClickColor() {
         var edit = StudioEdit.untouched(duration: 8)
         edit.clickColor = StudioColor(red: 1, green: 0.2, blue: 0.1)

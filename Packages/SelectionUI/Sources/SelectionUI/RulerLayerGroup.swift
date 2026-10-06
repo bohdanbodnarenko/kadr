@@ -33,7 +33,9 @@ final class RulerLayerGroup {
 
     init(scale: DisplayScale) {
         self.scale = scale
-        labelFont = .monospacedDigitSystemFont(ofSize: 9, weight: .medium)
+        // 10 pt is the floor for any text in Kadr's chrome (docs/18 X-1). SelectionUI
+        // sits beside ControlKit in the layering, so it cannot read the token itself.
+        labelFont = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
 
         container.isHidden = true
         ticksLayer.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor

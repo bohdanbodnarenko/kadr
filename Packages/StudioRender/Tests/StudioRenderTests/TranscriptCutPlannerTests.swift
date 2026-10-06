@@ -38,7 +38,7 @@ struct TranscriptCutPlannerTests {
         #expect(filler.label == "um")
     }
 
-    @Test("Every filler spelling is recognised", arguments: ["um", "Um", "uh,", "Erm.", "ah", "hmm"])
+    @Test("Every filler spelling is recognized", arguments: ["um", "Um", "uh,", "Erm.", "ah", "hmm"])
     func fillerSpellings(spelling: String) {
         let script = transcript([word("So", 0, 0.4), word(spelling, 0.5, 0.8), word("here", 0.9, 1.3)])
         #expect(planner.cuts(for: script, duration: 2).contains { $0.reason == .fillerWord })

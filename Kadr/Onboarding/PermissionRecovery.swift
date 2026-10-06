@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import OverlayKit
 import Shared
 
 /// What to do when a capture fails because the grant went away (docs/03 §9).
@@ -30,27 +31,37 @@ struct PermissionRecovery {
             ? "macOS has asked you to re-confirm screen recording."
             : "Kadr does not have permission to record the screen."
         if state == .revoked {
-            alert.informativeText = "macOS asks about once a month, for every screen-capture app. Turn Kadr back "
+            alert.informativeText = String(
+                localized: "macOS asks about once a month, for every screen-capture app. Turn Kadr back "
+            )
                 + "on and captures will work again."
         } else if includePicker {
-            alert.informativeText = "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            alert.informativeText = String(
+                localized: "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            )
                 + "You can also capture a window through the macOS picker, which needs no permission."
         } else {
-            alert.informativeText = "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            alert.informativeText = String(
+                localized: "Turn Kadr on under Privacy & Security → Screen & System Audio Recording. "
+            )
                 + "After turning it on, quit and reopen Kadr — macOS applies the permission on relaunch."
         }
 
-        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: String(localized: "Open System Settings"))
         if includePicker {
-            alert.addButton(withTitle: "Use the macOS Picker")
+            alert.addButton(withTitle: String(localized: "Use the macOS Picker"))
         }
         alert.addButton(withTitle: includePicker ? "Later" : "Cancel")
 
         // An accessory app has to come forward for a modal, or the alert appears behind
-        // whatever the user was doing.
-        NSApp.activate()
-
-        return switch alert.runModal() {
+        // whatever the user was doing — and must hand the keyboard back after Later, which
+        // a bare activate never did (docs/18 SH-8).
+        let response = ActivationJuggler.shared.withTemporaryActivation(
+            returningTo: ActivationJuggler.returnTarget()
+        ) {
+            alert.runModal()
+        }
+        return switch response {
         case .alertFirstButtonReturn: .openSettings
         case .alertSecondButtonReturn: includePicker ? .usePicker : .dismiss
         default: .dismiss

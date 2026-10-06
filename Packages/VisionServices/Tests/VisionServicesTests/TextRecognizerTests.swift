@@ -94,7 +94,7 @@ struct TextRecognizerTests {
         #expect(analysis.candidates.isEmpty, "redaction candidates are opt-in")
     }
 
-    @Test("Word boxes travel with recognised lines")
+    @Test("Word boxes travel with recognized lines")
     func wordBoxes() async throws {
         let analysis = try await recognizer.analyze(
             pngData: makeTextImage("Hello Kadr"),

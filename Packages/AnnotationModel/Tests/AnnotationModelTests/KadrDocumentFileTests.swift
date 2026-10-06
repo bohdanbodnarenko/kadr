@@ -35,7 +35,7 @@ struct ZipArchiveTests {
         #expect(read == entries)
     }
 
-    @Test("The archive starts with a local file header, so other tools recognise it")
+    @Test("The archive starts with a local file header, so other tools recognize it")
     func hasZipSignature() {
         let archive = ZipArchive.archive([ZipArchive.Entry(name: "a.txt", data: Data("hi".utf8))])
         #expect(Array(archive.prefix(4)) == [0x50, 0x4B, 0x03, 0x04])
@@ -279,5 +279,55 @@ struct StyleMemoryTests {
         memory.remember(.none, for: .shape)
         #expect(memory.fill(for: .shape).color == nil)
         #expect(abs(memory.lastFillOpacity - 0.7) < 0.001)
+    }
+}
+
+/// What a project from another build says when it cannot be read (docs/18 ED-8).
+@Suite("Reading projects from other builds")
+struct KadrDocumentFileCompatibilityTests {
+    private func archive(json: String) -> Data {
+        ZipArchive.archive([
+            ZipArchive.Entry(name: KadrDocumentFile.baseImageEntry, data: fakePNG),
+            ZipArchive.Entry(name: KadrDocumentFile.commandsEntry, data: Data(json.utf8))
+        ])
+    }
+
+    @Test("A newer file version is named as such, even when it does not decode")
+    func newerVersion() {
+        #expect(throws: KadrDocumentFile.FileError.unsupportedVersion(9)) {
+            try KadrDocumentFile.contents(of: archive(json: #"{"version":9,"whatever":true}"#))
+        }
+    }
+
+    @Test("An unknown command type is a newer Kadr, not a broken file")
+    func unknownCommand() throws {
+        let base = try JSONEncoder().encode(makeContents().document.baseImage)
+        let json = try #"{"version":1,"baseImage":"# + #require(String(bytes: base, encoding: .utf8))
+            + #","commands":[{"hologram":{"id":"x"}}]}"#
+        #expect(throws: KadrDocumentFile.FileError.newerCommands) {
+            try KadrDocumentFile.contents(of: archive(json: json))
+        }
+    }
+
+    @Test("Export Size travels with the project; native size writes nothing", arguments: [
+        (0.5 as Double?, 0.5 as Double?), (1, nil), (nil, nil)
+    ])
+    func exportScaleRoundTrip(saved: Double?, expected: Double?) throws {
+        var contents = makeContents()
+        contents.exportScale = saved
+        let read = try KadrDocumentFile.contents(of: KadrDocumentFile.data(for: contents))
+        #expect(read.exportScale == expected)
+    }
+
+    @Test("Errors read as sentences, not type names")
+    func messages() {
+        let errors: [KadrDocumentFile.FileError] = [
+            .unsupportedVersion(2), .newerCommands, .malformed("x"), .missingEntry("a")
+        ]
+        for error in errors {
+            let text = error.localizedDescription
+            #expect(!text.contains("FileError"))
+            #expect(text.hasSuffix("."))
+        }
     }
 }

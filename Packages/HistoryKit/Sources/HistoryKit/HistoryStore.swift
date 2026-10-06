@@ -112,7 +112,8 @@ public actor HistoryStore {
             capturedAt: draft.capturedAt,
             lastAccessedAt: draft.capturedAt,
             byteSize: byteSize,
-            originalFilename: draft.originalFilename
+            originalFilename: draft.originalFilename,
+            originalPath: draft.originalURL?.standardizedFileURL.path
         )
         try HistorySidecar.write(record, to: layout.sidecarURL(id: record.id))
         try await insert(record)
@@ -162,7 +163,10 @@ public actor HistoryStore {
         }
 
         return try await dbPool.read { db in
-            let request = Self.apply(filter, to: HistoryRecord.order(Self.order(for: filter.sort)))
+            // The id tiebreak matches keyset paging, so the first page and the ones after
+            // it agree on where equal keys fall (docs/18 OUT-9).
+            let ordered = HistoryRecord.order(Self.order(for: filter.sort), Self.tiebreak(for: filter.sort))
+            let request = Self.apply(filter, to: ordered)
             return try request.limit(limit, offset: offset).fetchAll(db)
         }
     }
@@ -398,8 +402,10 @@ public actor HistoryStore {
                 try? FileManager.default.removeItem(at: file)
                 try? FileManager.default.removeItem(at: thumb)
             case .trash:
-                try? FileManager.default.trashItem(at: file, resultingItemURL: nil)
-                try? FileManager.default.trashItem(at: thumb, resultingItemURL: nil)
+                // Under the name the user knows: Finder's Trash showed `3fa9c1….png`,
+                // which nobody can recognise or Put Back to anything (docs/18 OUT-6).
+                Self.trash(file, as: record.originalFilename, in: layout)
+                try? FileManager.default.removeItem(at: thumb)
             }
         }
 

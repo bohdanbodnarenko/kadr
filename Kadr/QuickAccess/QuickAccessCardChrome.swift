@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import SwiftUI
 
@@ -41,10 +42,67 @@ struct ThumbnailImage: View {
             }
         }
         .task(id: "\(url.path)-\(revision)") {
-            image = isVideo
+            let key = CardThumbnailCache.Key(path: url.path, revision: revision, maxPixelSize: maxPixelSize)
+            if let cached = CardThumbnailCache.shared.image(for: key) {
+                image = cached
+                return
+            }
+            let url = url
+            let maxPixelSize = maxPixelSize
+            // Off the main thread: a card, its peek miniature and a hover re-render used to
+            // decode the same capture up to three times on it (docs/18 OUT-11).
+            let decoded = isVideo
                 ? await VideoPosterFrame.posterFrame(of: url, maxPixelSize: maxPixelSize)
-                : ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
+                : await Task.detached(priority: .userInitiated) {
+                    ThumbnailLoader().thumbnail(for: url, maxPixelSize: maxPixelSize)
+                }.value
+            guard !Task.isCancelled else { return }
+            if let decoded {
+                CardThumbnailCache.shared.insert(decoded, for: key)
+            }
+            image = decoded
         }
+    }
+}
+
+/// The last few card thumbnails, so re-rendering a card does not decode it again.
+///
+/// Small and bounded: a handful of card-sized bitmaps, gone with the oldest entry. Cleared
+/// with the cards, so the idle agent holds none (CLAUDE.md rule 2).
+@MainActor
+final class CardThumbnailCache {
+    struct Key: Hashable {
+        let path: String
+        let revision: Int
+        let maxPixelSize: Int
+    }
+
+    static let shared = CardThumbnailCache()
+    static let capacity = 12
+
+    private var entries: [Key: CGImage] = [:]
+    private var order: [Key] = []
+
+    func image(for key: Key) -> CGImage? {
+        entries[key]
+    }
+
+    func insert(_ image: CGImage, for key: Key) {
+        if entries.updateValue(image, forKey: key) == nil {
+            order.append(key)
+        }
+        while order.count > Self.capacity {
+            entries.removeValue(forKey: order.removeFirst())
+        }
+    }
+
+    func removeAll() {
+        entries.removeAll()
+        order.removeAll()
+    }
+
+    var count: Int {
+        entries.count
     }
 }
 
@@ -53,10 +111,21 @@ struct ThumbnailImage: View {
 /// A fixed translucent fill rather than a system material: the overlay panel is almost
 /// never the key window, and a vibrancy material there renders in its flat inactive state —
 /// grey on one capture, invisible on the next. This reads the same over any picture.
+///
+/// Reduce Transparency makes the glass nearly opaque and Increase Contrast strengthens its
+/// edge, so the white glyphs stay legible over any capture (docs/18 X-3).
 enum CardGlass {
-    static let fill = Color(white: 0.08, opacity: 0.62)
-    static let hoverFill = Color(white: 0.08, opacity: 0.8)
-    static let edge = Color.white.opacity(0.16)
+    static var fill: Color {
+        Color(white: 0.08, opacity: KadrAccessibility.reduceTransparency ? 0.94 : 0.62)
+    }
+
+    static var hoverFill: Color {
+        Color(white: 0.08, opacity: KadrAccessibility.reduceTransparency ? 0.98 : 0.8)
+    }
+
+    static var edge: Color {
+        Color.white.opacity(KadrAccessibility.increaseContrast ? 0.45 : 0.16)
+    }
 }
 
 /// A glyph in the card's action bar: white on the bar's glass, a soft disc under the pointer.
@@ -88,10 +157,11 @@ private struct CardBarButtonBody: View {
 
     private var fill: Double {
         guard isEnabled else { return 0 }
+        let contrast = KadrAccessibility.increaseContrast
         if configuration.isPressed {
-            return 0.28
+            return contrast ? 0.4 : 0.28
         }
-        return isHovering ? 0.16 : 0
+        return isHovering ? (contrast ? 0.3 : 0.16) : 0
     }
 }
 

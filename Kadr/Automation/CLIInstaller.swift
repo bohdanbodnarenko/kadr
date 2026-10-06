@@ -78,17 +78,17 @@ struct CLIInstaller {
                 // with the name is left alone and the next directory is tried.
                 if exists(link) {
                     guard isKadrLink(link) else {
-                        logger.info("A different kadr is in \(directory.path, privacy: .public); leaving it")
+                        logger.info("A different kadr is in \(directory.path, privacy: .private); leaving it")
                         continue
                     }
                     try fileManager.removeItem(at: link)
                 }
                 try fileManager.createSymbolicLink(at: link, withDestinationURL: tool)
             } catch {
-                logger.error("Could not link into \(directory.path, privacy: .public)")
+                logger.error("Could not link into \(directory.path, privacy: .private)")
                 continue
             }
-            logger.info("Installed the CLI at \(link.path, privacy: .public)")
+            logger.info("Installed the CLI at \(link.path, privacy: .private)")
             return Self.isOnPath(directory) ? .installed(link) : .installedNeedsPath(link)
         }
         return .failed("Kadr could not write to /usr/local/bin or ~/.local/bin.")
@@ -115,10 +115,10 @@ struct CLIInstaller {
         guard let installedURL else { return .nothingInstalled }
         do {
             try fileManager.removeItem(at: installedURL)
-            logger.info("Removed the CLI at \(installedURL.path, privacy: .public)")
+            logger.info("Removed the CLI at \(installedURL.path, privacy: .private)")
             return .removed
         } catch {
-            logger.error("Could not remove \(installedURL.path, privacy: .public)")
+            logger.error("Could not remove \(installedURL.path, privacy: .private)")
             let path = installedURL.path
             return .failed(String(localized: "Kadr could not remove \(path). Remove it in Terminal with: rm \(path)"))
         }

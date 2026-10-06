@@ -37,7 +37,7 @@ public struct AutomationResponse: Codable, Hashable, Sendable {
     }
 
     public static let ok = AutomationResponse(status: .ok)
-    public static let cancelled = AutomationResponse(status: .cancelled, message: "Cancelled.")
+    public static let cancelled = AutomationResponse(status: .cancelled, message: "Canceled.")
     public static let denied = AutomationResponse(
         status: .denied,
         message: "This app is not allowed to control Kadr. Allow it in Settings → Advanced."

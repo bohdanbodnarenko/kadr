@@ -22,7 +22,8 @@ extension EditorWindowController {
         do {
             try writeProject(to: destination, addToHistory: true)
             rebind(to: destination)
-            logger.info("Saved project \(destination.lastPathComponent, privacy: .public)")
+            noteProjectKeepsOriginalPixels()
+            logger.info("Saved project \(destination.lastPathComponent, privacy: .private)")
         } catch {
             model.failExport(.save, message: error.localizedDescription)
             logger.error("Could not save the project: \(error.localizedDescription, privacy: .public)")
@@ -32,14 +33,18 @@ extension EditorWindowController {
     /// Writes the project. Never brings Finder forward: a save is the silent write
     /// (docs/03:171); only Show in Finder reveals (T-ED-1).
     func writeProject(to destination: URL, addToHistory: Bool = true) throws {
-        try KadrDocumentFile.write(
-            basePNG.contents(for: model.document),
-            to: destination
-        )
+        try KadrDocumentFile.write(projectContents(), to: destination)
         markClean()
         if addToHistory {
             addToLibrary(destination)
         }
+    }
+
+    /// The project as it would be written now, Export Size included (docs/18 ED-12).
+    func projectContents() throws -> KadrDocumentFile.Contents {
+        var contents = try basePNG.contents(for: model.document)
+        contents.exportScale = Double(model.exportScale)
+        return contents
     }
 
     /// The document matches what is on disk.
@@ -51,12 +56,60 @@ extension EditorWindowController {
 
     /// Points the window, its title and its proxy icon at `url`, so the next ⌘S, the
     /// title bar and a drag of the proxy icon all mean the file just written (T-ED-1).
+    ///
+    /// The proxy icon is the flattened image, never the `.kadr`: the project holds the
+    /// untouched base pixels, so dragging it into Mail would send what the user blurred
+    /// (docs/18 ED-3). With no flattened image on disk there is no proxy at all.
     func rebind(to url: URL) {
         guard url != documentURL else { return }
         autosave.discard(for: documentURL)
         documentURL = url
-        window?.setTitleWithRepresentedFilename(url.path)
-        window?.representedURL = url
+        window?.title = url.lastPathComponent
+        window?.representedURL = proxyURL
+    }
+
+    /// What the title-bar proxy hands out: the image the user sees, redactions burned in.
+    var proxyURL: URL? {
+        Self.proxyURL(for: documentURL, existingImage: capturedImageURL)
+    }
+
+    /// `document` itself when it is an image; otherwise the image beside the project, if
+    /// one exists. Never a `.kadr` (docs/18 ED-3).
+    static func proxyURL(for document: URL, existingImage: URL?) -> URL? {
+        guard document.pathExtension.lowercased() == KadrDocumentFile.fileExtension else { return document }
+        return existingImage
+    }
+
+    /// Says once, the first time a project with redactions is written, that the project
+    /// keeps the original pixels and the flattened image is the one to share (docs/18 ED-3).
+    func noteProjectKeepsOriginalPixels() {
+        guard Self.containsRedactions(model.document.commands),
+              !UserDefaults.standard.bool(forKey: Self.projectPixelsNoticeKey),
+              let window
+        else { return }
+        UserDefaults.standard.set(true, forKey: Self.projectPixelsNoticeKey)
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = String(localized: "The project keeps the original pixels.")
+        alert.informativeText = String(
+            localized: "Redactions are burned into the saved image, which is the file to share. "
+        )
+            + "The .kadr project keeps the unredacted capture so you can edit the redactions later; "
+            + "don't send the project to anyone who shouldn't see what's under them."
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.beginSheetModal(for: window) { _ in }
+    }
+
+    static let projectPixelsNoticeKey = "editorProjectPixelsNoticeShown"
+
+    static func containsRedactions(_ commands: [AnnotationCommand]) -> Bool {
+        commands.contains {
+            if case .redaction = $0 {
+                true
+            } else {
+                false
+            }
+        }
     }
 
     func addToLibrary(_ url: URL) {
@@ -120,14 +173,20 @@ extension EditorWindowController {
         }
         markClean()
         rebind(to: targets.document)
-        logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .public)")
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
+        logger.info("Saved \(targets.flattened.lastPathComponent, privacy: .private)")
         CaptureSavedNotice.post(.init(original: original, saved: targets.flattened, previousHash: previousHash))
     }
 
     /// Encodes in the format the destination's extension names.
-    func write(_ image: CGImage, to url: URL) throws {
+    func write(_ image: CGImage, to url: URL, quality: Double? = nil) throws {
         var options = exportEncodingOptions
         options.format = ImageFormat(fileExtension: url.pathExtension) ?? .png
+        if let quality {
+            options.quality = quality
+        }
         try CaptureFileWriter().write(image, to: url, options: options)
     }
 
@@ -162,12 +221,10 @@ extension EditorWindowController {
         panel.directoryURL = editsImportedCopy
             ? FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
             : documentURL.deletingLastPathComponent()
-        panel.message = "Save this capture"
-        var types = ImageFormat.writable.map(\.contentType)
-        if let project = UTType(filenameExtension: KadrDocumentFile.fileExtension) {
-            types.append(project)
-        }
-        panel.allowedContentTypes = types
+        panel.message = String(localized: "Save this capture")
+        let current = ImageFormat(fileExtension: (capturedImageURL ?? documentURL).pathExtension) ?? .png
+        let accessory = SaveAsAccessory(panel: panel, initial: .image(current))
+        panel.accessoryView = accessory.view
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self else { return }
             defer { self.model.endExport() }
@@ -176,8 +233,8 @@ extension EditorWindowController {
                 return
             }
             do {
-                try saveAs(image, to: url)
-                logger.info("Saved \(url.lastPathComponent, privacy: .public)")
+                try saveAs(image, to: url, quality: accessory.quality)
+                logger.info("Saved \(url.lastPathComponent, privacy: .private)")
                 completion?(true)
             } catch {
                 completion?(false)
@@ -189,7 +246,7 @@ extension EditorWindowController {
 
     /// Writes to a destination the user picked and rebinds the window to it, so the title,
     /// the proxy icon and the next ⌘S all follow (T-ED-1).
-    func saveAs(_ image: CGImage, to url: URL) throws {
+    func saveAs(_ image: CGImage, to url: URL, quality: Double? = nil) throws {
         guard let targets = EditorSaveTargets.chosen(
             url,
             writesProject: EditorCanvasPreferences.writesSidecarOnSave()
@@ -197,15 +254,19 @@ extension EditorWindowController {
             try writeProject(to: url)
             chosenSaveTargets = nil
             rebind(to: url)
+            noteProjectKeepsOriginalPixels()
             return
         }
-        try write(image, to: targets.flattened)
+        try write(image, to: targets.flattened, quality: quality)
         if let project = targets.project {
             try writeProject(to: project, addToHistory: false)
         }
         markClean()
         chosenSaveTargets = targets
         rebind(to: targets.document)
+        if targets.project != nil {
+            noteProjectKeepsOriginalPixels()
+        }
     }
 
     func printImage(_ image: CGImage) {
@@ -255,7 +316,7 @@ extension EditorWindowController {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-        panel.prompt = "Insert"
+        panel.prompt = String(localized: "Insert")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         insertImportedImage(from: url)
     }
@@ -273,18 +334,14 @@ extension EditorWindowController {
 
     func insertImportedImage(from url: URL) {
         guard let imported = EditorImageImporter.png(from: url) else {
-            logger.error("Could not read \(url.lastPathComponent, privacy: .public)")
+            logger.error("Could not read \(url.lastPathComponent, privacy: .private)")
             return
         }
         placeImportedImage(imported.data, pixelSize: imported.pixelSize)
     }
 
     func placeImportedImage(_ png: Data, pixelSize: CGSize) {
-        let point = CGPoint(
-            x: model.document.contentRect.midX,
-            y: model.document.contentRect.midY
-        )
-        _ = model.insertImage(pngData: png, pixelSize: pixelSize, at: point)
+        _ = model.insertImage(pngData: png, pixelSize: pixelSize, at: model.nextPastePoint())
     }
 
     /// A PNG for Pin or Share, in the editor's temporary folder.
@@ -307,9 +364,11 @@ extension EditorWindowController {
     /// Matches the agent's General-pane sRGB toggle by reading the agent defaults
     /// domain — the two processes do not share `UserDefaults.standard`.
     var exportEncodingOptions: EncodingOptions {
+        // The DPI tag follows the pixels: a 2× capture exported at half size is a 1× image,
+        // and tagging it 144 DPI made it open at half its size elsewhere (docs/18 ED-12).
         EncodingOptions(
             format: .png,
-            scale: DisplayScale(model.document.baseImage.scale),
+            scale: DisplayScale(max(model.document.baseImage.scale * model.exportScale, 0.01)),
             convertToSRGB: Self.agentConvertsExportsToSRGB
         )
     }

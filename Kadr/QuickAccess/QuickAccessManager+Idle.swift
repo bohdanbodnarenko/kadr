@@ -172,6 +172,24 @@ extension QuickAccessManager {
         }
     }
 
+    /// Gives the newest card the keyboard, for someone not using the pointer (docs/18
+    /// UX-18). Tab then moves between cards and the card keys act on the focused one; the
+    /// keyboard goes back as soon as the pointer leaves the stack, as after a click.
+    func focusFromKeyboard() {
+        if areHidden {
+            setHidden(false)
+        }
+        if isPeeking {
+            setPeeking(false)
+        }
+        guard let newest = items.first, let overlayPanel else { return }
+        lastHoveredItemID = newest.id
+        keyboardFocusRequest = nil
+        keyboardFocusRequest = newest.id
+        overlayPanel.takeKeyboard()
+        startHoverKeyMonitorIfNeeded()
+    }
+
     /// The card the keyboard talks to: the one under the pointer, or the one last clicked.
     var keyTargetItem: QuickAccessItem? {
         let id = hoveredItemID ?? lastHoveredItemID

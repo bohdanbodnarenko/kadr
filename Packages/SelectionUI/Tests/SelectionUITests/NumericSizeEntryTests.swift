@@ -137,7 +137,7 @@ struct DimensionFormatterTests {
         #expect(DimensionFormatter.pointerText(at: CGPoint(x: 100.4, y: 200.6)) == "100, 201")
     }
 
-    @Test("Colours read out as hex")
+    @Test("Colors read out as hex")
     func hexText() {
         #expect(DimensionFormatter.hexText(red: 255, green: 128, blue: 0) == "#FF8000")
         #expect(DimensionFormatter.hexText(red: 0, green: 0, blue: 0) == "#000000")

@@ -25,7 +25,29 @@ extension AppDelegate {
                 return confirmQuitDuringRecording(recording, unsaved: unsaved, sender: sender)
             }
         }
-        return replyForQuitWithUnsavedCaptures(unsaved)
+        return settlingDeletions(replyForQuitWithUnsavedCaptures(unsaved))
+    }
+
+    /// Lets deletions still inside their Undo window finish before the process goes.
+    ///
+    /// Quitting is the end of the Undo window, so the deletes run now; left to their
+    /// timers they never ran and the "deleted" captures stayed in History (docs/18 OUT-5).
+    /// Bounded, so a stuck database cannot hold up quitting.
+    private func settlingDeletions(_ reply: NSApplication.TerminateReply) -> NSApplication.TerminateReply {
+        guard reply == .terminateNow, let quickAccess = areaCaptureStorage?.quickAccess else { return reply }
+        let history = quickAccess.history
+        guard quickAccess.hasPendingDeletions || history?.hasPendingTrash == true else { return reply }
+        let reply = TerminationReplyOnce()
+        Task { @MainActor in
+            await quickAccess.settlePendingDeletions()
+            await history?.settlePendingTrash()
+            reply.send()
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            reply.send()
+        }
+        return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -95,7 +117,7 @@ extension AppDelegate {
     ) -> NSApplication.TerminateReply {
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "A screen recording is still in progress."
+        alert.messageText = String(localized: "A screen recording is still in progress.")
         var info = "Kadr will finish and save the recording before quitting. "
             + "This can take a moment for a long recording."
         if !unsaved.isEmpty {
@@ -112,8 +134,8 @@ extension AppDelegate {
         alert.alertStyle = .warning
         // Cancel is the first button, so it is the default Return answers: a stray
         // Return must not end the take.
-        alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Finish Recording and Quit")
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Finish Recording and Quit"))
         guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
         if alert.suppressionButton?.state == .on {
             let saved = finalizeStagedCapturesBeforeQuit(unsaved)
@@ -135,11 +157,11 @@ extension AppDelegate {
         alert.messageText = unsaved.count == 1
             ? "One capture has not been saved."
             : "\(unsaved.count) captures have not been saved."
-        alert.informativeText = "Captures still on screen are kept temporarily and cleared "
+        alert.informativeText = String(localized: "Captures still on screen are kept temporarily and cleared ")
             + "within a day. Saving them puts them in your capture folder."
         alert.addButton(withTitle: unsaved.count == 1 ? "Save and Quit" : "Save All and Quit")
-        alert.addButton(withTitle: "Discard and Quit").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Discard and Quit")).hasDestructiveAction = true
+        alert.addButton(withTitle: String(localized: "Cancel"))
         alert.alertStyle = .warning
         NSApp.activate()
 
@@ -162,5 +184,18 @@ extension AppDelegate {
     func finalizeStagedCapturesBeforeQuit(_ unsaved: [QuickAccessItem]) -> Int {
         guard !unsaved.isEmpty, let quickAccess = areaCaptureStorage?.quickAccess else { return 0 }
         return quickAccess.finalizeAllStaged()
+    }
+}
+
+/// Answers a `.terminateLater` exactly once, whichever of the work or its deadline
+/// finishes first.
+@MainActor
+private final class TerminationReplyOnce {
+    private var sent = false
+
+    func send() {
+        guard !sent else { return }
+        sent = true
+        NSApp.reply(toApplicationShouldTerminate: true)
     }
 }

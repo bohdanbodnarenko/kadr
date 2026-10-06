@@ -172,7 +172,7 @@ private struct TextCaptureToastView: View {
                 Button("Edit…", action: onEdit)
                     .buttonStyle(.link)
                     .font(.callout)
-                    .help("Open the recognised text to correct it before pasting")
+                    .help("Open the recognized text to correct it before pasting")
             }
         }
         .accessibilityElement(children: .contain)

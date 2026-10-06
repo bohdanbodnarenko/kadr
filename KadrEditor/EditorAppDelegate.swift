@@ -40,6 +40,8 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // Application Support, and a deleted capture should not leave its annotations
         // behind (docs/07 H5, M7).
         EditorAutosave().sweepOrphans()
+        // The editor's own hangs and crashes, kept beside the agent's (docs/18 T-DIAG-2).
+        EditorMetricKitCollector.shared.start()
         // Copies of Finder-opened images are only for the window that edits them, and stale
         // hand-off markers mean an open that never arrived (docs/18 ED-1).
         CaptureImporter().sweepImports(keeping: Set(windows.map(\.documentURL)))
@@ -71,7 +73,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     ///
     /// Only files from outside: a capture the agent just took is already Kadr's, and
     /// copying it again would leave two of everything.
-    private func imported(_ url: URL) -> URL? {
+    func imported(_ url: URL, handoff: EditorHandoff = EditorHandoff()) -> URL? {
         guard url.pathExtension.lowercased() != StylePresetTransfer.pathExtension else { return nil }
         // A project is the user's own document: edited where it is, so saving it writes
         // back to the file they double-clicked, not to a hidden copy (T-ED-9).
@@ -79,7 +81,10 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard !isKadrOwned(url), !TrimWindowController.handles(url) else { return nil }
         // A capture the agent handed over is edited in place, so ⌘S and Move to Trash act
         // on the file the user sees (docs/18 ED-1).
-        guard !EditorHandoff().consume(url) else { return nil }
+        guard !handoff.consume(url) else { return nil }
+        // The original, not the hidden copy, is what Open Recent offers: the copy is swept
+        // within a week and its name means nothing to the user (docs/18 T-ED-9).
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
         return CaptureImporter().copyIntoLibrary(url)
     }
 
@@ -100,10 +105,12 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             let preset = try StylePresetTransfer.decoding(Data(contentsOf: url))
             _ = StylePresetStore().add(preset)
             let alert = NSAlert()
-            alert.messageText = "Imported “\(preset.name)”."
-            alert.informativeText = "The look is in the editor’s Look list. Open a capture to apply it."
+            alert.messageText = String(localized: "Imported “\(preset.name)”.")
+            alert.informativeText = String(
+                localized: "The look is in the editor’s Look list. Open a capture to apply it."
+            )
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: String(localized: "OK"))
             if let window = NSApp.keyWindow {
                 alert.beginSheetModal(for: window) { _ in }
             } else {
@@ -193,13 +200,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.messageText = operations.count == 1
             ? "Studio work is still running."
             : "\(operations.count) studio tasks are still running."
-        alert.informativeText = "Quitting now stops "
+        alert.informativeText = String(localized: "Quitting now stops ")
             + StudioWindowController.list(operations)
             + ", and any partly-written file is deleted."
         alert.alertStyle = .warning
         // Keep Working is the Return default; quitting is the destructive choice (T-SH-6).
-        alert.addButton(withTitle: "Keep Working")
-        let quit = alert.addButton(withTitle: "Quit Anyway")
+        alert.addButton(withTitle: String(localized: "Keep Working"))
+        let quit = alert.addButton(withTitle: String(localized: "Quit Anyway"))
         quit.hasDestructiveAction = true
         return alert.runModal() == .alertSecondButtonReturn
     }
@@ -209,12 +216,14 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard !dirty.isEmpty else { return true }
         if dirty.count > 1 {
             let alert = NSAlert()
-            alert.messageText = "You have \(dirty.count) Kadr documents with unsaved changes. "
+            alert.messageText = String(localized: "You have \(dirty.count) Kadr documents with unsaved changes. ")
                 + "Do you want to review these changes before quitting?"
-            alert.informativeText = "If you don’t review your documents, all your changes will be lost."
-            alert.addButton(withTitle: "Review Changes…")
-            alert.addButton(withTitle: "Cancel")
-            let discard = alert.addButton(withTitle: "Discard Changes")
+            alert.informativeText = String(
+                localized: "If you don’t review your documents, all your changes will be lost."
+            )
+            alert.addButton(withTitle: String(localized: "Review Changes…"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            let discard = alert.addButton(withTitle: String(localized: "Discard Changes"))
             discard.hasDestructiveAction = true
             switch alert.runModal() {
             case .alertFirstButtonReturn:
@@ -294,9 +303,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             if !isKadrOwned(url) || url.pathExtension.lowercased() == KadrDocumentFile.fileExtension {
                 NSDocumentController.shared.noteNewRecentDocumentURL(url)
             }
-            logger.info("Opened \(url.lastPathComponent, privacy: .public)")
+            logger.info("Opened \(url.lastPathComponent, privacy: .private)")
         } catch {
-            logger.error("Could not open \(url.lastPathComponent, privacy: .public): \(error.localizedDescription)")
+            logger.error("Could not open \(url.lastPathComponent, privacy: .private): \(error.localizedDescription)")
             presentOpenFailure(for: url, error: error)
         }
     }
@@ -340,7 +349,7 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             }
             studioWindows.append(controller)
             controller.show()
-            logger.info("Opened \(session.directory.lastPathComponent, privacy: .public) in the studio")
+            logger.info("Opened \(session.directory.lastPathComponent, privacy: .private) in the studio")
         } catch {
             logger.error("Could not open the studio: \(error.localizedDescription, privacy: .public)")
             presentOpenFailure(for: session.directory, error: error)
@@ -355,9 +364,9 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             }
             trimWindows.append(controller)
             controller.show()
-            logger.info("Opened \(url.lastPathComponent, privacy: .public) for trimming")
+            logger.info("Opened \(url.lastPathComponent, privacy: .private) for trimming")
         } catch {
-            logger.error("Could not trim \(url.lastPathComponent, privacy: .public)")
+            logger.error("Could not trim \(url.lastPathComponent, privacy: .private)")
             presentOpenFailure(for: url, error: error)
         }
     }
@@ -372,10 +381,10 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func presentOpenFailure(for url: URL, error: any Error) {
         let alert = NSAlert()
-        alert.messageText = "Kadr could not open “\(url.lastPathComponent)”."
+        alert.messageText = String(localized: "Kadr could not open “\(url.lastPathComponent)”.")
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: String(localized: "OK"))
         if let window = NSApp.keyWindow {
             alert.beginSheetModal(for: window) { _ in }
         } else {

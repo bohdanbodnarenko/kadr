@@ -34,7 +34,7 @@ extension AllInOneView {
                 model.settings.recordsSystemAudio.toggle()
             } label: {
                 saveTargetLabel(
-                    model.settings.recordsSystemAudio ? "System sound on" : "System sound off",
+                    model.settings.recordsSystemAudio ? "System audio on" : "System audio off",
                     selected: model.settings.recordsSystemAudio
                 )
             }
@@ -64,12 +64,7 @@ extension AllInOneView {
             Section("Timer") {
                 ForEach(timerOptions, id: \.self) { seconds in
                     Button(timerLabel(seconds)) {
-                        if seconds == model.settings.customTimerSeconds, seconds > 0 {
-                            model.settings.selfTimer = .off
-                        } else {
-                            model.settings.customTimerSeconds = 0
-                            model.settings.selfTimer = SelfTimer(rawValue: seconds) ?? .off
-                        }
+                        selectTimer(seconds)
                     }
                 }
             }
@@ -90,7 +85,7 @@ extension AllInOneView {
                     model.settings.recordsSystemAudio.toggle()
                 } label: {
                     saveTargetLabel(
-                        model.settings.recordsSystemAudio ? "System sound on" : "System sound off",
+                        model.settings.recordsSystemAudio ? "System audio on" : "System audio off",
                         selected: model.settings.recordsSystemAudio
                     )
                 }
@@ -141,7 +136,7 @@ extension AllInOneView {
     var recordingAudioValue: String {
         var parts: [String] = []
         if model.settings.recordsSystemAudio {
-            parts.append("System sound")
+            parts.append("System audio")
         }
         if model.settings.recordsMicrophone {
             parts.append("Microphone")

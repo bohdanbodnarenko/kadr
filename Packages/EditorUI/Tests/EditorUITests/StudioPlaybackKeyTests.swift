@@ -47,7 +47,13 @@ struct StudioPlaybackKeyTests {
         Case(name: "control-space is the system's", keyCode: kVK_Space, modifiers: .control, expected: nil),
         Case(name: "shift-left is the timeline's", keyCode: kVK_LeftArrow, modifiers: .shift, expected: nil),
         Case(name: "option-space is nobody's", keyCode: kVK_Space, modifiers: .option, expected: nil),
-        Case(name: "an unrelated key falls through", keyCode: kVK_ANSI_K, modifiers: [], expected: nil)
+        Case(name: "J shuttles back", keyCode: kVK_ANSI_J, modifiers: [], expected: .shuttleReverse),
+        Case(name: "K stops", keyCode: kVK_ANSI_K, modifiers: [], expected: .shuttleStop),
+        Case(name: "L shuttles on", keyCode: kVK_ANSI_L, modifiers: [], expected: .shuttleForward),
+        Case(name: "Home goes to the start", keyCode: kVK_Home, modifiers: [.function], expected: .seekToStart),
+        Case(name: "End goes to the end", keyCode: kVK_End, modifiers: [.function], expected: .seekToEnd),
+        Case(name: "command-L is the menu's", keyCode: kVK_ANSI_L, modifiers: .command, expected: nil),
+        Case(name: "an unrelated key falls through", keyCode: kVK_ANSI_Q, modifiers: [], expected: nil)
     ])
     func matches(_ testCase: Case) {
         #expect(

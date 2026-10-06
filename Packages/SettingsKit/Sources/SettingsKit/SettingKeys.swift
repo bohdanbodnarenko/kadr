@@ -68,6 +68,8 @@ public enum SettingKeys {
     /// round-trip through the presets picker.
     public static let selfTimer = SettingKey("capture.selfTimer", default: SelfTimer.off)
     public static let customTimerSeconds = SettingKey("capture.customTimerSeconds", default: 0)
+    /// The last typed timer value, kept after a preset is picked (docs/17 T-CAP-12).
+    public static let rememberedCustomTimerSeconds = SettingKey("capture.rememberedCustomTimerSeconds", default: 0)
     /// Keep the line structure of recognised text, or fold it into spaces (docs/03 §1.7).
     public static let ocrPreservesLineBreaks = SettingKey("capture.ocrPreservesLineBreaks", default: true)
     /// Open an editable review window after Capture Text (docs/03 §1.7).
@@ -193,6 +195,10 @@ public enum SettingKeys {
     public static let teleprompterDocksUnderCamera = SettingKey("teleprompter.docksUnderCamera", default: false)
     /// Where the panel was left, so it comes back where the reader put it.
     public static let teleprompterFrame = SettingKey("teleprompter.frame", default: "")
+    public static let recordingBarOrigin = SettingKey("recording.bar.origin", default: "")
+    public static let cameraBubbleOrigin = SettingKey("recording.camera.origin", default: "")
+    public static let cameraBubbleDiameter = SettingKey("recording.camera.diameter", default: 160.0)
+    public static let cameraBubbleIsCircular = SettingKey("recording.camera.circular", default: true)
     /// Keep the display's HDR range in recordings (macOS 15+, docs/06 M25).
     public static let recordingDynamicRange = SettingKey(
         "recording.dynamicRange",

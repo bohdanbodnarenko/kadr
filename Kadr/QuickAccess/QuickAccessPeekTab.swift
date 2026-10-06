@@ -1,12 +1,14 @@
 import AppKit
+import ControlKit
 import SettingsKit
 import SwiftUI
 
 /// Copy for the collapsed overlay tab (docs/03 §2).
 enum OverlayPeekCopy {
     static func title(count: Int, hasVideo: Bool) -> String {
-        let noun = hasVideo ? "Capture" : "Screenshot"
-        return count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+        hasVideo
+            ? KadrText.counted("^[\(count) Capture](inflect: true)")
+            : KadrText.counted("^[\(count) Screenshot](inflect: true)")
     }
 }
 
@@ -53,7 +55,7 @@ struct QuickAccessPeekTabView: View {
                         HStack(spacing: 3) {
                             Text("Show")
                             Image(systemName: corner.isBottom ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(KadrType.font(KadrType.micro, weight: .bold))
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -81,7 +83,7 @@ struct QuickAccessPeekTabView: View {
         }
         .overlay {
             shape
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
         .compositingGroup()

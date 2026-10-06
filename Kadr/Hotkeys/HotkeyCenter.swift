@@ -34,6 +34,7 @@ extension KeyboardShortcuts.Name {
     /// Period, because it is the "stop" key everywhere else on the Mac — ⌘. has cancelled
     /// things since before the App Store.
     static let stopRecording = Self("stopRecording", initial: .init(.period, modifiers: [.control, .shift]))
+    static let pauseRecording = Self("pauseRecording")
     /// The discoverable path: one key for "I want to record something", which then asks what.
     static let recordSetup = Self("recordSetup", initial: .init(.six, modifiers: [.control, .shift]))
     static let freezeScreen = Self("freezeScreen")
@@ -41,6 +42,8 @@ extension KeyboardShortcuts.Name {
     static let closeAllOverlays = Self("closeAllOverlays")
     static let saveAllOverlays = Self("saveAllOverlays")
     static let hideOverlays = Self("hideOverlays")
+    /// Unbound by default: the way to reach the cards without the pointer (docs/18 UX-18).
+    static let focusOverlay = Self("focusOverlay")
     static let hidePins = Self("hidePins")
     static let pinClipboard = Self("pinClipboard")
     /// ⌘⌥L, the key a click-through pin's badge promises. Registered only while some pin
@@ -70,12 +73,14 @@ extension CaptureCommand {
         case .recordRegion: .recordRegion
         case .recordDisplay: .recordDisplay
         case .stopRecording: .stopRecording
+        case .pauseRecording: .pauseRecording
         case .recordSetup: .recordSetup
         case .freezeScreen: .freezeScreen
         case .toggleDesktopIcons: .toggleDesktopIcons
         case .closeAllOverlays: .closeAllOverlays
         case .saveAllOverlays: .saveAllOverlays
         case .hideOverlays: .hideOverlays
+        case .focusOverlay: .focusOverlay
         case .hidePins: .hidePins
         case .pinClipboard: .pinClipboard
         case .togglePinClickThrough: .togglePinClickThrough

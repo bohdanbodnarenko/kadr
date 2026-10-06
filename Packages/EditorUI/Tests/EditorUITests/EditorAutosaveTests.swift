@@ -197,6 +197,60 @@ struct EditorAutosaveTests {
         #expect(autosave.read(for: URL(fileURLWithPath: "/nope.png")) == nil)
     }
 
+    // MARK: - docs/18 ED-10: the base image once, the annotations every time
+
+    @Test("The base image is written once; later saves rewrite only the annotations")
+    func baseWrittenOnce() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let autosave = EditorAutosave(directory: folder)
+        let capture = URL(fileURLWithPath: "/Captures/Screenshot.png")
+        var document = AnnotationDocument(baseImage: BaseImageReference(size: CGSize(width: 10, height: 10)))
+        try autosave.write(makeContents(document), for: capture)
+
+        let base = try #require(try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .first { $0.lastPathComponent.hasSuffix(".base.png") })
+        let past = Date(timeIntervalSince1970: 1_000_000)
+        try FileManager.default.setAttributes([.modificationDate: past], ofItemAtPath: base.path)
+
+        document.add(.shape(ShapeSpec(rect: CGRect(x: 1, y: 1, width: 4, height: 4))))
+        try autosave.write(makeContents(document), for: capture)
+
+        let modified = try FileManager.default.attributesOfItem(atPath: base.path)[.modificationDate] as? Date
+        #expect(modified == past)
+        #expect(autosave.read(for: capture)?.document.commands == document.commands)
+    }
+
+    @Test("A rotation survives the autosave")
+    func orientationSurvives() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let autosave = EditorAutosave(directory: folder)
+        let capture = URL(fileURLWithPath: "/Captures/Screenshot.png")
+        var document = AnnotationDocument(baseImage: BaseImageReference(size: CGSize(width: 10, height: 10)))
+        document.rotateClockwise()
+        try autosave.write(makeContents(document), for: capture)
+
+        #expect(autosave.read(for: capture)?.document.orientation == document.orientation)
+    }
+
+    @Test("An autosave from an earlier build is still offered")
+    func legacyAutosaveIsRead() throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let autosave = EditorAutosave(directory: folder)
+        let capture = URL(fileURLWithPath: "/Captures/Screenshot.png")
+        var document = AnnotationDocument(baseImage: BaseImageReference(size: CGSize(width: 10, height: 10)))
+        document.add(.shape(ShapeSpec(rect: CGRect(x: 1, y: 1, width: 4, height: 4))))
+        let legacy = autosave.url(for: capture).deletingPathExtension()
+            .appendingPathExtension(KadrDocumentFile.fileExtension)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try KadrDocumentFile.write(makeContents(document), to: legacy)
+
+        #expect(autosave.hasAutosave(for: capture))
+        #expect(autosave.read(for: capture)?.document.commands == document.commands)
+    }
+
     @Test("An unreadable autosave is dropped rather than offered")
     func corruptAutosaveIsDropped() throws {
         let folder = scratch()

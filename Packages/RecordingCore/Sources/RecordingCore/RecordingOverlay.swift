@@ -33,9 +33,9 @@ public enum KeystrokePosition: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .bottomCentre: "Bottom"
-        case .bottomLeading: "Bottom Left"
-        case .topCentre: "Top"
+        case .bottomCentre: String(localized: "Bottom", bundle: .module)
+        case .bottomLeading: String(localized: "Bottom Left", bundle: .module)
+        case .topCentre: String(localized: "Top", bundle: .module)
         }
     }
 }

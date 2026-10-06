@@ -26,9 +26,19 @@ enum StudioFilmstrip {
 
     private static let timescale: CMTimeScale = 600
 
+    /// How many tiles a lane of `width` points draws, never more than `maximumTiles`.
+    ///
+    /// A 30-minute recording at full timeline zoom is a lane hundreds of thousands of
+    /// points wide, and one tile per 36 points was thousands of views laid out and decoded
+    /// eagerly (docs/18 STU-15). Past the cap each tile stretches; the picture is a guide to
+    /// where you are, not a frame-accurate strip.
     static func tileCount(forWidth width: CGFloat) -> Int {
-        max(1, Int((width / tileWidth).rounded(.down)))
+        guard width.isFinite else { return 1 }
+        return min(max(1, Int((width / tileWidth).rounded(.down))), maximumTiles)
     }
+
+    /// The most tiles one clip's lane draws.
+    static let maximumTiles = 240
 
     /// Decodes the frames at `times`. A missing file or a cancelled task yields `[]`
     /// rather than throwing — the lane is still a clip without a picture in it.

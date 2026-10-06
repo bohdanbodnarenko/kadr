@@ -12,7 +12,13 @@ import Speech
 protocol SpeechEngine: Sendable {
     var kind: SpeechEngineKind { get }
     func isReady(locale: Locale) async -> Bool
-    func transcribe(audioAt url: URL, locale: Locale) async throws -> [SpeechWordDTO]
+    /// - Parameter progress: how many seconds of the audio are done, when the engine can
+    ///   tell. An engine that cannot report nothing, and the caller shows elapsed time.
+    func transcribe(
+        audioAt url: URL,
+        locale: Locale,
+        progress: (@Sendable (TimeInterval) -> Void)?
+    ) async throws -> [SpeechWordDTO]
 }
 
 enum SpeechEngineKind: String, Sendable {
@@ -129,7 +135,11 @@ struct AnalyzerEngine: SpeechEngine {
         return await AssetInventory.status(forModules: [module]) == .installed
     }
 
-    func transcribe(audioAt url: URL, locale: Locale) async throws -> [SpeechWordDTO] {
+    func transcribe(
+        audioAt url: URL,
+        locale: Locale,
+        progress: (@Sendable (TimeInterval) -> Void)?
+    ) async throws -> [SpeechWordDTO] {
         guard let module = await module(for: locale),
               await AssetInventory.status(forModules: [module]) == .installed
         else {
@@ -154,14 +164,25 @@ struct AnalyzerEngine: SpeechEngine {
         // Drain while feeding: the sequence does not finish until the analyzer does, so
         // collecting afterwards deadlocks. Start the consumer *after* the analyzer exists
         // and *before* `analyzeSequence` — the drain race called out in docs/13 T-M5.
-        let collected = Task { try await words(from: module) }
+        let collected = Task { try await words(from: module, progress: progress) }
+        // A cancelled tidy stops the analyzer too, rather than letting it read the rest of
+        // the file in the helper (docs/17 T-STU-5).
+        let boxed = AnalyzerBox(analyzer)
         do {
-            _ = try await analyzer.analyzeSequence(from: file)
-            try await analyzer.finalizeAndFinishThroughEndOfInput()
+            try await withTaskCancellationHandler {
+                _ = try await boxed.analyzer.analyzeSequence(from: file)
+                try await boxed.analyzer.finalizeAndFinishThroughEndOfInput()
+            } onCancel: {
+                collected.cancel()
+                Task { await boxed.analyzer.cancelAndFinishNow() }
+            }
         } catch {
             await analyzer.cancelAndFinishNow()
             collected.cancel()
             _ = try? await collected.value
+            if Task.isCancelled {
+                throw CancellationError()
+            }
             throw VisionServiceError.transcriptionFailed
         }
         return try await collected.value
@@ -179,10 +200,16 @@ struct AnalyzerEngine: SpeechEngine {
         )
     }
 
-    private func words(from module: Speech.SpeechTranscriber) async throws -> [SpeechWordDTO] {
+    private func words(
+        from module: Speech.SpeechTranscriber,
+        progress: (@Sendable (TimeInterval) -> Void)?
+    ) async throws -> [SpeechWordDTO] {
         var words: [SpeechWordDTO] = []
         for try await result in module.results {
             try Task.checkCancellation()
+            // Results arrive in audio order, so the end of each is how far the analyzer
+            // has read (docs/18 STU-9).
+            progress?(result.range.end.seconds)
             let text = result.text
             for run in text.runs {
                 let span = run.audioTimeRange ?? result.range
@@ -195,6 +222,16 @@ struct AnalyzerEngine: SpeechEngine {
             }
         }
         return words
+    }
+}
+
+/// Hands the analyzer to the cancellation handler, which runs on another thread.
+@available(macOS 26, *)
+private struct AnalyzerBox: @unchecked Sendable {
+    let analyzer: SpeechAnalyzer
+
+    init(_ analyzer: SpeechAnalyzer) {
+        self.analyzer = analyzer
     }
 }
 
@@ -212,7 +249,11 @@ struct LegacyEngine: SpeechEngine {
         return recognizer.isAvailable && recognizer.supportsOnDeviceRecognition
     }
 
-    func transcribe(audioAt url: URL, locale: Locale) async throws -> [SpeechWordDTO] {
+    func transcribe(
+        audioAt url: URL,
+        locale: Locale,
+        progress _: (@Sendable (TimeInterval) -> Void)?
+    ) async throws -> [SpeechWordDTO] {
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
             throw VisionServiceError.speechUnavailable
         }

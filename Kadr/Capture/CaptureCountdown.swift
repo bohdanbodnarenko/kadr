@@ -86,6 +86,9 @@ final class CaptureCountdown {
             // The badge goes before the capture, so it cannot appear in the shot even if
             // window exclusion were to fail.
             panel.dismiss()
+            // No longer running once it fires, so what it starts can tell its own
+            // completion apart from a countdown still waiting.
+            task = nil
             perform()
         }
         onRunningChanged?(true)

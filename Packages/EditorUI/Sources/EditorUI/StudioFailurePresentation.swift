@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import StudioRender
 
@@ -39,6 +40,7 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         case exportAudio(URL, StudioAudioExporter.Format)
         case installSpeechModel
         case transcribe
+        case transcribeOnly
     }
 
     public init(
@@ -55,6 +57,12 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         self.secondaryAction = secondaryAction
     }
 
+    /// The shared feedback kind (docs/18 X-2): a failure the user can act on is an error;
+    /// one that only explains why nothing happened is a warning.
+    public var kind: FeedbackKind {
+        primaryAction == .dismiss ? .warning : .error
+    }
+
     // MARK: - Common failures
 
     public static func exportFailed(_ detail: String, to destination: URL) -> Self {
@@ -63,6 +71,26 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
             message: detail,
             primaryAction: .retry(.export(destination)),
             secondaryAction: .chooseExportLocation
+        )
+    }
+
+    /// docs/18 STU-5: checked before the render rather than discovered at minute seven.
+    public static func notEnoughSpaceToExport(_ estimate: String, to destination: URL) -> Self {
+        Self(
+            title: "Not enough free space to export.",
+            message: "This export needs about \(estimate), and the disk that holds "
+                + "“\(destination.deletingLastPathComponent().lastPathComponent)” has less free. "
+                + "Free some space, or choose another location or a smaller size.",
+            primaryAction: .chooseExportLocation,
+            secondaryAction: .retry(.export(destination))
+        )
+    }
+
+    /// docs/18 STU P3: the preview could not play, rather than a silent black well.
+    public static func previewFailed(_ detail: String) -> Self {
+        Self(
+            title: "The preview can't play this recording.",
+            message: "\(detail) Editing still works, and an export may still succeed."
         )
     }
 
@@ -116,13 +144,19 @@ public struct StudioFailurePresentation: Identifiable, Equatable, Sendable {
         )
     }
 
-    /// - Parameter retryable: false when trying again cannot help, such as a recording
+    /// - Parameters:
+    ///   - retryable: false when trying again cannot help, such as a recording
     ///   with no sound, so the banner does not offer a Retry that fails the same way.
-    public static func transcriptionFailed(_ detail: String, retryable: Bool = true) -> Self {
+    ///   - retrying: what Retry runs: Find Cuts, or a transcription with no cuts.
+    public static func transcriptionFailed(
+        _ detail: String,
+        retryable: Bool = true,
+        retrying operation: Operation = .transcribe
+    ) -> Self {
         Self(
             title: "Kadr could not transcribe this recording.",
             message: detail,
-            primaryAction: retryable ? .retry(.transcribe) : .dismiss
+            primaryAction: retryable ? .retry(operation) : .dismiss
         )
     }
 

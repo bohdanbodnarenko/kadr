@@ -1,66 +1,11 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
-/// One status model for user-initiated work (docs/14 UX-24).
-///
-/// Geometry stays stable: status is overlaid, never inserted as a label that resizes a
-/// card. Success is transient. Failures stay until dismissed or corrected.
-enum FeedbackKind: Equatable, Sendable {
-    case progress
-    case completion
-    case warning
-    case error
-}
-
-struct FeedbackStatus: Equatable, Identifiable {
-    let id: UUID
-    var kind: FeedbackKind
-    var message: String
-    var progress: Double?
-    var recoveryTitle: String?
-    var recovery: (() -> Void)?
-    /// How long a completion stays up. Longer for one that carries an Undo, so there is
-    /// time to reach it (docs/17 §5 theme 3).
-    var lingers: Duration = .seconds(3)
-
-    /// When the banner should take itself away, or nil if it stays until dismissed.
-    /// Failures and warnings stay; progress is replaced by its outcome.
-    var autoDismissDelay: Duration? {
-        kind == .completion ? lingers : nil
-    }
-
-    init(
-        id: UUID = UUID(),
-        kind: FeedbackKind,
-        message: String,
-        progress: Double? = nil,
-        recoveryTitle: String? = nil,
-        recovery: (() -> Void)? = nil
-    ) {
-        self.id = id
-        self.kind = kind
-        self.message = message
-        self.progress = progress
-        self.recoveryTitle = recoveryTitle
-        self.recovery = recovery
-    }
-
-    static func == (lhs: FeedbackStatus, rhs: FeedbackStatus) -> Bool {
-        lhs.id == rhs.id
-            && lhs.kind == rhs.kind
-            && lhs.message == rhs.message
-            && lhs.progress == rhs.progress
-            && lhs.recoveryTitle == rhs.recoveryTitle
-            && lhs.lingers == rhs.lingers
-    }
-}
-
+/// The model itself lives in ControlKit, shared with the editor and the studio
+/// (docs/18 X-2). The agent keeps what only it uses: the unavailable reasons, the
+/// announcement, and its own chrome.
 extension FeedbackStatus {
-    /// A finished action whose result is not otherwise on screen. Transient.
-    static func done(_ message: String) -> FeedbackStatus {
-        FeedbackStatus(kind: .completion, message: message)
-    }
-
     /// An action that could not run. Stays until dismissed, and says why rather than
     /// leaving a disabled button and a tooltip behind (docs/14 UX-24B).
     static func unavailable(
@@ -74,33 +19,6 @@ extension FeedbackStatus {
             recoveryTitle: recoveryTitle,
             recovery: recovery
         )
-    }
-
-    /// A destructive action that already happened, with a way back (docs/17 §5 theme 3).
-    ///
-    /// The HIG prefers undo to a confirmation for frequent destructive actions: the action
-    /// runs at once and this offers to reverse it for a few seconds.
-    static func undoable(_ message: String, undo: @escaping () -> Void) -> FeedbackStatus {
-        var status = FeedbackStatus(
-            kind: .completion,
-            message: message,
-            recoveryTitle: String(localized: "Undo"),
-            recovery: undo
-        )
-        status.lingers = undoWindow
-        return status
-    }
-
-    /// How long an Undo stays on offer.
-    static let undoWindow: Duration = .seconds(8)
-
-    /// Something the user asked for went wrong, with a way to try again.
-    static func failure(
-        _ message: String,
-        retryTitle: String? = nil,
-        retry: (() -> Void)? = nil
-    ) -> FeedbackStatus {
-        FeedbackStatus(kind: .error, message: message, recoveryTitle: retryTitle, recovery: retry)
     }
 }
 
@@ -146,7 +64,7 @@ enum ActionUnavailableReason: Equatable, Sendable {
         case let .permissionDenied(name):
             String(localized: "\(name) permission is required")
         case .cancelled:
-            String(localized: "Cancelled")
+            String(localized: "Canceled")
         case let .other(message):
             message
         }
@@ -176,7 +94,7 @@ struct ControlInlineStatus: View {
                     Button(title) { status.recovery?() }
                         .controlSize(.small)
                 }
-                if status.kind == .error || status.kind == .warning {
+                if status.kind.staysUntilDismissed {
                     Button("Dismiss", action: onDismiss)
                         .controlSize(.small)
                 }
@@ -194,21 +112,11 @@ struct ControlInlineStatus: View {
     }
 
     private func symbol(for kind: FeedbackKind) -> String {
-        switch kind {
-        case .progress: "ellipsis.circle"
-        case .completion: "checkmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .error: "xmark.octagon.fill"
-        }
+        kind.symbolName
     }
 
     private func tint(for kind: FeedbackKind) -> Color {
-        switch kind {
-        case .progress: .secondary
-        case .completion: .green
-        case .warning: .orange
-        case .error: .red
-        }
+        kind.tint
     }
 }
 
@@ -267,20 +175,10 @@ struct FeedbackBanner: View {
     }
 
     private var symbol: String {
-        switch status.kind {
-        case .progress: "ellipsis.circle"
-        case .completion: "checkmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .error: "xmark.octagon.fill"
-        }
+        status.kind.symbolName
     }
 
     private var tint: Color {
-        switch status.kind {
-        case .progress: .secondary
-        case .completion: .green
-        case .warning: .orange
-        case .error: .red
-        }
+        status.kind.tint
     }
 }

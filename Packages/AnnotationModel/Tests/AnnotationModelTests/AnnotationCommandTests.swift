@@ -81,7 +81,7 @@ struct AnnotationCommandTests {
         #expect(Set(ids).count == ids.count)
     }
 
-    @Test("Colours clamp out-of-range components rather than storing nonsense")
+    @Test("Colors clamp out-of-range components rather than storing nonsense")
     func colourClamping() {
         let colour = AnnotationColor(red: 5, green: -1, blue: 0.5, alpha: 12)
         #expect(colour.red == 1)
@@ -138,7 +138,7 @@ struct AnnotationCommandTests {
         #expect(SpotlightSpec(rect: .zero, dimOpacity: -1).dimOpacity == SpotlightSpec.dimOpacityRange.lowerBound)
     }
 
-    @Test("Recolouring a filled shape keeps the fill's opacity")
+    @Test("Recoloring a filled shape keeps the fill's opacity")
     func recolorPreservesFillAlpha() {
         let filled = AnnotationCommand.shape(ShapeSpec(
             rect: CGRect(x: 0, y: 0, width: 20, height: 20),
@@ -166,7 +166,7 @@ struct AnnotationCommandTests {
         #expect(spec.fill.color?.red == AnnotationColor.annotationRed.red)
     }
 
-    @Test("Recolouring a counter picks contrasting ink")
+    @Test("Recoloring a counter picks contrasting ink")
     func counterFillPicksContrastingInk() {
         let badge = AnnotationCommand.counter(CounterSpec(center: .zero, fill: .annotationRed))
         guard case let .counter(spec) = badge.applying(color: .white) else {

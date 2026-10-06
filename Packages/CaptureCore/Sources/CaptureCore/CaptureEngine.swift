@@ -72,7 +72,7 @@ public actor CaptureEngine {
         let state = signposter.beginInterval("captureDisplay")
         defer { signposter.endInterval("captureDisplay", state) }
 
-        if prefersDirectRectCapture {
+        if prefersDirectRectCapture(includesCursor: includesCursor) {
             let frontmost = await frontmostApplication.currentApplication()
             return try await captureDisplayDirectly(
                 displayID,
@@ -126,7 +126,7 @@ public actor CaptureEngine {
         includesCursor: Bool = false,
         excludesOwnWindows: Bool = true
     ) async throws -> [Capture] {
-        if prefersDirectRectCapture {
+        if prefersDirectRectCapture(includesCursor: includesCursor) {
             let frontmost = await frontmostApplication.currentApplication()
             return try await captureDisplaysDirectly(
                 includesCursor: includesCursor,
@@ -177,7 +177,7 @@ public actor CaptureEngine {
 
         guard !region.isEmpty else { throw CaptureError.emptyRegion }
 
-        if prefersDirectRectCapture {
+        if prefersDirectRectCapture(includesCursor: includesCursor) {
             let frontmost = await frontmostApplication.currentApplication()
             return try await captureRegionDirectly(
                 region,

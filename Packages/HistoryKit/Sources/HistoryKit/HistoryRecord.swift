@@ -11,10 +11,10 @@ public enum HistoryItemKind: String, Sendable, Codable, CaseIterable, Hashable {
 
     public var title: String {
         switch self {
-        case .image: "Images"
-        case .video: "Recordings"
-        case .scrolling: "Scrolling"
-        case .project: "Projects"
+        case .image: String(localized: "Images", bundle: .module)
+        case .video: String(localized: "Recordings", bundle: .module)
+        case .scrolling: String(localized: "Scrolling", bundle: .module)
+        case .project: String(localized: "Projects", bundle: .module)
         }
     }
 
@@ -48,6 +48,9 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
     public var lastAccessedAt: Date
     public var byteSize: Int64
     public var originalFilename: String
+    /// Where the capture was saved outside the library, when Kadr knows (schema v2,
+    /// docs/18 OUT-6). Nil for captures from before v2 and for ones never saved.
+    public var originalPath: String?
 
     public init(
         id: UUID = UUID(),
@@ -61,7 +64,8 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
         capturedAt: Date,
         lastAccessedAt: Date,
         byteSize: Int64,
-        originalFilename: String
+        originalFilename: String,
+        originalPath: String? = nil
     ) {
         self.id = id
         self.contentHash = contentHash
@@ -75,6 +79,7 @@ public struct HistoryRecord: Sendable, Hashable, Identifiable {
         self.lastAccessedAt = lastAccessedAt
         self.byteSize = byteSize
         self.originalFilename = originalFilename
+        self.originalPath = originalPath
     }
 
     public var pixelSize: PixelSize {
@@ -99,6 +104,8 @@ public struct HistoryIngest: Sendable {
     /// deleted it afterwards — a session of recordings left a poster each in the temporary
     /// directory (docs/07 LOW).
     public var thumbnailSourceIsTemporary = false
+    /// The capture's own file outside the library, when it has been saved (docs/18 OUT-6).
+    public var originalURL: URL?
 
     public init(
         sourceURL: URL,
@@ -108,7 +115,8 @@ public struct HistoryIngest: Sendable {
         capturedAt: Date = Date(),
         originalFilename: String,
         thumbnailSourceURL: URL? = nil,
-        thumbnailSourceIsTemporary: Bool = false
+        thumbnailSourceIsTemporary: Bool = false,
+        originalURL: URL? = nil
     ) {
         self.sourceURL = sourceURL
         self.kind = kind
@@ -118,6 +126,7 @@ public struct HistoryIngest: Sendable {
         self.originalFilename = originalFilename
         self.thumbnailSourceURL = thumbnailSourceURL
         self.thumbnailSourceIsTemporary = thumbnailSourceIsTemporary
+        self.originalURL = originalURL
     }
 }
 
@@ -152,10 +161,10 @@ public enum HistorySort: String, Sendable, Hashable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .newest: "Newest"
-        case .oldest: "Oldest"
-        case .largest: "Largest"
-        case .name: "Name"
+        case .newest: String(localized: "Newest", bundle: .module)
+        case .oldest: String(localized: "Oldest", bundle: .module)
+        case .largest: String(localized: "Largest", bundle: .module)
+        case .name: String(localized: "Name", bundle: .module)
         }
     }
 }

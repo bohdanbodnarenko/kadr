@@ -13,11 +13,11 @@ public enum WindowBackdrop: String, CaseIterable, SettingValue {
 
     public var title: String {
         switch self {
-        case .white: "White"
-        case .black: "Black"
-        case .gray: "Grey"
-        case .desktop: "Desktop wallpaper"
-        case .custom: "Custom image"
+        case .white: String(localized: "White", bundle: .module)
+        case .black: String(localized: "Black", bundle: .module)
+        case .gray: String(localized: "Gray", bundle: .module)
+        case .desktop: String(localized: "Desktop wallpaper", bundle: .module)
+        case .custom: String(localized: "Custom image", bundle: .module)
         }
     }
 

@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import ControlKit
 import OverlayKit
 import Shared
 
@@ -77,5 +78,21 @@ extension ScrollCaptureCoordinator {
             scale: NSScreen.screens.compactMap(ScreenDescriptor.init)
                 .first { $0.displayID == displayID }?.scale ?? .oneToOne
         )
+    }
+}
+
+// MARK: - Interruption
+
+@MainActor
+extension ScrollCaptureCoordinator {
+    /// macOS ended the stream mid-capture: stitch what there is and say why it stopped,
+    /// rather than leave a HUD counting frames that will never come (docs/18 CAP-8).
+    func streamInterrupted() {
+        guard state == .capturing else { return }
+        FailurePresenter.present(FeedbackStatus(
+            kind: .warning,
+            message: "macOS stopped the scrolling capture. Kadr kept the frames it had."
+        ))
+        stop()
     }
 }

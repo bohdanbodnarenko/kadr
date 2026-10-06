@@ -112,6 +112,16 @@ public extension StudioDocumentModel {
 
     /// Transcribes the recording and proposes cuts. Does not apply them (docs/13 T0.4).
     func tidySpeech() async {
+        await transcribe(proposingCuts: true)
+    }
+
+    /// Transcribes the recording for captions and the transcript, proposing no cuts
+    /// (docs/18 STU-4). Captions used to be reachable only through Find Cuts.
+    func transcribeOnly() async {
+        await transcribe(proposingCuts: false)
+    }
+
+    private func transcribe(proposingCuts: Bool) async {
         guard !isTranscribing else { return }
         guard await transcriber.requestAuthorization() else {
             failure = .speechPermissionNeeded()
@@ -120,7 +130,7 @@ public extension StudioDocumentModel {
 
         isTranscribing = true
         transcriptionProgress = 0
-        let task = Task { await runTidy() }
+        let task = Task { await runTidy(proposingCuts: proposingCuts) }
         transcribeTask = task
         await task.value
         transcribeTask = nil
@@ -134,12 +144,14 @@ public extension StudioDocumentModel {
         transcribeTask?.cancel()
     }
 
-    private func runTidy() async {
+    private func runTidy(proposingCuts: Bool) async {
+        let retry: StudioFailurePresentation.Operation = proposingCuts ? .transcribe : .transcribeOnly
         do {
             try Task.checkCancellation()
             let options = TranscriptionOptions(
                 localeIdentifier: SpeechLanguage.currentIdentifier(speechLocaleIdentifier),
-                tracks: .all
+                tracks: .all,
+                timeout: TranscriptionOptions.timeout(forDuration: manifest.duration)
             )
             let produced = try await transcriber.transcribe(
                 audioAt: session.screenURL,
@@ -148,7 +160,7 @@ public extension StudioDocumentModel {
                 Task { @MainActor in self?.transcriptionProgress = fraction }
             }
             try Task.checkCancellation()
-            adopt(produced)
+            adopt(produced, proposingCuts: proposingCuts)
         } catch is CancellationError {
             logger.info("Transcription cancelled")
         } catch TranscriptionError.unavailableOnDevice {
@@ -156,11 +168,13 @@ public extension StudioDocumentModel {
             if dictationSettingsNeeded {
                 failure = .transcriptionFailed(
                     "On-device dictation is not enabled for this language. Turn it on in "
-                        + "System Settings ▸ Keyboard ▸ Dictation, then try again."
+                        + "System Settings ▸ Keyboard ▸ Dictation, then try again.",
+                    retrying: retry
                 )
             } else {
                 failure = .transcriptionFailed(
-                    "There is no speech model on this Mac for your language yet."
+                    "There is no speech model on this Mac for your language yet.",
+                    retrying: retry
                 )
             }
         } catch TranscriptionError.noAudioTrack {
@@ -168,11 +182,11 @@ public extension StudioDocumentModel {
         } catch TranscriptionError.notAuthorized {
             failure = .speechPermissionNeeded()
         } catch {
-            failure = .transcriptionFailed(error.localizedDescription)
+            failure = .transcriptionFailed(error.localizedDescription, retrying: retry)
         }
     }
 
-    private func adopt(_ produced: Transcript) {
+    private func adopt(_ produced: Transcript, proposingCuts: Bool) {
         if produced.timingsLookCollapsed(relativeTo: manifest.duration) {
             failure = .transcriptionFailed(
                 "The transcript had no usable timings, so nothing was cut. "
@@ -191,6 +205,10 @@ public extension StudioDocumentModel {
         transcript = processed
         chapters = ChapterMarks.marks(from: processed, duration: manifest.duration)
         try? document.write(processed)
+        guard proposingCuts else {
+            notice = "Transcribed. Captions can be turned on in the inspector."
+            return
+        }
 
         let planner = tidyPlanner
         // Tidy only runs on an uncut recording, so the telemetry's time is the edit's.
@@ -255,7 +273,10 @@ public extension StudioDocumentModel {
 
     /// The planner for what the user chose to tidy (docs/17 T-STU-6).
     internal var tidyPlanner: TranscriptCutPlanner {
-        TranscriptCutPlanner(removesFillers: tidyRemovesFillers, removesSilences: tidyShortensPauses)
+        TranscriptCutPlanner(
+            removesFillers: tidyRemovesFillers && fillerWordsAvailable,
+            removesSilences: tidyShortensPauses
+        )
     }
 
     private var tidyNothingFoundNotice: String {
@@ -308,7 +329,26 @@ public extension StudioDocumentModel {
     }
 
     func isFillerWord(_ word: TranscriptWord) -> Bool {
-        TranscriptCutPlanner.fillerWords.contains(word.normalized)
+        transcriptFillerWords.contains(word.normalized)
+    }
+
+    /// The filler words of the transcript's language; empty when Kadr has no list for it.
+    var transcriptFillerWords: Set<String> {
+        TranscriptCutPlanner.fillerWords(forLocale: transcript?.localeIdentifier ?? "") ?? []
+    }
+
+    /// Whether "Filler words" means anything in the language a tidy would transcribe
+    /// (docs/18 STU-10). Hidden otherwise rather than offered and never acting.
+    var fillerWordsAvailable: Bool {
+        TranscriptCutPlanner.fillerWords(forLocale: SpeechLanguage.currentIdentifier(speechLocaleIdentifier)) != nil
+    }
+
+    /// Plays a cut word's footage again (docs/18 STU-10).
+    func restoreWords(_ words: [TranscriptWord]) {
+        guard let first = words.first, let last = words.last else { return }
+        change { edit in
+            edit.clips = edit.clips.restoringSourceRange(from: first.start, to: last.end)
+        }
     }
 
     /// The word being said at the playhead, if the transcript covers that moment.
@@ -330,15 +370,19 @@ public extension StudioDocumentModel {
             ?? words.last { $0.start <= source }
     }
 
-    var visibleTranscriptWords: [TranscriptWord] {
-        Self.visibleWords(in: transcript, query: transcriptQuery)
-    }
-
-    nonisolated static func visibleWords(in transcript: Transcript?, query: String) -> [TranscriptWord] {
+    /// The words a search finds, in transcript order (docs/18 STU-10).
+    ///
+    /// Search used to hide every other word, which threw away the context a match is in
+    /// and the places to click around it. It now finds in place: everything stays, the
+    /// matches are marked, and next and previous walk them. Case- and diacritic-blind, so
+    /// "cafe" finds "Café".
+    nonisolated static func matchingWordIDs(in transcript: Transcript?, query: String) -> [String] {
         guard let transcript else { return [] }
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return transcript.words }
-        return transcript.words.filter { $0.text.lowercased().contains(query) }
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return [] }
+        return transcript.words
+            .filter { $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+            .map(\.id)
     }
 
     func sentence(containing word: TranscriptWord) -> [TranscriptWord] {

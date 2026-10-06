@@ -223,6 +223,25 @@ struct StudioSpeechTests {
         #expect(studio.transcript != nil)
     }
 
+    /// docs/18 STU-4: captions without Find Cuts.
+    @Test("Transcribe makes a transcript and proposes no cuts")
+    func transcribeOnlyProposesNothing() async throws {
+        let folder = scratch()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let stub = StubTranscriber(transcript: Transcript(words: [
+            TranscriptWord(text: "Hello", start: 0, end: 0.4),
+            TranscriptWord(text: "um", start: 0.5, end: 0.8),
+            TranscriptWord(text: "world", start: 0.9, end: 1.4)
+        ]))
+        let studio = try model(in: folder, duration: 2, transcriber: stub)
+        let before = studio.edit.clips
+        await studio.transcribeOnly()
+        #expect(stub.calls == 1)
+        #expect(studio.transcript != nil)
+        #expect(studio.pendingCuts.isEmpty)
+        #expect(studio.edit.clips == before)
+    }
+
     /// docs/17 T-STU-6, through the model: the telemetry it loaded from disk protects the
     /// silent demonstration, and switching pauses off leaves only the fillers.
     @Test("Tidy leaves silent on-screen work alone and honours its toggles")
@@ -353,7 +372,7 @@ struct StudioSpeechTests {
         let reopened = try #require(StudioDocumentModel(session: studio.session))
         reopened.commitOnClose()
         await reopened.transcriptLoaded()
-        #expect(reopened.transcript == nil, "a cancelled check still delivered")
+        #expect(reopened.transcript == nil, "a canceled check still delivered")
     }
 
     /// Tidy Speech finishing first wins: the stored transcript is older by construction.

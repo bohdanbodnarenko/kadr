@@ -52,13 +52,13 @@ struct StatusMenuLayoutTests {
         #expect(!visibleTitles(controller.menu).contains("Check for Updates…"))
     }
 
-    @Test("Pins & Overlays exists only when there is something in it", arguments: [
+    @Test("Pins & Cards exists only when there is something in it", arguments: [
         (0, 0, false, [String]()),
-        (2, 0, false, ["Save All Overlays", "Close All Overlays", "Hide Overlays"]),
+        (2, 0, false, ["Save All Cards", "Close All Cards", "Hide Cards"]),
         (0, 0, true, ["Restore Recently Closed"]),
         (0, 3, false, ["Hide Pins", "Close All Pins"]),
         (1, 1, true, [
-            "Save All Overlays", "Close All Overlays", "Hide Overlays",
+            "Save All Cards", "Close All Cards", "Hide Cards",
             "Restore Recently Closed", "Hide Pins", "Close All Pins"
         ])
     ])
@@ -68,7 +68,7 @@ struct StatusMenuLayoutTests {
         let titles = controller.overlaySubmenuItems().filter { !$0.isSeparatorItem }.map(\.title)
         #expect(titles == expected)
         controller.menuNeedsUpdate(controller.menu)
-        #expect(visibleTitles(controller.menu).contains("Pins & Overlays") == !expected.isEmpty)
+        #expect(visibleTitles(controller.menu).contains("Pins & Cards") == !expected.isEmpty)
     }
 
     @Test("A live recording leads the menu")

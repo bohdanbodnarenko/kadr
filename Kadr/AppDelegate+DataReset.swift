@@ -38,6 +38,9 @@ extension AppDelegate {
             editor.terminate()
         }
         _ = CLIInstaller().uninstall()
+        // A login item left registered would relaunch the clean slate at the next login
+        // (docs/18 SH-5).
+        try? loginItem.setEnabled(false)
 
         let fileManager = FileManager.default
         let library = fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first
@@ -52,20 +55,44 @@ extension AppDelegate {
                 isDirectory: true
             )
         ].compactMap(\.self)
+        var leftBehind: [URL] = []
         for url in owned where fileManager.fileExists(atPath: url.path) {
             do {
                 try fileManager.removeItem(at: url)
             } catch {
-                logger.error("Could not remove \(url.lastPathComponent, privacy: .public)")
+                logger.error("Could not remove \(url.lastPathComponent, privacy: .private)")
+                leftBehind.append(url)
             }
         }
         for domain in Self.ownedPreferenceDomains {
             UserDefaults.standard.removePersistentDomain(forName: domain)
         }
+        // Automation consent lives in the Keychain, not the preferences domain (docs/18 OUT-13).
+        KeychainConsentStorage().remove()
 
         // Nothing may be written back on the way out: pins flushing, the login item,
         // the settings the running process still holds in memory.
         isRemovingAllData = true
+        if !leftBehind.isEmpty {
+            Self.reportLeftBehind(leftBehind)
+        }
         NSApp.terminate(nil)
+    }
+
+    /// Says what a clean slate could not remove before Kadr quits (docs/18 X-2).
+    ///
+    /// An alert rather than a banner: Kadr quits next, and a banner would go with it
+    /// before anyone read it.
+    private static func reportLeftBehind(_ urls: [URL]) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Kadr could not remove all of its data."
+        let home = NSHomeDirectory()
+        let paths = urls.map { $0.path.replacingOccurrences(of: home, with: "~") }
+        alert.informativeText = "Remove these in Finder:\n" + paths.joined(separator: "\n")
+        alert.addButton(withTitle: "Quit Kadr")
+        ActivationJuggler.shared.withTemporaryActivation(returningTo: nil) {
+            _ = alert.runModal()
+        }
     }
 }

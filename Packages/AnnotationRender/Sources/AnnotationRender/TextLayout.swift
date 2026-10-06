@@ -2,6 +2,7 @@ import AnnotationModel
 import CoreGraphics
 import CoreText
 import Foundation
+import os
 
 /// How a text annotation is laid out, for everyone who needs to know (docs/09 U1.8).
 ///
@@ -22,7 +23,43 @@ public enum TextLayout {
     public static let pillRadiusRatio: CGFloat = 0.25
 
     /// The font a style resolves to.
+    ///
+    /// Cached, and resolved under one lock. A bold or italic variant is a round trip to
+    /// the system font service, made for every text annotation on every render; and many
+    /// threads asking for variants at once could leave every one of them waiting on that
+    /// service indefinitely, which is what hung the AnnotationRender tests.
     public static func font(for style: TextStyle) -> CTFont {
+        let key = FontKey(name: style.fontName, size: style.fontSize, bold: style.isBold, italic: style.isItalic)
+        return fontCache.withLock { cache in
+            if let font = cache[key] {
+                return font
+            }
+            let font = FontBox(value: resolveFont(for: style))
+            if cache.count >= maximumCachedFonts {
+                cache.removeAll(keepingCapacity: true)
+            }
+            cache[key] = font
+            return font
+        }.value
+    }
+
+    private struct FontKey: Hashable {
+        let name: String
+        let size: CGFloat
+        let bold: Bool
+        let italic: Bool
+    }
+
+    /// `CTFont` is immutable and documented as safe to use from any thread.
+    private struct FontBox: @unchecked Sendable {
+        let value: CTFont
+    }
+
+    /// A handful of styles per document; the cap only stops a size slider from growing it.
+    private static let maximumCachedFonts = 64
+    private static let fontCache = OSAllocatedUnfairLock(initialState: [FontKey: FontBox]())
+
+    private static func resolveFont(for style: TextStyle) -> CTFont {
         let base = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
         var traits: CTFontSymbolicTraits = []
         if style.isBold {

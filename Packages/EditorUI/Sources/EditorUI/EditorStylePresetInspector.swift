@@ -36,7 +36,7 @@ struct EditorStylePresetInspector: View {
                     model.clearStylePreset()
                     appliedID = nil
                 }
-                .help("Remove the current look")
+                .help(Text("Remove the current look", bundle: .module))
 
                 ForEach(presets) { preset in
                     row(preset, look: look)
@@ -45,11 +45,11 @@ struct EditorStylePresetInspector: View {
         })
         .onAppear { presets = store.all() }
         .alert("Save this look", isPresented: $isNaming) {
-            TextField("Name", text: $draftName)
-            Button("Save") { saveCurrent() }
-            Button("Cancel", role: .cancel) {}
+            TextField(String(localized: "Name", bundle: .module), text: $draftName)
+            Button(String(localized: "Save", bundle: .module)) { saveCurrent() }
+            Button(String(localized: "Cancel", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Saves the background, perspective, depth of field and watermark together.")
+            Text("Saves the background, perspective, depth of field and watermark together.", bundle: .module)
         }
     }
 
@@ -63,17 +63,17 @@ struct EditorStylePresetInspector: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Menu {
-                Button("Save Look…") {
+                Button(String(localized: "Save Look…", bundle: .module)) {
                     draftName = look.matched?.name ?? ""
                     isNaming = true
                 }
                 .disabled(!look.hasAnyChrome)
-                Button("Export Look…") { exportCurrent() }
+                Button(String(localized: "Export Look…", bundle: .module)) { exportCurrent() }
                     .disabled(!look.hasAnyChrome)
-                Button("Use for New Captures") { saveAsDefault() }
+                Button(String(localized: "Use for New Captures", bundle: .module)) { saveAsDefault() }
                     .disabled(!look.hasAnyChrome)
                 Divider()
-                Button("Import Look…") { importPreset() }
+                Button(String(localized: "Import Look…", bundle: .module)) { importPreset() }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 13))
@@ -81,8 +81,8 @@ struct EditorStylePresetInspector: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Save, export or import looks")
-            .accessibilityLabel("Look actions")
+            .help(Text("Save, export or import looks", bundle: .module))
+            .accessibilityLabel(Text("Look actions", bundle: .module))
         }
     }
 

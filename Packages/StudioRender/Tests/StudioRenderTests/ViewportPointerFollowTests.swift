@@ -90,7 +90,7 @@ struct ViewportPointerFollowTests {
         #expect(late.x > early.x + 100)
     }
 
-    @Test("Edge-in-frame bias keeps a corner pointer off the centre of the zoom")
+    @Test("Edge-in-frame bias keeps a corner pointer off the center of the zoom")
     func boundsBiasPullsAwayFromThePointer() {
         let cue = ZoomCue(
             start: 0,
@@ -107,7 +107,7 @@ struct ViewportPointerFollowTests {
             centre: centre,
             pointer: samples
         )
-        #expect(aimed.centre.x > 400, "bias 1 should keep a left-edge pointer from the zoom centre")
+        #expect(aimed.centre.x > 400, "bias 1 should keep a left-edge pointer from the zoom center")
         #expect(aimed.centre.x < 960)
     }
 

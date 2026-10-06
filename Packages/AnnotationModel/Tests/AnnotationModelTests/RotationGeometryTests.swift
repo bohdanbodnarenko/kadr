@@ -17,7 +17,7 @@ struct RotationGeometryTests {
         hypot(lhs.x - rhs.x, lhs.y - rhs.y) <= tolerance
     }
 
-    @Test("Every rotatable annotation turns about the centre of its own extent", arguments: [
+    @Test("Every rotatable annotation turns about the center of its own extent", arguments: [
         AnnotationCommand.shape(ShapeSpec(rect: CGRect(x: 10, y: 20, width: 100, height: 40), rotation: 0.5)),
         .text(TextSpec(string: "Hi", rect: CGRect(x: 10, y: 20, width: 100, height: 40), rotation: 0.5)),
         .redaction(RedactionSpec(rect: CGRect(x: 10, y: 20, width: 100, height: 40), rotation: 0.5)),

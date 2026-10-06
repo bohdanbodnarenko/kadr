@@ -119,10 +119,14 @@ private struct TextCaptureReviewView: View {
     private var summary: String {
         let characters = text.count
         let words = text.split { $0.isWhitespace || $0.isNewline }.count
-        let codeNote = codes.isEmpty ? "" : "  ·  \(codes.count) code\(codes.count == 1 ? "" : "s")"
-        return "\(characters) character\(characters == 1 ? "" : "s")  ·  "
-            + "\(words) word\(words == 1 ? "" : "s")"
-            + codeNote
+        var parts = [
+            KadrText.counted("^[\(characters) character](inflect: true)"),
+            KadrText.counted("^[\(words) word](inflect: true)")
+        ]
+        if !codes.isEmpty {
+            parts.append(KadrText.counted("^[\(codes.count) code](inflect: true)"))
+        }
+        return parts.joined(separator: "  ·  ")
     }
 
     private func copy(_ string: String) {

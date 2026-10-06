@@ -20,11 +20,25 @@ import Shared
 /// `SCWindow` / `SCStream` filter. macOS 14 has no rect-capture API, so it keeps
 /// the filter path.
 extension CaptureEngine {
-    var prefersDirectRectCapture: Bool {
-        if #available(macOS 15.2, *) {
+    /// Whether this capture can skip the window list.
+    ///
+    /// On macOS 15.2 up to 26 the direct API takes a rect and nothing else, so a capture
+    /// that asked for the cursor or HDR silently got neither (docs/18 CAP-5). Those take
+    /// the filter path there, which honours both at the cost of asking for shareable
+    /// content.
+    func prefersDirectRectCapture(includesCursor: Bool) -> Bool {
+        if #available(macOS 26.0, *) {
             return true
         }
+        if #available(macOS 15.2, *) {
+            return Self.directRectCaptureHonours(includesCursor: includesCursor, wantsHDR: dynamicRange.isHigh)
+        }
         return false
+    }
+
+    /// What `captureImage(in:)` (macOS 15.2–26) can deliver: neither a cursor nor HDR.
+    nonisolated static func directRectCaptureHonours(includesCursor: Bool, wantsHDR: Bool) -> Bool {
+        !includesCursor && !wantsHDR
     }
 
     static func activeDisplayIDs() -> [CGDirectDisplayID] {

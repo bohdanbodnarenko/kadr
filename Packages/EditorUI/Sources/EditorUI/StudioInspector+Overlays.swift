@@ -15,7 +15,7 @@ extension StudioInspector {
 
     var pointerSection: some View {
         Section {
-            Toggle("Draw pointer", isOn: Binding(
+            Toggle(String(localized: "Draw pointer", bundle: .module), isOn: Binding(
                 get: { model.edit.showsCursor },
                 set: { value in model.change { $0.showsCursor = value } }
             ))
@@ -32,7 +32,7 @@ extension StudioInspector {
                     range: StudioEdit.minimumCursorScale ... StudioEdit.maximumCursorScale,
                     format: .multiplier
                 )
-                Picker("Motion", selection: Binding(
+                Picker(String(localized: "Motion", bundle: .module), selection: Binding(
                     get: { model.edit.cursorSmoothing },
                     set: { value in model.change { $0.cursorSmoothing = value } }
                 )) {
@@ -40,7 +40,7 @@ extension StudioInspector {
                 }
             }
         } header: {
-            Text("Pointer")
+            Text("Pointer", bundle: .module)
         } footer: {
             if model.manifest.hasBakedCursor {
                 Text("This recording already has the pointer in it. Record without it to have the "
@@ -53,18 +53,18 @@ extension StudioInspector {
 
     var clickSection: some View {
         Section {
-            Toggle("Ripple on clicks", isOn: Binding(
+            Toggle(String(localized: "Ripple on clicks", bundle: .module), isOn: Binding(
                 get: { model.edit.showsClicks },
                 set: { value in model.change { $0.showsClicks = value } }
             ))
             if model.edit.showsClicks {
-                Picker("Style", selection: Binding(
+                Picker(String(localized: "Style", bundle: .module), selection: Binding(
                     get: { model.edit.clickStyle },
                     set: { value in model.change { $0.clickStyle = value } }
                 )) {
                     ForEach(ClickRippleStyle.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                Toggle("Press into the screen", isOn: Binding(
+                Toggle(String(localized: "Press into the screen", bundle: .module), isOn: Binding(
                     get: { model.edit.showsClickPress },
                     set: { value in model.change { $0.showsClickPress = value } }
                 ))
@@ -80,7 +80,7 @@ extension StudioInspector {
                     format: .multiplier
                 )
                 ColorPicker(
-                    "Colour",
+                    "Color",
                     selection: Binding(
                         get: { Color(model.edit.clickColor) },
                         set: { color in
@@ -91,7 +91,7 @@ extension StudioInspector {
                 )
             }
         } header: {
-            Text("Clicks")
+            Text("Clicks", bundle: .module)
         }
     }
 
@@ -101,12 +101,12 @@ extension StudioInspector {
     /// Clip pane's.
     var zoomMotionSection: some View {
         Section {
-            Toggle("Use zooms", isOn: Binding(
+            Toggle(String(localized: "Use zooms", bundle: .module), isOn: Binding(
                 get: { model.edit.showsZooms },
                 set: { value in model.change { $0.showsZooms = value } }
             ))
             if model.edit.showsZooms {
-                Picker("Motion", selection: Binding(
+                Picker(String(localized: "Motion", bundle: .module), selection: Binding(
                     get: { model.edit.zoomStyle },
                     set: { value in model.change { $0.zoomStyle = value } }
                 )) {
@@ -125,9 +125,9 @@ extension StudioInspector {
                 )
             }
         } header: {
-            Text("Zoom")
+            Text("Zoom", bundle: .module)
         } footer: {
-            Text("Zooms are placed on the timeline. This is how they travel.")
+            Text("Zooms are placed on the timeline. This is how they travel.", bundle: .module)
         }
     }
 
@@ -135,7 +135,7 @@ extension StudioInspector {
 
     var keystrokeSection: some View {
         Section {
-            Toggle("Caption shortcuts", isOn: Binding(
+            Toggle(String(localized: "Caption shortcuts", bundle: .module), isOn: Binding(
                 get: { model.edit.showsKeystrokes },
                 set: { value in model.change { $0.showsKeystrokes = value } }
             ))
@@ -155,7 +155,7 @@ extension StudioInspector {
                     range: StudioEdit.minimumOverlayScale ... StudioEdit.maximumOverlayScale,
                     format: .multiplier
                 )
-                Picker("Theme", selection: Binding(
+                Picker(String(localized: "Theme", bundle: .module), selection: Binding(
                     get: { model.edit.keystrokeAppearance },
                     set: { value in model.change { $0.keystrokeAppearance = value } }
                 )) {
@@ -163,10 +163,10 @@ extension StudioInspector {
                 }
             }
         } header: {
-            Text("Shortcuts")
+            Text("Shortcuts", bundle: .module)
         } footer: {
             if model.edit.showsKeystrokes {
-                Text("Keys pressed during the recording appear as they are typed.")
+                Text("Keys pressed during the recording appear as they are typed.", bundle: .module)
             }
         }
     }

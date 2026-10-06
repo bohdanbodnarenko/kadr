@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Shared metrics for the floating recording / All-in-One islands.
@@ -36,9 +37,18 @@ enum RecordingBarMetrics {
     static let inactiveTint = Color(nsColor: .labelColor).opacity(0.4)
     static let stroke = Color(nsColor: .separatorColor)
     /// Hairline that defines the glass edge against a background of the same brightness.
-    static let edge = Color(nsColor: .labelColor).opacity(0.12)
+    /// Stronger under Increase Contrast (docs/18 X-3).
+    static var edge: Color {
+        let opacity = KadrFill.opacity(.stroke, increaseContrast: KadrAccessibility.increaseContrast)
+        return Color(nsColor: .labelColor).opacity(opacity)
+    }
+
     static let recordTint = Color(nsColor: .systemRed)
-    static let hoverFill = Color(nsColor: .labelColor).opacity(0.11)
+
+    static var hoverFill: Color {
+        Color(nsColor: .labelColor).opacity(KadrAccessibility.increaseContrast ? 0.2 : 0.11)
+    }
+
     static let hoverDiameter: CGFloat = 32
 
     /// Picker → countdown → live. Enough travel to read as one bar changing shape rather
@@ -46,9 +56,7 @@ enum RecordingBarMetrics {
     static let modeChange = Animation.spring(response: 0.34, dampingFraction: 0.86)
 
     static var tooltipAnimation: Animation {
-        AccessibilityChrome.reduceMotion
-            ? AccessibilityChrome.reduced
-            : .easeOut(duration: 0.12)
+        AccessibilityChrome.reduceMotion ? KadrMotion.reduced : KadrMotion.hover
     }
 
     static var shape: RoundedRectangle {
@@ -98,7 +106,9 @@ struct RecordingBarCircleButton: View {
     var help: String = ""
     /// Shown as a keycap in the hover pill when the control has a single-key shortcut.
     var key: String?
-    var isOn: Bool = true
+    /// Nil for an action; true or false for a toggle, which then shows its state by more
+    /// than a fainter tint (docs/18 REC P3).
+    var isOn: Bool?
     var tint: Color?
     let action: () -> Void
 
@@ -119,20 +129,29 @@ struct RecordingBarCircleButton: View {
 
 struct RecordingBarIcon: View {
     let symbol: String
-    var isOn: Bool = true
+    /// Nil for an action; a toggle that is on also sits on a faint plate, so on and off
+    /// differ by shape as well as by how bright the glyph is — which a low-contrast display
+    /// or Differentiate Without Colour cannot rely on (docs/18 REC P3).
+    var isOn: Bool?
     var tint: Color?
 
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous)
         Image(systemName: symbol)
             .font(.system(size: RecordingBarMetrics.iconSize, weight: .regular))
             .foregroundStyle(
-                (tint ?? (isOn ? RecordingBarMetrics.activeTint : RecordingBarMetrics.inactiveTint))
+                (tint ?? (isOn != false ? RecordingBarMetrics.activeTint : RecordingBarMetrics.inactiveTint))
                     .opacity(isEnabled ? 1 : 0.3)
             )
             .frame(width: RecordingBarMetrics.controlSize, height: RecordingBarMetrics.controlSize)
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background {
+                if isOn == true {
+                    shape.fill(KadrFill.selected)
+                }
+            }
+            .contentShape(shape)
     }
 }
 
@@ -182,7 +201,7 @@ struct RecordingAudioMeter: View {
         HStack(spacing: spacing) {
             ForEach(0 ..< 5, id: \.self) { index in
                 Capsule()
-                    .fill(level > Float(index) / 5 ? Color.green : Color.primary.opacity(0.18))
+                    .fill(level > Float(index) / 5 ? Self.color(forBar: index) : Color.primary.opacity(0.18))
                     .frame(
                         width: barWidth,
                         height: compact ? 5 + CGFloat(index) * 2 : 6 + CGFloat(index) * 2.5
@@ -191,6 +210,13 @@ struct RecordingAudioMeter: View {
         }
         .accessibilityLabel("Audio level")
         .accessibilityValue("\(Int((level * 100).rounded())) percent")
+    }
+
+    /// The system's green, not a fixed one, so Increase Contrast and the dark notch get
+    /// their own shade; the top bar warns in orange that the input is close to clipping
+    /// (docs/18 REC P3).
+    static func color(forBar index: Int) -> Color {
+        index == 4 ? Color(nsColor: .systemOrange) : Color(nsColor: .systemGreen)
     }
 }
 

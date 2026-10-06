@@ -119,7 +119,7 @@ struct BeautifyLayoutTests {
 
     // MARK: - Alignment
 
-    @Test("Centre splits the leftover space")
+    @Test("Center splits the leftover space")
     func centreSplitsLeftover() {
         let layout = BeautifyLayout.compute(contentSize: content, spec: plain(aspect: .square))
         #expect(layout.cardRect.origin == CGPoint(x: 0, y: 50))
@@ -198,7 +198,7 @@ struct BeautifyLayoutTests {
         #expect(layout.corners.bottomTrailing == 0)
     }
 
-    @Test("Centre never sticks to anything, whatever the toggle says")
+    @Test("Center never sticks to anything, whatever the toggle says")
     func centreNeverSticks() {
         let spec = plain(padding: .points(20), alignment: .center, sticksToEdges: true)
         let layout = BeautifyLayout.compute(contentSize: content, spec: spec)

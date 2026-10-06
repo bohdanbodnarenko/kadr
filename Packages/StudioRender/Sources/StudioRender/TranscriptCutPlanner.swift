@@ -10,8 +10,8 @@ public struct ProposedCut: Sendable, Hashable, Identifiable {
 
         public var title: String {
             switch self {
-            case .fillerWord: "Filler word"
-            case .silence: "Silence"
+            case .fillerWord: String(localized: "Filler word", bundle: .module)
+            case .silence: String(localized: "Silence", bundle: .module)
             }
         }
     }
@@ -100,6 +100,24 @@ public struct TranscriptCutPlanner: Sendable {
         "um", "uh", "erm", "er", "ah", "hmm", "mm", "mmm", "uhm", "eh"
     ]
 
+    /// The filler words for a transcript's language, or nil when Kadr has no list for it
+    /// (docs/18 STU-10).
+    ///
+    /// "um" and "uh" are English; offering "Filler words" for a Ukrainian or Japanese
+    /// recording proposed nothing and looked broken. A transcript with no recorded locale
+    /// predates the field and was English.
+    public static func fillerWords(forLocale identifier: String) -> Set<String>? {
+        guard !identifier.isEmpty else { return fillerWords }
+        switch Locale(identifier: identifier).language.languageCode?.identifier {
+        case "en": return fillerWords
+        case "de": return ["äh", "ähm", "öh", "öhm", "hm", "hmm"]
+        case "fr": return ["euh", "heu", "hum", "bah"]
+        case "es": return ["eh", "em", "ehm", "mmm"]
+        case "nl": return ["eh", "ehm", "uh", "uhm"]
+        default: return nil
+        }
+    }
+
     /// Cuts for a transcript.
     ///
     /// Ordered by time and never overlapping, so applying them is a walk rather than an
@@ -117,7 +135,11 @@ public struct TranscriptCutPlanner: Sendable {
         duration: TimeInterval,
         protecting protected: [ClosedRange<TimeInterval>] = []
     ) -> [ProposedCut] {
-        let speaker = Transcript(words: transcript.words.filter { $0.track != .system })
+        // The locale travels with the words: it picks the filler list (docs/18 STU-10).
+        let speaker = Transcript(
+            words: transcript.words.filter { $0.track != .system },
+            localeIdentifier: transcript.localeIdentifier
+        )
         guard !speaker.isEmpty else { return [] }
         var cuts: [ProposedCut] = []
 
@@ -218,8 +240,9 @@ public struct TranscriptCutPlanner: Sendable {
     /// Every filler word, padded a little into the silence around it.
     private func fillerCuts(in transcript: Transcript) -> [ProposedCut] {
         let words = transcript.words
+        let fillers = Self.fillerWords(forLocale: transcript.localeIdentifier) ?? []
         return words.enumerated().compactMap { index, word in
-            guard Self.fillerWords.contains(word.normalized) else { return nil }
+            guard fillers.contains(word.normalized) else { return nil }
             let previousEnd = index > 0 ? words[index - 1].end : max(word.start - 0.12, 0)
             let nextStart = index + 1 < words.count ? words[index + 1].start : word.end + 0.12
             let padBefore = min(0.12, max((word.start - previousEnd) / 2, 0))

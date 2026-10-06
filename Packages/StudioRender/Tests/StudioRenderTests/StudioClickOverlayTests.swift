@@ -36,7 +36,7 @@ struct StudioClickOverlayTests {
         )
     }
 
-    @Test("A coloured ripple is that colour, not always white")
+    @Test("A colored ripple is that color, not always white")
     func clickColorTintsTheRipple() throws {
         var telemetry = InputTelemetry(
             pointer: [

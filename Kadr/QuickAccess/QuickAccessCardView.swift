@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import SettingsKit
 import Shared
@@ -24,6 +25,8 @@ struct QuickAccessCardView: View {
     var showsTrashButton = false
     /// Actions stay visible instead of appearing on hover.
     var alwaysShowActions = false
+    /// Focus Quick Access picked this card (docs/18 UX-18).
+    var requestsKeyboardFocus = false
 
     @State private var isHovering = false
     /// Sticky single-click expansion (docs/03 §2, docs/14 UX-18).
@@ -135,6 +138,16 @@ struct QuickAccessCardView: View {
             // The system ring is a rectangle around a rounded picture; the card draws its own.
             .focusEffectDisabled()
             .focused($isFocused)
+            .onChange(of: requestsKeyboardFocus, initial: true) { _, requested in
+                if requested {
+                    isFocused = true
+                }
+            }
+            .onChange(of: isFocused) { _, focused in
+                if focused {
+                    actions.keyboardFocused()
+                }
+            }
             .onHover { hovering in
                 isHovering = hovering
                 actions.setHovered(hovering)
@@ -236,12 +249,12 @@ struct QuickAccessCardView: View {
         // light one inside it that holds the edge of a dark capture against a dark desktop.
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.16), lineWidth: 0.5)
+                .strokeBorder(Color.black.opacity(KadrAccessibility.increaseContrast ? 0.5 : 0.16), lineWidth: 0.5)
         )
         .overlay(
             RoundedRectangle(cornerRadius: Self.cornerRadius - 0.5, style: .continuous)
                 .inset(by: 0.5)
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(KadrAccessibility.increaseContrast ? 0.45 : 0.18), lineWidth: 0.5)
         )
         // Flattened first, so the shadow is cast by the rounded result rather than by the
         // square image inside it.
@@ -292,7 +305,8 @@ struct QuickAccessCardView: View {
                     // has not been acted on yet. Promise-aware receivers never look at it,
                     // but the many that only read `public.file-url` (browsers, Electron
                     // apps) got nothing at all without it (docs/16 OUT-6).
-                    stableFileURL: item.fileURL
+                    stableFileURL: item.fileURL,
+                    pathHandedOut: actions.pathHandedOut
                 )
             },
             dragImage: {

@@ -143,7 +143,7 @@ struct TeleprompterComposerView: View {
             }
         }
         .frame(height: 140)
-        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(KadrFill.hover, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var footer: some View {
@@ -174,7 +174,7 @@ struct TeleprompterComposerView: View {
                     .controlSize(.small)
                     .disabled(!settings.teleprompterEnabled)
                 Spacer()
-                Button("Install speech model…") {
+                Button("Install Speech Model…") {
                     Task { await installSpeechModel() }
                 }
                 .controlSize(.small)

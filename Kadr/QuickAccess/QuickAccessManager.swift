@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import ControlKit
 import HistoryKit
 import MediaExport
 import Observation
@@ -27,7 +28,6 @@ final class QuickAccessManager {
     @ObservationIgnored var editor = EditorLauncher()
     /// The helper does the GIF encoding; the agent only asks for it (docs/04 §1).
     /// The helper connection for GIF encoding (docs/03 §1.8).
-    @ObservationIgnored let vision = VisionClient()
     @ObservationIgnored let textRecognizer = TextRecognizer()
     /// Shows what OCR found, the same panel the selection overlay's text mode uses.
     @ObservationIgnored let textToast = TextCaptureToast()
@@ -79,15 +79,22 @@ final class QuickAccessManager {
     @ObservationIgnored var hoveredItemID: UUID?
     /// The card currently being dragged out.
     @ObservationIgnored var draggingItemID: UUID?
+    /// Cards whose staging path a drop receiver read directly (docs/18 OUT-2).
+    @ObservationIgnored var pathHandedOutItemIDs: Set<UUID> = []
     /// The card the pointer last rested on, so a clicked card keeps the keyboard after the
     /// pointer moves off it (docs/17 T-OUT-1).
     @ObservationIgnored var lastHoveredItemID: UUID?
+    /// The card Focus Quick Access asked to take keyboard focus; the card moves SwiftUI
+    /// focus onto itself when it sees its id (docs/18 UX-18).
+    var keyboardFocusRequest: UUID?
     @ObservationIgnored var localKeyMonitor: Any?
     /// Whether each recording card still has a studio session, so the stack does not
     /// rescan the disk on every render (docs/17 T-OUT-13).
     @ObservationIgnored var studioSessionCache: [UUID: Bool] = [:]
     /// The trackpad gesture in progress over the stack (docs/17 T-OUT-13).
     @ObservationIgnored var swipeTracker = OverlaySwipeTracker()
+    /// Where the card under a two-finger swipe sits while the finger is down (docs/18 OUT-16).
+    var swipeOffset = SwipeOffset.zero
     /// Cards deleted inside their Undo window (docs/17 T-OUT-1).
     @ObservationIgnored var pendingDeletions: [UUID: PendingCardDeletion] = [:]
     /// Dismissed cards, newest first, for "Restore recently closed" (docs/03 §2).
@@ -277,5 +284,17 @@ final class QuickAccessManager {
             applicationName: record.applicationName,
             origin: .library
         ))
+    }
+}
+
+/// A card's horizontal displacement during a swipe.
+struct SwipeOffset: Equatable {
+    var itemID: UUID?
+    var x: CGFloat
+
+    static let zero = SwipeOffset(itemID: nil, x: 0)
+
+    func x(for id: UUID) -> CGFloat {
+        itemID == id ? x : 0
     }
 }

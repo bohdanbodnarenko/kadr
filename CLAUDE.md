@@ -32,8 +32,9 @@ When a task references a doc section, read it before writing code.
    allowed only inside NSHostingView content that is deallocated on close.
    Nothing SwiftUI in the selection overlay's mouse path — CALayer only.
 5. Swift 6 language mode, strict concurrency, no new DispatchQueues outside
-   SCK-required handler queues. @MainActor UI, actors for engines,
-   AsyncStream at delegate boundaries.
+   SCK-required handler queues and the AVCapture/AVAssetWriter delegate queues
+   AVFoundation requires (camera, microphone, sample-buffer delegates). @MainActor
+   UI, actors for engines, AsyncStream at delegate boundaries.
 6. Coordinates go through Shared.Geometry typed wrappers (ScreenPoint,
    PixelRect) — never raw CGRect math across the AppKit/CG flip or
    point/pixel scaling.
@@ -59,6 +60,7 @@ Kadr.xcworkspace          open this, not the .xcodeproj
 Kadr.xcodeproj            the agent app target `Kadr` (LSUIElement, macOS 14+)
 Kadr/                     agent app sources (AppKit shell only)
 KadrTests/                agent app unit tests
+KadrEditorTests/          editor app tests, hosted in KadrEditor.app (`make test-editor`)
 Packages/<Module>/        16 local SPM packages, docs/04 §2
 Scripts/                  check-layering.sh, check-size.sh
 .github/workflows/ci.yml  packages (matrix) · app build · lint + checks
@@ -90,6 +92,7 @@ so a command that passes there is the command you ran.
 make build           # build the agent app
 make test            # every package's tests, then the app's
 make lint check      # swiftlint, swiftformat, layering, size
+make strings         # sync the String Catalogs with the source (CI runs check-strings)
 make install         # build signed and install into /Applications
 make all             # what CI runs
 ```

@@ -28,9 +28,9 @@ public enum OverlayPlacement: String, Sendable, Hashable, Codable, CaseIterable,
     /// Left / Centre / Right — the label on a two-row grid that already says Top or Bottom.
     public var title: String {
         switch self {
-        case .topLeading, .bottomLeading: "Left"
-        case .top, .bottom: "Centre"
-        case .topTrailing, .bottomTrailing: "Right"
+        case .topLeading, .bottomLeading: String(localized: "Left", bundle: .module)
+        case .top, .bottom: String(localized: "Center", bundle: .module)
+        case .topTrailing, .bottomTrailing: String(localized: "Right", bundle: .module)
         }
     }
 

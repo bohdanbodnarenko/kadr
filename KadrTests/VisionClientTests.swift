@@ -47,7 +47,7 @@ private func makeTextImage(_ string: String) -> CGImage {
 @MainActor
 @Suite("Vision helper over XPC", .serialized)
 struct VisionClientTests {
-    @Test("The helper recognises text and sends it back")
+    @Test("The helper recognizes text and sends it back")
     func roundTrip() async throws {
         let client = VisionClient()
         defer { client.disconnect() }

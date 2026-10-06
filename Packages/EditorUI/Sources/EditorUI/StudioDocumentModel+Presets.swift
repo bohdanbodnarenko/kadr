@@ -60,6 +60,23 @@ public extension StudioDocumentModel {
         appliedPresetID = preset.id
         guard next != edit else { return }
         adoptEditWithoutUndo(next)
+        // Zooms nobody asked for are said out loud, with a way to take them back in one
+        // click (docs/18 STU-14). They used to appear silently and outside undo.
+        if !rebased.isEmpty {
+            notice = rebased.count == 1
+                ? "Added a zoom where you clicked."
+                : "Added \(rebased.count) zooms where you clicked."
+            noticeAction = .removeAutomaticZooms
+        }
+    }
+
+    /// The notice's button.
+    func performNoticeAction(_ action: StudioNoticeAction) {
+        switch action {
+        case .removeAutomaticZooms:
+            change(named: "Remove Automatic Zooms") { $0.zooms = [] }
+        }
+        notice = nil
     }
 
     var isAppliedPresetEdited: Bool {
@@ -108,5 +125,16 @@ extension StudioDocumentModel {
         var resolved = edit
         resolved.showsCursor = false
         return resolved
+    }
+}
+
+/// What a studio notice can offer besides being dismissed.
+public enum StudioNoticeAction: Equatable, Sendable {
+    case removeAutomaticZooms
+
+    var title: String {
+        switch self {
+        case .removeAutomaticZooms: "Remove"
+        }
     }
 }

@@ -66,7 +66,7 @@ struct BorderWatermarkRenderTests {
 
     /// The ring, the capture and the backdrop are three distinct colours, sampled in
     /// order from the outside in.
-    @Test("A border is a ring of its own colour between the backdrop and the capture")
+    @Test("A border is a ring of its own color between the backdrop and the capture")
     func borderIsARing() throws {
         let spec = BeautifySpec(
             padding: .points(30),

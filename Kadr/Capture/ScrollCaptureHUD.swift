@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import SettingsKit
 import Shared
@@ -132,7 +133,7 @@ struct ScrollCaptureHUDView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(Color.primary.opacity(0.15))
+                            .strokeBorder(KadrFill.stroke)
                     )
             }
 

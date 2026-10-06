@@ -108,7 +108,8 @@ enum KadrHelpTopic: String, CaseIterable, Identifiable {
             """
             Click highlights and key overlays are composited into the recording, not drawn on \
             your screen. Key overlays can reveal passwords. The first time you record with keys \
-            on, macOS asks for Accessibility so Kadr can read shortcuts — never ordinary typing.
+            on, macOS asks for Accessibility and Input Monitoring so Kadr can read shortcuts — \
+            never ordinary typing. Without both, the recording runs with no key overlay.
             """
         case .scrolling:
             """
@@ -125,7 +126,7 @@ enum KadrHelpTopic: String, CaseIterable, Identifiable {
         case .saveTarget:
             """
             The default folder is used for Save on a card and for after-capture Save. “Ask where \
-            to save” shows a folder picker instead. The All-in-One strip can switch this per \
+            to save” shows a folder picker instead. The capture island can switch this per \
             session without opening Settings.
             """
         case .shortcuts:

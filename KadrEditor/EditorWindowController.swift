@@ -81,6 +81,9 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
             // projects (the agent cannot read pixels this way), are measured after open.
             needsVisibleBounds = contents.document.baseImage.visibleBounds == nil
             model = EditorDocumentModel(document: contents.document)
+            if let exportScale = contents.exportScale {
+                model.exportScale = CGFloat(exportScale)
+            }
         } else {
             // Read once: decoded from these bytes, and kept as the base PNG when that is
             // what they already are. Kept in memory rather than mapped, because saving a
@@ -176,7 +179,8 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         )
         window.title = documentURL.lastPathComponent
         // The title-bar proxy icon: dragging it hands the file to another app (docs/03 §3).
-        window.representedURL = documentURL
+        // Never the `.kadr`, which holds the un-redacted original (docs/18 ED-3).
+        window.representedURL = proxyURL
         window.isDocumentEdited = model.hasUnsavedChanges
         window.contentView = hosting
         window.delegate = self
@@ -239,13 +243,13 @@ final class EditorWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         window.makeKeyAndOrderFront(nil)
 
         let alert = NSAlert()
-        alert.messageText = "Save your changes to “\(documentURL.lastPathComponent)”?"
-        alert.informativeText = "Save writes the flattened image and a project file so the "
+        alert.messageText = String(localized: "Save your changes to “\(documentURL.lastPathComponent)”?")
+        alert.informativeText = String(localized: "Save writes the flattened image and a project file so the ")
             + "annotations stay editable."
-        alert.addButton(withTitle: "Save")
-        let dontSave = alert.addButton(withTitle: "Don't Save")
+        alert.addButton(withTitle: String(localized: "Save"))
+        let dontSave = alert.addButton(withTitle: String(localized: "Don't Save"))
         dontSave.hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Cancel"))
         alert.buttons.last?.keyEquivalent = "\u{1b}"
         alert.alertStyle = .warning
 

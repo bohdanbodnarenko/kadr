@@ -39,11 +39,19 @@ BUILD_NUMBER := $(shell git rev-list --count HEAD 2>/dev/null || echo 1)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 STAMP := CURRENT_PROJECT_VERSION=$(BUILD_NUMBER) KADR_GIT_COMMIT=$(GIT_COMMIT)
 
+# Lint tools are pinned: an unpinned `brew install` in CI meant a new SwiftLint rule could
+# turn main red with no change in the repository (docs/18 X-7). `make lint-tools` puts the
+# pinned binaries in build/tools, which `lint` prefers over whatever is on PATH.
+SWIFTLINT_VERSION := 0.65.1
+SWIFTFORMAT_VERSION := 0.63.0
+TOOLS := $(DERIVED)/tools
+export PATH := $(CURDIR)/$(TOOLS):$(PATH)
+
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
 .PHONY: help build build-editor release install uninstall run test test-packages test-package \
-        test-app dmg lint format format-fix check check-layering check-size size-gate perf packages packages-json \
-        all clean
+        test-app test-editor test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
+        check-size check-strings strings size-gate perf packages packages-json all clean
 
 help: ## Show the available commands
 	@printf 'Kadr — make <target>\n\n'
@@ -97,12 +105,12 @@ dmg: ## Notarized DMG and appcast entry (VERSION=0.9.0 [CHANNEL=beta])
 
 # MARK: - Testing
 
-test: test-packages test-app ## Run every test
+test: test-packages test-app test-editor ## Run every test
 
 test-packages: ## Run every package's tests
 	@for package in $(PACKAGES); do \
 		printf '\n== %s ==\n' "$$package"; \
-		( cd Packages/$$package && swift test ); \
+		( cd Packages/$$package && swift test ) || exit 1; \
 	done
 
 # One package, for CI's matrix: `make test-package PACKAGE=Shared`.
@@ -124,11 +132,46 @@ test-app: ## Run the agent app's tests
 		-only-testing:KadrTests $(STAMP) $(UNSIGNED) \
 		| { grep -E '✔|✘|Test run|error:' || true; }
 
+# The agent's tests built once and run elsewhere: CI builds on the newest macOS and runs
+# the same bundle on macOS 14, the deployment target, whose runners cannot build with the
+# current SDK (docs/18 X-7).
+test-app-build: ## Build the agent app's tests without running them
+	@xcodebuild build-for-testing -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP) $(UNSIGNED)
+
+test-app-run: ## Run tests built by test-app-build (on this or another Mac)
+	@set -o pipefail; xcodebuild test-without-building -xctestrun "$$(ls $(DERIVED)/Build/Products/*.xctestrun | head -1)" \
+		-destination 'platform=macOS' -only-testing:KadrTests \
+		| { grep -E '✔|✘|Test run|error:' || true; }
+
+# Same shape as test-app, hosted in the editor: save, rebind, open routing and the menus
+# are seams no package test reaches (docs/18 X-6).
+test-editor: ## Run the editor app's tests
+	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(EDITOR_SCHEME) -configuration Debug \
+		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
+		-only-testing:KadrEditorTests $(STAMP) $(UNSIGNED) \
+		| { grep -E '✔|✘|Test run|error:' || true; }
+
 # MARK: - Static checks
 
 lint: ## SwiftLint and SwiftFormat, both read-only
+	@[ "$$(swiftlint version)" = "$(SWIFTLINT_VERSION)" ] || \
+		printf 'warning: SwiftLint %s, pinned %s (make lint-tools)\n' "$$(swiftlint version)" "$(SWIFTLINT_VERSION)" >&2
+	@[ "$$(swiftformat --version)" = "$(SWIFTFORMAT_VERSION)" ] || \
+		printf 'warning: SwiftFormat %s, pinned %s (make lint-tools)\n' "$$(swiftformat --version)" "$(SWIFTFORMAT_VERSION)" >&2
 	@swiftlint lint --strict
 	@swiftformat --lint .
+
+lint-tools: ## Download the pinned SwiftLint and SwiftFormat into build/tools
+	@mkdir -p $(TOOLS)
+	@curl -fsSL -o $(TOOLS)/swiftlint.zip \
+		https://github.com/realm/SwiftLint/releases/download/$(SWIFTLINT_VERSION)/portable_swiftlint.zip
+	@unzip -oq $(TOOLS)/swiftlint.zip swiftlint -d $(TOOLS)
+	@curl -fsSL -o $(TOOLS)/swiftformat.zip \
+		https://github.com/nicklockwood/SwiftFormat/releases/download/$(SWIFTFORMAT_VERSION)/swiftformat.zip
+	@unzip -oq $(TOOLS)/swiftformat.zip swiftformat -d $(TOOLS)
+	@rm -f $(TOOLS)/*.zip
+	@swiftlint version && swiftformat --version
 
 format: format-fix ## Rewrite sources with SwiftFormat
 
@@ -142,6 +185,14 @@ check-layering: ## Layering, zero-network and agent-linkage (docs/04 §11)
 
 check-size: ## App bundle size against the PRD §8 budget (advisory on a build product)
 	@Scripts/check-size.sh
+
+# A command-line build extracts strings but never writes them into the String Catalog;
+# only the IDE does. These run the same sync from the last builds (docs/18 X-4).
+strings: build build-editor ## Sync the String Catalogs with the source
+	@Scripts/sync-strings.sh
+
+check-strings: ## Fail if the String Catalogs are out of step with the last builds
+	@Scripts/sync-strings.sh --check
 
 # The budget is about the DMG somebody downloads, and only an archive produces those
 # bytes: a `xcodebuild build` product carries local symbols an archive strips and is

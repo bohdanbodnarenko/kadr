@@ -65,7 +65,8 @@ public struct StagingArea: Sendable {
     /// Moves a staged file to a path the user picked (CleanShot §6.2 / §7).
     ///
     /// The save panel has already confirmed a replace, so an existing file at
-    /// `destination` is removed first rather than getting a counter suffix.
+    /// `destination` is replaced rather than getting a counter suffix — in one step, so a
+    /// failed move never leaves the user with neither file (docs/18 §4.3 P3).
     @discardableResult
     public func finalize(_ url: URL, to destination: URL) throws -> URL {
         let folder = destination.deletingLastPathComponent()
@@ -73,15 +74,11 @@ public struct StagingArea: Sendable {
         if url.standardizedFileURL == destination.standardizedFileURL {
             return destination
         }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
         do {
-            try FileManager.default.moveItem(at: url, to: destination)
+            return try FileReplacement.move(url, to: destination)
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
-        return destination
     }
 
     /// Copies a file the user owns — or the History library does — into staging, so a
@@ -134,6 +131,28 @@ public struct StagingArea: Sendable {
             == directory.standardizedFileURL.path
     }
 
+    /// Keeps a staged file out of every future sweep (docs/18 OUT-2).
+    ///
+    /// A drop into an app that reads only `public.file-url` hands it the staging path itself,
+    /// and the app may keep that path — a chat draft, an upload queue. Deleting the file a day
+    /// later would break a link the user never knew pointed into Kadr's staging. Marked with an
+    /// extended attribute rather than a list, so the mark travels with the file and needs no
+    /// bookkeeping of its own.
+    public func retain(_ url: URL) {
+        guard contains(url) else { return }
+        var value: UInt8 = 1
+        if setxattr(url.path, Self.retainedAttribute, &value, 1, 0, 0) != 0 {
+            logger.error("Could not keep a dropped capture out of the sweep: \(errno, privacy: .public)")
+        }
+    }
+
+    /// Whether `retain(_:)` marked this file.
+    public func isRetained(_ url: URL) -> Bool {
+        getxattr(url.path, Self.retainedAttribute, nil, 0, 0, 0) >= 0
+    }
+
+    private static let retainedAttribute = "app.kadr.staging.retained"
+
     /// Deletes staged files older than the retention window.
     ///
     /// Returns how many went, so launch can log it rather than deleting silently.
@@ -150,7 +169,7 @@ public struct StagingArea: Sendable {
         for entry in entries {
             let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate
-            guard let modified, now.timeIntervalSince(modified) > retention else { continue }
+            guard let modified, now.timeIntervalSince(modified) > retention, !isRetained(entry) else { continue }
             if (try? manager.removeItem(at: entry)) != nil {
                 removed += 1
             }

@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 
 extension PinContentView {
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -6,33 +7,45 @@ extension PinContentView {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        let copy = NSMenuItem(title: "Copy", action: #selector(copyPin), keyEquivalent: "")
+        let copy = NSMenuItem(title: String(localized: "Copy"), action: #selector(copyPin), keyEquivalent: "")
         copy.target = self
         menu.addItem(copy)
 
-        let save = NSMenuItem(title: "Save…", action: #selector(savePin), keyEquivalent: "")
+        let save = NSMenuItem(title: String(localized: "Save…"), action: #selector(savePin), keyEquivalent: "")
         save.target = self
         menu.addItem(save)
 
-        let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(revealPin), keyEquivalent: "")
+        let reveal = NSMenuItem(
+            title: String(localized: "Show in Finder"),
+            action: #selector(revealPin),
+            keyEquivalent: ""
+        )
         reveal.target = self
         menu.addItem(reveal)
 
-        let annotate = NSMenuItem(title: "Annotate", action: #selector(annotatePin), keyEquivalent: "")
+        let annotate = NSMenuItem(
+            title: String(localized: "Annotate"),
+            action: #selector(annotatePin),
+            keyEquivalent: ""
+        )
         annotate.target = self
         menu.addItem(annotate)
 
-        let ocr = NSMenuItem(title: "Copy Text", action: #selector(copyPinText), keyEquivalent: "")
+        let ocr = NSMenuItem(title: String(localized: "Copy Text"), action: #selector(copyPinText), keyEquivalent: "")
         ocr.target = self
         menu.addItem(ocr)
 
         menu.addItem(.separator())
 
         // Opacity from the menu too (docs/03 §4), so it never depends on a scroll gesture.
-        let opacity = NSMenuItem(title: "Opacity", action: nil, keyEquivalent: "")
+        let opacity = NSMenuItem(title: String(localized: "Opacity"), action: nil, keyEquivalent: "")
         let levels = NSMenu()
         for percent in Self.opacityLevels {
-            let item = NSMenuItem(title: "\(percent)%", action: #selector(setPinOpacity(_:)), keyEquivalent: "")
+            let item = NSMenuItem(
+                title: String(localized: "\(percent)%"),
+                action: #selector(setPinOpacity(_:)),
+                keyEquivalent: ""
+            )
             item.target = self
             item.tag = percent
             item.state = Int((panel.alphaValue * 100).rounded()) == percent ? .on : .off
@@ -44,15 +57,16 @@ extension PinContentView {
         let clickThrough = NSMenuItem(
             title: panel.clickThroughEnabled ? "Stop Click-Through" : "Click-Through",
             action: #selector(toggleClickThrough),
-            keyEquivalent: "l"
+            keyEquivalent: ""
         )
-        clickThrough.keyEquivalentModifierMask = [.command, .option]
+        // The live binding, not a hard-coded ⌘⌥L: the shortcut is rebindable (docs/18 OUT-15).
+        clickThrough.setShortcut(for: .togglePinClickThrough)
         clickThrough.target = self
         menu.addItem(clickThrough)
 
         menu.addItem(.separator())
 
-        let close = NSMenuItem(title: "Close Pin", action: #selector(closePin), keyEquivalent: "w")
+        let close = NSMenuItem(title: String(localized: "Close Pin"), action: #selector(closePin), keyEquivalent: "w")
         close.target = self
         menu.addItem(close)
 

@@ -21,9 +21,19 @@ public struct AnnotationExportRenderer: Sendable {
         self.objectShadowsEnabled = objectShadowsEnabled ?? ObjectShadowPolicy.isEnabled()
     }
 
-    public enum RenderError: Error, Equatable {
+    public enum RenderError: Error, Equatable, LocalizedError {
         case couldNotCreateContext
         case couldNotCreateImage
+
+        /// Banners showed "…RenderError error 0" (docs/18 ED-8).
+        public var errorDescription: String? {
+            switch self {
+            case .couldNotCreateContext:
+                "There is not enough memory to draw an image this large."
+            case .couldNotCreateImage:
+                "Kadr could not draw the finished image."
+            }
+        }
     }
 
     /// Flattens a document into a single image.
@@ -154,8 +164,12 @@ public struct AnnotationExportRenderer: Sendable {
     /// context cannot be made, because a slightly flattened export beats none.
     /// Internal, not private: the canvas assembly lives in
     /// `AnnotationExportRenderer+Canvas.swift`, and `private` is file-scoped.
+    ///
+    /// Only an RGB source keeps its own colour space: an RGBA context cannot be made in a
+    /// CMYK, grey or indexed one, so those render in sRGB rather than fail (docs/18 ED-13).
     static func makeContext(width: Int, height: Int, matching source: CGImage) -> CGContext? {
-        let space = source.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let srgb = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let space = source.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? srgb
 
         if source.bitsPerComponent > 8 {
             var info = CGImageAlphaInfo.premultipliedLast.rawValue
@@ -176,15 +190,21 @@ public struct AnnotationExportRenderer: Sendable {
             }
         }
 
-        return CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: space,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        )
+        // An RGB space an RGBA context still refuses (an unusual ICC profile) gets sRGB.
+        for candidate in [space, srgb] {
+            if let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: candidate,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) {
+                return context
+            }
+        }
+        return nil
     }
 
     // MARK: - Commands

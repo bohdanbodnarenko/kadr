@@ -38,7 +38,7 @@ note() { printf '  %s%s%s\n' "$DIM" "$1" "$OFF"; }
 # the XPC helper and the `kadr` CLI. Sparkle's own sources (once vendored) are never in
 # these paths.
 swift_sources() {
-    find Kadr KadrTests KadrEditor HelperTools KadrCLI Packages/*/Sources Packages/*/Tests \
+    find Kadr KadrTests KadrEditor KadrEditorTests HelperTools KadrCLI Packages/*/Sources Packages/*/Tests \
         -name '*.swift' -not -path '*/.build/*' 2>/dev/null | sort
 }
 
@@ -337,6 +337,13 @@ if Scripts/check-dead-api.sh; then
     :
 else
     fail "dead-API check failed (docs/10 R3.3)"
+fi
+
+# ---------------------------------------------------------------- H. no silent failures (docs/18 X-2)
+if Scripts/check-silent-catches.sh; then
+    pass "every catch in the agent that logs an error also reports it, or is allow-listed"
+else
+    fail "a catch in Kadr/ only logs (docs/04 §5 Feedback)"
 fi
 
 # ----------------------------------------------------------------

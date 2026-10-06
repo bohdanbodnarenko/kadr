@@ -27,7 +27,7 @@ public enum BeautifyAspect: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .original: "Original"
+        case .original: String(localized: "Original", bundle: .module)
         case .square: "1:1"
         case .fourFive: "4:5"
         case .sixteenNine: "16:9"
@@ -191,10 +191,10 @@ public enum BeautifyShadowStyle: String, CaseIterable, Hashable, Sendable {
 
     public var title: String {
         switch self {
-        case .soft: "Soft"
-        case .long: "Long"
-        case .glow: "Glow"
-        case .crisp: "Crisp"
+        case .soft: String(localized: "Soft", bundle: .module)
+        case .long: String(localized: "Long", bundle: .module)
+        case .glow: String(localized: "Glow", bundle: .module)
+        case .crisp: String(localized: "Crisp", bundle: .module)
         }
     }
 

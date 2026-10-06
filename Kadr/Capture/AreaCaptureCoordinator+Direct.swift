@@ -12,19 +12,25 @@ import Shared
 @MainActor
 extension AreaCaptureCoordinator {
     /// Captures every display with no overlay at all (docs/03 §1.3).
-    func captureAllDisplays() {
-        captureFullscreen()
+    ///
+    /// - Parameter frontmost: the app the user was in, when the caller sampled it before
+    ///   Kadr took activation (the island does); nil samples it now (docs/17 T-CAP-3).
+    func captureAllDisplays(frontmost: AppIdentity? = nil) {
+        captureFullscreen(frontmost: frontmost)
     }
 
     /// Honours Settings → Capture → Fullscreen captures (docs/16 CAP-3).
     ///
     /// - Parameter target: this capture's target; nil follows the setting. The island's
     ///   Screen menu passes one so a single capture never rewrites Settings (T-CAP-5).
-    func captureFullscreen(target: FullscreenTarget? = nil) {
+    func captureFullscreen(target: FullscreenTarget? = nil, frontmost: AppIdentity? = nil) {
+        // Sampled here: nothing on this path set it, so a full-screen capture was named
+        // after whatever app the previous capture saw (docs/17 T-CAP-3).
+        frontmostAtHotkey = frontmost ?? Self.currentFrontmostApp()
         switch target ?? settings.fullscreenTarget {
         case .activeDisplay:
             if let displayID = ActiveScreen.resolve().flatMap({ ScreenDescriptor($0) })?.displayID {
-                captureDisplay(displayID)
+                captureDisplay(displayID, frontmost: frontmostAtHotkey)
             } else {
                 captureEveryDisplay(preferringActive: false)
             }
@@ -73,8 +79,9 @@ extension AreaCaptureCoordinator {
     }
 
     /// Captures one display with no overlay, the `display=` form of fullscreen.
-    func captureDisplay(_ displayID: CGDirectDisplayID) {
+    func captureDisplay(_ displayID: CGDirectDisplayID, frontmost: AppIdentity? = nil) {
         rememberBeautifySkip()
+        frontmostAtHotkey = frontmost ?? Self.currentFrontmostApp()
         if captureHeldFreeze(displayID: displayID) {
             return
         }

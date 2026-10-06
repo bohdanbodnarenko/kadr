@@ -80,7 +80,7 @@ struct LoupeSamplerTests {
         #expect(sampler.magnifiedRegion(around: .zero, sideInPoints: 0) == nil)
     }
 
-    @Test("The colour under the pointer is read from the right half of the image")
+    @Test("The color under the pointer is read from the right half of the image")
     func readsColour() {
         let sampler = LoupeSampler(image: makeImage(), scale: .oneToOne)
 
@@ -97,7 +97,7 @@ struct LoupeSamplerTests {
 
     /// The canvas is reused across reads, so nothing of one read may leak into the next —
     /// including a translucent pixel, which would otherwise composite over the last colour.
-    @Test("Repeated reads on one sampler never carry a colour over", arguments: [
+    @Test("Repeated reads on one sampler never carry a color over", arguments: [
         [(10, PixelColor(red: 255, green: 0, blue: 0)), (90, PixelColor(red: 0, green: 0, blue: 255))],
         [(90, PixelColor(red: 0, green: 0, blue: 255)), (10, PixelColor(red: 255, green: 0, blue: 0))],
         [(10, PixelColor(red: 255, green: 0, blue: 0)), (10, PixelColor(red: 255, green: 0, blue: 0))]
@@ -111,7 +111,7 @@ struct LoupeSamplerTests {
         }
     }
 
-    @Test("A transparent pixel after an opaque one reads as black, not the previous colour")
+    @Test("A transparent pixel after an opaque one reads as black, not the previous color")
     func transparentAfterOpaque() {
         let context = makeContext(width: 2, height: 1)
         context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
@@ -123,13 +123,13 @@ struct LoupeSamplerTests {
         #expect(sampler.color(at: CGPoint(x: 1, y: 0)) == PixelColor(red: 0, green: 0, blue: 0))
     }
 
-    @Test("A pointer outside the image has no colour")
+    @Test("A pointer outside the image has no color")
     func outOfBoundsColour() {
         let sampler = LoupeSampler(image: makeImage(), scale: .oneToOne)
         #expect(sampler.color(at: CGPoint(x: -1, y: 10)) == nil)
         #expect(sampler.color(at: CGPoint(x: 100, y: 10)) == nil)
     }
 
-    @Test("Colours render as hex and choose a legible text colour")
+    @Test("Colors render as hex and choose a legible text color")
     func colourReadout() {}
 }

@@ -232,7 +232,7 @@ struct ZoomCuePlannerTests {
 
     /// An anchor that followed the pointer would make the camera dither during the zoom —
     /// the most common way an automatic zoom looks cheap.
-    @Test("A cluster's anchor is its centre, fixed once")
+    @Test("A cluster's anchor is its center, fixed once")
     func anchorIsTheClusterCentre() throws {
         let events = [
             ClickEvent(time: 1, position: CGPoint(x: 400, y: 300)),

@@ -30,6 +30,14 @@ enum KadrText {
         expand(String(localized: value))
     }
 
+    /// A string with a count in it, agreeing in number through automatic grammar agreement:
+    /// `"^[\(n) word](inflect: true)"` reads "1 word" and "3 words", and a translation can
+    /// agree the way its own language does. Splicing an "s" on in code can do neither
+    /// (docs/18 X-4).
+    nonisolated static func counted(_ value: String.LocalizationValue) -> String {
+        expand(String(AttributedString(localized: value).characters))
+    }
+
     nonisolated static func expand(_ value: String) -> String {
         guard isPseudolocalized else { return value }
         return Pseudolocalization.expand(value, factor: expansionFactor)

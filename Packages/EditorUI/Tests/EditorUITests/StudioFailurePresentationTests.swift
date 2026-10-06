@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import Testing
 @testable import EditorUI
@@ -28,6 +29,7 @@ struct StudioFailurePresentationTests {
         (.speechModelDownloadFailed("x"), .retry(.installSpeechModel)),
         (.transcriptionFailed("x"), .retry(.transcribe)),
         (.transcriptionFailed("x", retryable: false), .dismiss),
+        (.transcriptionFailed("x", retrying: .transcribeOnly), .retry(.transcribeOnly)),
         (
             .audioExportFailed("x", to: URL(fileURLWithPath: "/tmp/a.m4a"), format: .m4a),
             .retry(.exportAudio(URL(fileURLWithPath: "/tmp/a.m4a"), .m4a))
@@ -35,5 +37,12 @@ struct StudioFailurePresentationTests {
     ])
     func retryCarriesOperation(failure: StudioFailurePresentation, expected: StudioFailurePresentation.Action) {
         #expect(failure.primaryAction == expected)
+    }
+
+    @Test("Actionable failures are errors; explanations are warnings")
+    func feedbackKind() {
+        #expect(StudioFailurePresentation.copyEditedFailed("x").kind == .error)
+        #expect(StudioFailurePresentation.onlyClipLeft().kind == .warning)
+        #expect(StudioFailurePresentation.speechPermissionNeeded().kind == .error)
     }
 }

@@ -63,6 +63,8 @@ public enum CaptureError: Error, Equatable, Sendable {
 }
 
 extension CaptureError: LocalizedError {
+    /// What a banner says. No display or window IDs and no raw SCK codes: those mean
+    /// nothing to a user and live in `logDescription` instead (docs/18 CAP-11).
     public var errorDescription: String? {
         switch self {
         case .permissionDenied:
@@ -71,16 +73,26 @@ extension CaptureError: LocalizedError {
             "macOS refused the capture because Kadr is missing an entitlement."
         case .noCaptureSource:
             "macOS reported no displays or windows available to capture."
-        case let .displayNotFound(id):
-            "Display \(id) is no longer connected."
-        case let .windowNotFound(id):
-            "Window \(id) is no longer on screen."
+        case .displayNotFound:
+            "That display is no longer connected."
+        case .windowNotFound:
+            "That window closed before Kadr could capture it."
         case .regionOutsideDisplay:
             "That region is not on the display it was captured from."
         case .emptyRegion:
             "That selection has no area."
-        case let .captureFailed(code, description):
-            "Screen capture failed (\(code)): \(description)"
+        case .captureFailed:
+            "macOS could not capture the screen. Try again."
+        }
+    }
+
+    /// The same failure with its identifiers, for the log only.
+    public var logDescription: String {
+        switch self {
+        case let .displayNotFound(id): "display \(id) not found"
+        case let .windowNotFound(id): "window \(id) not found"
+        case let .captureFailed(code, description): "SCK error \(code): \(description)"
+        default: errorDescription ?? String(describing: self)
         }
     }
 }

@@ -21,6 +21,9 @@ struct StudioTranscriptPanel: View {
     @State private var groupedTracks: [TranscriptTrackGroup] = []
     /// The word under the playhead, as last reported by the follower.
     @State private var activeWordID: String?
+    /// The words the search finds, in order, and which one is current (docs/18 STU-10).
+    @State private var matchIDs: [String] = []
+    @State private var matchIndex: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -37,20 +40,54 @@ struct StudioTranscriptPanel: View {
         .padding(10)
         .onDeleteCommand(perform: cutSelection)
         .onExitCommand { clearSelection() }
+        // Arrow keys walk the words, ⇧ extends the selection (docs/14 UX-34).
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.leftArrow, phases: .down) { press in
+            moveSelection(by: -1, extending: press.modifiers.contains(.shift))
+        }
+        .onKeyPress(.rightArrow, phases: .down) { press in
+            moveSelection(by: 1, extending: press.modifiers.contains(.shift))
+        }
         .onAppear(perform: rebuildWords)
         .onChange(of: model.transcript) { rebuildWords() }
-        .onChange(of: model.transcriptQuery) { rebuildWords() }
+        .onChange(of: model.transcriptQuery) { rebuildMatches() }
     }
 
     private var header: some View {
         HStack {
-            Text("Transcript")
+            Text("Transcript", bundle: .module)
                 .font(.headline)
             Spacer()
-            TextField("Search", text: Bindable(model).transcriptQuery)
+            TextField(String(localized: "Find", bundle: .module), text: Bindable(model).transcriptQuery)
                 .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 160)
+                .frame(maxWidth: 140)
+                .onSubmit { stepMatch(by: 1) }
+            if !model.transcriptQuery.isEmpty {
+                Text(matchLabel)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Button { stepMatch(by: -1) } label: { Image(systemName: "chevron.up") }
+                    .help(Text("Previous match", bundle: .module))
+                    .accessibilityLabel(Text("Previous match", bundle: .module))
+                    .disabled(matchIDs.isEmpty)
+                Button { stepMatch(by: 1) } label: { Image(systemName: "chevron.down") }
+                    .help(Text("Next match (Return)", bundle: .module))
+                    .accessibilityLabel(Text("Next match", bundle: .module))
+                    .disabled(matchIDs.isEmpty)
+            }
         }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+    }
+
+    private var matchLabel: String {
+        guard !matchIDs.isEmpty else { return "No matches" }
+        return "\((matchIndex ?? 0) + 1) of \(matchIDs.count)"
+    }
+
+    private var currentMatchID: String? {
+        matchIndex.flatMap { matchIDs.indices.contains($0) ? matchIDs[$0] : nil }
     }
 
     private var chapterRow: some View {
@@ -78,19 +115,33 @@ struct StudioTranscriptPanel: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.top, 6)
                         }
-                        FlowWords(
-                            words: group.words,
-                            clips: clips,
-                            selectedIDs: selectedIDs,
-                            activeID: activeWordID,
-                            actions: TranscriptChipActions(
-                                onSelect: handleTap,
-                                onCutSentence: { model.cutSentence(containing: $0) }
+                        // Paragraph-sized rows, so the stack is lazy over a long transcript and
+                        // a new active word re-renders the one row it is in (docs/18 STU-15).
+                        ForEach(group.chunks) { chunk in
+                            FlowWords(
+                                words: chunk.words,
+                                clips: clips,
+                                selectedIDs: chunk.ids.intersection(selectedIDs),
+                                activeID: activeWordID.flatMap { chunk.ids.contains($0) ? $0 : nil },
+                                marks: TranscriptMarks(
+                                    fillers: model.transcriptFillerWords,
+                                    matches: chunk.ids.intersection(matchIDs),
+                                    currentMatch: currentMatchID.flatMap { chunk.ids.contains($0) ? $0 : nil }
+                                ),
+                                actions: TranscriptChipActions(
+                                    onSelect: handleTap,
+                                    onCutSentence: { model.cutSentence(containing: $0) },
+                                    onRestore: { model.restoreWords([$0]) }
+                                )
                             )
-                        )
-                        .equatable()
+                            .equatable()
+                        }
                     }
                 }
+            }
+            .onChange(of: currentMatchID) {
+                guard let currentMatchID else { return }
+                proxy.scrollTo(currentMatchID, anchor: .center)
             }
             .background {
                 TranscriptPlayheadFollower(
@@ -107,9 +158,16 @@ struct StudioTranscriptPanel: View {
 
     private var cutSelectionRow: some View {
         HStack(spacing: 6) {
-            Button(cutTitle, action: cutSelection)
-                .foregroundStyle(.red)
-            Button("Clear", action: clearSelection)
+            if selectionIsAllCut {
+                Button(selectedWords.count == 1 ? "Restore Word" : "Restore \(selectedWords.count) Words") {
+                    model.restoreWords(selectedWords)
+                    clearSelection()
+                }
+            } else {
+                Button(cutTitle, action: cutSelection)
+                    .foregroundStyle(.red)
+            }
+            Button(String(localized: "Clear", bundle: .module), action: clearSelection)
                 .foregroundStyle(.secondary)
         }
         .controlSize(.small)
@@ -120,14 +178,53 @@ struct StudioTranscriptPanel: View {
         return displayedWords.filter { selectedIDs.contains($0.id) }
     }
 
+    /// Whether every selected word's footage is already cut, so the action is Restore.
+    private var selectionIsAllCut: Bool {
+        !selectedWords.isEmpty && selectedWords.allSatisfy { !model.transcriptWordSurvives($0) }
+    }
+
     private var cutTitle: String {
         selectedWords.count == 1 ? "Cut Word" : "Cut \(selectedWords.count) Words"
     }
 
     private func rebuildWords() {
-        let words = StudioDocumentModel.visibleWords(in: model.transcript, query: model.transcriptQuery)
+        let words = model.transcript?.words ?? []
         displayedWords = words
         groupedTracks = TranscriptTrackGroup.groups(of: words)
+        rebuildMatches()
+    }
+
+    private func rebuildMatches() {
+        matchIDs = StudioDocumentModel.matchingWordIDs(in: model.transcript, query: model.transcriptQuery)
+        matchIndex = matchIDs.isEmpty ? nil : 0
+    }
+
+    /// Next or previous match, wrapping, and seeks there so the preview shows it.
+    private func stepMatch(by step: Int) {
+        guard !matchIDs.isEmpty else { return }
+        let next = ((matchIndex ?? -step) + step + matchIDs.count) % matchIDs.count
+        matchIndex = next
+        if let word = displayedWords.first(where: { $0.id == matchIDs[next] }) {
+            model.seekToWord(word)
+        }
+    }
+
+    /// Moves the selection one word, or extends it from the anchor with ⇧.
+    private func moveSelection(by step: Int, extending: Bool) -> KeyPress.Result {
+        guard !displayedWords.isEmpty else { return .ignored }
+        let current = selectedWords.last.flatMap { displayedWords.firstIndex(of: $0) }
+            ?? displayedWords.firstIndex { $0.id == activeWordID }
+            ?? (step > 0 ? -1 : displayedWords.count)
+        let index = min(max(current + step, 0), displayedWords.count - 1)
+        let word = displayedWords[index]
+        if extending, let ids = rangeIDs(from: anchor, to: word) {
+            selectedIDs = ids
+        } else {
+            selectedIDs = [word.id]
+            anchor = word
+            model.seekToWord(word)
+        }
+        return .handled
     }
 
     private func label(for track: SpeechTrackKind) -> String {
@@ -186,9 +283,22 @@ struct StudioTranscriptPanel: View {
 struct TranscriptTrackGroup: Identifiable, Equatable {
     var track: SpeechTrackKind
     var words: [TranscriptWord]
+    /// The words in rows of at most `chunkSize`, built once with the group.
+    var chunks: [TranscriptChunk] = []
 
     var id: SpeechTrackKind {
         track
+    }
+
+    /// Words per transcript row: about a paragraph.
+    static let chunkSize = 80
+
+    init(track: SpeechTrackKind, words: [TranscriptWord]) {
+        self.track = track
+        self.words = words
+        chunks = stride(from: 0, to: words.count, by: Self.chunkSize).map { start in
+            TranscriptChunk(words: Array(words[start ..< min(start + Self.chunkSize, words.count)]))
+        }
     }
 
     /// Groups in track order, each keeping the words' own order. One pass over the words.
@@ -200,6 +310,21 @@ struct TranscriptTrackGroup: Identifiable, Equatable {
         return byTrack
             .sorted { $0.key.rawValue < $1.key.rawValue }
             .map { TranscriptTrackGroup(track: $0.key, words: $0.value) }
+    }
+}
+
+/// One row of a transcript track.
+struct TranscriptChunk: Identifiable, Equatable {
+    let words: [TranscriptWord]
+    let ids: Set<String>
+
+    var id: String {
+        words.first?.id ?? ""
+    }
+
+    init(words: [TranscriptWord]) {
+        self.words = words
+        ids = Set(words.map(\.id))
     }
 }
 
@@ -226,6 +351,14 @@ private struct TranscriptPlayheadFollower: View {
 private struct TranscriptChipActions {
     let onSelect: (TranscriptWord) -> Void
     let onCutSentence: (TranscriptWord) -> Void
+    let onRestore: (TranscriptWord) -> Void
+}
+
+/// What marks the words carry besides cut, selected and active.
+private struct TranscriptMarks: Equatable {
+    var fillers: Set<String>
+    var matches: Set<String>
+    var currentMatch: String?
 }
 
 /// Wrapping word chips. A custom layout rather than a single `Text` so a click lands on
@@ -238,11 +371,13 @@ private struct FlowWords: View, Equatable {
     let clips: ClipTimeline
     let selectedIDs: Set<String>
     let activeID: String?
+    let marks: TranscriptMarks
     let actions: TranscriptChipActions
 
     nonisolated static func == (lhs: FlowWords, rhs: FlowWords) -> Bool {
         lhs.activeID == rhs.activeID
             && lhs.selectedIDs == rhs.selectedIDs
+            && lhs.marks == rhs.marks
             && lhs.clips == rhs.clips
             && lhs.words == rhs.words
     }
@@ -252,9 +387,10 @@ private struct FlowWords: View, Equatable {
             TranscriptChip(
                 word: word,
                 isCut: !clips.containsSourceTime((word.start + word.end) / 2),
-                isFiller: TranscriptCutPlanner.fillerWords.contains(word.normalized),
+                isFiller: marks.fillers.contains(word.normalized),
                 isSelected: selectedIDs.contains(word.id),
                 isActive: word.id == activeID,
+                match: marks.currentMatch == word.id ? .current : marks.matches.contains(word.id) ? .other : nil,
                 actions: actions
             )
             .equatable()
@@ -269,7 +405,13 @@ private struct TranscriptChip: View, Equatable {
     let isFiller: Bool
     let isSelected: Bool
     let isActive: Bool
+    let match: Match?
     let actions: TranscriptChipActions
+
+    enum Match: Equatable {
+        case current
+        case other
+    }
 
     nonisolated static func == (lhs: TranscriptChip, rhs: TranscriptChip) -> Bool {
         lhs.word == rhs.word
@@ -277,6 +419,7 @@ private struct TranscriptChip: View, Equatable {
             && lhs.isFiller == rhs.isFiller
             && lhs.isSelected == rhs.isSelected
             && lhs.isActive == rhs.isActive
+            && lhs.match == rhs.match
     }
 
     var body: some View {
@@ -290,15 +433,51 @@ private struct TranscriptChip: View, Equatable {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 1)
                 .background(background, in: RoundedRectangle(cornerRadius: 4))
+                // Shape as well as tint (docs/14 UX-34): selected words are outlined and
+                // the spoken word carries a bar, so neither depends on telling two
+                // accent shades apart.
+                .overlay {
+                    if isSelected || match == .current {
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(isSelected ? Color.accentColor : Color.orange, lineWidth: 1.5)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if isActive, !isCut {
+                        Capsule().fill(Color.accentColor).frame(height: 2).padding(.horizontal, 3)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .id(word.id)
         .accessibilityLabel(word.text)
+        .accessibilityValue(accessibilityState)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint("Seek to this word. Shift-click to select a range.")
+        .accessibilityHint(Text("Seek to this word. Shift-click to select a range.", bundle: .module))
         .contextMenu {
-            Button("Cut this sentence") { actions.onCutSentence(word) }
+            if isCut {
+                Button(String(localized: "Restore Word", bundle: .module)) { actions.onRestore(word) }
+            } else {
+                Button(String(localized: "Cut This Sentence", bundle: .module)) { actions.onCutSentence(word) }
+            }
         }
+    }
+
+    private var accessibilityState: String {
+        var states: [String] = []
+        if isCut {
+            states.append("cut")
+        }
+        if isFiller, !isCut {
+            states.append("filler")
+        }
+        if isActive {
+            states.append("playing")
+        }
+        if match != nil {
+            states.append("search match")
+        }
+        return states.joined(separator: ", ")
     }
 
     private var background: Color {
@@ -306,64 +485,12 @@ private struct TranscriptChip: View, Equatable {
             Color.accentColor.opacity(isCut ? 0.12 : 0.24)
         } else if isActive, !isCut {
             Color.accentColor.opacity(0.2)
+        } else if match != nil {
+            Color.yellow.opacity(match == .current ? 0.45 : 0.25)
         } else if isFiller, !isCut {
             Color.orange.opacity(0.16)
         } else {
             Color.clear
-        }
-    }
-}
-
-/// Simple wrapping HStack. Not a production layout engine — just enough for a transcript.
-private struct FlexibleWordWrap<Item: Identifiable, Content: View>: View {
-    let words: [Item]
-    @ViewBuilder let content: (Item) -> Content
-
-    var body: some View {
-        // A wrapping layout without UIKit: `ViewThatFits` per row would be another
-        // implementation; this uses a flow via `Layout`. Keep it cheap — transcripts
-        // are thousands of words, not tens of thousands.
-        WordWrapLayout {
-            ForEach(words) { word in
-                content(word)
-            }
-        }
-    }
-}
-
-private struct WordWrapLayout: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 280
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var row: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > 0, x + size.width > width {
-                x = 0
-                y += row + 2
-                row = 0
-            }
-            row = max(row, size.height)
-            x += size.width
-        }
-        return CGSize(width: width, height: y + row)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var row: CGFloat = 0
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + size.width > bounds.maxX {
-                x = bounds.minX
-                y += row + 2
-                row = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width
-            row = max(row, size.height)
         }
     }
 }

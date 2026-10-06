@@ -17,6 +17,13 @@ public enum StudioPlaybackKey: Equatable, Sendable {
     case step(frames: Int)
     /// Jump by seconds, for getting across a long recording.
     case skip(seconds: TimeInterval)
+    /// J, K and L.
+    case shuttleReverse
+    case shuttleStop
+    case shuttleForward
+    /// Home and End.
+    case seekToStart
+    case seekToEnd
 
     /// What an event means, or nil for "not ours — let it keep travelling".
     ///
@@ -33,6 +40,19 @@ public enum StudioPlaybackKey: Equatable, Sendable {
             return option ? .skip(seconds: -5) : .step(frames: -1)
         case kVK_RightArrow:
             return option ? .skip(seconds: 5) : .step(frames: 1)
+        // J, K, L, Home and End travel the same chain, so they keep working after a click
+        // in the inspector takes focus off the timeline (docs/18 STU-11). Matched by key
+        // position, which also keeps them working on a Ukrainian or Cyrillic layout.
+        case kVK_ANSI_J:
+            return option ? nil : .shuttleReverse
+        case kVK_ANSI_K:
+            return option ? nil : .shuttleStop
+        case kVK_ANSI_L:
+            return option ? nil : .shuttleForward
+        case kVK_Home:
+            return option ? nil : .seekToStart
+        case kVK_End:
+            return option ? nil : .seekToEnd
         default:
             return nil
         }

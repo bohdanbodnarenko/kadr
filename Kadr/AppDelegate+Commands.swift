@@ -1,5 +1,6 @@
 import AppKit
 import AutomationKit
+import KeyboardShortcuts
 import os
 import RecordingCore
 import SelectionUI
@@ -30,11 +31,13 @@ extension AppDelegate {
             scrollCapture.begin()
         case .recordRegion, .recordDisplay, .stopRecording, .recordSetup:
             performRecording(command)
+        case .pauseRecording:
+            togglePauseFromShortcut()
         case .toggleDesktopIcons:
             desktopHygiene.toggleUserHide()
         case .allInOne, .captureArea, .captureWindow, .captureFullscreen, .captureText,
              .pickColor, .capturePreviousArea, .captureAreaAndCopy, .captureAreaAndSave,
-             .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays,
+             .selfTimer, .freezeScreen, .closeAllOverlays, .saveAllOverlays, .hideOverlays, .focusOverlay,
              .hidePins, .pinClipboard, .togglePinClickThrough:
             break
         case .openHistory:
@@ -116,6 +119,8 @@ extension AppDelegate {
             areaCapture.saveAllOverlays()
         case .hideOverlays:
             areaCapture.toggleOverlaysHidden()
+        case .focusOverlay:
+            areaCapture.quickAccess.focusFromKeyboard()
         case .hidePins:
             areaCapture.togglePinsHidden()
         case .pinClipboard:
@@ -143,13 +148,23 @@ extension AppDelegate {
         }
     }
 
+    /// The island's display pick, named after the app the island saved (docs/17 T-CAP-3).
+    func captureIslandDisplay(_ displayID: CGDirectDisplayID) {
+        areaCapture.captureDisplay(displayID, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
+    /// The island's Screen menu, likewise.
+    func captureIslandScreen(_ target: FullscreenTarget?) {
+        areaCapture.captureFullscreen(target: target, frontmost: allInOne.takeFrontmostBeforePresent())
+    }
+
     /// What the All-in-One strip starts (docs/03 §1.4).
     func performAllInOne(_ mode: AllInOneMode) {
         let frontmost = allInOne.takeFrontmostBeforePresent()
         switch mode {
         case .area: areaCapture.beginOverlayCapture(mode: .area, frontmost: frontmost)
         case .window: areaCapture.beginOverlayCapture(mode: .window, frontmost: frontmost)
-        case .screen: areaCapture.captureAllDisplays()
+        case .screen: areaCapture.captureAllDisplays(frontmost: frontmost)
         case .record:
             let source = allInOne.takeHandOffFrame()
             // A take is live, starting or saving: the recorder would only arm a second one
@@ -164,7 +179,7 @@ extension AppDelegate {
         case .gif: recording.beginGIFRecording()
         case .scrolling: scrollCapture.begin()
         case .ocr: areaCapture.beginOverlayCapture(mode: .area, purpose: .recognizeText, frontmost: frontmost)
-        case .color: areaCapture.beginColorPick()
+        case .color: areaCapture.beginColorPick(frontmost: frontmost)
         }
     }
 
@@ -211,7 +226,11 @@ extension AppDelegate {
     /// "an optional floating stop button" — but on by default, since the app shipped with
     /// no on-screen way to stop at all and that is what people hit first.
     func refreshRecordingControlBar() {
-        guard settings.recordingShowsControlBar else {
+        // With the bar off, Stop lives in the menu bar and on the stop shortcut. With no
+        // shortcut bound either, the bar shows anyway: a take must always have an on-screen
+        // Stop (docs/18 REC-2).
+        let hasStopShortcut = KeyboardShortcuts.getShortcut(for: .stopRecording) != nil
+        guard settings.recordingShowsControlBar || !hasStopShortcut else {
             recordingControlBar.dismiss()
             return
         }
@@ -260,9 +279,11 @@ extension AppDelegate {
             restart: { [weak self] in self?.recording.restart() },
             audioLevel: recording.audioMeter.peak,
             microphoneIsSilent: recording.microphoneIsSilent,
+            microphoneDropped: recording.microphoneDropped,
             notice: recording.liveNotice,
             isTransitioning: recording.isTransitioning,
-            isSaving: isSaving
+            isSaving: isSaving,
+            recordedDisplayID: recording.lastTarget.flatMap(\.displayID)
         )
     }
 
@@ -360,6 +381,16 @@ extension AppDelegate {
         // is that nothing starts until the user says so.
         case .recordSetup: recordSetup.toggle()
         default: break
+        }
+    }
+
+    /// Pause and Resume without reaching for the bar (docs/18 REC-11). Outside a running
+    /// take there is nothing to pause, so the key says so rather than starting anything.
+    private func togglePauseFromShortcut() {
+        switch recording.state {
+        case .recording: recording.pause()
+        case .paused: recording.resume()
+        default: NSSound.beep()
         }
     }
 

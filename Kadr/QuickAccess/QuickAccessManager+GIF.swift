@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import os
 import OverlayKit
@@ -22,6 +23,9 @@ extension QuickAccessManager {
         setActivity(.exportingGIF, on: item)
         Task { [weak self] in
             guard let self else { return }
+            // A client of its own: one shared client was disconnected by whichever of
+            // Compress and GIF finished first, under the other (docs/18 OUT-12).
+            let vision = VisionClient()
             defer { vision.disconnect() }
             // Busy while encoding, so auto-dismiss cannot take the card mid-export
             // (docs/16 OUT-16).
@@ -43,7 +47,7 @@ extension QuickAccessManager {
                 ))
                 guard let path = result.path else { return }
                 let gifURL = URL(fileURLWithPath: path)
-                logger.info("Exported \(gifURL.lastPathComponent, privacy: .public)")
+                logger.info("Exported \(gifURL.lastPathComponent, privacy: .private)")
                 presentExternalFile(at: gifURL, origin: .capture)
                 NSWorkspace.shared.activateFileViewerSelecting([gifURL])
             } catch {
@@ -82,7 +86,7 @@ extension QuickAccessManager {
     func confirmExport(_ estimate: GIFResponse) -> Bool {
         let size = ByteCountFormatter.string(fromByteCount: Int64(estimate.byteCount), countStyle: .file)
         let alert = NSAlert()
-        alert.messageText = "Export this recording as a GIF?"
+        alert.messageText = String(localized: "Export this recording as a GIF?")
         var detail = "The GIF will be roughly \(size). GIFs are much larger than "
             + "video, so long recordings get big quickly."
         if estimate.isClipped {
@@ -91,8 +95,8 @@ extension QuickAccessManager {
                 + "will cover the first \(seconds) seconds. Trim it first to choose which part."
         }
         alert.informativeText = detail
-        alert.addButton(withTitle: "Export")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Export"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         let answer = ActivationJuggler.shared.withTemporaryActivation(
             returningTo: ActivationJuggler.returnTarget()
         ) { alert.runModal() }

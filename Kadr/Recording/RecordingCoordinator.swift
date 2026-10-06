@@ -85,6 +85,12 @@ final class RecordingCoordinator {
 
     /// Whether the resolved options for this take record the microphone.
     @ObservationIgnored var microphoneThisTake = false
+    /// The take asked for a microphone and is recording without one. Shown for the whole
+    /// take, not only as the five-second notice (docs/18 REC-1).
+    var microphoneDropped = false {
+        didSet { onStateChanged?() }
+    }
+
     /// A device the take had to go without, shown on the bar once it is rolling.
     @ObservationIgnored var startNotice: String?
     /// Loudest microphone sample so far this take, for the silent-mic notice.
@@ -107,7 +113,16 @@ final class RecordingCoordinator {
     @ObservationIgnored var terminationCompletion: (() -> Void)?
     /// Why the engine asked us to stop, if it did (docs/16 REC-1).
     @ObservationIgnored var pendingInterruption: String?
+    /// The recorded second the free space was last checked at (docs/18 REC-8).
+    @ObservationIgnored var lastDiskCheckSecond: Int?
     @ObservationIgnored var engineEventsTask: Task<Void, Never>?
+    /// Sleep and wake, for the coordinator's lifetime (docs/18 REC-5).
+    @ObservationIgnored var sleepTasks: [Task<Void, Never>] = []
+    @ObservationIgnored var deviceLossTask: Task<Void, Never>?
+    /// The camera this take records, or nil (docs/18 REC-10).
+    @ObservationIgnored var cameraThisTake: String?
+    /// This pause was Kadr's, for sleep; wake says so (docs/18 REC-5).
+    @ObservationIgnored var pausedForSleep = false
     /// Disables transport while start/pause/resume/stop is in flight (docs/16 REC-17).
     var isTransitioning = false {
         didSet { onStateChanged?() }
@@ -142,6 +157,8 @@ final class RecordingCoordinator {
         self.hygiene = hygiene
         studio = StudioSessionRecorder(camera: camera)
         listenForEngineEvents()
+        listenForSleep()
+        listenForDeviceLoss()
     }
 
     /// Stream death and writer failure must stop the take and keep the footage
@@ -156,11 +173,18 @@ final class RecordingCoordinator {
     }
 
     func handleEngineEvent(_ event: RecordingEngineEvent) {
-        guard state == .recording || state == .paused else { return }
         let message: String = switch event {
         case let .streamStopped(reason), let .writerFailed(reason):
             reason
         }
+        // The stream can die after the engine started but before this take claimed
+        // `.recording`. Dropping it left a take that looked live with nothing filming; it
+        // is held and replayed once the start completes (docs/18 REC-7).
+        if state == .starting {
+            pendingInterruption = message
+            return
+        }
+        guard state == .recording || state == .paused else { return }
         pendingInterruption = message
         liveNotice = "Saving what was captured…"
         stop()
@@ -275,6 +299,7 @@ final class RecordingCoordinator {
         // What this take really records, not what the settings asked for (T-REC-9).
         microphoneThisTake = options.recordsMicrophone
         startNotice = resolved.notice
+        microphoneDropped = resolved.droppedMicrophone
         if let notice = resolved.notice {
             logger.info("\(notice, privacy: .public)")
         }
@@ -339,8 +364,10 @@ final class RecordingCoordinator {
         }
 
         let camera = cameraDeviceID ?? settings.recordingCameraDeviceID
+        let recordsCamera = settings.recordingShowsWebcam && !camera.isEmpty
+        cameraThisTake = recordsCamera ? camera : nil
         studio.start(
-            recordsCamera: settings.recordingShowsWebcam && !camera.isEmpty,
+            recordsCamera: recordsCamera,
             cameraDeviceID: camera,
             pointConverter: converter,
             pointPixelScale: Self.pointPixelScale(for: target, windowDisplay: windowHighlightDisplayID),

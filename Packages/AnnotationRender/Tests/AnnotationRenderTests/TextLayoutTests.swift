@@ -126,7 +126,7 @@ struct TextLayoutTests {
 
     /// The point of the whole type: the string the field lays out is the string the
     /// exporter draws, attribute for attribute.
-    @Test("The attributed string carries the style's font and colour")
+    @Test("The attributed string carries the style's font and color")
     func attributedStringMatchesTheStyle() {
         let style = TextStyle(fontSize: 33, isBold: false, color: AnnotationColor(red: 0, green: 1, blue: 0))
         let attributed = TextLayout.attributedString(spec("Hello", style: style))
@@ -143,5 +143,17 @@ struct TextLayoutTests {
     @Test("An empty string still produces a string, not nil")
     func emptyAttributedString() {
         #expect(TextLayout.attributedString(spec("")).length == 0)
+    }
+
+    @Test("Concurrent lookups of one style resolve to one cached font")
+    func concurrentLookupsShareOneFont() async {
+        let style = TextStyle(fontName: "Helvetica Neue", fontSize: 31, isBold: true, isItalic: true)
+        let identifiers = await withTaskGroup(of: ObjectIdentifier.self) { group in
+            for _ in 0 ..< 32 {
+                group.addTask { ObjectIdentifier(TextLayout.font(for: style)) }
+            }
+            return await group.reduce(into: Set<ObjectIdentifier>()) { $0.insert($1) }
+        }
+        #expect(identifiers.count == 1)
     }
 }

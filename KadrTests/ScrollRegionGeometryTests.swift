@@ -69,7 +69,7 @@ struct ScrollRegionGeometryTests {
         #expect(stretched.maxY == bounds.maxY)
     }
 
-    @Test("It opens on the window under the pointer, or a centred area")
+    @Test("It opens on the window under the pointer, or a centerd area")
     func initialRect() {
         let visible = CGRect(x: 0, y: 0, width: 1440, height: 875)
         let window = CGRect(x: 200, y: 100, width: 800, height: 600)

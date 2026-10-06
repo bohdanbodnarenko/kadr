@@ -255,7 +255,7 @@ struct GIFEncoderTests {
 /// docs/17 T-STU-7: the studio's GIF phase reports progress and stops when cancelled.
 @Suite("GIF encoder progress and cancellation")
 struct GIFEncoderProgressTests {
-    @Test("Progress rises through the encode, and a cancelled encode leaves no file")
+    @Test("Progress rises through the encode, and a canceled encode leaves no file")
     func progressAndCancel() async throws {
         let folder = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: folder) }

@@ -124,7 +124,7 @@ struct CapturePane: View {
                 Text("Selection")
             } footer: {
                 Text("When confirm mode is on, mouse-up leaves handles until Return. ⇧-drag still "
-                    + "forces a square. The All-in-One strip has the same aspect menu.")
+                    + "forces a square. The capture island has the same aspect menu.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -199,7 +199,20 @@ struct CapturePane: View {
                             Text(wallpaper.title).tag(wallpaper)
                         }
                     }
-                    Toggle("Precision crosshair (press C on the overlay)", isOn: $settings.capturePrecisionCrosshair)
+                    if settings.captureWallpaper == .customImage {
+                        // The option used to exist with no way to name the image, so it
+                        // silently kept the user's wallpaper (docs/18 SH-9).
+                        LabeledContent("Image") {
+                            HStack {
+                                Text(customWallpaperName)
+                                    .truncationMode(.middle)
+                                    .lineLimit(1)
+                                    .foregroundStyle(.secondary)
+                                Button("Choose…", action: chooseCustomWallpaper)
+                            }
+                        }
+                    }
+                    Toggle("Precision crosshair (press C while selecting)", isOn: $settings.capturePrecisionCrosshair)
                     Toggle("Snap the selection to edges Kadr finds", isOn: $settings.captureSnapsToEdges)
                 }
             } footer: {
@@ -224,8 +237,25 @@ struct CapturePane: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
-        panel.prompt = "Choose"
+        panel.prompt = String(localized: "Choose")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.windowBackdropImagePath = url.path
+    }
+}
+
+private extension CapturePane {
+    var customWallpaperName: String {
+        let path = settings.captureWallpaperImagePath
+        return path.isEmpty ? "None chosen" : URL(fileURLWithPath: path).lastPathComponent
+    }
+
+    func chooseCustomWallpaper() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.captureWallpaperImagePath = url.path
     }
 }

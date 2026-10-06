@@ -176,9 +176,9 @@ public enum TelemetrySource: String, Codable, Sendable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .eventTap: "Full"
-        case .appKitMonitors: "Reduced"
-        case .sampler: "Sampled"
+        case .eventTap: String(localized: "Full", bundle: .module)
+        case .appKitMonitors: String(localized: "Reduced", bundle: .module)
+        case .sampler: String(localized: "Sampled", bundle: .module)
         }
     }
 }

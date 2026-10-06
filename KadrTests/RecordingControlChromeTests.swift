@@ -163,7 +163,7 @@ struct RecordingIslandChromeTests {
         )
     }
 
-    @Test("The default bar sits 48 pt above the visible frame, centred")
+    @Test("The default bar sits 48 pt above the visible frame, centerd")
     func defaultPlacement() {
         let visible = CGRect(x: 0, y: 80, width: 1440, height: 820)
         let origin = RecordingControlBar.defaultOrigin(in: visible)
@@ -187,5 +187,26 @@ struct RecordingIslandChromeTests {
         let rightBarEdge = offTop.x + (size.width + barWidth) / 2
         #expect(rightBarEdge <= visible.maxX)
         #expect(offTop.y + RecordingBarMetrics.shadowSlack + RecordingBarMetrics.barHeight <= visible.maxY)
+    }
+
+    /// docs/18 REC-9: the notch docks only when its display is the one the take is about.
+    @Test("The notch docks only for its own display, or the pointer's for a window", arguments: [
+        (CGDirectDisplayID?.some(1), CGDirectDisplayID?.some(1), CGDirectDisplayID?.some(2), true),
+        (1, 2, 1, false),
+        (1, nil, 1, true),
+        (1, nil, 2, false),
+        (nil, 1, 1, false)
+    ])
+    func notchRelevance(
+        notch: CGDirectDisplayID?,
+        recorded: CGDirectDisplayID?,
+        pointer: CGDirectDisplayID?,
+        docks: Bool
+    ) {
+        #expect(RecordingControlBar.notchIsRelevant(
+            notchDisplay: notch,
+            recordedDisplay: recorded,
+            pointerDisplay: pointer
+        ) == docks)
     }
 }

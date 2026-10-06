@@ -66,8 +66,9 @@ public extension AnnotationCanvasView {
         NSAccessibility.post(element: self, notification: .layoutChanged)
     }
 
-    /// Tab and ⇧Tab cycle the selection through the annotations. Returns false when there
-    /// is nothing to select, so the key view loop can take focus onwards instead.
+    /// Tab and ⇧Tab step the selection through the annotations. Returns false past the last
+    /// one (or with nothing to select), so the key view loop takes focus onwards; the
+    /// selection is cleared then, so coming back in starts from the first again.
     internal func applyTabKey(_ event: NSEvent) -> Bool {
         guard event.keyCode == 48,
               event.modifierFlags.isDisjoint(with: [.command, .control, .option])
@@ -80,6 +81,9 @@ public extension AnnotationCanvasView {
             after: model.selection,
             backward: event.modifierFlags.contains(.shift)
         ) else {
+            if !model.selection.isEmpty {
+                model.selection = []
+            }
             return false
         }
         selectForAccessibility(next)

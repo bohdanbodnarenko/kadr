@@ -35,7 +35,8 @@ final class HintLayerGroup {
             purpose: context.purpose,
             mode: context.mode,
             phase: context.phase,
-            isEyedropper: context.isEyedropper
+            isEyedropper: context.isEyedropper,
+            confirmsSelection: context.confirmsSelection
         ) else {
             container.isHidden = true
             return
@@ -46,9 +47,11 @@ final class HintLayerGroup {
             attributes: [.font: Self.font]
         ).size().width) + Self.padding.width * 2
         let height: CGFloat = 32
+        // Bottom-centre, clear of where people drag; the view is flipped, so the bottom is
+        // maxY. Mid-screen it sat under the selection being drawn (docs/18 CAP-10).
         let frame = CGRect(
             x: bounds.midX - width / 2,
-            y: bounds.midY - height / 2,
+            y: bounds.maxY - height - Self.bottomMargin,
             width: width,
             height: height
         )
@@ -64,6 +67,8 @@ final class HintLayerGroup {
         container.isHidden = false
     }
 
+    static let bottomMargin: CGFloat = 72
+
     func hide() {
         container.isHidden = true
     }
@@ -76,6 +81,7 @@ struct CaptureHintContext {
     var phase: SelectionInteraction.Phase
     var isEyedropper: Bool
     var isEnabled: Bool
+    var confirmsSelection = false
 }
 
 /// The overlay's teaching lines, as copy rather than layers so they can be tested.
@@ -84,7 +90,8 @@ enum CaptureHintCopy {
         purpose: SelectionPurpose,
         mode: SelectionOverlayView.Mode,
         phase: SelectionInteraction.Phase,
-        isEyedropper: Bool
+        isEyedropper: Bool,
+        confirmsSelection: Bool = false
     ) -> String? {
         if isEyedropper {
             return "Click to copy  ·  F changes format  ·  X compares  ·  E leaves"
@@ -93,6 +100,11 @@ enum CaptureHintCopy {
         case .window:
             return windowCopy(purpose)
         case .area:
+            // Confirm mode waits on a drawn selection with nothing on screen saying how to
+            // finish it (docs/14 UX-17C).
+            if confirmsSelection, phase == .selected {
+                return "Return to capture  ·  drag a corner to resize  ·  Esc to cancel"
+            }
             return areaCopy(purpose, phase: phase)
         }
     }

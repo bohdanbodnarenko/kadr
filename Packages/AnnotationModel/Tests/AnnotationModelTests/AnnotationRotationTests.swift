@@ -13,7 +13,7 @@ struct AnnotationRotationTests {
         #expect(AnnotationRotation.aabb(rect, radians: 0) == rect)
     }
 
-    @Test("Inverse rotation round-trips a point around the centre")
+    @Test("Inverse rotation round-trips a point around the center")
     func inverseRoundTrip() {
         let center = CGPoint(x: 50, y: 40)
         let point = CGPoint(x: 80, y: 40)
@@ -23,7 +23,7 @@ struct AnnotationRotationTests {
         #expect(abs(back.y - point.y) < 0.001)
     }
 
-    @Test("A 90° box AABB is the swapped size, centred")
+    @Test("A 90° box AABB is the swapped size, centerd")
     func rotatedAABB() {
         let rect = CGRect(x: 0, y: 0, width: 40, height: 10)
         let box = AnnotationRotation.aabb(rect, radians: .pi / 2)

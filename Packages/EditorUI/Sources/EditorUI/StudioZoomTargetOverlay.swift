@@ -40,8 +40,8 @@ struct StudioZoomTargetOverlay: View {
             }
             .contentShape(Rectangle())
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Zoom target")
-            .accessibilityValue(String(format: "%.1f×", cue.magnification))
+            .accessibilityLabel(Text("Zoom target", bundle: .module))
+            .accessibilityValue(StudioMultiplier.text(cue.magnification))
         }
     }
 
@@ -64,7 +64,7 @@ struct StudioZoomTargetOverlay: View {
             .frame(width: target.width, height: target.height)
             .position(x: target.midX, y: target.midY)
             .overlay {
-                Text(String(format: "%.1f×", magnification))
+                Text(StudioMultiplier.text(magnification))
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -96,7 +96,7 @@ struct StudioZoomTargetOverlay: View {
             .position(point)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .help("Where the pointer was when this zoom starts")
+            .help(Text("Where the pointer was when this zoom starts", bundle: .module))
         }
     }
 
@@ -123,7 +123,7 @@ struct StudioZoomTargetOverlay: View {
                     NSCursor.arrow.set()
                 }
             }
-            .help("Drag to aim this zoom. Drag a corner to change how close it goes.")
+            .help(Text("Drag to aim this zoom. Drag a corner to change how close it goes.", bundle: .module))
     }
 
     private func handle(_ corner: Corner, target: CGRect, anchor: CGPoint) -> some View {

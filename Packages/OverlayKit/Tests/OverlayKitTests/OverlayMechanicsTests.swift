@@ -96,6 +96,22 @@ struct CaptureExclusionRegistryTests {
         #expect(registry.excludedWindowIDs.contains(CGWindowID(window.windowNumber)))
     }
 
+    /// docs/18 T-REC-7: a running capture hears about panels that come and go.
+    @Test("Membership changes are announced, and a repeat register is not")
+    func announcesChanges() {
+        let registry = CaptureExclusionRegistry()
+        var changes = 0
+        registry.onChange = { changes += 1 }
+        let window = makeWindow()
+
+        registry.register(window)
+        registry.register(window)
+        #expect(changes == 1)
+
+        registry.unregister(window)
+        #expect(changes == 2)
+    }
+
     @Test("Include Kadr overlays reaches panels and the filter, except always-hidden ones (T-CAP-11)")
     func includeOverlaysSetting() {
         let previous = CaptureVisibility.includesOverlays

@@ -15,10 +15,23 @@ final class CameraPreviewPanel {
     private static let minDiameter: CGFloat = 96
     private static let maxDiameter: CGFloat = 420
 
-    /// Where the user last dragged it, so it comes back where they put it.
-    static var savedOrigin: CGPoint?
-    static var savedDiameter: CGFloat = CameraPreviewPanel.defaultDiameter
-    static var isCircular = true
+    /// Where the user last dragged it, so it comes back where they put it — across
+    /// launches (docs/18 REC P3).
+    static var savedOrigin: CGPoint? {
+        get { RecordingPlacement.cameraOrigin }
+        set { RecordingPlacement.cameraOrigin = newValue }
+    }
+
+    static var savedDiameter: CGFloat {
+        get { RecordingPlacement.cameraDiameter }
+        set { RecordingPlacement.cameraDiameter = newValue }
+    }
+
+    static var isCircular: Bool {
+        get { RecordingPlacement.cameraIsCircular }
+        set { RecordingPlacement.cameraIsCircular = newValue }
+    }
+
     static var fillsDisplay = false
 
     private var panel: NonActivatingPanel?
@@ -27,6 +40,11 @@ final class CameraPreviewPanel {
 
     var isShowing: Bool {
         panel != nil
+    }
+
+    /// Where the bubble is, so a click on it is kept out of the telemetry (docs/18 REC-11).
+    var screenFrame: NSRect? {
+        panel?.frame
     }
 
     /// Puts the bubble on screen, attached to an already-running capture session.
@@ -184,8 +202,8 @@ private final class CameraPreviewChromeView: NSView {
 
     override func rightMouseDown(with event: NSEvent) {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Circle", action: #selector(makeCircle), keyEquivalent: "")
-        menu.addItem(withTitle: "Rounded", action: #selector(makeRounded), keyEquivalent: "")
+        menu.addItem(withTitle: String(localized: "Circle"), action: #selector(makeCircle), keyEquivalent: "")
+        menu.addItem(withTitle: String(localized: "Rounded"), action: #selector(makeRounded), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(
             withTitle: CameraPreviewPanel.fillsDisplay ? "Exit Full Screen" : "Fill Screen",

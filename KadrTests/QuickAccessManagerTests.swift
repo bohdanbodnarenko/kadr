@@ -293,8 +293,29 @@ struct QuickAccessDragTests {
         let dragged = try #require(harness.manager.resolveForDrag(staged))
 
         #expect(FileManager.default.fileExists(atPath: dragged.path), "the receiver must get a real file")
-        #expect(dragged.deletingLastPathComponent().path == save.path, "resolving finalises the capture")
-        #expect(try FileManager.default.contentsOfDirectory(atPath: stage.path).isEmpty)
+        // docs/18 OUT-2: the receiver's copy is the only one; the save folder stays empty.
+        #expect(dragged.deletingLastPathComponent().path == stage.path, "a promise copies from staging")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: save.path).isEmpty)
+        #expect(harness.manager.items.first?.isStaged == true)
+        harness.manager.dismissAll()
+    }
+
+    @Test("A drop that read the staging path keeps the file out of the sweep")
+    func pathOnlyDropRetainsStagedFile() throws {
+        let save = temporaryDirectory("save")
+        let stage = temporaryDirectory("stage")
+        let harness = makeManager(saveFolder: save, stagingFolder: stage)
+        harness.settings.defaultAction = .overlayOnly
+
+        let capture = makeCapture()
+        let result = try #require(harness.output.deliver(capture))
+        harness.manager.show(result, capture: capture)
+        let staged = try #require(harness.manager.items.first)
+
+        harness.manager.actions(for: staged).pathHandedOut()
+        harness.manager.dragCompleted(staged, accepted: true)
+
+        #expect(StagingArea(directory: stage).isRetained(staged.fileURL))
         harness.manager.dismissAll()
     }
 
@@ -317,7 +338,7 @@ struct QuickAccessDragTests {
 
     /// The other half of C1: dismissing at drag *start* threw the capture away when the
     /// user changed their mind mid-drag.
-    @Test("A cancelled drag leaves the card and its file alone")
+    @Test("A canceled drag leaves the card and its file alone")
     func cancelledDragKeepsTheCard() throws {
         let save = temporaryDirectory("save")
         let stage = temporaryDirectory("stage")

@@ -51,7 +51,7 @@ struct OverlaySwipeTests {
             harness.manager.overlayPanel?.onSwipe,
             "the panel must be wired to the swipe handler"
         )
-        onSwipe(.began, 20, 0, true)
+        onSwipe(.began, 60, 0, true)
         #expect(harness.manager.items.isEmpty, "an outward flick hides the hovered card")
     }
 
@@ -64,12 +64,12 @@ struct OverlaySwipeTests {
         harness.manager.setHovered(second, hovering: true)
         let onSwipe = try #require(harness.manager.overlayPanel?.onSwipe)
 
-        onSwipe(.began, 20, 0, true)
+        onSwipe(.began, 60, 0, true)
         if let next = harness.manager.items.first {
             harness.manager.setHovered(next, hovering: true)
         }
-        onSwipe(.changed, 20, 0, true)
-        onSwipe(.changed, 20, 0, true)
+        onSwipe(.changed, 60, 0, true)
+        onSwipe(.changed, 60, 0, true)
 
         #expect(harness.manager.items.count == 1)
         harness.manager.dismissAll()
@@ -97,7 +97,7 @@ struct OverlaySwipeTests {
         harness.settings.overlayCorner = .bottomRight
         harness.manager.setHovered(item, hovering: true)
 
-        harness.manager.handleScroll(deltaX: 0, deltaY: 20)
+        harness.manager.handleScroll(deltaX: 0, deltaY: 40)
         #expect(harness.manager.isPeeking)
         #expect(harness.manager.items.count == 1, "peeking keeps the card")
         harness.manager.dismissAll()
@@ -110,23 +110,52 @@ struct OverlaySwipeTests {
         _ = try showCard(harness)
         harness.settings.overlayCorner = .bottomRight
 
-        harness.manager.handleScroll(deltaX: 20, deltaY: 0)
+        harness.manager.handleScroll(deltaX: 60, deltaY: 0)
         #expect(harness.manager.items.count == 1)
         harness.manager.dismissAll()
     }
 
-    @Test("A flick toward the docked edge hides the card")
+    @Test("A swipe toward the docked edge hides the card once it travels far enough")
     func swipeOutwardDismisses() {
-        #expect(OverlaySwipe.from(deltaX: 12, deltaY: 0, corner: .bottomRight) == .dismiss)
-        #expect(OverlaySwipe.from(deltaX: -12, deltaY: 0, corner: .bottomLeft) == .dismiss)
-        #expect(OverlaySwipe.from(deltaX: 12, deltaY: 0, corner: .bottomLeft) == nil)
+        #expect(OverlaySwipe.from(deltaX: 60, deltaY: 0, corner: .bottomRight) == .dismiss)
+        #expect(OverlaySwipe.from(deltaX: -60, deltaY: 0, corner: .bottomLeft) == .dismiss)
+        #expect(OverlaySwipe.from(deltaX: 60, deltaY: 0, corner: .bottomLeft) == nil)
     }
 
-    @Test("A flick toward the screen edge peeks")
+    @Test("A swipe toward the screen edge peeks once it travels far enough")
     func swipeTowardEdgePeeks() {
-        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 10, corner: .bottomLeft) == .peek)
-        #expect(OverlaySwipe.from(deltaX: 0, deltaY: -10, corner: .topRight) == .peek)
-        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 10, corner: .topRight) == nil)
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 40, corner: .bottomLeft) == .peek)
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: -40, corner: .topRight) == .peek)
+        #expect(OverlaySwipe.from(deltaX: 0, deltaY: 40, corner: .topRight) == nil)
+    }
+
+    /// docs/18 OUT-16: a resting finger's drift is not a swipe; a quick flick is.
+    @Test("Nudges do nothing; distance or a fast flick acts", arguments: [
+        (CGFloat(8), CGSize(width: 8, height: 0), OverlaySwipe?.none),
+        (CGFloat(30), CGSize(width: 6, height: 0), OverlaySwipe?.none),
+        (CGFloat(48), CGSize(width: 6, height: 0), OverlaySwipe?.some(.dismiss)),
+        (CGFloat(20), CGSize(width: 26, height: 0), OverlaySwipe?.some(.dismiss)),
+        (CGFloat(10), CGSize(width: 26, height: 0), OverlaySwipe?.none)
+    ])
+    func nudgeVersusFlick(travel: CGFloat, lastStep: CGSize, expected: OverlaySwipe?) {
+        #expect(OverlaySwipe.from(deltaX: travel, deltaY: 0, corner: .bottomRight, lastStep: lastStep) == expected)
+    }
+
+    @Test("The hovered card follows the finger, and springs home when the swipe falls short")
+    func cardFollowsFinger() throws {
+        let harness = makeHarness()
+        harness.settings.overlayCorner = .bottomRight
+        let item = try showCard(harness)
+        harness.manager.setHovered(item, hovering: true)
+        let onSwipe = try #require(harness.manager.overlayPanel?.onSwipe)
+
+        onSwipe(.began, 5, 0, true)
+        onSwipe(.changed, 5, 0, true)
+        #expect(harness.manager.swipeOffset.x(for: item.id) == 10)
+        onSwipe(.ended, 0, 0, true)
+        #expect(harness.manager.swipeOffset.x(for: item.id) == 0)
+        #expect(harness.manager.items.count == 1)
+        harness.manager.dismissAll()
     }
 
     @Test("The peek tab names screenshots unless a recording is in the stack")

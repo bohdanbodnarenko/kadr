@@ -1,0 +1,234 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld fps" : {
+
+    },
+    "%lld seconds" : {
+
+    },
+    "1 GB" : {
+
+    },
+    "10 GB" : {
+
+    },
+    "30 days" : {
+
+    },
+    "5 GB" : {
+
+    },
+    "512 MB" : {
+
+    },
+    "7 days" : {
+
+    },
+    "Action row" : {
+
+    },
+    "Active display" : {
+
+    },
+    "After %lld seconds" : {
+
+    },
+    "All displays" : {
+
+    },
+    "All displays, stitched" : {
+
+    },
+    "Annotate" : {
+
+    },
+    "Ask where to save" : {
+
+    },
+    "Black" : {
+
+    },
+    "Bottom" : {
+
+    },
+    "Bottom Left" : {
+
+    },
+    "Bottom Right" : {
+
+    },
+    "Bottom left" : {
+
+    },
+    "Bottom right" : {
+
+    },
+    "Clean White" : {
+
+    },
+    "Compress" : {
+
+    },
+    "Copy" : {
+
+    },
+    "Copy Text" : {
+
+    },
+    "Copy and Save" : {
+
+    },
+    "Copy to Clipboard" : {
+
+    },
+    "Copy to the clipboard" : {
+
+    },
+    "Custom image" : {
+
+    },
+    "Delete" : {
+
+    },
+    "Desktop wallpaper" : {
+
+    },
+    "Edge Bleed" : {
+
+    },
+    "Export GIF" : {
+
+    },
+    "Floating island" : {
+
+    },
+    "Forever" : {
+
+    },
+    "Free" : {
+
+    },
+    "Gray" : {
+
+    },
+    "H.264 (most compatible)" : {
+
+    },
+    "HEVC (smaller files)" : {
+
+    },
+    "Horizontal" : {
+
+    },
+    "Instagram" : {
+
+    },
+    "Keep my wallpaper" : {
+
+    },
+    "Keep on the Card Only" : {
+
+    },
+    "Menu bar notch" : {
+
+    },
+    "Never" : {
+
+    },
+    "No limit" : {
+
+    },
+    "Off" : {
+
+    },
+    "Open for annotation" : {
+
+    },
+    "Open in the studio" : {
+
+    },
+    "Pin" : {
+
+    },
+    "Pin to the screen" : {
+
+    },
+    "Recordings" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save As" : {
+
+    },
+    "Save to Folder" : {
+
+    },
+    "Save to the folder" : {
+
+    },
+    "Screenshots" : {
+
+    },
+    "Several actions" : {
+
+    },
+    "Share" : {
+
+    },
+    "Show a card" : {
+
+    },
+    "Solid black" : {
+
+    },
+    "Solid gray" : {
+
+    },
+    "Solid white" : {
+
+    },
+    "Square" : {
+
+    },
+    "Story" : {
+
+    },
+    "Studio" : {
+
+    },
+    "This session only" : {
+
+    },
+    "Top" : {
+
+    },
+    "Top Left" : {
+
+    },
+    "Top Right" : {
+
+    },
+    "Top left" : {
+
+    },
+    "Top right" : {
+
+    },
+    "Trim" : {
+
+    },
+    "Twitter / X" : {
+
+    },
+    "Vertical" : {
+
+    },
+    "White" : {
+
+    }
+  },
+  "version" : "1.0"
+}

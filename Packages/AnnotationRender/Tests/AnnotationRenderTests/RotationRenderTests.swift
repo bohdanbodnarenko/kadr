@@ -118,7 +118,7 @@ struct RotationRenderTests {
         )
         let image = try AnnotationExportRenderer().render(baseImage: base, document: document)
         let centre = CGPoint(x: Self.rect.midX, y: Self.rect.midY)
-        #expect(red(image, at: CGPoint(x: centre.x, y: centre.y - 50)) < 60, "turned bar covers above the centre")
+        #expect(red(image, at: CGPoint(x: centre.x, y: centre.y - 50)) < 60, "turned bar covers above the center")
         #expect(red(image, at: CGPoint(x: Self.rect.minX + 5, y: centre.y)) > 200, "the level bar's end is empty")
     }
 

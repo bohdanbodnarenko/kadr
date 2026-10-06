@@ -39,6 +39,9 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
         view.delegate = self
         view.onCommit = { [weak self] in self?.finish() }
         view.isRichText = false
+        // ⌘Z inside the field undoes typing, in the field's own history; it no longer
+        // reaches the document and removes the box under the live field (docs/18 ED-5).
+        view.allowsUndo = true
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
         view.drawsBackground = spec.style.backgroundColor != nil
@@ -166,6 +169,32 @@ final class TextOverlayEditor: NSObject, NSTextViewDelegate {
 /// `doCommandBy` match on one never fired.
 final class CommittingTextView: NSTextView {
     var onCommit: (() -> Void)?
+
+    /// The field's own history. Registered on the window's manager, typing would outlive
+    /// the field and later ⌘Z presses would replay keystrokes into nothing.
+    private let fieldUndoManager = UndoManager()
+
+    override var undoManager: UndoManager? {
+        fieldUndoManager
+    }
+
+    /// First in the responder chain while editing, so Edit ▸ Undo lands here, not on the
+    /// window controller's document undo.
+    @objc func undo(_ sender: Any?) {
+        fieldUndoManager.undo()
+    }
+
+    @objc func redo(_ sender: Any?) {
+        fieldUndoManager.redo()
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(undo(_:)): fieldUndoManager.canUndo
+        case #selector(redo(_:)): fieldUndoManager.canRedo
+        default: super.validateUserInterfaceItem(item)
+        }
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if window?.firstResponder === self,

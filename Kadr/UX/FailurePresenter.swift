@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import os
 import OverlayKit
 import SwiftUI

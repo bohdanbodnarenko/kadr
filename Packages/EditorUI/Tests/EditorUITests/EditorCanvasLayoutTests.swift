@@ -175,7 +175,7 @@ struct EditorCanvasLayoutTests {
         )
         #expect(
             source.contains("setMagnification(target, centeredAt:"),
-            "the centred API is gone; zoom will magnify about the corner again"
+            "the centerd API is gone; zoom will magnify about the corner again"
         )
         #expect(
             source.contains("setMagnification(target, centeredAt: scrollView.viewportCentre)"),

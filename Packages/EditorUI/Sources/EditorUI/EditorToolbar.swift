@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// The tool palette, history and export controls (docs/03 §3, docs/14 UX-25).
@@ -66,12 +67,12 @@ struct EditorToolbar: View {
                 }
                 .disabled(model.isExporting)
             }
-            Button("Save") {
+            Button(String(localized: "Save", bundle: .module)) {
                 onExport(.save)
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.isExporting || isCropping)
-            .help("Save")
+            .help(Text("Save", bundle: .module))
             EditorToolbarButton(
                 symbol: "sidebar.right",
                 help: isInspectorPresented ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)",
@@ -80,7 +81,6 @@ struct EditorToolbar: View {
             ) {
                 isInspectorPresented.toggle()
             }
-            .keyboardShortcut("i", modifiers: [.command, .option])
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
@@ -120,20 +120,20 @@ struct EditorToolbar: View {
                 .disabled(model.isLiftingSubject || model.isExporting)
                 Divider()
             }
-            Button("Rotate 90° Clockwise") { model.rotateClockwise() }
-            Button("Flip Horizontal") { model.flipHorizontal() }
-            Button("Flip Vertical") { model.flipVertical() }
+            Button(String(localized: "Rotate 90° Clockwise", bundle: .module)) { model.rotateClockwise() }
+            Button(String(localized: "Flip Horizontal", bundle: .module)) { model.flipHorizontal() }
+            Button(String(localized: "Flip Vertical", bundle: .module)) { model.flipVertical() }
             Divider()
-            Button("Copy Flattened Image") { onExport(.copyFlattened) }
-            Button("Copy Without Annotations") { onExport(.copyWithoutAnnotations) }
+            Button(String(localized: "Copy Flattened Image", bundle: .module)) { onExport(.copyFlattened) }
+            Button(String(localized: "Copy Without Annotations", bundle: .module)) { onExport(.copyWithoutAnnotations) }
             Divider()
-            Button("Insert Image…") { onExport(.insertImage) }
-            Button("Pin") { onExport(.pin) }
-            Button("Share…") { onExport(.share) }
-            Button("Print…") { onExport(.print) }
+            Button(String(localized: "Insert Image…", bundle: .module)) { onExport(.insertImage) }
+            Button(String(localized: "Pin", bundle: .module)) { onExport(.pin) }
+            Button(String(localized: "Share…", bundle: .module)) { onExport(.share) }
+            Button(String(localized: "Print…", bundle: .module)) { onExport(.print) }
             Divider()
-            Button("Save As…") { onExport(.saveAs) }
-            Button("Save Project…") { onExport(.saveProject) }
+            Button(String(localized: "Save As…", bundle: .module)) { onExport(.saveAs) }
+            Button(String(localized: "Save Project…", bundle: .module)) { onExport(.saveProject) }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.system(size: 14))
@@ -143,8 +143,8 @@ struct EditorToolbar: View {
         .fixedSize()
         .frame(width: 32, height: 28)
         .disabled(model.isExporting)
-        .help("More")
-        .accessibilityLabel("More actions")
+        .help(Text("More", bundle: .module))
+        .accessibilityLabel(Text("More actions", bundle: .module))
     }
 }
 
@@ -204,7 +204,7 @@ struct EditorToolbarButton: View {
         if isOn {
             return Color.accentColor.opacity(0.16)
         }
-        return isHovering && isEnabled ? Color.primary.opacity(0.07) : .clear
+        return isHovering && isEnabled ? KadrFill.hover : .clear
     }
 }
 

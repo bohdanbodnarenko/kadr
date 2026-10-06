@@ -10,8 +10,8 @@ public enum ProgressiveBlurShape: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .radial: "Radial"
-        case .directional: "Directional"
+        case .radial: String(localized: "Radial", bundle: .module)
+        case .directional: String(localized: "Directional", bundle: .module)
         }
     }
 }
@@ -27,8 +27,8 @@ public enum ProgressiveBlurExtent: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .clipped: "Capture only"
-        case .scene: "Whole canvas"
+        case .clipped: String(localized: "Capture only", bundle: .module)
+        case .scene: String(localized: "Whole canvas", bundle: .module)
         }
     }
 }

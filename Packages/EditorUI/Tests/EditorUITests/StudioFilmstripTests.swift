@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import MediaExport
 import StudioRender
+import StudioSession
 import Testing
 import UniformTypeIdentifiers
 @testable import EditorUI
@@ -36,6 +37,21 @@ struct StudioFilmstripTests {
     func tileCount() {
         #expect(StudioFilmstrip.tileCount(forWidth: 10) == 1)
         #expect(StudioFilmstrip.tileCount(forWidth: 108) == 3)
+    }
+
+    /// docs/18 STU-15: a long transcript is rows a lazy stack can skip, in order.
+    @Test("Transcript tracks split into ordered rows of bounded size", arguments: [0, 1, 80, 81, 1000])
+    func transcriptChunks(count: Int) {
+        let words = (0 ..< count).map { TranscriptWord(text: "w\($0)", start: Double($0), end: Double($0) + 0.5) }
+        let group = TranscriptTrackGroup(track: .mixed, words: words)
+        #expect(group.chunks.flatMap(\.words) == words)
+        #expect(group.chunks.allSatisfy { $0.words.count <= TranscriptTrackGroup.chunkSize })
+    }
+
+    /// docs/18 STU-15: a fully zoomed long recording does not lay out thousands of tiles.
+    @Test("Tile count is capped for very wide lanes", arguments: [CGFloat(200_000), 5_000_000, .infinity])
+    func tileCountCap(width: CGFloat) {
+        #expect(StudioFilmstrip.tileCount(forWidth: width) <= StudioFilmstrip.maximumTiles)
     }
 }
 

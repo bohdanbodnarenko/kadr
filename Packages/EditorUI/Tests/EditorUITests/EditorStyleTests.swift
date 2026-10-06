@@ -13,7 +13,7 @@ struct EditorStyleTests {
         ))
     }
 
-    @Test("Changing colour recolours the selection, not just the next drawing")
+    @Test("Changing color recolors the selection, not just the next drawing")
     func applyColorUpdatesSelection() throws {
         let model = makeModel()
         model.tool = .arrow
@@ -230,6 +230,59 @@ struct EditorStyleTests {
         #expect(abs(stronger.style.density - 0.8) < 0.001)
     }
 
+    // MARK: - docs/18 ED-4: inspector sliders make one undo step per drag
+
+    @Test("Dragging redaction strength coalesces into one undo step")
+    func redactionStrengthCoalescesUndo() throws {
+        let model = makeModel()
+        model.tool = .redaction
+        model.pointerDown(at: .zero)
+        model.pointerDragged(to: CGPoint(x: 80, y: 60))
+        model.pointerUp(at: CGPoint(x: 80, y: 60))
+        guard case let .redaction(original) = try #require(model.document.commands.first) else { return }
+
+        for density in stride(from: 0.2, through: 1.0, by: 0.05) {
+            model.applyRedactionStyleLive(original.style.withDensity(CGFloat(density)))
+        }
+        model.endInspectorStyleEdit()
+
+        model.undo()
+        guard case let .redaction(restored) = try #require(model.document.commands.first) else { return }
+        #expect(restored.style.density == original.style.density)
+        model.undo()
+        #expect(model.document.commands.isEmpty, "the second undo removes the redaction itself")
+    }
+
+    @Test("Dragging image size, opacity and corners coalesces into one undo step each")
+    func imageSlidersCoalesceUndo() throws {
+        let model = makeModel()
+        let id = try #require(model.insertImage(
+            pngData: Data([1, 2, 3]),
+            pixelSize: CGSize(width: 100, height: 100),
+            at: CGPoint(x: 200, y: 200)
+        ))
+        let original = try #require(model.selectedImage)
+
+        for step in 1 ... 40 {
+            model.updateSelectedImageLive { $0.opacity = 1 - Double(step) / 100 }
+        }
+        model.endInspectorStyleEdit()
+        for step in 1 ... 40 {
+            model.updateSelectedImageLive { $0.cornerRadius = CGFloat(step) }
+        }
+        model.endInspectorStyleEdit()
+        #expect(model.selectedImage?.cornerRadius == 40)
+
+        model.undo()
+        #expect(model.selectedImage?.cornerRadius == original.cornerRadius)
+        #expect(abs((model.selectedImage?.opacity ?? 0) - 0.6) < 0.001)
+        model.undo()
+        #expect(model.selectedImage?.opacity == original.opacity)
+        model.undo()
+        #expect(model.document.command(id) == nil)
+        #expect(!model.document.isGestureOpen)
+    }
+
     @Test("Select with nothing selected has no drawing-tool inspector")
     func selectHasNoInspectedTool() {
         let model = makeModel()
@@ -240,7 +293,7 @@ struct EditorStyleTests {
         #expect(model.inspectedTool == .arrow)
     }
 
-    @Test("Counter size and colour rewrite every badge, not just the selection")
+    @Test("Counter size and color rewrite every badge, not just the selection")
     func counterStyleUpdatesAllBadges() {
         let model = makeModel()
         model.tool = .counter
@@ -267,7 +320,7 @@ struct EditorStyleTests {
         #expect(model.styleMemory.lastCounterFill == .black)
     }
 
-    @Test("The next counter lands at the remembered size and colour")
+    @Test("The next counter lands at the remembered size and color")
     func counterPlaceUsesRememberedStyle() throws {
         let model = makeModel()
         model.tool = .counter

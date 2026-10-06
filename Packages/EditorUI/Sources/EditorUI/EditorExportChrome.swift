@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// Export progress and failure chrome for the annotation editor (docs/14 UX-26).
@@ -40,8 +41,11 @@ struct EditorExportChrome: View {
 
     private func exportFailure(_ failure: EditorExportFailure) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            // The shared failure look, so an editor failure reads like the agent's and the
+            // studio's (docs/18 X-2).
+            Image(systemName: FeedbackKind.error.symbolName)
+                .foregroundStyle(FeedbackKind.error.tint)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(failure.title)
                     .font(.callout.weight(.semibold))
@@ -50,15 +54,15 @@ struct EditorExportChrome: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
-                    Button("Retry") {
+                    Button(String(localized: "Retry", bundle: .module)) {
                         onRetry(failure.action)
                     }
                     if failure.offersAnotherLocation {
-                        Button("Choose Another Location") {
+                        Button(String(localized: "Choose Another Location", bundle: .module)) {
                             onChooseAnotherLocation(failure.action)
                         }
                     }
-                    Button("Dismiss") {
+                    Button(String(localized: "Dismiss", bundle: .module)) {
                         model.exportFailure = nil
                     }
                     .foregroundStyle(.secondary)
@@ -103,7 +107,7 @@ struct EditorExportChrome: View {
         HStack(spacing: 10) {
             ProgressView()
                 .controlSize(.small)
-            Text("Removing the background…")
+            Text("Removing the background…", bundle: .module)
                 .font(.callout)
             Spacer(minLength: 0)
         }
@@ -111,6 +115,6 @@ struct EditorExportChrome: View {
         .padding(.vertical, 8)
         .editorFloatingCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Removing the background")
+        .accessibilityLabel(Text("Removing the background", bundle: .module))
     }
 }

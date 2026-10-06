@@ -103,7 +103,10 @@ extension SelectionOverlayView {
         }
         guard let rect = interaction.rect, !rect.isEmpty else {
             if isEyedropperMode, let pointer = interaction.pointer {
-                return String(format: "Pointer at %.0f, %.0f points", pointer.x, pointer.y)
+                // The colour is what the eyedropper is for; VoiceOver read only the
+                // pointer position (docs/14 UX-17B).
+                let position = String(format: "Pointer at %.0f, %.0f points", pointer.x, pointer.y)
+                return [eyedropperReadout, position].compactMap(\.self).joined(separator: ". ")
             }
             return nil
         }

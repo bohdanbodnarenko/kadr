@@ -1,3 +1,4 @@
+import ControlKit
 import Foundation
 import HistoryKit
 import os

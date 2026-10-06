@@ -5,13 +5,19 @@ import Shared
 extension StatusItemController {
     func showIdleIcon() {
         showsRecordingIcon = false
+        updateMenuBarVisibility()
+        // A background-found update badges the icon; the menu's row was easy to miss
+        // because a click opens the island, not the menu (docs/18 SH-3).
+        let update = availableUpdate()
         apply(StatusItemAppearance(
             symbol: "camera.viewfinder",
-            accessibilityDescription: "Kadr",
+            accessibilityDescription: update == nil ? "Kadr" : "Kadr — update available",
             isTemplate: true,
             title: "",
             length: NSStatusItem.squareLength,
-            toolTip: "Kadr — click to capture, right-click for the menu"
+            toolTip: update.map { String(localized: "Kadr — \($0) is available; right-click to update") }
+                ?? "Kadr — click to capture, right-click for the menu",
+            isBadged: update != nil
         ))
         attachIdleMenu()
     }
@@ -31,7 +37,8 @@ extension StatusItemController {
             isTemplate: true,
             title: "",
             length: NSStatusItem.squareLength,
-            toolTip: "Kadr — capture armed"
+            toolTip: "Kadr — capture armed",
+            accessibilityHelp: "A capture is waiting for you to choose what to capture."
         ))
         attachIdleMenu()
     }
@@ -43,13 +50,19 @@ extension StatusItemController {
     /// rendered monochrome like everything else in the menu bar.
     func showRecordingIcon(elapsed: String, isPaused: Bool) {
         showsRecordingIcon = true
+        updateMenuBarVisibility()
         apply(StatusItemAppearance(
             symbol: isPaused ? "pause.circle.fill" : "record.circle",
             accessibilityDescription: "Recording",
             isTemplate: false,
             title: " \(elapsed)",
             length: NSStatusItem.variableLength,
-            toolTip: "Click to stop · right-click for pause and discard"
+            toolTip: "Click to stop · right-click for pause and discard",
+            // A press stops the take now, and VoiceOver must not still promise the island
+            // (docs/18 SH-10).
+            accessibilityHelp: isPaused
+                ? "Paused. Press to stop and save the recording. Use the actions rotor for the menu."
+                : "Press to stop and save the recording. Use the actions rotor for the menu."
         ))
         attachRecordingClick()
     }
@@ -78,6 +91,9 @@ extension StatusItemController {
         if button.toolTip != appearance.toolTip {
             button.toolTip = appearance.toolTip
         }
+        if button.accessibilityHelp() != appearance.accessibilityHelp {
+            button.setAccessibilityHelp(appearance.accessibilityHelp)
+        }
     }
 
     private func icon(for appearance: StatusItemAppearance) -> NSImage? {
@@ -91,11 +107,31 @@ extension StatusItemController {
         if !appearance.isTemplate {
             image = image?.withSymbolConfiguration(.init(paletteColors: [.systemRed]))
         }
+        if appearance.isBadged, let base = image {
+            image = Self.badged(base)
+        }
         image?.isTemplate = appearance.isTemplate
         if let image {
             iconCache[appearance.imageKey] = image
         }
         return image
+    }
+
+    /// `base` with a dot at its top-right corner, cut out of the glyph so it reads at menu
+    /// bar size in either appearance. Drawn once and cached with the other icons.
+    private static func badged(_ base: NSImage) -> NSImage {
+        let size = base.size
+        return NSImage(size: size, flipped: false) { rect in
+            let diameter = max(4, size.width * 0.36)
+            let dot = NSRect(x: rect.maxX - diameter, y: rect.maxY - diameter, width: diameter, height: diameter)
+            base.draw(in: rect)
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dot.insetBy(dx: -1.5, dy: -1.5)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
     }
 
     /// Idle: a click opens the capture island; right-click, ⌃-click or ⌥-click opens the
@@ -155,7 +191,7 @@ extension StatusItemController {
             return true
         }
         button.setAccessibilityCustomActions([action])
-        button.setAccessibilityHelp("Opens the capture island. Use the actions rotor for the menu.")
+        button.setAccessibilityHelp(StatusItemAppearance.idleHelp)
     }
 
     func popIdleMenu() {
@@ -165,7 +201,20 @@ extension StatusItemController {
     }
 
     func applyMenuBarVisibility(_ visible: Bool) {
-        statusItem.isVisible = visible
+        userWantsMenuBarIcon = visible
+        updateMenuBarVisibility()
+    }
+
+    /// What the item should show as: the user's choice, or forced on while recording.
+    var desiredMenuBarVisibility: Bool {
+        userWantsMenuBarIcon || showsRecordingIcon
+    }
+
+    private func updateMenuBarVisibility() {
+        let desired = desiredMenuBarVisibility
+        if statusItem.isVisible != desired {
+            statusItem.isVisible = desired
+        }
     }
 
     private static let menuBarVisibilityChanged = Notification.Name("app.kadr.menuBarVisibility")
@@ -196,7 +245,10 @@ extension StatusItemController {
         visibilityObservation = statusItem.observe(\.isVisible, options: [.new]) { [weak self] item, _ in
             let visible = item.isVisible
             Task { @MainActor in
-                self?.onMenuBarVisibilityChange?(visible)
+                // Only the user's own drag counts. Kadr showing the item for a recording,
+                // or applying the setting, must not write the setting back (docs/18 REC-2).
+                guard let self, visible != self.desiredMenuBarVisibility else { return }
+                self.onMenuBarVisibilityChange?(visible)
             }
         }
     }
@@ -220,9 +272,15 @@ struct StatusItemAppearance: Equatable {
     let title: String
     let length: CGFloat
     let toolTip: String
+    /// What VoiceOver says a press does, per state (docs/18 SH-10).
+    var accessibilityHelp: String = Self.idleHelp
+    /// A dot on the glyph: something waits in the menu (docs/18 SH-3).
+    var isBadged = false
+
+    static let idleHelp = "Opens the capture island. Use the actions rotor for the menu."
 
     /// Two appearances with the same key share one image.
     var imageKey: String {
-        "\(symbol)|\(isTemplate)|\(accessibilityDescription)"
+        "\(symbol)|\(isTemplate)|\(accessibilityDescription)|\(isBadged)"
     }
 }

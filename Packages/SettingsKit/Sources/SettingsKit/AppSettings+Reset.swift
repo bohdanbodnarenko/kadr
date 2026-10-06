@@ -13,6 +13,7 @@ public extension AppSettings {
         resetCapture()
         resetRecording()
         resetChrome()
+        resetPlacement()
     }
 
     private func resetGeneral() {
@@ -52,6 +53,7 @@ public extension AppSettings {
         captureConfirmsSelection = SettingKeys.captureConfirmsSelection.defaultValue
         selfTimer = SettingKeys.selfTimer.defaultValue
         customTimerSeconds = SettingKeys.customTimerSeconds.defaultValue
+        rememberedCustomTimerSeconds = 0
         scrollAutoScroll = SettingKeys.scrollAutoScroll.defaultValue
         scrollStepPoints = SettingKeys.scrollStepPoints.defaultValue
         scrollFrameRate = SettingKeys.scrollFrameRate.defaultValue

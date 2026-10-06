@@ -13,8 +13,8 @@ public enum RecordingCodec: String, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .hevc: "HEVC (smaller)"
-        case .h264: "H.264 (most compatible)"
+        case .hevc: String(localized: "HEVC (smaller)", bundle: .module)
+        case .h264: String(localized: "H.264 (most compatible)", bundle: .module)
         }
     }
 
@@ -33,7 +33,7 @@ public enum RecordingFrameRate: Int, CaseIterable, Sendable {
     case sixty = 60
 
     public var title: String {
-        "\(rawValue) fps"
+        String(localized: "\(rawValue) fps", bundle: .module)
     }
 
     /// The preset closest to a requested rate.
@@ -167,6 +167,14 @@ public enum RecordingTarget: Sendable, Hashable {
     case display(CGDirectDisplayID)
     case window(CGWindowID)
     case region(DisplayRect, display: CGDirectDisplayID)
+
+    /// The display this target is on, or nil for a window, which can move between them.
+    public var displayID: CGDirectDisplayID? {
+        switch self {
+        case let .display(id), let .region(_, id): id
+        case .window: nil
+        }
+    }
 }
 
 /// Where a recording is in its life.
@@ -261,7 +269,7 @@ extension RecordingError: LocalizedError {
         case .noFramesCaptured:
             "The recording captured no frames."
         case .cancelledDuringStart:
-            "The recording was cancelled before it began."
+            "The recording was canceled before it began."
         case let .stitchFailed(reason, directory):
             if let directory {
                 "Kadr could not join the recording (\(reason)). The parts are still in \(directory)."

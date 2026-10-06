@@ -12,39 +12,61 @@ struct HistoryPane: View {
     @State private var pendingDeletion: PendingRetentionChange?
     /// Set while a cancelled change is being put back, so the revert is not reviewed too.
     @State private var isReverting = false
+    /// What choosing "This session only" will clear at the next launch, while the user
+    /// decides (docs/18 SH-2). The setting is written only on confirm.
+    @State private var pendingSessionOnly: HistoryStorageUsage?
 
     var body: some View {
         Form {
             Section {
-                Picker("Keep captures", selection: $settings.historyRetention) {
+                Picker("Keep captures", selection: retentionChoice) {
                     ForEach(HistoryRetention.allCases, id: \.self) { retention in
                         Text(retention.title).tag(retention)
                     }
                 }
-                Text("Session-only clears the library the next time Kadr launches. "
-                    + "Deleting from History always removes the file Kadr stored.")
+                .alert(
+                    "Clear History the next time Kadr launches?",
+                    isPresented: Binding(
+                        get: { pendingSessionOnly != nil },
+                        set: {
+                            if !$0 {
+                                pendingSessionOnly = nil
+                            }
+                        }
+                    ),
+                    presenting: pendingSessionOnly
+                ) { _ in
+                    Button("Clear at Next Launch", role: .destructive) {
+                        pendingSessionOnly = nil
+                        settings.historyRetention = .session
+                    }
+                    Button("Cancel", role: .cancel) {
+                        pendingSessionOnly = nil
+                    }
+                } message: { usage in
+                    Text(PendingRetentionChange.sessionOnlyMessage(for: usage))
+                }
+                Text("Session-only clears History at the next launch. Deleting from History "
+                    + "removes Kadr's stored copy.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 Toggle("Search the text in captures", isOn: $settings.historyIndexesText)
-                Text("Kadr reads your captures so History can be searched by what is in "
-                    + "them. It happens in a helper process, only while you are on mains "
-                    + "power, and nothing ever leaves this Mac. Turning it off deletes "
-                    + "everything Kadr has read.")
+                Text("Makes History searchable by the text in your captures. Runs on this "
+                    + "Mac only, on mains power. Turning it off deletes what was read.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker("Library size limit", selection: $settings.historySizeCap) {
+                Picker("History size limit", selection: $settings.historySizeCap) {
                     ForEach(HistorySizeCap.allCases, id: \.self) { cap in
                         Text(cap.title).tag(cap)
                     }
                 }
-                Text("When the library is over the limit, the captures you have not "
-                    + "opened or dragged out recently are removed first.")
+                Text("Over the limit, the captures used least recently go first.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -82,6 +104,25 @@ struct HistoryPane: View {
         }
     }
 
+    /// The retention picker, held as a draft for "This session only" (docs/18 SH-2).
+    ///
+    /// Session-only deletes nothing until the next launch, so the preview the other choices
+    /// confirm against was always empty and the wipe went unconfirmed. Choosing it now asks
+    /// first, with what is in History today, and writes the setting only on confirm.
+    private var retentionChoice: Binding<HistoryRetention> {
+        Binding(
+            get: { settings.historyRetention },
+            set: { choice in
+                let usage = history?.usage ?? .zero
+                if choice == .session, settings.historyRetention != .session, usage.itemCount > 0 {
+                    pendingSessionOnly = usage
+                } else {
+                    settings.historyRetention = choice
+                }
+            }
+        )
+    }
+
     /// Asks before a change that deletes, and applies one that does not.
     private func review(revert: @escaping () -> Void) {
         if isReverting {
@@ -114,6 +155,16 @@ struct PendingRetentionChange {
     let count: Int
     let bytes: Int64
     let revert: () -> Void
+
+    /// The body of the session-only confirmation (docs/18 SH-2).
+    static func sessionOnlyMessage(for usage: HistoryStorageUsage) -> String {
+        let size = ByteCountFormatter.string(fromByteCount: usage.byteCount, countStyle: .file)
+        let captures = usage.itemCount == 1
+            ? String(localized: "The 1 capture (\(size)) in History now")
+            : String(localized: "The \(usage.itemCount) captures (\(size)) in History now")
+        let consequence = String(localized: "and everything you capture until then are deleted with their files.")
+        return captures + ", " + consequence + " " + String(localized: "This can't be undone.")
+    }
 
     var title: String {
         let size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)

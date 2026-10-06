@@ -31,6 +31,8 @@ final class AllInOneHUD {
         performTool: @escaping (AllInOneTool) -> Void = { _ in },
         desktopIconsHidden: @escaping () -> Bool = { false },
         captureScreen: @escaping (FullscreenTarget) -> Void = { _ in },
+        availableUpdate: @escaping () -> String? = { nil },
+        installUpdate: @escaping () -> Void = {},
         juggler: ActivationJuggler = .shared
     ) {
         self.juggler = juggler
@@ -38,6 +40,8 @@ final class AllInOneHUD {
         model.onCaptureScreen = captureScreen
         model.onTool = performTool
         model.desktopIconsHidden = desktopIconsHidden
+        model.availableUpdate = availableUpdate
+        model.onInstallUpdate = installUpdate
     }
 
     var isShowing: Bool {
@@ -76,6 +80,9 @@ final class AllInOneHUD {
         model.onCancel = { [weak self] in self?.dismiss() }
         model.onPicked = { [weak self] in self?.close(keepingTarget: true) }
         model.onHandOff = { [weak self] in self?.handOff() }
+        model.waitForTarget = { [weak self] in
+            await TargetActivation.wait(for: self?.returnTarget?.processIdentifier)
+        }
 
         // Every present, not only the first: a stale target is how files ended up named
         // after an app the user had left long ago. Kadr frontmost (the island re-shown)
@@ -116,6 +123,7 @@ final class AllInOneHUD {
         }
         self.panel = panel
         self.hosting = hosting
+        openedOrigin = panel.frame.origin
         onShowingChanged?()
         if let onPresented {
             // A turn later, once the panel is on screen and laid out: a popover shown
@@ -189,12 +197,20 @@ final class AllInOneHUD {
         }
         guard let panel else { return }
         onClosed?()
+        rememberPlacement(of: panel)
         CaptureExclusionRegistry.shared.unregister(panel)
         panel.orderOut(nil)
         panel.contentView = nil
         self.panel = nil
         hosting = nil
         onShowingChanged?()
+    }
+
+    /// Remembers the island's spot only if the user dragged it away from where it opened,
+    /// so an island nobody moved keeps following the default placement.
+    private func rememberPlacement(of panel: NSWindow) {
+        guard panel.frame.origin != openedOrigin, let visible = panel.screen?.visibleFrame else { return }
+        IslandPlacementMemory.remember(panel.frame, in: visible)
     }
 
     /// The glass capsule in screen space: the panel less the slack `RecordingIslandSurface`
@@ -217,6 +233,8 @@ final class AllInOneHUD {
     }
 
     private var handOffFrame: NSRect?
+    /// Where the panel opened, to tell a moved island from one left alone.
+    private var openedOrigin: CGPoint?
     private static let handOffFade: TimeInterval = 0.18
 
     /// Leaves for the recorder: remembers where the glass was and fades rather than
@@ -258,6 +276,10 @@ final class AllInOneHUD {
     /// Bottom-centre of the pointer's screen, clear of the menu bar and most window chrome.
     private static func centeredFrame(for size: CGSize) -> NSRect {
         let visible = ActiveScreen.resolve()?.visibleFrame ?? .zero
+        // Where the user last left it, if they moved it (docs/18 §4.2 P3).
+        if let remembered = IslandPlacementMemory.frame(for: size, in: visible) {
+            return remembered
+        }
         let margin: CGFloat = 22
         let x = visible.midX - size.width / 2
         let y = visible.minY + margin
@@ -272,6 +294,9 @@ final class AllInOneModel {
     @ObservationIgnored private let perform: (AllInOneMode) -> Void
     @ObservationIgnored var onPicked: () -> Void = {}
     @ObservationIgnored var onCancel: () -> Void = {}
+    /// Waits, briefly, for the app the island was opened over to be active again, so a
+    /// freeze taken right after a pick shows it as the user left it (docs/18 CAP-4).
+    @ObservationIgnored var waitForTarget: () async -> Void = {}
     /// Record is not a capture: the island hands over to the recorder instead of closing.
     @ObservationIgnored var onHandOff: () -> Void = {}
     @ObservationIgnored var onPickDisplay: (CGDirectDisplayID) -> Void = { _ in }
@@ -279,6 +304,9 @@ final class AllInOneModel {
     /// The Screen menu's rows: this capture's target, without touching Settings (T-CAP-5).
     @ObservationIgnored var onCaptureScreen: (FullscreenTarget) -> Void = { _ in }
     @ObservationIgnored var desktopIconsHidden: () -> Bool = { false }
+    /// A version a background check found, offered in the Tools menu (docs/18 SH-3).
+    @ObservationIgnored var availableUpdate: () -> String? = { nil }
+    @ObservationIgnored var onInstallUpdate: () -> Void = {}
 
     init(
         settings: AppSettings,
@@ -298,23 +326,42 @@ final class AllInOneModel {
         settings.lastAllInOneMode = mode.rawValue
         if mode == .record {
             onHandOff()
+            perform(mode)
         } else {
             onPicked()
+            afterTargetIsActive { [perform] in perform(mode) }
         }
-        perform(mode)
     }
 
     /// Closes the island first, so a tool that captures does not capture the island.
     func use(_ tool: AllInOneTool) {
         onPicked()
-        onTool(tool)
+        afterTargetIsActive { [onTool] in onTool(tool) }
+    }
+
+    /// Closes the island and hands over to the updater.
+    func installUpdate() {
+        onPicked()
+        onInstallUpdate()
     }
 
     /// Captures the screen with an explicit target, for this capture only.
     func pickScreen(_ target: FullscreenTarget) {
         settings.lastAllInOneMode = AllInOneMode.screen.rawValue
         onPicked()
-        onCaptureScreen(target)
+        afterTargetIsActive { [onCaptureScreen] in onCaptureScreen(target) }
+    }
+
+    /// Runs a capture once the island's activation has gone back to the user's app.
+    ///
+    /// Closing the island yields activation asynchronously; freezing in the same turn
+    /// caught the target with grey traffic lights and an inactive selection colour.
+    private func afterTargetIsActive(_ work: @escaping @MainActor () -> Void) {
+        let wait = waitForTarget
+        Task { @MainActor in
+            await wait()
+            work()
+        }
     }
 
     func pickLast() {

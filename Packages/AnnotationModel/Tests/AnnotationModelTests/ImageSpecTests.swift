@@ -36,7 +36,7 @@ struct ImageSpecTests {
         #expect(rect.height == 100)
     }
 
-    @Test("It lands centred on where it was dropped")
+    @Test("It lands centerd on where it was dropped")
     func centredOnTheDrop() {
         let rect = ImageSpec.placement(
             pixelSize: CGSize(width: 200, height: 100),

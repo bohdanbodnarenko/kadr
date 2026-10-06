@@ -168,13 +168,22 @@ public final class StudioDocumentModel {
         }
     }
 
+    /// When the running render began, for the time-left estimate (docs/18 STU-13).
+    @ObservationIgnored var exportStartedAt: Date?
+    /// The file the last export wrote, for the in-window "Exported" banner (docs/18 STU-13).
+    public var lastExportedURL: URL?
+
     /// Whether the inspector column is open, and whether the export sheet is up.
     ///
     /// On the model rather than in the view's `@State` so the window's menu commands — ⌘I
     /// and ⌘E, which arrive through the responder chain — can reach them. A menu item is
     /// the one place a keyboard command works whatever the window's layout happens to be,
     /// and the transport bar's controls move between three arrangements.
-    public var isInspectorPresented = true
+    /// Its state is remembered across windows and launches (docs/18 STU-12).
+    public var isInspectorPresented = StudioDocumentModel.rememberedInspectorPresented {
+        didSet { UserDefaults.standard.set(isInspectorPresented, forKey: Self.inspectorPresentedKey) }
+    }
+
     public var showsExportOptions = false
 
     /// Set when something went wrong that the user should see.
@@ -184,8 +193,16 @@ public final class StudioDocumentModel {
 
     /// Set when something worked and saying so is the whole feedback.
     public var notice: String? {
-        didSet { Self.announce(notice, unless: oldValue == notice) }
+        didSet {
+            Self.announce(notice, unless: oldValue == notice)
+            if notice != oldValue {
+                noticeAction = nil
+            }
+        }
     }
+
+    /// A button the notice offers, set after the notice itself (docs/18 STU-14).
+    public var noticeAction: StudioNoticeAction?
 
     /// The look last applied from the preset bar.
     var storedAppliedPresetID: UUID?
@@ -478,17 +495,4 @@ public final class StudioDocumentModel {
     @ObservationIgnored var draftGeneration = 0
     /// Whether this model has put a draft on disk yet. The first one is written in place.
     @ObservationIgnored var hasWrittenDraft = false
-
-    /// The guard `tidySpeech` applies before it rebuilds the timeline.
-    ///
-    /// Its own method so a test can reach it: the rest of `tidySpeech` needs a microphone,
-    /// a permission grant and a speech model, and the refusal needs none of those — which
-    /// is exactly the split that let the bug through in the first place.
-    func refuseTidyIfEditedForTesting() {
-        guard edit.clips.isEdited(ofRecordingLasting: manifest.duration) else { return }
-        failure = .tidyRefused()
-    }
-
-    nonisolated static let tidyRefusal = "Speech tidying works on a recording you have not cut or re-timed yet. "
-        + "Undo your clip edits first, or trim the pauses by hand."
 }

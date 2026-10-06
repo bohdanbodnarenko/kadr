@@ -40,6 +40,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		KADR00000000000000000E05 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KADR00000000000000000400;
+			remoteInfo = KadrEditor;
+		};
 		F5F2A2453040394B00A5DC07 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
@@ -127,6 +134,7 @@
 /* Begin PBXFileReference section */
 		F5F2A2373040394A00A5DC07 /* Kadr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kadr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5F2A2443040394B00A5DC07 /* KadrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		KADR00000000000000000E01 /* KadrEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000401 /* KadrEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KadrEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000501 /* HelperTools.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = HelperTools.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000701 /* kadr */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kadr; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -141,6 +149,11 @@
 		F5F2A2473040394B00A5DC07 /* KadrTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = KadrTests;
+			sourceTree = "<group>";
+		};
+		KADR00000000000000000E02 /* KadrEditorTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KadrEditorTests;
 			sourceTree = "<group>";
 		};
 		KADR00000000000000000402 /* KadrEditor */ = {
@@ -183,6 +196,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F5F2A2413040394B00A5DC07 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000000E07 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -233,6 +253,7 @@
 				KADR00000000000000000502 /* HelperTools */,
 				KADR00000000000000000702 /* KadrCLI */,
 				F5F2A2473040394B00A5DC07 /* KadrTests */,
+				KADR00000000000000000E02 /* KadrEditorTests */,
 				F5F2A2383040394A00A5DC07 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -245,6 +266,7 @@
 				KADR00000000000000000501 /* HelperTools.xpc */,
 				KADR00000000000000000701 /* kadr */,
 				F5F2A2443040394B00A5DC07 /* KadrTests.xctest */,
+				KADR00000000000000000E01 /* KadrEditorTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -252,6 +274,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		KADR00000000000000000E00 /* KadrEditorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KADR00000000000000000E09 /* Build configuration list for PBXNativeTarget "KadrEditorTests" */;
+			buildPhases = (
+				KADR00000000000000000E06 /* Sources */,
+				KADR00000000000000000E07 /* Frameworks */,
+				KADR00000000000000000E08 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				KADR00000000000000000E04 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				KADR00000000000000000E02 /* KadrEditorTests */,
+			);
+			name = KadrEditorTests;
+			packageProductDependencies = (
+			);
+			productName = KadrEditorTests;
+			productReference = KADR00000000000000000E01 /* KadrEditorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		F5F2A2363040394A00A5DC07 /* Kadr */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F5F2A2583040394B00A5DC07 /* Build configuration list for PBXNativeTarget "Kadr" */;
@@ -414,6 +459,10 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = F5F2A2363040394A00A5DC07;
 					};
+					KADR00000000000000000E00 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = KADR00000000000000000400;
+					};
 				};
 			};
 			buildConfigurationList = F5F2A2323040394A00A5DC07 /* Build configuration list for PBXProject "Kadr" */;
@@ -455,11 +504,19 @@
 				KADR00000000000000000500 /* HelperTools */,
 				KADR00000000000000000700 /* KadrCLI */,
 				F5F2A2433040394B00A5DC07 /* KadrTests */,
+				KADR00000000000000000E00 /* KadrEditorTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		KADR00000000000000000E08 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F5F2A2353040394A00A5DC07 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -498,6 +555,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		KADR00000000000000000E06 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F5F2A2333040394A00A5DC07 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -536,6 +600,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		KADR00000000000000000E04 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000400 /* KadrEditor */;
+			targetProxy = KADR00000000000000000E05 /* PBXContainerItemProxy */;
+		};
 		F5F2A2463040394B00A5DC07 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F5F2A2363040394A00A5DC07 /* Kadr */;
@@ -564,6 +633,48 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		KADR00000000000000000E0A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrEditorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KadrEditor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KadrEditor";
+			};
+			name = Debug;
+		};
+		KADR00000000000000000E0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrEditorTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KadrEditor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KadrEditor";
+			};
+			name = Release;
+		};
 		F5F2A2563040394B00A5DC07 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -717,7 +828,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -756,7 +867,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "Kadr uses the camera only to add your webcam to a recording, and only while that recording is running.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 the Kadr contributors. MIT licensed.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kadr uses the microphone only to record your voice alongside the screen, and only while that recording is running.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac, and only when the teleprompter is set to follow your voice, so the script keeps your place while you read. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -889,7 +1000,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -910,7 +1021,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Config/HelperTools-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Kadr Helper";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognises speech on this Mac so the studio can cut filler words and the teleprompter can follow your voice. Nothing is uploaded.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Kadr recognizes speech on this Mac so the teleprompter can follow your voice and the studio can transcribe and cut filler words. Nothing is uploaded.";
 				MARKETING_VERSION = 0.9.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.Kadr.Editor.HelperTools;
 				PRODUCT_NAME = HelperTools;
@@ -959,6 +1070,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		KADR00000000000000000E09 /* Build configuration list for PBXNativeTarget "KadrEditorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KADR00000000000000000E0A /* Debug */,
+				KADR00000000000000000E0B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F5F2A2323040394A00A5DC07 /* Build configuration list for PBXProject "Kadr" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

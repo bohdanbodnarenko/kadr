@@ -271,6 +271,26 @@ struct SessionDocumentTests {
         #expect(!stamp.matches(editDigest: "abc", pixelSize: CGSize(width: 1920, height: 1080)))
     }
 
+    /// docs/18 STU-7: "already exported" is about the file, not the path.
+    @Test("A stamp whose file changed since does not match")
+    func stampWithChangedFile() throws {
+        let scratch = try scratch()
+        defer { try? FileManager.default.removeItem(at: scratch.root) }
+        let output = scratch.root.appendingPathComponent("out.mp4")
+        try Data("the export".utf8).write(to: output)
+        let size = CGSize(width: 1920, height: 1080)
+        let stamp = RenderStamp(
+            editDigest: "abc",
+            outputPath: output.path,
+            pixelSize: size,
+            outputIdentity: .of(path: output.path)
+        )
+        #expect(stamp.matches(editDigest: "abc", pixelSize: size))
+
+        try Data("trimmed in another app".utf8).write(to: output)
+        #expect(!stamp.matches(editDigest: "abc", pixelSize: size))
+    }
+
     @Test("A stamp round-trips")
     func stampRoundTrips() throws {
         let scratch = try scratch()
@@ -376,7 +396,7 @@ struct SessionDocumentTests {
         #expect(document.audioHashCache() == nil)
     }
 
-    @Test("Hashing a file stops when its task is cancelled")
+    @Test("Hashing a file stops when its task is canceled")
     func hashingIsCancellable() async throws {
         let scratch = try scratch()
         let (session, root) = (scratch.session, scratch.root)

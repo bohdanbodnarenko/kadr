@@ -39,7 +39,7 @@ struct StudioPreviewView: View {
                 StudioPreviewPlayerView(player: playback.player) { size, scale in
                     playback.setViewSize(size, backingScale: scale)
                 }
-                .accessibilityLabel("Studio preview")
+                .accessibilityLabel(Text("Studio preview", bundle: .module))
                 if playback.outputSize == nil {
                     ProgressView()
                         .controlSize(.small)
@@ -119,7 +119,7 @@ private struct StudioPreviewSkim: View {
                 Spacer()
             }
             .allowsHitTesting(false)
-            .accessibilityLabel("Timeline skim preview")
+            .accessibilityLabel(Text("Timeline skim preview", bundle: .module))
         }
     }
 }

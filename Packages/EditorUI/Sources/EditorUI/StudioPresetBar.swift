@@ -27,11 +27,14 @@ struct StudioPresetBar: View {
             }
         }
         .alert("Save this look", isPresented: $isNaming) {
-            TextField("Name", text: $draftName)
-            Button("Save") { model.saveCurrentPreset(named: draftName) }
-            Button("Cancel", role: .cancel) {}
+            TextField(String(localized: "Name", bundle: .module), text: $draftName)
+            Button(String(localized: "Save", bundle: .module)) { model.saveCurrentPreset(named: draftName) }
+            Button(String(localized: "Cancel", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Saves the canvas, camera bubble, pointer and overlays. Cuts and zooms stay as they are.")
+            Text(
+                "Saves the canvas, camera bubble, pointer and overlays. Cuts and zooms stay as they are.",
+                bundle: .module
+            )
         }
         .alert(
             "Delete this look?",
@@ -45,13 +48,13 @@ struct StudioPresetBar: View {
             ),
             presenting: pendingDeletion
         ) { preset in
-            Button("Delete", role: .destructive) {
+            Button(String(localized: "Delete", bundle: .module), role: .destructive) {
                 model.deletePreset(id: preset.id)
                 pendingDeletion = nil
             }
-            Button("Cancel", role: .cancel) { pendingDeletion = nil }
+            Button(String(localized: "Cancel", bundle: .module), role: .cancel) { pendingDeletion = nil }
         } message: { preset in
-            Text("“\(preset.name)” will be removed. This recording will not change.")
+            Text("“\(preset.name)” will be removed. This recording will not change.", bundle: .module)
         }
     }
 
@@ -67,13 +70,13 @@ struct StudioPresetBar: View {
 
     private var menu: some View {
         Menu {
-            Section("Built-in") {
+            Section(String(localized: "Built-in", bundle: .module)) {
                 ForEach(StudioPreset.builtIn) { preset in
                     presetButton(preset)
                 }
             }
             if !model.userPresets.isEmpty {
-                Section("Saved") {
+                Section(String(localized: "Saved", bundle: .module)) {
                     ForEach(model.userPresets) { preset in
                         presetButton(preset)
                     }
@@ -93,7 +96,7 @@ struct StudioPresetBar: View {
             .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .menuStyle(.button)
-        .help("Apply a saved look. Cuts and zooms are left alone.")
+        .help(Text("Apply a saved look. Cuts and zooms are left alone.", bundle: .module))
     }
 
     private func presetButton(_ preset: StudioPreset) -> some View {
@@ -111,7 +114,7 @@ struct StudioPresetBar: View {
                 model.setDefaultPreset(id: model.defaultPresetID == preset.id ? nil : preset.id)
             }
             if model.userPresets.contains(where: { $0.id == preset.id }) {
-                Button("Delete", role: .destructive) {
+                Button(String(localized: "Delete", bundle: .module), role: .destructive) {
                     pendingDeletion = preset
                 }
             }

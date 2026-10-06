@@ -27,6 +27,9 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// A command of its own as well as the toggle on the two record hotkeys, because the
     /// user who cannot remember which one they started with still needs a way out.
     case stopRecording
+    /// Pauses a running take, or resumes a paused one (docs/18 REC-11). No default key:
+    /// a global shortcut is taken from every app, and only blind-fired commands get one.
+    case pauseRecording
     /// Opens record mode rather than starting a recording (docs/03 §1.4).
     case recordSetup
     case freezeScreen
@@ -35,6 +38,8 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     case saveAllOverlays
     /// Hide overlay cards so they do not appear in the next capture (CleanShot §6.3).
     case hideOverlays
+    /// Gives the newest card the keyboard without touching it (docs/18 UX-18).
+    case focusOverlay
     /// Hide / show every pinned screenshot without closing them (CleanShot §11).
     case hidePins
     /// Pin whatever is on the clipboard — an image, or text drawn as a card (docs/03 §4).
@@ -51,12 +56,12 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     /// Menu title (docs/03 §8.1).
     var title: String {
         switch self {
-        case .allInOne: String(localized: "All-in-One")
+        case .allInOne: String(localized: "Capture Island")
         case .captureArea: String(localized: "Capture Area")
         case .captureWindow: String(localized: "Capture Window")
         case .captureFullscreen: String(localized: "Capture Screen")
         case .captureText: String(localized: "Capture Text (OCR)")
-        case .pickColor: String(localized: "Pick Colour…")
+        case .pickColor: String(localized: "Pick Color…")
         case .captureScrolling: String(localized: "Scrolling Capture…")
         case .capturePreviousArea: String(localized: "Capture Previous Area")
         case .captureAreaAndCopy: String(localized: "Capture Area and Copy")
@@ -65,12 +70,14 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
         case .recordRegion: String(localized: "Record Region…")
         case .recordDisplay: String(localized: "Record Screen")
         case .stopRecording: String(localized: "Stop Recording")
+        case .pauseRecording: String(localized: "Pause / Resume Recording")
         case .recordSetup: String(localized: "Record…")
         case .freezeScreen: String(localized: "Freeze Screen")
         case .toggleDesktopIcons: String(localized: "Hide Desktop Icons")
-        case .closeAllOverlays: String(localized: "Close All Overlays")
-        case .saveAllOverlays: String(localized: "Save All Overlays")
-        case .hideOverlays: String(localized: "Hide Overlays")
+        case .closeAllOverlays: String(localized: "Close All Cards")
+        case .saveAllOverlays: String(localized: "Save All Cards")
+        case .hideOverlays: String(localized: "Hide Cards")
+        case .focusOverlay: String(localized: "Focus Quick Access")
         case .hidePins: String(localized: "Hide Pins")
         case .pinClipboard: String(localized: "Pin Clipboard")
         case .togglePinClickThrough: String(localized: "Toggle Pin Click-Through")
@@ -83,7 +90,7 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
     var shortcutTitle: String {
         switch self {
         case .toggleDesktopIcons: "Toggle Desktop Icons"
-        case .hideOverlays: "Hide / Show Overlays"
+        case .hideOverlays: "Hide / Show Cards"
         case .hidePins: "Hide / Show Pins"
         case .pinClipboard: "Pin Clipboard"
         case .openHistory: "History"
@@ -127,10 +134,10 @@ nonisolated enum CaptureCommand: String, CaseIterable, Sendable {
                 .captureScrolling, .captureText, .pickColor, .capturePreviousArea,
                 .captureAreaAndCopy, .captureAreaAndSave
             ]),
-            ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording]),
+            ("Recording", [.recordSetup, .recordRegion, .recordDisplay, .stopRecording, .pauseRecording]),
             ("Utilities", [.selfTimer, .freezeScreen, .toggleDesktopIcons]),
-            ("Overlays and Pins", [
-                .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
+            ("Cards and Pins", [
+                .focusOverlay, .saveAllOverlays, .closeAllOverlays, .hideOverlays, .pinClipboard, .hidePins,
                 .togglePinClickThrough
             ]),
             ("Library", [.openHistory, .openSaveFolder])

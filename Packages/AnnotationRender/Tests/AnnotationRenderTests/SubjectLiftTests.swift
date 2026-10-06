@@ -119,7 +119,7 @@ struct SubjectLiftTests {
         #expect(background.alpha < 40, "the background should be gone, not merely covered")
     }
 
-    @Test("A colour background fills what the subject does not cover")
+    @Test("A color background fills what the subject does not cover")
     func colourBackground() {
         let spec = SubjectLiftSpec(
             maskPNG: makeMaskPNG(),

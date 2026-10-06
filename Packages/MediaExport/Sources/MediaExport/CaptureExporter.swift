@@ -162,6 +162,11 @@ public struct CaptureExporter: Sendable {
         try staging.adoptCopy(of: url, named: filename)
     }
 
+    /// Keeps a staged file out of the sweep (docs/18 OUT-2).
+    public func retainStaged(_ url: URL) {
+        staging.retain(url)
+    }
+
     /// Whether this file is still sitting in staging (docs/07 M11).
     public func isStaged(_ url: URL) -> Bool {
         staging.contains(url)
@@ -192,7 +197,7 @@ public struct CaptureExporter: Sendable {
         } catch {
             throw ExportError.writeFailed(error.localizedDescription)
         }
-        logger.info("Wrote \(url.lastPathComponent, privacy: .public)")
+        logger.info("Wrote \(url.lastPathComponent, privacy: .private)")
         return url
     }
 }

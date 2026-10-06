@@ -60,7 +60,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Welcome to Kadr"
+        window.title = String(localized: "Welcome to Kadr")
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false

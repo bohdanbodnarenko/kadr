@@ -85,6 +85,8 @@ public final class AnnotationCanvasView: NSView {
     /// Layers by annotation, so an update finds its own layer without a search.
     var layers: [AnnotationID: CALayer] = [:]
     var draftShapeLayer: CALayer?
+    /// Snap guides while a selection moves (docs/18 ED-7).
+    var guideLayer: CAShapeLayer?
     /// A freehand or highlighter draft's path so far, extended point by point.
     ///
     /// Rebuilding the whole polyline (and re-smoothing it) on every mouse-move made a long
@@ -284,6 +286,7 @@ public final class AnnotationCanvasView: NSView {
         if textEditor.isEditing {
             textEditor.finish()
         }
+        prepareSnapping()
 
         if event.clickCount == 2, beginEditingText(at: imagePoint(from: event)) {
             return
@@ -346,6 +349,7 @@ public final class AnnotationCanvasView: NSView {
         updateDraftLayer()
         if model.tool == .select || model.isMovingSelection {
             rebuildAnnotationLayersDuringMove()
+            updateSnapGuides()
         }
         if model.tool == .crop {
             updateCropOverlay()
@@ -359,6 +363,7 @@ public final class AnnotationCanvasView: NSView {
         }
         model.pointerUp(at: imagePoint(from: event), modifiers: modifiers(from: event))
         updateDraftLayer()
+        updateSnapGuides()
         updateHighlightPreview()
         // One sync for the whole gesture. It updates the layers in place and falls back to a
         // rebuild only when something was added or removed — a drag used to rebuild (and

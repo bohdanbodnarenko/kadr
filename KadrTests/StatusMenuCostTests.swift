@@ -133,6 +133,22 @@ struct StatusMenuCostTests {
         #expect((first.imageKey == second.imageKey) == same)
     }
 
+    /// docs/18 SH-3: the update badge is a different image, not a cached plain one.
+    @Test("A badged appearance has its own image key")
+    func badgeChangesKey() {
+        var plain = StatusItemAppearance(
+            symbol: "camera.viewfinder",
+            accessibilityDescription: "Kadr",
+            isTemplate: true,
+            title: "",
+            length: NSStatusItem.squareLength,
+            toolTip: "one"
+        )
+        let key = plain.imageKey
+        plain.isBadged = true
+        #expect(plain.imageKey != key)
+    }
+
     @Test("A running clock rebuilds no image and touches only the title")
     func clockTickKeepsTheImage() {
         let controller = StatusItemController(perform: { _ in }, openSettings: {})

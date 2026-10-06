@@ -88,8 +88,16 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
     // MARK: - Trimming
 
     @objc func beginTrimming() {
+        guard !isExportingTrim else { return }
         guard playerView.canBeginTrimming else {
+            // Said, not only logged: the window used to open showing the movie and nothing
+            // else, with no hint why the trim handles never came (docs/18 STU P3).
             logger.info("This recording cannot be trimmed in place")
+            presentMessage(
+                "Kadr can't trim “\(fileURL.lastPathComponent)” here.",
+                detail: player.currentItem?.error?.localizedDescription
+                    ?? "The movie may still be loading, or its format does not support trimming in place."
+            )
             return
         }
         // The completion handler is not main-actor isolated, so hop back before touching
@@ -107,7 +115,9 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
     /// The handles set the player item's playable range, so that range — not the whole
     /// asset — is what the trim asks for.
     private func exportTrimmedRange() {
-        guard let item = player.currentItem else { return }
+        // One trim at a time: the flag was set and never read, so a second trim started
+        // over a file still being written (docs/17 T-STU-9).
+        guard !isExportingTrim, let item = player.currentItem else { return }
         let range = TrimRange(
             start: CMTimeGetSeconds(item.reversePlaybackEndTime),
             end: CMTimeGetSeconds(item.forwardPlaybackEndTime)
@@ -121,7 +131,7 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
 
         let destination = PassthroughVideoTrimmer.destination(trimming: fileURL)
         isExportingTrim = true
-        window?.title = "Trimming “\(fileURL.lastPathComponent)”…"
+        window?.title = String(localized: "Trimming “\(fileURL.lastPathComponent)”…")
         Task { [weak self] in
             guard let self else { return }
             defer {
@@ -132,7 +142,7 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
             }
             do {
                 let written = try await trimmer.trim(movieAt: fileURL, to: range, destination: destination)
-                logger.info("Wrote \(written.lastPathComponent, privacy: .public)")
+                logger.info("Wrote \(written.lastPathComponent, privacy: .private)")
                 NSWorkspace.shared.activateFileViewerSelecting([written])
             } catch {
                 present(error)
@@ -141,9 +151,13 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
     }
 
     private func present(_ error: any Error) {
+        presentMessage("Kadr could not trim “\(fileURL.lastPathComponent)”.", detail: error.localizedDescription)
+    }
+
+    private func presentMessage(_ message: String, detail: String) {
         let alert = NSAlert()
-        alert.messageText = "Kadr could not trim “\(fileURL.lastPathComponent)”."
-        alert.informativeText = error.localizedDescription
+        alert.messageText = message
+        alert.informativeText = detail
         alert.alertStyle = .warning
         if let window {
             alert.beginSheetModal(for: window) { _ in }
@@ -159,6 +173,17 @@ final class TrimWindowController: NSObject, NSWindowDelegate {
         toolbar.delegate = self
         toolbar.displayMode = .iconAndLabel
         return toolbar
+    }
+
+    /// Not while a trim is being written: closing would leave the file half-made with
+    /// nobody told (docs/17 T-STU-9).
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard isExportingTrim else { return true }
+        presentMessage(
+            "Kadr is still writing the trimmed recording.",
+            detail: "The window can close once it finishes, in a moment."
+        )
+        return false
     }
 
     func windowWillClose(_ notification: Notification) {

@@ -13,16 +13,50 @@ public final class VisionClient {
     private let signposter = KadrLog.signposter(.capture)
     private var connection: NSXPCConnection?
 
-    public enum ClientError: LocalizedError {
+    public enum ClientError: LocalizedError, Equatable {
         case helperUnavailable
         case encodingFailed
-        case timedOut
+        /// The helper did not answer within the operation's bound. Names the operation, so
+        /// a stalled transcription no longer reads "Text recognition did not finish"
+        /// (docs/18 STU-8).
+        case timedOut(Operation)
 
         public var errorDescription: String? {
             switch self {
-            case .helperUnavailable: "Kadr's text recognition helper is not available."
+            case .helperUnavailable: "Kadr's helper is not available."
             case .encodingFailed: "Kadr could not prepare the image for text recognition."
-            case .timedOut: "Text recognition did not finish in time."
+            case let .timedOut(operation): "\(operation.title) did not finish in time."
+            }
+        }
+    }
+
+    /// What a request to the helper was doing, for the message when it stalls.
+    public enum Operation: String, Sendable, Equatable {
+        case textRecognition
+        case gifEncoding
+        case compression
+        case scrollStitching
+        case historyIndexing
+        case subjectMask
+        case transcription
+        case speechStatus
+        case speechModelInstall
+        case speechWarmUp
+        case liveSpeech
+
+        public var title: String {
+            switch self {
+            case .textRecognition: "Text recognition"
+            case .gifEncoding: "Making the GIF"
+            case .compression: "Compressing the capture"
+            case .scrollStitching: "Stitching the scrolling capture"
+            case .historyIndexing: "Indexing History"
+            case .subjectMask: "Finding the subject"
+            case .transcription: "Transcription"
+            case .speechStatus: "Checking speech recognition"
+            case .speechModelInstall: "Installing the language model"
+            case .speechWarmUp: "Preparing speech recognition"
+            case .liveSpeech: "Starting live captions"
             }
         }
     }
@@ -47,7 +81,7 @@ public final class VisionClient {
 
         guard let pngData = Self.pngData(from: image) else { throw ClientError.encodingFailed }
         let optionsData = try JSONEncoder().encode(options)
-        return try await send(timeout: Self.timeout, fallback: .recognitionFailed) { service, reply in
+        return try await send(.textRecognition, timeout: Self.timeout, fallback: .recognitionFailed) { service, reply in
             service.analyze(imageData: pngData, optionsData: optionsData, reply: reply)
         }
     }
@@ -64,7 +98,7 @@ public final class VisionClient {
         // Encoding a long recording legitimately takes a while, so this bound is far more
         // generous than the recognition one — it exists to catch a dead helper, not a slow
         // encode.
-        return try await send(timeout: .seconds(600), fallback: .recognitionFailed) { service, reply in
+        return try await send(.gifEncoding, timeout: .seconds(600), fallback: .recognitionFailed) { service, reply in
             service.encodeGIF(requestData: requestData, reply: reply)
         }
     }
@@ -81,7 +115,7 @@ public final class VisionClient {
         let requestData = try JSONEncoder().encode(request)
         // A handful of encodes of one still; generous for a slow machine, bounded so a
         // wedged helper cannot leave the card spinning.
-        return try await send(timeout: .seconds(60), fallback: .compressionFailed) { service, reply in
+        return try await send(.compression, timeout: .seconds(60), fallback: .compressionFailed) { service, reply in
             service.compressImage(requestData: requestData, reply: reply)
         }
     }
@@ -96,7 +130,7 @@ public final class VisionClient {
         defer { signposter.endInterval("scroll stitch", state) }
 
         let requestData = try JSONEncoder().encode(request)
-        return try await send(timeout: .seconds(300), fallback: .stitchFailed) { service, reply in
+        return try await send(.scrollStitching, timeout: .seconds(300), fallback: .stitchFailed) { service, reply in
             service.stitchScroll(requestData: requestData, reply: reply)
         }
     }
@@ -114,7 +148,11 @@ public final class VisionClient {
         let requestData = try JSONEncoder().encode(request)
         // A batch is a handful of OCR passes; generous enough for a slow machine, bounded
         // so a wedged helper cannot leave the pass hanging forever.
-        return try await send(timeout: .seconds(120), fallback: .historyUnavailable) { service, reply in
+        return try await send(
+            .historyIndexing,
+            timeout: .seconds(120),
+            fallback: .historyUnavailable
+        ) { service, reply in
             service.indexHistory(requestData: requestData, reply: reply)
         }
     }
@@ -130,7 +168,7 @@ public final class VisionClient {
         let requestData = try JSONEncoder().encode(request)
         // Segmenting a 5K capture on an older machine is seconds, not minutes; this bound
         // exists to catch a dead helper, not a slow model.
-        return try await send(timeout: .seconds(60), fallback: .maskFailed) { service, reply in
+        return try await send(.subjectMask, timeout: .seconds(60), fallback: .maskFailed) { service, reply in
             service.subjectMask(requestData: requestData, reply: reply)
         }
     }
@@ -152,6 +190,7 @@ public final class VisionClient {
         let connection = makeSpeechConnection(sink: sink)
         self.connection = connection
         return try await send(
+            .transcription,
             timeout: timeout,
             fallback: .transcriptionFailed,
             connection: connection
@@ -162,7 +201,7 @@ public final class VisionClient {
 
     public func speechStatus(_ request: SpeechStatusRequest) async throws -> SpeechStatusResponse {
         let requestData = try JSONEncoder().encode(request)
-        return try await send(timeout: .seconds(30), fallback: .speechUnavailable) { service, reply in
+        return try await send(.speechStatus, timeout: .seconds(30), fallback: .speechUnavailable) { service, reply in
             service.speechStatus(requestData: requestData, reply: reply)
         }
     }
@@ -177,6 +216,7 @@ public final class VisionClient {
         let connection = makeSpeechConnection(sink: sink)
         self.connection = connection
         return try await send(
+            .speechModelInstall,
             timeout: .seconds(3600),
             fallback: .speechUnavailable,
             connection: connection
@@ -199,7 +239,11 @@ public final class VisionClient {
 
     public func warmUpSpeech(_ request: SpeechStatusRequest) async throws {
         let requestData = try JSONEncoder().encode(request)
-        let _: Bool = try await send(timeout: .seconds(60), fallback: .speechUnavailable) { service, reply in
+        let _: Bool = try await send(
+            .speechWarmUp,
+            timeout: .seconds(60),
+            fallback: .speechUnavailable
+        ) { service, reply in
             service.warmUpSpeech(requestData: requestData, reply: reply)
         }
     }
@@ -218,6 +262,7 @@ public final class VisionClient {
         self.connection = connection
         let requestData = try JSONEncoder().encode(request)
         let _: Data = try await send(
+            .liveSpeech,
             timeout: .seconds(30),
             fallback: .speechUnavailable,
             connection: connection
@@ -251,6 +296,7 @@ public final class VisionClient {
     ///     error, which should not happen and must still be an error rather than a hang.
     ///   - invoke: calls the method this request wants.
     private func send<Response: Decodable>(
+        _ operation: Operation,
         timeout: Duration,
         fallback: VisionServiceError,
         connection: NSXPCConnection? = nil,
@@ -263,28 +309,66 @@ public final class VisionClient {
         }
 
         let boxed = UncheckedSendableBox(connection)
-        let resultData = try await withTaskCancellationHandler {
-            try await withThrowingTaskGroup(of: Data.self) { group in
-                group.addTask { try await Self.request(on: boxed.value, fallback: fallback, invoke: invoke) }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    throw ClientError.timedOut
-                }
-                defer { group.cancelAll() }
-                guard let first = try await group.next() else { throw ClientError.timedOut }
-                return first
+        let resultData: Data
+        do {
+            resultData = try await withTaskCancellationHandler {
+                try await Self.race(
+                    on: boxed,
+                    operation: operation,
+                    timeout: timeout,
+                    fallback: fallback,
+                    invoke: invoke
+                )
+            } onCancel: {
+                // Cancelling the caller's task stops the work in the helper (docs/17 T-STU-5).
+                // On *this* connection — the helper keeps one service per connection, so a
+                // cancel sent anywhere else reaches nothing — and then the connection goes,
+                // which ends whatever it started even if the cancel message is lost, and
+                // fails the pending reply so this call returns now rather than at the timeout.
+                (boxed.value.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
+                boxed.value.invalidate()
             }
-        } onCancel: {
-            // Cancelling the caller's task stops the work in the helper (docs/17 T-STU-5).
-            // On *this* connection — the helper keeps one service per connection, so a
-            // cancel sent anywhere else reaches nothing — and then the connection goes,
-            // which ends whatever it started even if the cancel message is lost, and
-            // fails the pending reply so this call returns now rather than at the timeout.
-            (boxed.value.remoteObjectProxy as? any VisionServiceProtocol)?.cancelSpeech()
-            boxed.value.invalidate()
+        } catch let ClientError.timedOut(operation) {
+            // The connection was invalidated to end the wait; the next call needs a new one.
+            if self.connection === connection {
+                self.connection = nil
+            }
+            throw ClientError.timedOut(operation)
         }
         try Task.checkCancellation()
         return try JSONDecoder().decode(Response.self, from: resultData)
+    }
+
+    /// The request against its bound.
+    ///
+    /// When the bound wins, the connection is invalidated before the group is left. A task
+    /// group waits for every child, and the request child is suspended on a continuation
+    /// that only the helper's reply or the connection's error handler resumes, so throwing
+    /// alone left the call waiting on a hung helper forever (docs/18 STU-8). Invalidating
+    /// fires the error handler, the continuation resumes, and the group can finish.
+    nonisolated static func race(
+        on boxed: UncheckedSendableBox<NSXPCConnection>,
+        operation: Operation,
+        timeout: Duration,
+        fallback: VisionServiceError,
+        invoke: @escaping @Sendable (any VisionServiceProtocol, @escaping @Sendable (Data?, (any Error)?) -> Void)
+            -> Void
+    ) async throws -> Data {
+        try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await request(on: boxed.value, fallback: fallback, invoke: invoke) }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw ClientError.timedOut(operation)
+            }
+            defer { group.cancelAll() }
+            do {
+                guard let first = try await group.next() else { throw ClientError.timedOut(operation) }
+                return first
+            } catch let error as ClientError {
+                boxed.value.invalidate()
+                throw error
+            }
+        }
     }
 
     private nonisolated static func request(
@@ -364,7 +448,7 @@ public final class VisionClient {
 }
 
 /// Carries a value that is safe to hand to one other task but is not marked `Sendable`.
-private nonisolated struct UncheckedSendableBox<Value>: @unchecked Sendable {
+nonisolated struct UncheckedSendableBox<Value>: @unchecked Sendable {
     let value: Value
 
     init(_ value: Value) {

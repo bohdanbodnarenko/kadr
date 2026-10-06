@@ -58,7 +58,7 @@ struct BeautifyMetricTests {
         #expect(decoded == .points(48))
     }
 
-    @Test("An unrecognised shape decodes as nothing rather than throwing")
+    @Test("An unrecognized shape decodes as nothing rather than throwing")
     func unknownShape() throws {
         let decoded = try JSONDecoder().decode(BeautifyMetric.self, from: Data("{\"future\":1}".utf8))
         #expect(decoded == .zero)

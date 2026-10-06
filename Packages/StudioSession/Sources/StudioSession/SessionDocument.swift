@@ -110,19 +110,50 @@ public struct RenderStamp: Codable, Sendable, Hashable {
     /// and soundtrack. Optional so older stamps still decode — and a caller that asks
     /// for a match with inputs never matches a stamp without them.
     public var inputsDigest: String?
+    /// The rendered file's size and modification date when it was stamped (docs/18 STU-7).
+    /// A path alone said "already exported" about a file the user had since trimmed in
+    /// QuickTime or replaced. Optional so older stamps still decode; they trust the path.
+    public var outputIdentity: FileIdentity?
+
+    /// What a file looked like when it was stamped.
+    public struct FileIdentity: Codable, Sendable, Hashable {
+        public var byteCount: Int64
+        public var modified: Date
+
+        public init(byteCount: Int64, modified: Date) {
+            self.byteCount = byteCount
+            self.modified = modified
+        }
+
+        /// The file at `path` now, or nil if it cannot be read.
+        public static func of(path: String) -> FileIdentity? {
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+                  let size = (attributes[.size] as? NSNumber)?.int64Value,
+                  let modified = attributes[.modificationDate] as? Date
+            else { return nil }
+            return FileIdentity(byteCount: size, modified: modified)
+        }
+
+        /// Same size, and modified within a second: file systems round dates differently.
+        func matches(_ other: FileIdentity) -> Bool {
+            byteCount == other.byteCount && abs(modified.timeIntervalSince(other.modified)) < 1
+        }
+    }
 
     public init(
         editDigest: String,
         outputPath: String,
         pixelSize: CGSize,
         settingsDigest: String? = nil,
-        inputsDigest: String? = nil
+        inputsDigest: String? = nil,
+        outputIdentity: FileIdentity? = nil
     ) {
         self.editDigest = editDigest
         self.outputPath = outputPath
         self.pixelSize = pixelSize
         self.settingsDigest = settingsDigest
         self.inputsDigest = inputsDigest
+        self.outputIdentity = outputIdentity
     }
 
     /// Whether a cached render can be handed over instead of doing the work again.
@@ -146,9 +177,11 @@ public struct RenderStamp: Codable, Sendable, Hashable {
         if let inputsDigest, self.inputsDigest != inputsDigest {
             return false
         }
-        return self.editDigest == editDigest
-            && self.pixelSize == pixelSize
-            && FileManager.default.fileExists(atPath: outputPath)
+        guard self.editDigest == editDigest, self.pixelSize == pixelSize else { return false }
+        guard let stamped = outputIdentity else {
+            return FileManager.default.fileExists(atPath: outputPath)
+        }
+        return FileIdentity.of(path: outputPath).map(stamped.matches) ?? false
     }
 
     /// The digest of an edit, or nil if it could not be encoded.
@@ -337,7 +370,7 @@ public struct SessionDocument: Sendable {
                 try? FileManager.default.removeItem(at: backup)
                 try FileManager.default.moveItem(at: url, to: backup)
                 backups.append(backup)
-                logger.error("Moved an unreadable \(url.lastPathComponent, privacy: .public) aside")
+                logger.error("Moved an unreadable \(url.lastPathComponent, privacy: .private) aside")
             } catch {
                 logger.error("Could not move an unreadable edit aside: \(error.localizedDescription, privacy: .public)")
             }

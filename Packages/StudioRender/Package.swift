@@ -9,6 +9,10 @@ import PackageDescription
 
 let package = Package(
     name: "StudioRender",
+    // Display titles are localized from this package's own catalog, through
+    // Bundle.module (docs/18 X-4). Only the agent and editor link it, so the
+    // resource bundle always ships beside the code.
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "StudioRender", targets: ["StudioRender"])
@@ -24,6 +28,7 @@ let package = Package(
                 .product(name: "Shared", package: "Shared"),
                 .product(name: "StudioSession", package: "StudioSession")
             ],
+            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

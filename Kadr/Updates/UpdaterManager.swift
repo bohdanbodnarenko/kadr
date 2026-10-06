@@ -38,7 +38,16 @@ final class UpdaterManager: NSObject {
     /// A scheduled check found this version while Kadr was in the background, and Sparkle
     /// left it to Kadr to mention gently rather than throwing a window over whatever the
     /// user was doing (docs/17 T-REL-4). The status menu offers it until the session ends.
-    private(set) var availableUpdateVersion: String?
+    private(set) var availableUpdateVersion: String? {
+        didSet {
+            if availableUpdateVersion != oldValue {
+                onAvailableUpdateChange?()
+            }
+        }
+    }
+
+    /// Tells the menu bar to badge, or un-badge, its icon (docs/18 SH-3).
+    @ObservationIgnored var onAvailableUpdateChange: (() -> Void)?
 
     /// Whether beta builds are offered too. Stored so SwiftUI tracks it; the preference is
     /// the source of truth across launches.
@@ -221,7 +230,12 @@ final class UpdaterManager: NSObject {
         #if DEBUG
             logger.info("Ignoring an update check in a debug build")
         #else
-            guard let controller = updaterController() else { return }
+            guard let controller = updaterController() else {
+                // Check Now must answer even when the updater never started (docs/18 SH-7).
+                FailurePresenter.present(message: String(localized: "Kadr could not check for updates.")
+                    + " " + String(localized: "Try again later, or download the latest version from the website."))
+                return
+            }
             logger.notice("Update check requested")
             // Before the call: Sparkle's "Checking…" window appears straight away, and it
             // should appear in front. Released in `standardUserDriverWillFinishUpdateSession`.

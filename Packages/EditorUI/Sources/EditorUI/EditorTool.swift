@@ -1,4 +1,5 @@
 import AnnotationModel
+import AppKit
 import Foundation
 
 /// What the pointer does right now (docs/03 §3).
@@ -79,6 +80,36 @@ public enum EditorTool: Hashable, Sendable, CaseIterable {
         case .measure: "m"
         case .sticker: "e"
         }
+    }
+
+    /// The physical key for `shortcut` on an ANSI keyboard (`kVK_ANSI_*`).
+    ///
+    /// Tools are chosen by key position, not by the typed character, so the letters work on
+    /// Ukrainian, Russian, Greek and every other non-Latin layout (docs/18 ED-6).
+    public var shortcutKeyCode: UInt16 {
+        switch self {
+        case .select: 9
+        case .arrow: 0
+        case .shape: 15
+        case .line: 37
+        case .freehand: 35
+        case .highlighter: 4
+        case .text: 17
+        case .redaction: 11
+        case .spotlight: 1
+        case .counter: 8
+        case .crop: 40
+        case .measure: 46
+        case .sticker: 14
+        }
+    }
+
+    /// The tool a bare key press picks, or nil. A key held with ⌘, ⌥ or ⌃ is a command,
+    /// never a tool letter (docs/18 ED-6); ⇧ is allowed so Caps Lock and a held Shift
+    /// still choose tools.
+    public static func tool(forKeyCode keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> EditorTool? {
+        guard modifiers.isDisjoint(with: [.command, .option, .control]) else { return nil }
+        return allCases.first { $0.shortcutKeyCode == keyCode }
     }
 
     /// Tools that place a fixed-size annotation with a single click rather than a drag.

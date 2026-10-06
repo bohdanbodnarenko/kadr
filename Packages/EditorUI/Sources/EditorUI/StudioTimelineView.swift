@@ -129,12 +129,10 @@ struct StudioTimelineView: View {
                 return .ignored
             }
             .onDeleteCommand {
-                // Delete acts on a selection, never on whatever the playhead is over
-                // (docs/17 T-STU-8).
-                if model.selectedZoom != nil {
-                    model.removeSelectedZoom()
-                } else if let clip = model.selectedClip {
-                    model.removeClip(id: clip)
+                // One rule with the trash button: the selection, never the playhead's clip
+                // (docs/17 T-STU-8, docs/18 STU-11).
+                if model.canDeleteTimelineSelection {
+                    model.deleteTimelineSelection()
                 } else {
                     NSSound.beep()
                 }
@@ -157,6 +155,17 @@ struct StudioTimelineView: View {
                             PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
                                 .id(Self.playheadAnchor)
                         }
+                        .background {
+                            // Inside the content, so it can read how far it has scrolled.
+                            PlayheadFollower(
+                                clock: model.playheadClock,
+                                scale: scale,
+                                viewportWidth: viewport,
+                                isFollowing: zoom > 1 && model.isPlaying
+                            ) {
+                                scroller.scrollTo(Self.playheadAnchor, anchor: PlayheadFollower.landing)
+                            }
+                        }
                         .overlay(alignment: .topLeading) {
                             Color.clear
                                 .frame(width: 1, height: 1)
@@ -164,11 +173,7 @@ struct StudioTimelineView: View {
                                 .id(Self.zoomAnchor)
                         }
                 }
-                .background {
-                    PlayheadFollower(clock: model.playheadClock, isFollowing: zoom > 1) {
-                        scroller.scrollTo(Self.playheadAnchor, anchor: .center)
-                    }
-                }
+                .coordinateSpace(name: PlayheadFollower.viewportSpace)
                 .onChange(of: zoom) {
                     if zoom <= 1 {
                         scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
@@ -241,10 +246,10 @@ struct StudioTimelineView: View {
             // Built when the menu opens, so this is the clip that was right-clicked.
             let time = hoverTime ?? model.playhead
             let clip = model.clipID(at: time)
-            Button("Split Clip Here") {
+            Button(String(localized: "Split Clip Here", bundle: .module)) {
                 model.split(at: time)
             }
-            Button("Delete Clip", role: .destructive) {
+            Button(String(localized: "Delete Clip", bundle: .module), role: .destructive) {
                 if let clip {
                     model.removeClip(id: clip)
                 }
@@ -356,11 +361,11 @@ struct StudioTimelineView: View {
             }
         }
         .frame(width: width, height: clipHeight)
-        .help("Drag the ends to trim. Hover and press C to split.")
+        .help(Text("Drag the ends to trim. Hover and press C to split.", bundle: .module))
         // One element per clip (docs/17 T-STU-11): "Clip 2 of 5, 0:12 to 0:31, 2×".
         // Adjusting it moves between clips, and its action selects this one.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Clip \(index + 1) of \(model.edit.clips.clips.count)")
+        .accessibilityLabel(Text("Clip \(index + 1) of \(model.edit.clips.clips.count)", bundle: .module))
         .accessibilityValue(clipAccessibilityValue(clip, index: index))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityAction(named: "Select") {
@@ -402,7 +407,7 @@ struct StudioTimelineView: View {
     private func speedLabel(_ speed: Double) -> String {
         speed == speed.rounded()
             ? "\(Int(speed))×"
-            : String(format: "%.1f×", speed)
+            : StudioMultiplier.text(speed)
     }
 }
 
@@ -450,23 +455,6 @@ private struct PlayheadScrollAnchor: View {
         Color.clear
             .frame(width: 1, height: 1)
             .offset(x: clock.time * scale)
-    }
-}
-
-/// Keeps a zoomed timeline scrolled to the playhead while it moves.
-///
-/// A leaf so the per-tick `onChange` lives in a body that has nothing else to rebuild.
-private struct PlayheadFollower: View {
-    let clock: StudioPlayhead
-    let isFollowing: Bool
-    let follow: () -> Void
-
-    var body: some View {
-        Color.clear
-            .onChange(of: clock.time) {
-                guard isFollowing else { return }
-                follow()
-            }
     }
 }
 

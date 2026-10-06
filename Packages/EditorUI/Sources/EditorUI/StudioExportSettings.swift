@@ -196,6 +196,24 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
         self.gifFrameRate = gifFrameRate
     }
 
+    /// What Copy and Share render, whatever the Export popover last held (docs/18 STU-6).
+    ///
+    /// They used to borrow the export settings, so a GIF or a 480p export chosen last week
+    /// was what landed in a chat today. A clipboard movie has to play everywhere it is
+    /// pasted, so this is fixed: MP4, H.264, up to 1080p, quality-compressed, with sound.
+    public static let sharing = StudioExportSettings(
+        quality: .high,
+        codec: .h264,
+        resolution: .fullHD,
+        container: .mp4,
+        includeAudio: true,
+        frameRate: .source,
+        compresses: true
+    )
+
+    /// The sharing preset in words, for the menu items that use it.
+    public static let sharingSummary = "MP4, up to 1080p"
+
     private enum CodingKeys: String, CodingKey {
         case quality, codec, resolution, container, includeAudio, frameRate, compresses
         case gifWidth, gifFrameRate
@@ -212,8 +230,59 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
         includeAudio = try container.decode(Bool.self, forKey: .includeAudio)
         frameRate = try container.decodeIfPresent(FrameRate.self, forKey: .frameRate) ?? .source
         compresses = try container.decodeIfPresent(Bool.self, forKey: .compresses) ?? false
+        // The one size control has no uncompressed Medium or Low (docs/18 STU-13). Someone
+        // who chose them wanted a smaller file, so they become the matching compressed
+        // step rather than silently growing back to Best Quality.
+        if !compresses, quality != .high {
+            compresses = true
+        }
         gifWidth = try container.decodeIfPresent(GIFWidth.self, forKey: .gifWidth) ?? .large
         gifFrameRate = try container.decodeIfPresent(GIFFrameRate.self, forKey: .gifFrameRate) ?? .smooth
+    }
+
+    /// Size against quality, as one choice (docs/18 STU-13).
+    ///
+    /// "Quality" used to change meaning when "Compress" was switched on — a bit rate off,
+    /// a perceptual target on — so the two controls read as independent and were not.
+    /// One picker of four steps says what the user is trading.
+    public enum SizePreset: String, CaseIterable, Sendable, Identifiable {
+        case best = "Best Quality"
+        case balanced = "Balanced"
+        case smaller = "Smaller"
+        case smallest = "Smallest"
+
+        public var id: String {
+            rawValue
+        }
+
+        /// What each step costs, in words.
+        public var hint: String {
+            switch self {
+            case .best: "The largest file, at a fixed high bit rate."
+            case .balanced: "Looks identical. Usually about a quarter smaller, more when little moves."
+            case .smaller: "Looks the same. Usually 40% smaller or better."
+            case .smallest: "About half the size. Fine text may soften slightly."
+            }
+        }
+    }
+
+    public var sizePreset: SizePreset {
+        get {
+            guard compresses else { return .best }
+            switch quality {
+            case .high: return .balanced
+            case .medium: return .smaller
+            case .low: return .smallest
+            }
+        }
+        set {
+            switch newValue {
+            case .best: (compresses, quality) = (false, .high)
+            case .balanced: (compresses, quality) = (true, .high)
+            case .smaller: (compresses, quality) = (true, .medium)
+            case .smallest: (compresses, quality) = (true, .low)
+            }
+        }
     }
 
     /// Whether this export will actually use the quality target. A GIF is re-encoded by

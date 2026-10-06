@@ -75,7 +75,8 @@ final class OverlayHostingView: NSHostingView<AnyView> {
 /// Focus is the other delicate part. The panel must never take key status just by appearing
 /// — the frontmost app keeps its cursor and its focus ring — but ⌫ has to reach a card once
 /// the user is interacting with it. `becomesKeyOnlyIfNeeded` gives exactly that: showing the
-/// panel steals nothing, clicking a card hands it the keyboard.
+/// panel steals nothing, clicking a card hands it the keyboard, and moving the pointer off
+/// the stack hands it back.
 @MainActor
 final class QuickAccessOverlayPanel: NonActivatingPanel {
     private let hostingView: OverlayHostingView
@@ -151,8 +152,53 @@ final class QuickAccessOverlayPanel: NonActivatingPanel {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown || event.type == .rightMouseDown, !isKeyWindow {
             makeKey()
+            // Watched only while key, so an idle stack costs nothing (rule 2).
+            acceptsMouseMovedEvents = true
+        }
+        if event.type == .mouseMoved, isKeyWindow, !isOverCard(event.locationInWindow) {
+            handBackKeyboard()
+            return
         }
         super.sendEvent(event)
+    }
+
+    /// Takes the keyboard without a click, for Focus Quick Access (docs/18 UX-18). The panel
+    /// does not activate Kadr, so the app underneath stays frontmost.
+    func takeKeyboard() {
+        guard !isKeyWindow else { return }
+        makeKey()
+        acceptsMouseMovedEvents = true
+    }
+
+    /// Set while handing the keyboard back, so re-ordering the panel cannot make it key.
+    private var refusesKey = false
+
+    override var canBecomeKey: Bool {
+        !refusesKey && super.canBecomeKey
+    }
+
+    /// Gives the keyboard back to the app underneath (docs/18 OUT-1).
+    ///
+    /// A click on Copy made this panel key and nothing resigned it, so the ⌘V meant for
+    /// Slack, and any ⌫ after it, came here instead. Once the pointer leaves the stack the
+    /// user is somewhere else: the panel orders out and back in while refusing key, which
+    /// is how a non-activating panel hands key focus back to the active app's window
+    /// without activating anything.
+    func handBackKeyboard() {
+        guard isKeyWindow else { return }
+        acceptsMouseMovedEvents = false
+        refusesKey = true
+        orderOut(nil)
+        orderFrontRegardless()
+        refusesKey = false
+    }
+
+    /// Whether a point in window space is over a card, with the same slop as clicks.
+    private func isOverCard(_ windowPoint: NSPoint) -> Bool {
+        guard let rects = hostingView.interactiveRects else { return true }
+        let local = hostingView.convert(windowPoint, from: nil)
+        let slop = InteractiveRegionTracker.hitSlop
+        return rects.contains { $0.insetBy(dx: -slop, dy: -slop).contains(local) }
     }
 
     /// A flick over a card dismisses it or tucks the stack away (docs/03 §2).

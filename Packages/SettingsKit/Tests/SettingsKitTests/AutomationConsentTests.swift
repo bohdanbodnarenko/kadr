@@ -12,6 +12,13 @@ struct AutomationConsentTests {
         return defaults
     }
 
+    private func consent(
+        _ storage: InMemoryConsentStorage = InMemoryConsentStorage(),
+        legacy: UserDefaults? = nil
+    ) -> AutomationConsent {
+        AutomationConsent(storage: storage, legacy: legacy ?? store())
+    }
+
     private nonisolated static let raycast = AutomationConsent.Sender.app(
         bundleID: "com.raycast.macos",
         teamID: "SY64MV22J9",
@@ -84,17 +91,17 @@ struct AutomationConsentTests {
 
     @Test("Off by default")
     func offByDefault() {
-        #expect(!AutomationConsent(store: store()).allowsOtherApps)
+        #expect(!consent().allowsOtherApps)
     }
 
     @Test("Answers persist, and forgetting asks again")
     func persistence() {
-        let defaults = store()
-        let consent = AutomationConsent(store: defaults)
-        consent.allowsOtherApps = true
-        consent.record(.allowed, for: Self.raycast)
+        let storage = InMemoryConsentStorage()
+        let first = consent(storage)
+        first.allowsOtherApps = true
+        first.record(.allowed, for: Self.raycast)
 
-        let reloaded = AutomationConsent(store: defaults)
+        let reloaded = consent(storage)
         #expect(reloaded.allowsOtherApps)
         #expect(reloaded.verdict(for: Self.raycast) == .run)
         #expect(reloaded.rememberedApps.map(\.name) == ["Raycast"])
@@ -105,9 +112,78 @@ struct AutomationConsentTests {
 
     @Test("An unidentified sender's answer is never remembered")
     func unidentifiedIsNotRemembered() {
-        let consent = AutomationConsent(store: store())
+        let gate = consent()
+        gate.allowsOtherApps = true
+        gate.record(.allowed, for: .unidentified(name: "open"))
+        #expect(gate.decisions.isEmpty)
+    }
+
+    // MARK: - docs/18 OUT-13
+
+    @Test("A browser is asked every time, and its answer is never kept")
+    func browsersAreNeverRemembered() {
+        let safari = AutomationConsent.Sender.app(bundleID: "com.apple.Safari", teamID: "APPLE", name: "Safari")
+        let gate = consent()
+        gate.allowsOtherApps = true
+        gate.record(.allowed, for: safari)
+        #expect(gate.decisions.isEmpty)
+        #expect(gate.verdict(for: safari) == .ask)
+        #expect(!gate.remembersAnswer(for: safari))
+    }
+
+    @Test("Upgrading keeps the switch and denials, and drops allows anything could have written")
+    func legacyMigration() {
+        let legacy = store()
+        let denied = AutomationConsent.Sender.app(bundleID: "com.example.bad", teamID: "T", name: "Bad")
+        let deniedKey = AutomationConsent.key(for: denied) ?? ""
+        legacy.set(true, forKey: "automation.allowsOtherApps")
+        legacy.set([Self.key: "allowed", deniedKey: "denied"], forKey: "automation.consentDecisions")
+        legacy.set([Self.key: "Raycast", deniedKey: "Bad"], forKey: "automation.consentNames")
+
+        let storage = InMemoryConsentStorage()
+        let gate = consent(storage, legacy: legacy)
+
+        #expect(gate.allowsOtherApps)
+        #expect(gate.verdict(for: Self.raycast) == .ask, "a legacy allow is asked again")
+        #expect(gate.verdict(for: denied) == .refuse(.deniedBefore))
+        #expect(legacy.object(forKey: "automation.consentDecisions") == nil, "the old copy is gone")
+        #expect(storage.snapshot?.decisions == [deniedKey: .denied])
+    }
+
+    @Test("Values written to the preferences domain later grant nothing")
+    func defaultsCannotGrant() {
+        let legacy = store()
+        let storage = InMemoryConsentStorage(AutomationConsentSnapshot())
+        legacy.set(true, forKey: "automation.allowsOtherApps")
+        legacy.set([Self.key: "allowed"], forKey: "automation.consentDecisions")
+
+        let gate = consent(storage, legacy: legacy)
+        #expect(gate.verdict(for: Self.raycast) == .refuse(.notAllowed))
+    }
+
+    @Test("Reset forgets everything and turns the switch off")
+    func reset() {
+        let gate = consent()
+        gate.allowsOtherApps = true
+        gate.record(.allowed, for: Self.raycast)
+        gate.reset()
+        #expect(!gate.allowsOtherApps)
+        #expect(gate.decisions.isEmpty)
+    }
+
+    @Test("A reset survives a reload")
+    func resetPersists() {
+        let storage = InMemoryConsentStorage()
+        let consent = consent(storage)
         consent.allowsOtherApps = true
-        consent.record(.allowed, for: .unidentified(name: "open"))
-        #expect(consent.decisions.isEmpty)
+        consent.record(.allowed, for: Self.raycast)
+
+        consent.reset()
+
+        #expect(!consent.allowsOtherApps)
+        #expect(consent.rememberedApps.isEmpty)
+        let reloaded = self.consent(storage)
+        #expect(!reloaded.allowsOtherApps)
+        #expect(reloaded.rememberedApps.isEmpty)
     }
 }

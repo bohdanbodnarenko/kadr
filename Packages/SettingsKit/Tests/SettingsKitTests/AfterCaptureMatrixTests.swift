@@ -121,7 +121,7 @@ struct AfterCaptureMatrixTests {
         }
     }
 
-    @Test("A migrated matrix always shows a card, as the old behaviour did")
+    @Test("A migrated matrix always shows a card, as the old behavior did")
     func migrationKeepsTheOverlay() {
         for action in DefaultCaptureAction.allCases {
             #expect(AfterCaptureMatrix.migrating(action)[.screenshot].contains(.overlay))
@@ -244,5 +244,19 @@ struct AfterCaptureMigrationTests {
         let store = store(defaultAction: "copyToClipboard", schema: 99)
         SettingsMigrator.migrate(store)
         #expect(AfterCaptureMatrix.read(from: store, forKey: SettingKeys.afterCapture.name) == nil)
+    }
+
+    // MARK: - docs/18 SH-6: onboarding reads the matrix
+
+    @Test("Every old-style action round-trips through the matrix", arguments: DefaultCaptureAction.allCases)
+    func equivalentRoundTrip(action: DefaultCaptureAction) {
+        #expect(AfterCaptureMatrix.migrating(action).equivalentDefaultAction == action)
+    }
+
+    @Test("A tuned matrix has no single equivalent")
+    func tunedMatrixHasNoEquivalent() {
+        var matrix = AfterCaptureMatrix.migrating(.copyToClipboard)
+        matrix.recording = []
+        #expect(matrix.equivalentDefaultAction == nil)
     }
 }

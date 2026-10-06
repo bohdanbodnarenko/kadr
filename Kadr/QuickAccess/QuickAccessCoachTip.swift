@@ -95,7 +95,7 @@ private struct QuickAccessCoachTipView: View {
 
             HStack {
                 Spacer()
-                Button("Got it", action: done)
+                Button("Got It", action: done)
                     .keyboardShortcut(.defaultAction)
             }
         }

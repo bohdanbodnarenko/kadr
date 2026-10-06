@@ -32,7 +32,7 @@ struct EditorToolOptions: View {
     @ViewBuilder
     private var strokeControls: some View {
         let stroke = model.styleMemory.stroke(for: tool)
-        InspectorStackedRow("Colour") {
+        InspectorStackedRow("Color") {
             EditorSwatchStrip(selected: stroke.color, onSelect: { model.applyColor($0) })
         }
         InspectorRow("Stroke") {
@@ -53,7 +53,7 @@ struct EditorToolOptions: View {
     @ViewBuilder
     private var arrowOptions: some View {
         InspectorRow("End") {
-            Picker("End", selection: Binding(
+            Picker(String(localized: "End", bundle: .module), selection: Binding(
                 get: { model.styleMemory.lastArrowHead },
                 set: { model.applyArrowHead($0) }
             )) {
@@ -64,11 +64,11 @@ struct EditorToolOptions: View {
             .inspectorMenuPicker()
         }
         InspectorRow("Start") {
-            Picker("Start", selection: Binding(
+            Picker(String(localized: "Start", bundle: .module), selection: Binding(
                 get: { model.styleMemory.lastStartArrowHead },
                 set: { model.applyStartArrowHead($0) }
             )) {
-                Text("None").tag(ArrowHead?.none)
+                Text("None", bundle: .module).tag(ArrowHead?.none)
                 ForEach(ArrowHead.allCases, id: \.self) { head in
                     Text(head.title).tag(Optional(head))
                 }
@@ -128,10 +128,11 @@ struct EditorToolOptions: View {
                 title: "Strength",
                 value: Binding(
                     get: { Double(style.density) },
-                    set: { model.applyRedactionStyle(style.withDensity(CGFloat($0))) }
+                    set: { model.applyRedactionStyleLive(style.withDensity(CGFloat($0))) }
                 ),
                 range: 0.15 ... 1,
-                format: .percent
+                format: .percent,
+                onEditingEnded: { model.endInspectorStyleEdit() }
             )
         }
     }

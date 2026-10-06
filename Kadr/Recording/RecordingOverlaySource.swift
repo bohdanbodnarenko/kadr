@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import ControlKit
 import CoreGraphics
 import Foundation
 import os
@@ -250,10 +251,12 @@ final class RecordingOverlaySource: RecordingOverlayProviding, @unchecked Sendab
     private func startKeystrokeMonitor() {
         guard AXIsProcessTrusted() else {
             logger.info("Keystroke overlay needs Accessibility permission; skipping it this time")
+            Self.reportMissingKeystrokeAccess("Accessibility")
             return
         }
         guard CGPreflightListenEventAccess() else {
             logger.info("Keystroke overlay needs Input Monitoring permission; skipping it this time")
+            Self.reportMissingKeystrokeAccess("Input Monitoring")
             return
         }
 
@@ -447,5 +450,18 @@ enum KeystrokeAccess {
         if !CGPreflightListenEventAccess() {
             _ = CGRequestListenEventAccess()
         }
+    }
+}
+
+extension RecordingOverlaySource {
+    /// Says the key overlay is off for this take, rather than leave a recording that
+    /// silently lacks the keys the user turned on (docs/18 SH-12).
+    @MainActor
+    static func reportMissingKeystrokeAccess(_ permission: String) {
+        FailurePresenter.present(FeedbackStatus(
+            kind: .warning,
+            message: String(localized: "Recording without the key overlay: it needs \(permission).") + " "
+                + String(localized: "Turn it on in System Settings ▸ Privacy & Security.")
+        ))
     }
 }

@@ -161,6 +161,18 @@ final class NonActivatingPanel: NSPanel {
 - Quick Access cards: file-promise drags (`NSFilePromiseProvider`) so drops into Mail/Slack/Finder materialize the file with its real name even in overlay-only staging mode.
 - Pins: `.floating` panels; click-through = `ignoresMouseEvents = true`; backing image is an ImageIO-downsampled texture at panel size × scale, full-res lazily reloaded for zoom/copy.
 
+### Feedback (docs/18 X-2)
+
+One model, `ControlKit.FeedbackStatus` with a `FeedbackKind` (progress, completion, warning, error), shared by the agent, the annotation editor and the studio. Each app draws it in its own chrome, but the kind fixes the symbol, the tint and whether it waits to be dismissed. The surface follows from what happened:
+
+| What happened | Surface | Lifetime |
+|---|---|---|
+| A recoverable failure or warning on something the user started | **Banner**: `FailurePresenter` in the agent, the export banner in the editor, the failure banner in the studio. Carries the retry. | Stays until dismissed or retried |
+| Something destructive is about to happen | **Alert**, and only then | Modal, answered |
+| A finished action whose result is not already on screen | **Toast**: a completion banner; an Undo when the action was destructive | Takes itself away |
+
+A `logger.error` in a `catch` on a path the user started is half a report: use `FailurePresenter.report`, which logs and shows in one call. `Scripts/check-layering.sh` enforces this for `Kadr/`: a `catch` that only logs must be in its allow-list, with the reason it is not user-facing.
+
 ---
 
 ## 6. Annotation editor
@@ -196,7 +208,7 @@ final class NonActivatingPanel: NSPanel {
 
 - **No TCA.** Plain `@Observable` models + actor services + environment injection. Rationale: the app's complexity is in AppKit window management and media pipelines — reducer indirection buys testability we already get from package-level unit tests, at real dependency and cognitive cost. (Capso, Mio, Snapzy all converge on this.)
 - Settings: `SettingsKit` `@Observable` façade over `UserDefaults` with typed keys + migration versions; hotkeys stored by `KeyboardShortcuts`.
-- History: content-addressed files under `~/Library/Application Support/Kadr/Captures/` + GRDB/SQLite index (records, thumbnails path, OCR text FTS5 (P3)); retention/eviction in `HistoryKit`; the DB is disposable (rebuildable from files + sidecar JSON).
+- History: content-addressed files under `~/Library/Application Support/Kadr/Captures/` + GRDB/SQLite index (records, thumbnails path, OCR text FTS5 (P3)); retention/eviction in `HistoryKit`; the DB is disposable (rebuildable from files + sidecar JSON). Schema v2 (`v2-original-path`, sidecar version 2) adds `original_path`, the capture's own file outside the library when Kadr has seen it saved; Reveal, Pin and Annotate from History use it while it exists at the recorded size, and a History delete trashes the library copy under its original filename rather than its hash (docs/18 OUT-6). An unreadable database is moved aside and rebuilt from the sidecars at open (docs/18 OUT-3).
 
 ## 10. Distribution & updates
 
@@ -229,6 +241,7 @@ final class NonActivatingPanel: NSPanel {
 | Updates | Sparkle 2 + DMG + Homebrew | MAS | sandbox limits, Sparkle ban, license model |
 | License | MIT | GPL | adoption; GPL neighbors remain read-only references |
 | Language mode | Swift 6.2 strict | Swift 5 mode | new codebase; approachable-concurrency defaults |
+| Hiding desktop icons | borderless wallpaper cover one level above `desktopIconWindow` | Finder `CreateDesktop` + restart | no Finder restart (interrupted copies, 250 ms settle), instant, nothing to restore after a crash; decoded at point size for the RAM budget (docs/18 SH-4) |
 
 ## 13. Reference implementations consulted
 

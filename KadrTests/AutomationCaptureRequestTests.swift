@@ -45,7 +45,7 @@ struct AutomationCaptureRequestTests {
 
     /// The case that would otherwise hang a script: two automations in a row, the first
     /// superseded before it finished.
-    @Test("Arming a second request tells the first it was cancelled")
+    @Test("Arming a second request tells the first it was canceled")
     func armingDisplacesThepreviousCaller() {
         let request = AutomationCaptureRequest()
         var first: CaptureOutcome?

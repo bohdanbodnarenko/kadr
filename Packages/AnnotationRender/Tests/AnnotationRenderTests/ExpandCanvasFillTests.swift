@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import AnnotationRender
 
-@Suite("Expand-canvas fill colour")
+@Suite("Expand-canvas fill color")
 struct ExpandCanvasFillTests {
     private struct RGB {
         let red: Double

@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// Recording controls that grow out of the MacBook notch (macos-notch-ui).
@@ -38,6 +39,13 @@ struct RecordingNotchIsland: View {
             .coordinateSpace(.named(RecordingBarCoordinateSpace.bar))
             .overlay { RecordingBarTooltipLayer(tooltip: tooltip, edge: .bottom) }
             .background { RecordingNotchHoverTracking { setHovering($0) } }
+            // Hover is not the only way in: a click on the compact shell opens the row,
+            // so Stop and Pause are reachable when hover never fires (docs/18 REC-11, UX-16).
+            .contentShape(shape)
+            .onTapGesture {
+                guard !layout.showsRow else { return }
+                expandFromClick()
+            }
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .named(RecordingBarCoordinateSpace.panel))
             } action: { frame in
@@ -45,6 +53,7 @@ struct RecordingNotchIsland: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Recording controls")
+            .accessibilityAction(named: "Show Controls") { expandFromClick() }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .coordinateSpace(.named(RecordingBarCoordinateSpace.panel))
             .environment(tooltip)
@@ -144,16 +153,26 @@ struct RecordingNotchIsland: View {
         .allowsHitTesting(false)
     }
 
+    /// Live is a filled red dot, the countdown an orange ring: the shape tells them apart
+    /// when the colour cannot (Differentiate Without Colour, docs/18 X-3).
+    @ViewBuilder
+    private var statusDot: some View {
+        if model.preRoll == nil {
+            Circle().fill(RecordingBarMetrics.recordTint)
+        } else {
+            Circle().strokeBorder(Color.orange, lineWidth: 2)
+        }
+    }
+
     private var statusEar: some View {
         HStack(spacing: 5) {
-            Circle()
-                .fill(model.preRoll == nil ? RecordingBarMetrics.recordTint : Color.orange)
+            statusDot
                 .frame(width: 8, height: 8)
                 .opacity(model.isPaused ? 0.35 : 1)
 
             if model.isPaused {
                 Image(systemName: "pause.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(KadrType.font(KadrType.micro, weight: .bold))
                     .foregroundStyle(.white.opacity(0.75))
             } else if model.preRoll == nil {
                 // The one thing about a recording in progress worth a glance: whether
@@ -165,7 +184,7 @@ struct RecordingNotchIsland: View {
                 )
             }
 
-            if model.microphoneIsSilent, model.preRoll == nil {
+            if model.microphoneIsSilent || model.microphoneDropped, model.preRoll == nil {
                 Image(systemName: "mic.slash.fill")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.orange)
@@ -195,6 +214,9 @@ struct RecordingNotchIsland: View {
         if model.preRoll != nil {
             return KadrText.string("Countdown")
         }
+        if model.microphoneDropped {
+            return KadrText.string("Recording — no microphone")
+        }
         if model.microphoneIsSilent {
             return KadrText.string("Recording — microphone is silent")
         }
@@ -218,6 +240,13 @@ struct RecordingNotchIsland: View {
     }
 
     // MARK: - Hover
+
+    /// Opens the row and keeps it open while the pointer stays; leaving collapses it as
+    /// hover would.
+    private func expandFromClick() {
+        collapseTask?.cancel()
+        model.notchExpanded = true
+    }
 
     private func setHovering(_ hovering: Bool) {
         collapseTask?.cancel()

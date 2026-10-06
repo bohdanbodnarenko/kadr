@@ -1,5 +1,6 @@
 import AppKit
 import CaptureCore
+import ControlKit
 import Foundation
 import MediaExport
 import os
@@ -23,6 +24,9 @@ extension QuickAccessManager {
         Task { [weak self] in
             guard let self else { return }
             setActivity(.compressing, on: item)
+            // A client of its own: one shared client was disconnected by whichever of
+            // Compress and GIF finished first, under the other (docs/18 OUT-12).
+            let vision = VisionClient()
             defer { vision.disconnect() }
             defer { setActivity(nil, on: item) }
             do {

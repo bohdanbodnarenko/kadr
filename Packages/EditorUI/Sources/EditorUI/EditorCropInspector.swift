@@ -22,7 +22,7 @@ struct EditorCropInspector: View {
     var body: some View {
         InspectorGroup("Crop") {
             InspectorRow("Ratio") {
-                Picker("Ratio", selection: aspectBinding) {
+                Picker(String(localized: "Ratio", bundle: .module), selection: aspectBinding) {
                     ForEach(CropAspectPreset.allCases, id: \.self) { preset in
                         Text(preset.title).tag(preset)
                     }
@@ -31,7 +31,10 @@ struct EditorCropInspector: View {
             }
 
             InspectorToggleRow("Allow the canvas to grow", isOn: expandBinding)
-                .help("Lets the crop extend past the capture, adding blank space rather than cutting.")
+                .help(Text(
+                    "Lets the crop extend past the capture, adding blank space rather than cutting.",
+                    bundle: .module
+                ))
 
             if crop != nil {
                 // The working rect, not the stored one: it follows a handle drag live.
@@ -40,13 +43,16 @@ struct EditorCropInspector: View {
 
             // Return is bound on the canvas crop bar, which is on screen whenever this is.
             HStack(spacing: 8) {
-                Button("Reset") { model.clearCrop() }
+                Button(String(localized: "Reset", bundle: .module)) { model.clearCrop() }
                     .buttonStyle(InspectorButtonStyle())
                     .disabled(crop == nil)
-                    .help("Put the crop back to the whole capture")
-                Button("Done") { model.selectTool(.select) }
+                    .help(Text("Put the crop back to the whole capture", bundle: .module))
+                Button(String(localized: "Done", bundle: .module)) { model.selectTool(.select) }
                     .buttonStyle(InspectorButtonStyle(isProminent: true))
-                    .help("Finish cropping (Return). The crop stays editable — reopen Crop to change it.")
+                    .help(Text(
+                        "Finish cropping (Return). The crop stays editable — reopen Crop to change it.",
+                        bundle: .module
+                    ))
             }
         }
     }

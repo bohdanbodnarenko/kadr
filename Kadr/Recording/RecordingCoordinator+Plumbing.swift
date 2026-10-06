@@ -3,6 +3,7 @@ import CaptureCore
 import Foundation
 import MediaExport
 import os
+import OverlayKit
 import RecordingCore
 import SettingsKit
 import Shared
@@ -63,6 +64,7 @@ extension RecordingCoordinator {
             // existed on disk. If the state moved out from under us, the engine has
             // already been told to stand down and there is nothing here to claim.
             guard state == .starting else {
+                pendingInterruption = nil
                 await engine.cancel()
                 isTransitioning = false
                 logger.info("Recording was stopped while it was still starting")
@@ -77,7 +79,12 @@ extension RecordingCoordinator {
             hygiene?.beginRecording()
             isTransitioning = false
             showStartNotice()
+            followExclusionChanges()
             logger.info("Recording started")
+            if pendingInterruption != nil {
+                liveNotice = "Saving what was captured…"
+                stop()
+            }
         } catch {
             // Only this start's own pieces. A Stop or Cancel during the start has already
             // torn them down, and if another take has claimed the coordinator since, the
@@ -92,6 +99,7 @@ extension RecordingCoordinator {
             teleprompter.stop()
             hygiene?.endRecording()
             isTransitioning = false
+            pendingInterruption = nil
             state = .idle
             // A cancellation is not a capture failure. Feeding it to the permission
             // tracker would count the user's own Escape as evidence that screen
@@ -111,10 +119,13 @@ extension RecordingCoordinator {
     /// missing or not allowed — rather than only logging it (docs/17 T-REC-9).
     ///
     /// Cleared after a few seconds by a Task that exists only while a take does.
-    private func showStartNotice() {
+    func showStartNotice() {
         guard let notice = startNotice else { return }
         startNotice = nil
         liveNotice = notice
+        // The notice is caption text on a bar nobody is reading while they talk; VoiceOver
+        // users would otherwise never hear it at all (docs/18 REC-1).
+        FeedbackAnnouncement.post(notice)
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard let self, liveNotice == notice else { return }
@@ -122,8 +133,29 @@ extension RecordingCoordinator {
         }
     }
 
+    /// Keeps the live stream's filter in step with Kadr's panels for the whole take
+    /// (docs/18 T-REC-7).
+    ///
+    /// A panel that opens mid-take — a card, a notice, the bubble — was kept out of the file
+    /// only by its sharing type, which macOS 15.2+ honours and earlier versions do not. The
+    /// push waits a turn: panels register before they are ordered on screen, and a window
+    /// with no number yet cannot be excluded.
+    func followExclusionChanges() {
+        CaptureExclusionRegistry.shared.onChange = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, state == .recording || state == .paused else { return }
+                await engine.updateExcludedWindowIDs(CaptureExclusionPush.ids)
+            }
+        }
+    }
+
+    func stopFollowingExclusionChanges() {
+        CaptureExclusionRegistry.shared.onChange = nil
+    }
+
     func startTicking() {
         stopTicking()
+        lastDiskCheckSecond = nil
         microphonePeakMax = 0
         lastAudibleTime = nil
         audioMeter = AudioMeter()
@@ -154,6 +186,7 @@ extension RecordingCoordinator {
             lastAudibleTime = elapsed
         }
         onAudioLevel?(audioMeter.peak)
+        checkDiskSpaceIfDue()
         if RecordingTickPolicy.shouldNotify(previous: before, next: tickDisplay) {
             onStateChanged?()
         }
@@ -162,6 +195,23 @@ extension RecordingCoordinator {
     /// What the tick can change that somebody can see, other than the meter.
     private var tickDisplay: RecordingTickDisplay {
         RecordingTickDisplay(wholeSeconds: Int(elapsed), microphoneIsSilent: microphoneIsSilent)
+    }
+
+    /// Stops and saves before the disk fills, from the tick the take already has rather
+    /// than a timer of its own (docs/18 REC-8, rule 2).
+    private func checkDiskSpaceIfDue() {
+        let second = Int(elapsed)
+        guard state == .recording,
+              RecordingDiskSpace.isCheckDue(atWholeSecond: second, lastChecked: lastDiskCheckSecond)
+        else { return }
+        lastDiskCheckSecond = second
+        guard let volume = RecordingDiskSpace.availableCapacity(of: InterruptedRecordingStore.inProgressRoot()),
+              RecordingDiskSpace.mustStop(availableBytes: volume.bytes)
+        else { return }
+        logger.error("Stopping the recording: \(volume.bytes, privacy: .public) bytes free")
+        handleEngineEvent(.writerFailed(
+            String(localized: "“\(volume.name)” is almost full, so Kadr stopped recording.")
+        ))
     }
 
     func stopTicking() {

@@ -1,5 +1,6 @@
 import AppKit
 import AutomationKit
+import ControlKit
 import os
 import OverlayKit
 import SettingsKit
@@ -25,6 +26,13 @@ final class AutomationConsentGate {
 
     init(consent: AutomationConsent = AutomationConsent()) {
         self.consent = consent
+        // Every app that can open web links is a browser for this purpose, not only the
+        // ones Kadr knows by name (docs/18 OUT-13).
+        if let https = URL(string: "https://example.com") {
+            let handlers = NSWorkspace.shared.urlsForApplications(toOpen: https)
+                .compactMap { Bundle(url: $0)?.bundleIdentifier }
+            consent.neverRemembered.formUnion(handlers)
+        }
     }
 
     /// Who sent the Apple event being handled right now.
@@ -88,19 +96,33 @@ final class AutomationConsentGate {
         let name = Self.displayName(of: sender)
         let alert = NSAlert()
         alert.alertStyle = .warning
-        if case .app = sender {
+        // What the request reaches, so the answer is about this file or region and not
+        // only the verb (docs/18 OUT-13).
+        let details = command.consentDetails.map { "• \($0)" }.joined(separator: "\n")
+        let reach = details.isEmpty ? "" : "\n" + details
+        if case .app = sender, consent.remembersAnswer(for: sender) {
             alert.messageText = String(localized: "Allow “\(name)” to control Kadr?")
             alert.informativeText = String(localized: """
-            It asked Kadr to: \(command.verb.summary)
+            It asked Kadr to: \(command.verb.summary)\(reach)
             Apps you allow can take screenshots and recordings, and read files, with \
             Kadr's permissions. You can change this in Settings → Advanced.
             """)
             alert.addButton(withTitle: String(localized: "Don't Allow"))
             alert.addButton(withTitle: String(localized: "Allow"))
+        } else if case .app = sender {
+            // A browser opens kadr:// for whatever page it shows, so its yes holds for this
+            // request only.
+            alert.messageText = String(localized: "Allow “\(name)” to control Kadr this time?")
+            alert.informativeText = String(localized: """
+            A page in \(name) asked Kadr to: \(command.verb.summary)\(reach)
+            Kadr asks every time for a web browser, because any website can make this request.
+            """)
+            alert.addButton(withTitle: String(localized: "Don't Allow"))
+            alert.addButton(withTitle: String(localized: "Allow Once"))
         } else {
             alert.messageText = String(localized: "Allow this request to control Kadr?")
             alert.informativeText = String(localized: """
-            \(name) asked Kadr to: \(command.verb.summary)
+            \(name) asked Kadr to: \(command.verb.summary)\(reach)
             Kadr can't tell which app sent it, so it asks every time.
             """)
             alert.addButton(withTitle: String(localized: "Don't Allow"))
