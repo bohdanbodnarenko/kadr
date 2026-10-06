@@ -17,6 +17,14 @@ struct GeneralPane: View {
 
     private let logger = KadrLog.logger(.settings)
 
+    /// What the template produces for a typical capture, so a typo or a missing brace is
+    /// visible before the next capture lands with that name (docs/18 SH P3).
+    private var filenamePreview: String {
+        let template = FilenameTemplate(settings.filenameTemplate)
+        let context = FilenameContext(applicationName: "Safari", width: 1440, height: 900)
+        return "\(template.expand(context)).\(settings.imageFormat.fileExtension)"
+    }
+
     var body: some View {
         Form {
             Section {
@@ -85,7 +93,14 @@ struct GeneralPane: View {
 
             Section {
                 TextField("Filename", text: $settings.filenameTemplate)
-                Text("Placeholders: {app}, {date}, {time}")
+                LabeledContent("Example") {
+                    Text(filenamePreview)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .accessibilityLabel(String(localized: "Example file name: \(filenamePreview)"))
+                }
+                Text("Placeholders: {app}, {date}, {time}, {w}, {h}, {size}, {counter}")
                     .font(.callout)
                     .foregroundStyle(.secondary)
 

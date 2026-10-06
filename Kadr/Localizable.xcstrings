@@ -860,6 +860,12 @@
     "Everything captured so far was saved. %@" : {
 
     },
+    "Example" : {
+
+    },
+    "Example file name: %@" : {
+
+    },
     "Export" : {
 
     },
@@ -1503,7 +1509,7 @@
     "Pins & Cards" : {
 
     },
-    "Placeholders: {app}, {date}, {time}" : {
+    "Placeholders: {app}, {date}, {time}, {w}, {h}, {size}, {counter}" : {
 
     },
     "Play a sound when capturing" : {
