@@ -252,7 +252,7 @@ struct LegacyEngine: SpeechEngine {
     func transcribe(
         audioAt url: URL,
         locale: Locale,
-        progress _: (@Sendable (TimeInterval) -> Void)?
+        progress: (@Sendable (TimeInterval) -> Void)?
     ) async throws -> [SpeechWordDTO] {
         guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
             throw VisionServiceError.speechUnavailable
@@ -263,15 +263,18 @@ struct LegacyEngine: SpeechEngine {
 
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = false
+        // Partial results only to say how far it has read (docs/18 STU-9): this engine has
+        // no progress of its own, so a long recording sat at 18% until it finished.
+        request.shouldReportPartialResults = progress != nil
         request.taskHint = .dictation
 
-        return try await recognize(request, with: recognizer)
+        return try await recognize(request, with: recognizer, progress: progress)
     }
 
     private func recognize(
         _ request: SFSpeechURLRecognitionRequest,
-        with recognizer: SFSpeechRecognizer
+        with recognizer: SFSpeechRecognizer,
+        progress: (@Sendable (TimeInterval) -> Void)?
     ) async throws -> [SpeechWordDTO] {
         let box = ResumeBox()
         // The recognition task is kept and cancelled with the Swift task (docs/17 T-STU-5).
@@ -287,7 +290,17 @@ struct LegacyEngine: SpeechEngine {
                         box.resume(continuation, with: .failure(failure))
                         return
                     }
-                    guard let result, result.isFinal else { return }
+                    guard let result else { return }
+                    guard result.isFinal else {
+                        // Partial segments may carry no timing yet; report only real reach.
+                        let reached = result.bestTranscription.segments
+                            .map { $0.timestamp + $0.duration }
+                            .max() ?? 0
+                        if reached > 0 {
+                            progress?(reached)
+                        }
+                        return
+                    }
                     let words = result.bestTranscription.segments.map { segment in
                         SpeechWordDTO(
                             text: segment.substring,

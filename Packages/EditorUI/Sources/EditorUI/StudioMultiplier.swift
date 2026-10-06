@@ -6,6 +6,6 @@ import Foundation
 /// `String(format: "%.1f×")` always wrote a full stop, in every locale (docs/18 X-4).
 enum StudioMultiplier {
     static func text(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(1))) + "×"
+        value.formatted(.number.precision(.fractionLength(1 ... 2))) + "×"
     }
 }

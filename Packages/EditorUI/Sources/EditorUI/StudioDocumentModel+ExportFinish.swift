@@ -42,7 +42,8 @@ extension StudioDocumentModel {
     /// appeared unannounced beside an export, or silently failed to, were a surprise
     /// either way (docs/18 STU P3).
     func writeCaptions(for snapshot: StudioExportSnapshot, beside destination: URL) {
-        guard let transcript = snapshot.transcript else { return }
+        guard let transcript = snapshot.transcript?.applying(corrections: snapshot.edit.transcriptCorrections)
+        else { return }
         let base = destination.deletingPathExtension()
         let srt = CaptionExport.srt(from: transcript, timeline: snapshot.edit.clips)
         let vtt = CaptionExport.vtt(from: transcript, timeline: snapshot.edit.clips)

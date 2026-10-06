@@ -79,8 +79,8 @@ public extension StudioDocumentModel {
     }
 
     /// J, K and L (docs/17 T-STU-11). L plays, and a second L doubles the speed; K stops;
-    /// J steps back a second at a time, twice as far on a second press — the preview
-    /// player does not play a composition backwards smoothly.
+    /// J plays backwards, twice as fast on a second press (docs/18 T-STU-11). A preview the
+    /// player cannot run in reverse falls back to stepping back a second, or two, per press.
     func shuttle(_ direction: Shuttle) {
         switch direction {
         case .stop:
@@ -93,8 +93,16 @@ public extension StudioDocumentModel {
                 play()
             }
         case .reverse:
+            let reversing = isPlaying && shuttleSpeed < 0
             shuttleSpeed = shuttleSpeed <= -1 ? -2 : -1
-            step(seconds: Double(shuttleSpeed))
+            if isPlaying, !reversing {
+                // Playing forwards: J turns it round rather than speeding it up.
+                pausePlayback()
+                shuttleSpeed = -1
+            }
+            if !previewPlayback.playReverse(speed: Float(-shuttleSpeed)) {
+                step(seconds: Double(shuttleSpeed))
+            }
         }
     }
 

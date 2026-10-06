@@ -23,8 +23,9 @@ public extension StudioDocumentModel {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.message = "Choose an audio file to replace this recording's soundtrack."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await importSoundtrack(from: url) }
+        presentPanel(panel) { [weak self] url in
+            Task { await self?.importSoundtrack(from: url) }
+        }
     }
 
     /// Copies `url` into the session and uses it as the soundtrack.
@@ -64,12 +65,13 @@ public extension StudioDocumentModel {
         panel.canSelectHiddenExtension = true
         panel.nameFieldStringValue = "Soundtrack"
         panel.message = "Export the edited soundtrack, without the picture."
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let format: StudioAudioExporter.Format = url.pathExtension.lowercased() == "wav" ? .wav : .m4a
-        guard audioExportTask == nil else { return }
-        audioExportTask = Task { [self] in
-            await exportEditedAudio(to: url, format: format)
-            audioExportTask = nil
+        presentPanel(panel) { [weak self] url in
+            guard let self, audioExportTask == nil else { return }
+            let format: StudioAudioExporter.Format = url.pathExtension.lowercased() == "wav" ? .wav : .m4a
+            audioExportTask = Task { [self] in
+                await exportEditedAudio(to: url, format: format)
+                audioExportTask = nil
+            }
         }
     }
 

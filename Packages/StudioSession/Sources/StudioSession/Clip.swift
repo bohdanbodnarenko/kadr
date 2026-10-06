@@ -35,9 +35,10 @@ public struct Clip: Sendable, Hashable, Codable, Identifiable {
         self.speed = min(max(speed, Self.minimumSpeed), Self.maximumSpeed)
     }
 
-    /// Below this the audio is unintelligible and the footage reads as broken rather than
-    /// slow.
-    public static let minimumSpeed: Double = 1
+    /// Slow motion goes down to a quarter speed (docs/18 Phase 4): below that a screen
+    /// recording's frames repeat four times over and read as stuck rather than slow.
+    /// Audio keeps its pitch, through the spectral time-pitch algorithm.
+    public static let minimumSpeed: Double = 0.25
     /// Past eight times, a second of recording is an eighth of a second on screen and
     /// nothing in it can be followed.
     public static let maximumSpeed: Double = 8

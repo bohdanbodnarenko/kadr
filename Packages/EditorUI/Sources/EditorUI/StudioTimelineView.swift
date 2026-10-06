@@ -50,6 +50,8 @@ struct StudioTimelineView: View {
     @State var creating: (start: TimeInterval, end: TimeInterval)?
     /// The clip edge being trimmed, and where it was when the drag began.
     @State var trimOrigin: (id: Clip.ID, edge: TimeInterval)?
+    /// The content stretch worth drawing while zoomed (docs/18 STU-15); nil draws it all.
+    @State var visibleWindow: ClosedRange<CGFloat>?
     /// Edited time under the pointer, for the split marker and hover-C.
     ///
     /// Read from the model's playhead clock rather than kept in `@State`: a state write on
@@ -151,6 +153,7 @@ struct StudioTimelineView: View {
             ScrollViewReader { scroller in
                 ScrollView(.horizontal, showsIndicators: zoom > 1) {
                     bands(scale: scale, width: width)
+                        .reportsTimelineScrollOrigin()
                         .overlay(alignment: .topLeading) {
                             PlayheadScrollAnchor(clock: model.playheadClock, scale: scale)
                                 .id(Self.playheadAnchor)
@@ -174,6 +177,14 @@ struct StudioTimelineView: View {
                         }
                 }
                 .coordinateSpace(name: PlayheadFollower.viewportSpace)
+                .onPreferenceChange(TimelineScrollOriginKey.self) { leading in
+                    let window = zoom > 1
+                        ? StudioTimelineWindow.visibleRange(origin: leading, viewportWidth: viewport)
+                        : nil
+                    if window != visibleWindow {
+                        visibleWindow = window
+                    }
+                }
                 .onChange(of: zoom) {
                     if zoom <= 1 {
                         scroller.scrollTo(Self.zoomAnchor, anchor: .leading)
@@ -230,6 +241,9 @@ struct StudioTimelineView: View {
         .contentShape(Rectangle())
         .onContinuousHover { phase in
             hover(phase, scale: scale)
+        }
+        .overlay(alignment: .topLeading) {
+            StudioTimelineMarks(marks: model.marks, duration: model.edit.duration, scale: scale, height: bandsHeight)
         }
         .overlay(alignment: .topLeading) {
             StudioTimelinePlayhead(
@@ -313,6 +327,14 @@ struct StudioTimelineView: View {
         }
     }
 
+    /// The visible window in one clip lane's own coordinates (docs/18 STU-15).
+    private func laneWindow(index: Int, scale: CGFloat) -> ClosedRange<CGFloat>? {
+        visibleWindow.map { window in
+            let laneX = model.editedStart(ofClipAt: index) * scale + CGFloat(index) * 2
+            return (window.lowerBound - laneX) ... (window.upperBound - laneX)
+        }
+    }
+
     private func clipLane(_ clip: Clip, index: Int, scale: CGFloat) -> some View {
         // `currentClipIndex` rather than `clipIndex(at: playhead)`: it changes when the
         // playhead crosses a cut, not on every tick.
@@ -326,7 +348,8 @@ struct StudioTimelineView: View {
                 url: model.session.screenURL,
                 clip: clip,
                 width: width,
-                height: clipHeight
+                height: clipHeight,
+                visible: laneWindow(index: index, scale: scale)
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .opacity(0.9)

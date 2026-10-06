@@ -53,10 +53,31 @@ struct StudioExportOptionsView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
 
+                Toggle(
+                    String(localized: "Wider color (Display P3)", bundle: .module),
+                    isOn: $model.exportSettings.widerColor
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help(Text(
+                    "Keeps a wide-color display's colors. Older players may show them a little dull.",
+                    bundle: .module
+                ))
+
                 Text(model.exportSettings.sizePreset.hint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let range = model.marks.range(duration: model.edit.duration) {
+                Toggle(isOn: $model.marks.exportsRangeOnly) {
+                    let start = StudioInspector.clock(range.lowerBound)
+                    let end = StudioInspector.clock(range.upperBound)
+                    Text("Only the marked range (\(start)–\(end))", bundle: .module)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
 
             if let sizeHint {
