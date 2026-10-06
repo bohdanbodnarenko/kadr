@@ -129,7 +129,12 @@ extension StudioTimelineView {
         candidates.removeAll { candidate in
             ignored.contains { abs($0 - candidate) < 0.0005 }
         }
-        let snapped = TimelineSnap.snap(time, candidates: candidates, scale: scale)
+        let snapped = TimelineSnap.snap(
+            time,
+            candidates: candidates,
+            scale: scale,
+            bypassed: NSEvent.modifierFlags.contains(.command)
+        )
         if snapped != time {
             AlignmentHaptic.snap(id: String(format: "%.3f", snapped))
         }
