@@ -30,12 +30,19 @@ struct EditorExportChrome: View {
                 .controlSize(.small)
             Text(action.progressTitle)
                 .font(.callout)
+                .accessibilityAddTraits(.updatesFrequently)
             Spacer(minLength: 0)
+            if model.canCancelExport {
+                Button(String(localized: "Cancel", bundle: .module)) {
+                    model.cancelExport()
+                }
+                .controlSize(.small)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .editorFloatingCard()
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(action.progressTitle)
     }
 

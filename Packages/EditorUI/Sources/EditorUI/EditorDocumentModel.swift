@@ -155,6 +155,9 @@ public final class EditorDocumentModel {
     /// main actor and the window still takes input.
     public internal(set) var runningExport: EditorExportAction?
 
+    /// Stops the running export, set by whoever started it (docs/18 §4.1 P3).
+    @ObservationIgnored public var exportCancellation: (@MainActor () -> Void)?
+
     /// An export that did not happen, until the user retries or dismisses it.
     public var exportFailure: EditorExportFailure?
 
