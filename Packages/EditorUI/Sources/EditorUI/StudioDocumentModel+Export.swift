@@ -73,7 +73,7 @@ public extension StudioDocumentModel {
 
     /// The studio's own window, found through the share anchor or a window titled for
     /// this recording.
-    private var studioWindowContentView: NSView? {
+    internal var studioWindowContentView: NSView? {
         if let window = shareAnchorView?.window {
             return window.contentView
         }
