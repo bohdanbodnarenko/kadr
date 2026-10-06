@@ -1,3 +1,4 @@
+import AppKit
 import ControlKit
 import SettingsKit
 import SwiftUI
@@ -17,6 +18,11 @@ struct CardLayoutEditor: View {
     @State private var previewKind: CaptureKind = .screenshot
     @State private var focusedSlot: CardSlot = .column
     @State private var selectedAction: CardAction?
+    /// The list-based arrangement is the way in for VoiceOver and the keyboard; for
+    /// everyone else it doubled the pane, so it starts folded unless one of those is on
+    /// (docs/18 SH P3, docs/14 UX-12).
+    @State private var showsKeyboardArrangement = NSApp?.isFullKeyboardAccessEnabled == true
+        || NSWorkspace.shared.isVoiceOverEnabled
 
     private var layout: CardLayout {
         settings.cardLayout
@@ -155,10 +161,13 @@ struct CardLayoutEditor: View {
     // MARK: - Keyboard arrangement (docs/14 UX-12)
 
     private var keyboardArrangement: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Keyboard arrangement")
-                .font(.headline)
+        DisclosureGroup("Arrange with the Keyboard", isExpanded: $showsKeyboardArrangement) {
+            keyboardArrangementControls
+        }
+    }
 
+    private var keyboardArrangementControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Picker("Slot", selection: $focusedSlot) {
                 ForEach(CardSlot.allCases, id: \.self) { slot in
                     Text(slot.title).tag(slot)
