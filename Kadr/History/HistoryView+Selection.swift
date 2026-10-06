@@ -1,6 +1,7 @@
 import AppKit
 import HistoryKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// History acting like a Finder window (docs/18 OUT-8): commands apply to the selection,
 /// typing jumps to a name, and a double-click opens the capture rather than a card.
@@ -11,6 +12,30 @@ extension HistoryView {
         selection.selected.contains(record.id) && selection.selected.count > 1
             ? Array(selection.selected)
             : [record.id]
+    }
+
+    /// A capture as a file promise, under its real name and never the library's hash
+    /// (docs/03 §6, docs/17 T-OUT-10).
+    func promise(for record: HistoryRecord) -> FilePromisePayload {
+        FilePromisePayload(
+            suggestedName: record.originalFilename,
+            contentType: UTType(filenameExtension: (record.originalFilename as NSString).pathExtension) ?? .png,
+            resolve: {
+                controller.markAccessed(record)
+                return controller.namedURL(for: record)
+            },
+            stableFileURL: controller.namedURL(for: record)
+        )
+    }
+
+    /// The rest of the selection, when the dragged capture is part of it — so a drag out
+    /// carries every selected file, as Finder's does (docs/18 OUT-8). In grid order.
+    func dragCompanions(for record: HistoryRecord) -> [FilePromisePayload] {
+        let others = Set(targets(for: record)).subtracting([record.id])
+        guard !others.isEmpty else { return [] }
+        return controller.records
+            .filter { others.contains($0.id) }
+            .map(promise(for:))
     }
 
     /// Double-click and Return: a recording opens in the studio (or its card), and an
