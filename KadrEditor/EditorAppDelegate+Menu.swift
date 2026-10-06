@@ -101,14 +101,13 @@ extension EditorAppDelegate {
             keyEquivalent: ""
         )
         fileMenu.addItem(.separator())
-        // Studio only: an annotation window has no `exportMovie:`, so the item greys itself
-        // out there rather than needing to be built per window kind.
+        // Studio only: hidden while an annotation window is key (docs/18 ED-11).
         fileMenu.addItem(
             withTitle: String(localized: "Export Video…"),
             action: #selector(StudioWindowController.exportMovie(_:)),
             keyEquivalent: "e"
-        )
-        fileMenu.addItem(.separator())
+        ).scoped(to: .studio)
+        fileMenu.addItem(NSMenuItem.separator().scoped(to: .studio))
         fileMenu.addItem(
             withTitle: String(localized: "Print…"),
             action: #selector(EditorWindowController.printDocument(_:)),
@@ -355,7 +354,7 @@ extension EditorAppDelegate {
             keyEquivalent: ""
         )
         clipItem.submenu = clipMenu
-        return clipItem
+        return clipItem.scoped(to: .studio)
     }
 
     /// Minimize, Zoom, the window list and Bring All to Front (T-ED-2). AppKit appends the

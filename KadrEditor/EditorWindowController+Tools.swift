@@ -40,6 +40,6 @@ extension EditorAppDelegate {
             entry.tag = index
         }
         item.submenu = menu
-        return item
+        return item.scoped(to: .annotation)
     }
 }
