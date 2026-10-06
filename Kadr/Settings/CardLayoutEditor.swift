@@ -63,7 +63,7 @@ struct CardLayoutEditor: View {
     private var mockCard: some View {
         VStack(spacing: 6) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: KadrRadius.large)
                     .fill(Color.secondary.opacity(0.15))
                     .frame(height: 90)
                     .overlay(
@@ -85,14 +85,14 @@ struct CardLayoutEditor: View {
                         cornerWell(.bottomTrailing)
                     }
                 }
-                .padding(6)
+                .padding(KadrSpace.small)
             }
             columnWell
         }
-        .padding(8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(KadrSpace.medium)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.panel))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: KadrRadius.panel)
                 .strokeBorder(KadrFill.stroke)
         )
     }
@@ -103,7 +103,7 @@ struct CardLayoutEditor: View {
             if let placed {
                 chip(placed, in: slot)
             } else {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(dash: [3, 3]))
                     .frame(width: 26, height: 26)
             }
@@ -120,7 +120,7 @@ struct CardLayoutEditor: View {
                 chip(action, in: .column)
             }
             if layout.column.count < CardLayout.columnCapacity {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .strokeBorder(Color.secondary.opacity(0.35), style: StrokeStyle(dash: [3, 3]))
                     .frame(width: 26, height: 26)
             }
@@ -139,7 +139,7 @@ struct CardLayoutEditor: View {
             .frame(width: 26, height: 26)
             .background(
                 selectedAction == action ? Color.accentColor.opacity(0.35) : Color.accentColor.opacity(0.18),
-                in: RoundedRectangle(cornerRadius: 6)
+                in: RoundedRectangle(cornerRadius: KadrRadius.medium)
             )
             .draggable(action.rawValue) {
                 Image(systemName: action.systemImage)
@@ -259,7 +259,10 @@ struct CardLayoutEditor: View {
                     ForEach(available, id: \.self) { action in
                         Image(systemName: action.systemImage)
                             .frame(width: 26, height: 26)
-                            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                            .background(
+                                Color.secondary.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: KadrRadius.medium)
+                            )
                             .draggable(action.rawValue) {
                                 Image(systemName: action.systemImage)
                             }

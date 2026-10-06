@@ -32,7 +32,7 @@ struct StudioZoomFocusPad: View {
             )
 
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                     .fill(KadrFill.hover)
                     .frame(width: size.width, height: size.height)
                     .position(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
@@ -45,7 +45,7 @@ struct StudioZoomFocusPad: View {
                 }
                 .stroke(KadrFill.stroke, lineWidth: 0.5)
 
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: KadrRadius.small, style: .continuous)
                     .stroke(Color.accentColor.opacity(0.5), lineWidth: 1)
                     .frame(width: viewport.width, height: viewport.height)
                     .position(x: viewportCenter.x, y: viewportCenter.y)

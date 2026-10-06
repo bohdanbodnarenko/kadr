@@ -143,7 +143,7 @@ private struct FocusPad: View {
         GeometryReader { geometry in
             let size = geometry.size
             ZStack {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .fill(KadrFill.hover)
                 Circle()
                     .fill(Color.accentColor)

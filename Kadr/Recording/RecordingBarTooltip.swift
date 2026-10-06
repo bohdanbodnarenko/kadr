@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// Positioned off the hovered control's measured frame, so it tracks a mode swap.
@@ -129,7 +130,7 @@ struct RecordingBarTooltipPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: KadrType.caption, weight: .medium))
                 .foregroundStyle(RecordingBarMetrics.activeTint)
                 .lineLimit(1)
                 .fixedSize()
@@ -140,11 +141,11 @@ struct RecordingBarTooltipPill: View {
         .padding(.horizontal, 9)
         .frame(height: RecordingBarMetrics.tooltipPillHeight)
         .kadrLiquidGlass(
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous),
+            in: RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous),
             interactive: false
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous)
                 .strokeBorder(RecordingBarMetrics.edge, lineWidth: 0.5)
         }
         .transition(.opacity)
@@ -160,13 +161,13 @@ struct RecordingBarKeycap: View {
 
     var body: some View {
         Text(key)
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .font(.system(size: KadrType.micro, weight: .semibold, design: .rounded))
             .foregroundStyle(RecordingBarMetrics.activeTint.opacity(0.75))
             .fixedSize()
             .padding(.horizontal, 5)
             .frame(minWidth: 18, minHeight: 16)
             .background {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: KadrRadius.small, style: .continuous)
                     .fill(RecordingBarMetrics.hoverFill)
             }
             .accessibilityHidden(true)

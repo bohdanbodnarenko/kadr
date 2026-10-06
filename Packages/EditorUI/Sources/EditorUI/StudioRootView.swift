@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -101,10 +102,10 @@ public struct StudioRootView: View {
                 .buttonStyle(.borderless)
                 .help(Text("Dismiss", bundle: .module))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+            .padding(.horizontal, KadrSpace.large)
+            .padding(.vertical, KadrSpace.medium)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
+            .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
             .shadow(radius: 6, y: 2)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
@@ -170,7 +171,7 @@ public struct StudioRootView: View {
             }
             .frame(minHeight: 36)
         }
-        .padding(12)
+        .padding(KadrSpace.large)
         .background(.bar)
         // The transport's keys are not declared here. ⌘K, ⌘I and ⌘E are menu commands and
         // Space and the arrows come through the window's responder chain

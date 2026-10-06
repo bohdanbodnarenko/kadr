@@ -210,10 +210,10 @@ struct QuickAccessStackView: View {
             VStack(spacing: 2) {
                 ForEach(edges, id: \.element.id) { index, _ in
                     let depth = corner.isBottom ? edges.count - index : index + 1
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                         .fill(.regularMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                                 .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
                         )
                         .frame(height: QuickAccessCardView.sliverHeight)

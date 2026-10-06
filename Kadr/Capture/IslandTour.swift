@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// One page of the island's first-open tour (docs/03 §1.4).
@@ -128,7 +129,7 @@ struct IslandTourView: View {
             .clipped()
             controls
         }
-        .padding(16)
+        .padding(KadrSpace.xl)
         .frame(width: 300)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tip \(model.index + 1) of \(model.steps.count)")

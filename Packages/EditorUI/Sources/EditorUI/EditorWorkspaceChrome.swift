@@ -67,10 +67,10 @@ struct EditorZoomControl: View {
             Button("200%") { session.setPercent(200) }
         } label: {
             Text(session.zoomToFit ? "Fit" : "\(session.zoomPercent)%")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: KadrType.body, weight: .medium))
                 .monospacedDigit()
                 .frame(minWidth: 38)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, KadrSpace.large)
                 .padding(.vertical, 7)
                 .contentShape(Capsule())
         }
@@ -90,10 +90,10 @@ struct EditorCanvasSizeBadge: View {
 
     var body: some View {
         Text("\(Int(size.width.rounded())) × \(Int(size.height.rounded())) px", bundle: .module)
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: KadrType.body, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, KadrSpace.large)
             .padding(.vertical, 7)
             .fixedSize()
             .editorFloatingCard(cornerRadius: 15)
@@ -166,7 +166,7 @@ private struct EditorCropBar: View {
             .help(Text("Aspect ratio", bundle: .module))
 
             Text(sizeText)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: KadrType.body, weight: .medium))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
                 // Wide enough for four-digit sides, so dragging a handle does not make the
@@ -183,8 +183,8 @@ private struct EditorCropBar: View {
                 .keyboardShortcut(.defaultAction)
                 .help(Text("Finish cropping (Return)", bundle: .module))
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 8)
+        .padding(.leading, KadrSpace.large)
+        .padding(.trailing, KadrSpace.medium)
         .padding(.vertical, 7)
         .fixedSize()
         .editorFloatingCard(cornerRadius: 22)

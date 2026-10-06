@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 
 /// The one-time popover above the first capture card (docs/03 §2, §8.2).
@@ -99,14 +100,14 @@ private struct QuickAccessCoachTipView: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16)
+        .padding(KadrSpace.xl)
         .frame(width: 300)
     }
 
     private func tip(symbol: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: symbol)
-                .font(.system(size: 13))
+                .font(.system(size: KadrType.title))
                 .foregroundStyle(.tint)
                 .frame(width: 18)
                 .accessibilityHidden(true)

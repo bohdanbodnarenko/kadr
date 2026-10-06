@@ -78,9 +78,9 @@ struct StudioZoomLane: View {
 
             if model.edit.zooms.isEmpty, suggestions.isEmpty, creating == nil, !isHovering {
                 Text("Click or drag here to add a zoom", bundle: .module)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: KadrType.micro, weight: .medium))
                     .foregroundStyle(.tertiary)
-                    .padding(.leading, 8)
+                    .padding(.leading, KadrSpace.medium)
                     .frame(height: height)
                     .allowsHitTesting(false)
             }
@@ -99,7 +99,7 @@ struct StudioZoomLane: View {
 
             if let creating {
                 let span = model.proposedZoomSpan(origin: creating.start, current: creating.end)
-                RoundedRectangle(cornerRadius: 3)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .fill(Color.orange.opacity(0.35))
                     .frame(width: max((span.high - span.low) * scale, 2), height: height)
                     .offset(x: span.low * scale)
@@ -200,11 +200,11 @@ struct StudioZoomLane: View {
         }
         .frame(width: width, height: height)
         .background(
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .fill(Color.orange.opacity(running ? (selected ? 0.92 : 0.58) : 0.22))
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 3)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .strokeBorder(Color.primary.opacity(dragging?.id == cue.id ? 0.7 : 0), lineWidth: 1)
         }
         .offset(x: span.lowerBound * scale)

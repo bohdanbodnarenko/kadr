@@ -70,9 +70,9 @@ struct StudioTransportBar: View {
                 model.addOrSelectZoom(at: model.playhead)
             } label: {
                 Label(String(localized: "Zoom", bundle: .module), systemImage: "plus.magnifyingglass")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: KadrType.body, weight: .medium))
                     .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, KadrSpace.small)
                     .frame(height: 24)
                     .background(Capsule().fill(Color.orange.opacity(0.14)))
                     .contentShape(Capsule())
@@ -152,7 +152,7 @@ struct StudioTransportBar: View {
             zoomMenuItems
         } label: {
             Label(String(localized: "Edit", bundle: .module), systemImage: "slider.horizontal.3")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: KadrType.body, weight: .medium))
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -188,7 +188,7 @@ struct StudioTransportBar: View {
                 }
             }
             Text(StudioClock.frames(model.edit.duration, frameRate: model.manifest.frameRate))
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .font(.system(size: KadrType.body, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
         .disabled(model.edit.duration <= 0)
@@ -200,7 +200,7 @@ struct StudioTransportBar: View {
         Rectangle()
             .fill(KadrFill.stroke)
             .frame(width: KadrFill.strokeWidth, height: 14)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, KadrSpace.small)
     }
 
     @ViewBuilder
@@ -265,9 +265,9 @@ struct StudioTransportBar: View {
 
     private func iconLabel(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: KadrType.body, weight: .medium))
             .frame(width: 26, height: 24)
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
     }
 
     private func icon(
@@ -299,7 +299,7 @@ private struct StudioSuggestedZoomsButton: View {
             model.addSuggestedZooms()
         } label: {
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: KadrType.body, weight: .medium))
                 .frame(width: 26, height: 24)
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
@@ -312,7 +312,7 @@ private struct StudioSuggestedZoomsButton: View {
                             .offset(x: 2, y: -2)
                     }
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
         }
         .buttonStyle(StudioTransportIconStyle())
         .disabled(count == 0)
@@ -331,7 +331,7 @@ private struct StudioPlayheadClockLabel: View {
 
     var body: some View {
         Text(StudioClock.frames(clock.time, frameRate: frameRate))
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .font(.system(size: KadrType.body, weight: .semibold).monospacedDigit())
     }
 }
 
@@ -348,7 +348,7 @@ private struct StudioPlayPauseButton: View {
             model.togglePlayback()
         } label: {
             Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: KadrType.body, weight: .bold))
                 .frame(width: 30, height: 30)
                 .background(Circle().fill(KadrFill.hover))
                 .contentShape(Circle())

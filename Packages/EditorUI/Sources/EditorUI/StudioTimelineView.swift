@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Foundation
 import StudioSession
 import SwiftUI
@@ -342,7 +343,7 @@ struct StudioTimelineView: View {
             || (model.selectedClip == nil && model.currentClipIndex == index)
         let width = max(clip.editedDuration * scale - 2, 3)
         return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: KadrRadius.small)
                 .fill(Color.accentColor.opacity(selected ? 0.55 : 0.28))
             ClipFilmstripLane(
                 url: model.session.screenURL,
@@ -351,17 +352,17 @@ struct StudioTimelineView: View {
                 height: clipHeight,
                 visible: laneWindow(index: index, scale: scale)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .clipShape(RoundedRectangle(cornerRadius: KadrRadius.small))
             .opacity(0.9)
             if selected {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: KadrRadius.small)
                     .strokeBorder(Color.accentColor, lineWidth: 1.5)
             }
             if clip.speed != 1 {
                 Text(speedLabel(clip.speed))
                     .font(.caption.monospacedDigit().weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, KadrSpace.small)
+                    .padding(.vertical, KadrSpace.xxs)
                     .foregroundStyle(.white)
                     .background(.black.opacity(0.45), in: Capsule())
                     .padding(.leading, 10)
@@ -456,7 +457,7 @@ struct StudioTimelineRuler: View {
                             .fill(Color.secondary.opacity(0.4))
                             .frame(width: 1, height: 4)
                         Text(StudioTimelineView.tickLabel(time, step: step))
-                            .font(.system(size: 10).monospacedDigit())
+                            .font(.system(size: KadrType.micro).monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     .fixedSize()

@@ -1,3 +1,4 @@
+import ControlKit
 import StudioSession
 import SwiftUI
 
@@ -59,7 +60,7 @@ struct StudioZoomTargetOverlay: View {
     }
 
     private func frame(_ target: CGRect, magnification: Double) -> some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
+        RoundedRectangle(cornerRadius: KadrRadius.small, style: .continuous)
             .strokeBorder(.white, lineWidth: 1.5)
             .frame(width: target.width, height: target.height)
             .position(x: target.midX, y: target.midY)
@@ -67,8 +68,8 @@ struct StudioZoomTargetOverlay: View {
                 Text(StudioMultiplier.text(magnification))
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, KadrSpace.small)
+                    .padding(.vertical, KadrSpace.xxs)
                     .background(.black.opacity(0.55), in: Capsule())
                     .position(x: target.midX, y: max(target.minY - 14, 12))
             }

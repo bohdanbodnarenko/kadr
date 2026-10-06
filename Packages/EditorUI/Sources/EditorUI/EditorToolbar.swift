@@ -174,8 +174,11 @@ private struct EditorToolGroup: View {
                 }
             }
         }
-        .padding(2)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(KadrSpace.xxs)
+        .background(
+            Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: KadrRadius.large, style: .continuous)
+        )
     }
 }
 
@@ -193,11 +196,11 @@ struct EditorToolbarButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: KadrType.title, weight: .medium))
                 .foregroundStyle(isOn ? Color.accentColor : Color.primary)
                 .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(fill))
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous).fill(fill))
+                .contentShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.35)
@@ -220,6 +223,6 @@ private struct EditorToolbarDivider: View {
         Rectangle()
             .fill(Color(nsColor: .separatorColor))
             .frame(width: 1, height: 18)
-            .padding(.horizontal, 2)
+            .padding(.horizontal, KadrSpace.xxs)
     }
 }

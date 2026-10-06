@@ -29,10 +29,10 @@ struct StudioFailureBanner: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
+        .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
         .shadow(radius: 6, y: 2)
         .padding(.horizontal, 10)
         .accessibilityElement(children: .combine)

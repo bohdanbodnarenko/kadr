@@ -227,11 +227,11 @@ struct RecordingBarCapsuleButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: KadrType.body, weight: .semibold))
             .foregroundStyle(isDestructive ? Color.white : RecordingBarMetrics.activeTint)
             .lineLimit(1)
             .fixedSize()
-            .padding(.horizontal, 12)
+            .padding(.horizontal, KadrSpace.large)
             .frame(height: 28)
             .background {
                 Capsule().fill(isDestructive ? RecordingBarMetrics.recordTint : RecordingBarMetrics.hoverFill)

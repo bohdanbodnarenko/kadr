@@ -57,7 +57,7 @@ struct QuickAccessPeekTabView: View {
                             Image(systemName: corner.isBottom ? "chevron.up" : "chevron.down")
                                 .font(KadrType.font(KadrType.micro, weight: .bold))
                         }
-                        .font(.system(size: 11))
+                        .font(.system(size: KadrType.caption))
                         .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
@@ -70,7 +70,7 @@ struct QuickAccessPeekTabView: View {
             .help("Show recent captures")
 
             PeekDismissButton(action: onDismissAll)
-                .padding(.trailing, 8)
+                .padding(.trailing, KadrSpace.medium)
         }
         // Its own height, not its container's: the button's click target asks for all the
         // height it can get, and in the full-screen overlay panel nothing else bounds it.
@@ -112,9 +112,9 @@ struct QuickAccessPeekTabView: View {
                     showsPlayBadge: false
                 )
                 .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.4), lineWidth: 0.5)
                 )
                 .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
@@ -136,7 +136,7 @@ private struct PeekDismissButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: KadrType.micro, weight: .bold))
                 .foregroundStyle(isHovering ? Color.primary : Color.secondary)
                 .frame(width: 26, height: 26)
                 .background(Circle().fill(Color.primary.opacity(isHovering ? 0.1 : 0)))

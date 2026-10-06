@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import Shared
 import SwiftUI
 
@@ -128,13 +129,13 @@ public struct EditorRootView: View {
                 onChooseAnotherLocation: onChooseExportLocation,
                 onFind: { Task { await runFind() } }
             )
-            .padding(.top, 12)
-            .padding(.horizontal, 16)
+            .padding(.top, KadrSpace.large)
+            .padding(.horizontal, KadrSpace.xl)
         }
         .overlay(alignment: .bottomLeading) {
             EditorZoomControl(session: canvasSession)
-                .padding(.leading, 16)
-                .padding(.bottom, 16)
+                .padding(.leading, KadrSpace.xl)
+                .padding(.bottom, KadrSpace.xl)
         }
         .overlay(alignment: .bottom) {
             EditorCropChrome(model: model)

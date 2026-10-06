@@ -1,3 +1,4 @@
+import ControlKit
 import MediaExport
 import StudioRender
 import SwiftUI
@@ -94,9 +95,9 @@ struct StudioExportOptionsView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .controlSize(.small)
-            .padding(.top, 4)
+            .padding(.top, KadrSpace.xs)
         }
-        .padding(16)
+        .padding(KadrSpace.xl)
         .frame(width: 300)
     }
 

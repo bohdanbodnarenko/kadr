@@ -1,3 +1,4 @@
+import ControlKit
 import RecordingCore
 import SettingsKit
 import SwiftUI
@@ -20,8 +21,8 @@ struct RecordingPreRollBar: View {
                     .font(.system(size: 16, weight: .medium, design: .monospaced).monospacedDigit())
                     .foregroundStyle(RecordingBarMetrics.activeTint)
                     .frame(minWidth: 28, alignment: .center)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 2)
+                    .padding(.leading, KadrSpace.medium)
+                    .padding(.trailing, KadrSpace.xxs)
                     .frame(height: RecordingBarMetrics.controlSize)
                     .contentTransition(.numericText(countsDown: true))
                     .kadrAnimation(.snappy, value: preRoll.remaining)

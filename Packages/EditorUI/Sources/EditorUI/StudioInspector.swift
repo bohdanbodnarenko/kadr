@@ -65,8 +65,8 @@ struct StudioInspector: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .background(.bar)
     }
 

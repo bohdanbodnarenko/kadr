@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import HistoryKit
 import StudioSession
 import SwiftUI
@@ -194,7 +195,7 @@ struct HistoryView: View {
                                 }
                             }
                         }
-                        .padding(16)
+                        .padding(KadrSpace.xl)
                     }
                 }
             }
@@ -351,8 +352,8 @@ struct HistoryView: View {
                 .foregroundStyle(.secondary)
         }
         .font(.callout)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.xl)
+        .padding(.vertical, KadrSpace.medium)
     }
 
     func deleteSelected() async {

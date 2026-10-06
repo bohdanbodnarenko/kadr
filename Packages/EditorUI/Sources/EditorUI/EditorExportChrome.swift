@@ -42,8 +42,8 @@ struct EditorExportChrome: View {
                 .controlSize(.small)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .editorFloatingCard()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(action.progressTitle)
@@ -81,8 +81,8 @@ struct EditorExportChrome: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .editorFloatingCard()
     }
 
@@ -102,8 +102,8 @@ struct EditorExportChrome: View {
             }
             .buttonStyle(.borderless)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .editorFloatingCard()
         .task {
             try? await Task.sleep(for: .seconds(4))
@@ -135,8 +135,8 @@ struct EditorExportChrome: View {
             .buttonStyle(.borderless)
             .accessibilityLabel(String(localized: "Dismiss", bundle: .module))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .editorFloatingCard()
         .help(String(localized: "Unlock with ⇧⌘L or the lock in the toolbar", bundle: .module))
         .onAppear {
@@ -154,8 +154,8 @@ struct EditorExportChrome: View {
                 .font(.callout)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
         .editorFloatingCard()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text("Removing the background", bundle: .module))

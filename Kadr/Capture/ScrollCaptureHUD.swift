@@ -130,9 +130,9 @@ struct ScrollCaptureHUDView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: KadrRadius.medium))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: KadrRadius.medium)
                             .strokeBorder(KadrFill.stroke)
                     )
             }
@@ -153,9 +153,9 @@ struct ScrollCaptureHUDView: View {
                     .disabled(isStitching)
             }
         }
-        .padding(12)
+        .padding(KadrSpace.large)
         .frame(width: 240)
-        .kadrLiquidGlass(in: RoundedRectangle(cornerRadius: 12, style: .continuous), interactive: true)
+        .kadrLiquidGlass(in: RoundedRectangle(cornerRadius: KadrRadius.panel, style: .continuous), interactive: true)
     }
 
     /// Hands the scrolling to Kadr, and back again.
@@ -190,7 +190,7 @@ struct ScrollCaptureHUDView: View {
                 Text("AUTO")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, KadrSpace.xxs)
                     .background(Color.accentColor.opacity(0.2), in: Capsule())
             }
         }

@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// A collapsible inspector section that remembers whether it was open (docs/14 UX-30).
@@ -85,12 +86,12 @@ struct EditorInspectorSection<Content: View, Accessory: View>: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)
-                .padding(.leading, 4)
+                .padding(.leading, KadrSpace.xs)
             }
 
             Button(action: toggleOpen) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: KadrType.micro, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isOpen ? 90 : 0))
                     .frame(width: 20, height: 24)

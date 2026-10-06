@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import Shared
 import SwiftUI
@@ -180,7 +181,7 @@ struct CaptureRegionStageView: View {
             Button(action: start) {
                 Label(purpose.title, systemImage: purpose.symbol)
                     .font(.system(size: 14, weight: .semibold))
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, KadrSpace.small)
                     .padding(.vertical, 3)
             }
             .buttonStyle(.borderedProminent)
@@ -191,7 +192,7 @@ struct CaptureRegionStageView: View {
             if let startAuto {
                 Button(action: startAuto) {
                     Label("Auto Scroll to the End", systemImage: "play.circle")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: KadrType.body, weight: .medium))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -200,23 +201,23 @@ struct CaptureRegionStageView: View {
             }
 
             Text("\(Int(pixelSize.width.rounded())) × \(Int(pixelSize.height.rounded())) px")
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .font(.system(size: KadrType.caption, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
                 Text(purpose.hint)
-                    .font(.system(size: 11))
+                    .font(.system(size: KadrType.caption))
                     .foregroundStyle(.secondary)
                 Button(purpose.cancelTitle, action: cancel)
                     .buttonStyle(.link)
-                    .font(.system(size: 11))
+                    .font(.system(size: KadrType.caption))
             }
         }
         .fixedSize()
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .kadrLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(12)
+        .padding(KadrSpace.large)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(purpose.title)
     }

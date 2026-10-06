@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import OverlayKit
 import Shared
 import SwiftUI
@@ -202,9 +203,9 @@ private struct TextCaptureToastView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
-        .padding(12)
+        .padding(KadrSpace.large)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.panel))
     }
 
     private func copy(_ string: String) {

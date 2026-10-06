@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// A titled inspector section that is always open — the context the user is working in.
@@ -266,7 +267,7 @@ private struct InspectorButtonBody: View {
             .font(.inspectorValue)
             .lineLimit(1)
             .foregroundStyle(isProminent ? Color.white : Color.primary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, KadrSpace.large)
             .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: InspectorMetrics.controlHeight)
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(isProminent ? Color.clear : InspectorControlPalette.border, lineWidth: 0.5))
@@ -297,7 +298,7 @@ struct InspectorIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: KadrType.caption, weight: .semibold))
                 .foregroundStyle(isHovering && isEnabled ? Color.primary : Color.secondary)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(isHovering && isEnabled ? InspectorControlPalette.hoverFill : .clear))
