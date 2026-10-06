@@ -107,6 +107,9 @@ extension StudioInspector {
                         ProgressView()
                             .controlSize(.small)
                     }
+                    // Elapsed time as well as the bar: an engine that cannot say how far it
+                    // has read still shows that it is working (docs/18 STU-9).
+                    TranscriptionElapsed()
                     Button(String(localized: "Cancel", bundle: .module)) { model.cancelTidySpeech() }
                         .buttonStyle(.link)
                 }
