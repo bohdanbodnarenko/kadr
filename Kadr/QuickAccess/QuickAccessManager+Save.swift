@@ -161,6 +161,11 @@ extension QuickAccessManager {
             items[index].fileURL = moved
             items[index].isStaged = false
         }
+        // Save As and moves out of staging alike: History follows the file, so Reveal and
+        // Pin from History find it where the user put it (docs/18 OUT-6).
+        if moved != original {
+            history?.noteOriginal(moved)
+        }
         return moved
     }
 

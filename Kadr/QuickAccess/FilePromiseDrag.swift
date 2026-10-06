@@ -86,16 +86,32 @@ final class FilePromiseDragController: NSObject, NSDraggingSource {
     private var inFlight: FilePromisePayload?
 
     /// Starts a promise drag from `view`, using `event` as the drag's origin.
-    func beginDrag(from view: NSView, event: NSEvent, payload: FilePromisePayload, image: NSImage?) {
+    ///
+    /// - Parameter companions: further files carried in the same drag, as Finder does with
+    ///   a multiple selection (docs/18 OUT-8). Only `payload` reports the outcome.
+    func beginDrag(
+        from view: NSView,
+        event: NSEvent,
+        payload: FilePromisePayload,
+        image: NSImage?,
+        companions: [FilePromisePayload] = []
+    ) {
         inFlight = payload
         Self.activeSources.append(self)
 
-        let provider = KadrFilePromiseProvider(payload: payload)
-        let item = NSDraggingItem(pasteboardWriter: provider)
         let size = image?.size ?? CGSize(width: 64, height: 64)
-        item.setDraggingFrame(view.bounds.centred(size), contents: image)
+        let frame = view.bounds.centred(size)
+        let lead = NSDraggingItem(pasteboardWriter: KadrFilePromiseProvider(payload: payload))
+        lead.setDraggingFrame(frame, contents: image)
+        let companionItems = companions.enumerated().map { index, companion in
+            let item = NSDraggingItem(pasteboardWriter: KadrFilePromiseProvider(payload: companion))
+            // Fanned out behind the lead so the drag reads as a stack; AppKit badges the count.
+            let offset = CGFloat(min(index + 1, 4)) * 4
+            item.setDraggingFrame(frame.offsetBy(dx: offset, dy: -offset), contents: image)
+            return item
+        }
 
-        view.beginDraggingSession(with: [item], event: event, source: self)
+        view.beginDraggingSession(with: [lead] + companionItems, event: event, source: self)
     }
 
     // MARK: - NSDraggingSource
@@ -224,6 +240,8 @@ struct FilePromiseDragView: NSViewRepresentable {
     var onDoubleTap: @MainActor () -> Void = {}
     /// Fired when the drag threshold is crossed, so auto-dismiss can pause.
     var onDragBegan: @MainActor () -> Void = {}
+    /// Other files that travel with this one, such as the rest of a History selection.
+    var companions: @MainActor () -> [FilePromisePayload] = { [] }
 
     func makeNSView(context: Context) -> DragSourceView {
         let view = DragSourceView()
@@ -255,7 +273,8 @@ struct FilePromiseDragView: NSViewRepresentable {
                 from: view,
                 event: event,
                 payload: owner.payload(),
-                image: owner.dragImage()
+                image: owner.dragImage(),
+                companions: owner.companions()
             )
         }
     }

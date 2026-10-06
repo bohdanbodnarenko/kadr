@@ -7,11 +7,13 @@ public extension HistoryStore {
     /// saved from staging, or moved by Save As. Nil clears it.
     func setOriginalPath(_ url: URL?, forContentHash contentHash: String) async throws {
         let path = url?.standardizedFileURL.path
+        let bookmark = url.flatMap { try? $0.bookmarkData() }
         let records = try await read { db in
             try HistoryRecord.filter(sql: "content_hash = ?", arguments: [contentHash]).fetchAll(db)
         }
-        for var record in records where record.originalPath != path {
+        for var record in records where record.originalPath != path || record.originalBookmark != bookmark {
             record.originalPath = path
+            record.originalBookmark = bookmark
             let persisted = record
             try HistorySidecar.write(persisted, to: layout.sidecarURL(id: persisted.id))
             try await write { db in
@@ -20,15 +22,32 @@ public extension HistoryStore {
         }
     }
 
-    /// The user's own file for `record`, when it is still where Kadr last saw it and still
-    /// the same size; otherwise nil, and callers use the library copy.
+    /// The user's own file for `record`: where Kadr last saw it, or where its bookmark says
+    /// it went after a move or rename, as long as it is still the same size. Otherwise nil,
+    /// and callers use the library copy.
     nonisolated func originalFile(for record: HistoryRecord) -> URL? {
-        guard let path = record.originalPath else { return nil }
-        let url = URL(fileURLWithPath: path)
-        guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
-              Int64(size) == record.byteSize
-        else { return nil }
-        return url
+        Self.originalFile(path: record.originalPath, bookmark: record.originalBookmark, byteSize: record.byteSize)
+    }
+
+    internal nonisolated static func originalFile(path: String?, bookmark: Data?, byteSize: Int64) -> URL? {
+        func matches(_ url: URL) -> Bool {
+            guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else { return false }
+            return Int64(size) == byteSize
+        }
+        if let path {
+            let url = URL(fileURLWithPath: path)
+            if matches(url) {
+                return url
+            }
+        }
+        guard let bookmark else { return nil }
+        var isStale = false
+        guard let moved = try? URL(
+            resolvingBookmarkData: bookmark,
+            options: [.withoutUI, .withoutMounting],
+            bookmarkDataIsStale: &isStale
+        ), !moved.path.contains("/.Trash/"), matches(moved) else { return nil }
+        return moved
     }
 
     /// Moves a library file to the Trash under `name` rather than its content hash.

@@ -382,7 +382,7 @@
     "Area" : {
 
     },
-    "Ask where to save" : {
+    "Arrange with the Keyboard" : {
 
     },
     "Ask where to save from a card" : {
@@ -752,9 +752,6 @@
     "Default Camera" : {
 
     },
-    "Default folder" : {
-
-    },
     "Delete" : {
 
     },
@@ -858,6 +855,12 @@
 
     },
     "Everything captured so far was saved. %@" : {
+
+    },
+    "Example" : {
+
+    },
+    "Example file name: %@" : {
 
     },
     "Export" : {
@@ -1095,6 +1098,9 @@
     "Kadr Help" : {
 
     },
+    "Kadr asks where to save each screenshot" : {
+
+    },
     "Kadr blocked %@, which you didn't allow" : {
 
     },
@@ -1181,9 +1187,6 @@
 
     },
     "Keyboard Shortcuts" : {
-
-    },
-    "Keyboard arrangement" : {
 
     },
     "Keyboard shortcuts" : {
@@ -1503,7 +1506,7 @@
     "Pins & Cards" : {
 
     },
-    "Placeholders: {app}, {date}, {time}" : {
+    "Placeholders: {app}, {date}, {time}, {w}, {h}, {size}, {counter}" : {
 
     },
     "Play a sound when capturing" : {
@@ -1522,6 +1525,9 @@
 
     },
     "Previous step" : {
+
+    },
+    "Quick Access" : {
 
     },
     "Quick Look" : {
@@ -1770,6 +1776,12 @@
     "Screen access is off. Practice works without it, and the menu bar icon is always there." : {
 
     },
+    "Screenshots save to %@" : {
+
+    },
+    "Screenshots stay on their card until you save them" : {
+
+    },
     "Scroll Myself" : {
 
     },
@@ -1828,6 +1840,9 @@
 
     },
     "Self-timer" : {
+
+    },
+    "Services" : {
 
     },
     "Set Desktop Icons" : {
