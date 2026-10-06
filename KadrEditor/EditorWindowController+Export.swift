@@ -279,7 +279,13 @@ extension EditorWindowController {
         let operation = NSPrintOperation(view: view, printInfo: printInfo)
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
-        operation.run()
+        // A sheet on this window, not an app-modal panel: printing one capture should not
+        // freeze every other editor window (docs/18 §4.1 P3).
+        if let window {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
     }
 
     func pinImage(_ image: CGImage) {
@@ -317,8 +323,16 @@ extension EditorWindowController {
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.image]
         panel.prompt = String(localized: "Insert")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        insertImportedImage(from: url)
+        // A sheet, so other editor windows stay usable while this one picks a file.
+        guard let window else {
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            insertImportedImage(from: url)
+            return
+        }
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.insertImportedImage(from: url)
+        }
     }
 
     func insertImageFromClipboard() {
