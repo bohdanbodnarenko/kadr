@@ -24,7 +24,9 @@ public enum StudioColorSpace: String, Sendable, Codable, CaseIterable {
     /// (docs/17 T-STU-12): untagged, QuickTime, browsers and Slack each guessed differently.
     var writerColorProperties: [String: String] {
         [
-            AVVideoColorPrimariesKey: self == .displayP3 ? AVVideoColorPrimaries_P3_D65 : AVVideoColorPrimaries_ITU_R_709_2,
+            AVVideoColorPrimariesKey: self == .displayP3
+                ? AVVideoColorPrimaries_P3_D65
+                : AVVideoColorPrimaries_ITU_R_709_2,
             AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
             AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
         ]

@@ -28,7 +28,7 @@ struct StudioTimelineWindowTests {
 
     @Test("A windowed lane keeps natural tile width however long it is")
     func windowedCount() {
-        #expect(StudioFilmstrip.tileCount(forWidth: 360_000, windowed: true) == 10_000)
+        #expect(StudioFilmstrip.tileCount(forWidth: 360_000, windowed: true) == 10000)
         #expect(StudioFilmstrip.tileCount(forWidth: 360_000) == StudioFilmstrip.maximumTiles)
     }
 }

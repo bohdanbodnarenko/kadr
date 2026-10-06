@@ -303,28 +303,6 @@ final class StudioPlaybackController {
         }
     }
 
-    /// Plays backwards at `speed` (J, docs/18 T-STU-11), when the item can.
-    ///
-    /// - Returns: false when the item is not ready or cannot play in reverse, so the caller
-    ///   falls back to stepping back. AVFoundation plays reverse silently.
-    @discardableResult
-    func playReverse(speed: Float) -> Bool {
-        guard let model, model.edit.duration > 0,
-              let item = player?.currentItem, item.canPlayReverse
-        else { return false }
-        rate = -max(abs(speed), 1)
-        guard model.playhead > 0.05 else { return true }
-        if model.isPlaying {
-            player?.rate = rate
-            return true
-        }
-        model.isPlaying = true
-        skim(at: nil)
-        update()
-        startRolling()
-        return true
-    }
-
     func play() {
         guard let model, !model.isPlaying, model.edit.duration > 0 else { return }
         // Playing from the end means playing from the start. Anything else leaves the user
@@ -492,5 +470,29 @@ final class StudioPlaybackController {
 
     static func time(_ seconds: TimeInterval) -> CMTime {
         CMTime(seconds: max(seconds, 0), preferredTimescale: 600)
+    }
+}
+
+extension StudioPlaybackController {
+    /// Plays backwards at `speed` (J, docs/18 T-STU-11), when the item can.
+    ///
+    /// - Returns: false when the item is not ready or cannot play in reverse, so the caller
+    ///   falls back to stepping back. AVFoundation plays reverse silently.
+    @discardableResult
+    func playReverse(speed: Float) -> Bool {
+        guard let model, model.edit.duration > 0,
+              let item = player?.currentItem, item.canPlayReverse
+        else { return false }
+        rate = -max(abs(speed), 1)
+        guard model.playhead > 0.05 else { return true }
+        if model.isPlaying {
+            player?.rate = rate
+            return true
+        }
+        model.isPlaying = true
+        skim(at: nil)
+        update()
+        startRolling()
+        return true
     }
 }

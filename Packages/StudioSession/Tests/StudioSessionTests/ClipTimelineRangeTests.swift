@@ -11,19 +11,26 @@ struct ClipTimelineRangeTests {
         Clip(sourceStart: 10, sourceDuration: 4, speed: 2)
     ])
 
+    /// One kept clip: where it starts in the source, how much source, and at what speed.
+    struct Kept: Sendable {
+        let start: TimeInterval
+        let duration: TimeInterval
+        let speed: Double
+    }
+
     @Test("A range keeps the overlapping source, at each clip's speed", arguments: [
-        (1.0 ... 3.0, [(1.0, 2.0, 1.0)]),
-        (3.0 ... 5.0, [(3.0, 1.0, 1.0), (10.0, 2.0, 2.0)]),
-        (4.5 ... 6.0, [(11.0, 3.0, 2.0)]),
-        (0.0 ... 6.0, [(0.0, 4.0, 1.0), (10.0, 4.0, 2.0)])
+        (1.0 ... 3.0, [Kept(start: 1, duration: 2, speed: 1)]),
+        (3.0 ... 5.0, [Kept(start: 3, duration: 1, speed: 1), Kept(start: 10, duration: 2, speed: 2)]),
+        (4.5 ... 6.0, [Kept(start: 11, duration: 3, speed: 2)]),
+        (0.0 ... 6.0, [Kept(start: 0, duration: 4, speed: 1), Kept(start: 10, duration: 4, speed: 2)])
     ])
-    func keepsRange(range: ClosedRange<TimeInterval>, expected: [(Double, Double, Double)]) {
+    func keepsRange(range: ClosedRange<TimeInterval>, expected: [Kept]) {
         let kept = timeline.keepingEdited(range)
         #expect(kept.clips.count == expected.count)
         for (clip, want) in zip(kept.clips, expected) {
-            #expect(abs(clip.sourceStart - want.0) < 1e-9)
-            #expect(abs(clip.sourceDuration - want.1) < 1e-9)
-            #expect(clip.speed == want.2)
+            #expect(abs(clip.sourceStart - want.start) < 1e-9)
+            #expect(abs(clip.sourceDuration - want.duration) < 1e-9)
+            #expect(clip.speed == want.speed)
         }
         #expect(abs(kept.editedDuration - (range.upperBound - range.lowerBound)) < 1e-9)
     }

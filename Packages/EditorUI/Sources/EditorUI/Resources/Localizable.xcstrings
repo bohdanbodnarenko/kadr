@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ to %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ to %2$@"
+          }
+        }
+      }
+    },
     "%@. %@" : {
       "localizations" : {
         "en" : {
@@ -163,9 +173,6 @@
     "Audio and speech" : {
 
     },
-    "Audio stays in sync. Past 8× nothing on screen is readable, so that is the cap." : {
-
-    },
     "Backdrop" : {
 
     },
@@ -288,6 +295,15 @@
 
     },
     "Corner" : {
+
+    },
+    "Correct" : {
+
+    },
+    "Correct Word" : {
+
+    },
+    "Correct Word…" : {
 
     },
     "Covers" : {
@@ -473,6 +489,12 @@
     "From" : {
 
     },
+    "From 0.25× slow motion to 8×. Audio stays in sync and keeps its pitch." : {
+
+    },
+    "Heard as “%@”. Captions and exports use the correction." : {
+
+    },
     "Hero" : {
 
     },
@@ -509,6 +531,9 @@
     "Keep this aim and go back to the transport (↩)" : {
 
     },
+    "Keeps a wide-color display's colors. Older players may show them a little dull." : {
+
+    },
     "Keys pressed during the recording appear as they are typed." : {
 
     },
@@ -537,6 +562,9 @@
 
     },
     "Make a transcript for captions, without proposing any cuts" : {
+
+    },
+    "Marked range" : {
 
     },
     "Middle" : {
@@ -611,6 +639,16 @@
     "Obscure Center" : {
 
     },
+    "Only the marked range (%@–%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Only the marked range (%1$@–%2$@)"
+          }
+        }
+      }
+    },
     "Open Dictation Settings" : {
 
     },
@@ -641,7 +679,7 @@
     "Play This Zoom" : {
 
     },
-    "Play this clip faster" : {
+    "Play this clip slower or faster" : {
 
     },
     "Play this zoom from just before it starts (Return)" : {
@@ -941,6 +979,9 @@
     "Tilt Shift" : {
 
     },
+    "Time elapsed" : {
+
+    },
     "Timeline skim preview" : {
 
     },
@@ -995,7 +1036,13 @@
     "Where the sharp area sits" : {
 
     },
+    "Wider color (Display P3)" : {
+
+    },
     "Width" : {
+
+    },
+    "Word" : {
 
     },
     "Zoom" : {

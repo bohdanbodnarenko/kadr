@@ -181,7 +181,9 @@ struct StudioTimelineView: View {
                     let window = zoom > 1
                         ? StudioTimelineWindow.visibleRange(origin: leading, viewportWidth: viewport)
                         : nil
-                    if window != visibleWindow { visibleWindow = window }
+                    if window != visibleWindow {
+                        visibleWindow = window
+                    }
                 }
                 .onChange(of: zoom) {
                     if zoom <= 1 {
@@ -325,6 +327,14 @@ struct StudioTimelineView: View {
         }
     }
 
+    /// The visible window in one clip lane's own coordinates (docs/18 STU-15).
+    private func laneWindow(index: Int, scale: CGFloat) -> ClosedRange<CGFloat>? {
+        visibleWindow.map { window in
+            let laneX = model.editedStart(ofClipAt: index) * scale + CGFloat(index) * 2
+            return (window.lowerBound - laneX) ... (window.upperBound - laneX)
+        }
+    }
+
     private func clipLane(_ clip: Clip, index: Int, scale: CGFloat) -> some View {
         // `currentClipIndex` rather than `clipIndex(at: playhead)`: it changes when the
         // playhead crosses a cut, not on every tick.
@@ -339,10 +349,7 @@ struct StudioTimelineView: View {
                 clip: clip,
                 width: width,
                 height: clipHeight,
-                visible: visibleWindow.map { window in
-                    let laneX = model.editedStart(ofClipAt: index) * scale + CGFloat(index) * 2
-                    return (window.lowerBound - laneX) ... (window.upperBound - laneX)
-                }
+                visible: laneWindow(index: index, scale: scale)
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .opacity(0.9)

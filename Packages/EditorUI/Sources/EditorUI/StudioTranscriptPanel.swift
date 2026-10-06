@@ -43,7 +43,11 @@ struct StudioTranscriptPanel: View {
         .padding(10)
         .alert(
             Text("Correct Word", bundle: .module),
-            isPresented: Binding(get: { correcting != nil }, set: { if !$0 { correcting = nil } }),
+            isPresented: Binding(get: { correcting != nil }, set: {
+                if !$0 {
+                    correcting = nil
+                }
+            }),
             presenting: correcting
         ) { word in
             TextField(String(localized: "Word", bundle: .module), text: $correctionDraft)

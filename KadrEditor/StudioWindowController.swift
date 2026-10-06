@@ -218,19 +218,7 @@ final class StudioWindowController: NSResponder, NSWindowDelegate, NSMenuItemVal
         ) else {
             return false
         }
-        switch key {
-        case .togglePlayback: model.togglePlayback()
-        case let .step(frames): model.step(frames: frames)
-        case let .skip(seconds): model.step(seconds: seconds)
-        case .shuttleReverse: model.shuttle(.reverse)
-        case .shuttleStop: model.shuttle(.stop)
-        case .shuttleForward: model.shuttle(.forward)
-        case .seekToStart: model.seekToStart()
-        case .seekToEnd: model.seekToEnd()
-        case .markIn: model.markIn()
-        case .markOut: model.markOut()
-        case .clearMarks: model.clearMarks()
-        }
+        model.perform(key)
         return true
     }
 
