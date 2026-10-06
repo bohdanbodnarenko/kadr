@@ -34,7 +34,8 @@ extension AppDelegate {
         desktopHygiene.setUserHide(false)
         desktopHygiene.prepareForTermination()
 
-        for editor in NSRunningApplication.runningApplications(withBundleIdentifier: "com.bohdanbodnarenko.kadr.Editor") {
+        let editors = NSRunningApplication.runningApplications(withBundleIdentifier: "com.bohdanbodnarenko.kadr.Editor")
+        for editor in editors {
             editor.terminate()
         }
         _ = CLIInstaller().uninstall()
@@ -49,7 +50,10 @@ extension AppDelegate {
                 .appendingPathComponent("Kadr", isDirectory: true),
             fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first?
                 .appendingPathComponent("com.bohdanbodnarenko.kadr", isDirectory: true),
-            library?.appendingPathComponent("Saved Application State/com.bohdanbodnarenko.kadr.savedState", isDirectory: true),
+            library?.appendingPathComponent(
+                "Saved Application State/com.bohdanbodnarenko.kadr.savedState",
+                isDirectory: true
+            ),
             library?.appendingPathComponent(
                 "Saved Application State/com.bohdanbodnarenko.kadr.Editor.savedState",
                 isDirectory: true

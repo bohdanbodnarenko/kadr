@@ -9,7 +9,8 @@ import Testing
 @Suite("Teleprompter composer")
 struct TeleprompterComposerTests {
     private func settings() -> AppSettings {
-        let suite = UserDefaults(suiteName: "com.bohdanbodnarenko.kadr.tests.teleprompter-composer.\(UUID().uuidString)")
+        let name = "com.bohdanbodnarenko.kadr.tests.teleprompter-composer.\(UUID().uuidString)"
+        let suite = UserDefaults(suiteName: name)
         return AppSettings(store: suite ?? .standard)
     }
 
