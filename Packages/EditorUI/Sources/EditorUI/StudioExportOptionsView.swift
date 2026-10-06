@@ -53,6 +53,11 @@ struct StudioExportOptionsView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
 
+                Toggle(String(localized: "Wider color (Display P3)", bundle: .module), isOn: $model.exportSettings.widerColor)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .help(Text("Keeps a wide-color display's colors. Older players may show them a little dull.", bundle: .module))
+
                 Text(model.exportSettings.sizePreset.hint)
                     .font(.caption)
                     .foregroundStyle(.secondary)

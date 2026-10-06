@@ -149,6 +149,9 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
     public var compresses: Bool
     public var gifWidth: GIFWidth
     public var gifFrameRate: GIFFrameRate
+    /// Write Display P3 instead of sRGB, keeping a wide-colour display's colours
+    /// (docs/18 Phase 4). Off by default: sRGB is what every player everywhere shows right.
+    public var widerColor = false
 
     public enum FrameRate: String, CaseIterable, Sendable, Codable, Identifiable {
         case source = "Source"
@@ -216,7 +219,7 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case quality, codec, resolution, container, includeAudio, frameRate, compresses
-        case gifWidth, gifFrameRate
+        case gifWidth, gifFrameRate, widerColor
     }
 
     /// Decodes a choice remembered before `compresses` existed, rather than throwing it
@@ -238,6 +241,7 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
         }
         gifWidth = try container.decodeIfPresent(GIFWidth.self, forKey: .gifWidth) ?? .large
         gifFrameRate = try container.decodeIfPresent(GIFFrameRate.self, forKey: .gifFrameRate) ?? .smooth
+        widerColor = try container.decodeIfPresent(Bool.self, forKey: .widerColor) ?? false
     }
 
     /// Size against quality, as one choice (docs/18 STU-13).
@@ -305,7 +309,9 @@ public struct StudioExportSettings: Sendable, Hashable, Codable {
             maxLongestEdge: maxLongestEdge,
             targetQuality: usesCompression ? quality.targetQuality : nil,
             // 96 kb/s AAC is transparent for narration; the default 128 stays otherwise.
-            audioBitRate: usesCompression ? 96000 : nil
+            audioBitRate: usesCompression ? 96000 : nil,
+            // A GIF is quantised to a palette afterwards; wider colour buys it nothing.
+            colorSpace: widerColor && container != .gif ? .displayP3 : .sRGB
         )
     }
 

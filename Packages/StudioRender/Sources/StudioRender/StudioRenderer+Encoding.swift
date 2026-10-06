@@ -31,16 +31,6 @@ extension StudioRenderer {
         return compression
     }
 
-    /// Tagged BT.709, the HD standard every player assumes for untagged video anyway
-    /// (docs/17 T-STU-12). Untagged, players guess — QuickTime, browsers and Slack guessed
-    /// differently — so the same export looked different depending on where it was
-    /// opened. HDR sources are not tone-mapped yet; that needs a device check.
-    static let colorProperties: [String: String] = [
-        AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
-        AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
-        AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
-    ]
-
     /// A bit rate for a size and a frame rate.
     ///
     /// Roughly 0.1 bits per pixel per frame, which is where HEVC stops showing blocking on

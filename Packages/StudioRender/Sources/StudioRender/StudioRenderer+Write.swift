@@ -217,7 +217,7 @@ extension StudioRenderer {
         // cache survive between frames — building a context per frame is most of the cost
         // of a frame. The same colour space and bounds the synchronous render used.
         let destination = CIRenderDestination(pixelBuffer: buffer)
-        destination.colorSpace = StudioRenderContext.sRGB
+        destination.colorSpace = writer.colorSpace
         destination.alphaMode = .premultiplied
         do {
             let task = try StudioRenderContext.shared.startTask(
@@ -353,6 +353,8 @@ extension StudioRenderer {
         let video: AVAssetWriterInput
         let audio: AudioRelay?
         let adaptor: AVAssetWriterInputPixelBufferAdaptor
+        /// What frames are drawn into, matching how the track is tagged.
+        let colorSpace: CGColorSpace
     }
 
     private func makeWriter(
@@ -375,7 +377,7 @@ extension StudioRenderer {
             AVVideoWidthKey: Int(size.width),
             AVVideoHeightKey: Int(size.height),
             AVVideoCompressionPropertiesKey: compression,
-            AVVideoColorPropertiesKey: Self.colorProperties
+            AVVideoColorPropertiesKey: options.colorSpace.writerColorProperties
         ])
         video.expectsMediaDataInRealTime = false
         writer.shouldOptimizeForNetworkUse = options.fileType == .mp4
@@ -405,7 +407,13 @@ extension StudioRenderer {
                 kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()
             ]
         )
-        return WriterBundle(writer: writer, video: video, audio: audio, adaptor: adaptor)
+        return WriterBundle(
+            writer: writer,
+            video: video,
+            audio: audio,
+            adaptor: adaptor,
+            colorSpace: options.colorSpace.cgColorSpace
+        )
     }
 
     /// Waits for a frame's pixels and hands them to the encoder.
