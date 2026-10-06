@@ -1,6 +1,7 @@
 import AppKit
 import CaptureCore
 import os
+import OverlayKit
 import Shared
 
 /// The permission-free capture path and the app that was in front at hotkey time.
@@ -10,7 +11,7 @@ extension AreaCaptureCoordinator {
     static func currentFrontmostApp() -> AppIdentity? {
         guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
         let identifier = app.bundleIdentifier ?? ""
-        if identifier.hasPrefix("app.kadr.") {
+        if ActivationJuggler.isKadrProcess(identifier) {
             return nil
         }
         return AppIdentity(name: app.localizedName, bundleIdentifier: app.bundleIdentifier)

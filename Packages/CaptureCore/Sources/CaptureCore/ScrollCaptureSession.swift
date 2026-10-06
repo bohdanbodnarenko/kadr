@@ -293,7 +293,7 @@ public actor ScrollCaptureSession {
 /// It forwards buffers and nothing else; writing a PNG on this queue would stall the
 /// stream and drop the frames the stitch depends on.
 private final class ScrollStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    let queue = DispatchQueue(label: "app.kadr.scroll.samples", qos: .userInitiated)
+    let queue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.scroll.samples", qos: .userInitiated)
     let buffers: AsyncStream<UncheckedSendableBox<CMSampleBuffer>>
     private let continuation: AsyncStream<UncheckedSendableBox<CMSampleBuffer>>.Continuation
 

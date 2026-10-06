@@ -31,13 +31,13 @@ cask "kadr" do
 
   zap trash: [
     "~/Library/Application Support/Kadr",
-    "~/Library/Caches/app.kadr.Kadr",
-    "~/Library/Caches/app.kadr.Kadr.Editor",
-    "~/Library/HTTPStorages/app.kadr.Kadr",
-    "~/Library/HTTPStorages/app.kadr.Kadr.binarycookies",
-    "~/Library/Preferences/app.kadr.Kadr.plist",
-    "~/Library/Preferences/app.kadr.Kadr.Editor.plist",
-    "~/Library/Saved Application State/app.kadr.Kadr.savedState",
-    "~/Library/Saved Application State/app.kadr.Kadr.Editor.savedState",
+    "~/Library/Caches/com.bohdanbodnarenko.kadr",
+    "~/Library/Caches/com.bohdanbodnarenko.kadr.Editor",
+    "~/Library/HTTPStorages/com.bohdanbodnarenko.kadr",
+    "~/Library/HTTPStorages/com.bohdanbodnarenko.kadr.binarycookies",
+    "~/Library/Preferences/com.bohdanbodnarenko.kadr.plist",
+    "~/Library/Preferences/com.bohdanbodnarenko.kadr.Editor.plist",
+    "~/Library/Saved Application State/com.bohdanbodnarenko.kadr.savedState",
+    "~/Library/Saved Application State/com.bohdanbodnarenko.kadr.Editor.savedState",
   ]
 end

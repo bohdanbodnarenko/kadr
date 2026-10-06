@@ -7,7 +7,7 @@ import Foundation
 /// depend on SettingsKit (docs/04 §2).
 public struct EditorUserPalette: Equatable, Sendable {
     public static let capacity = 8
-    public static let defaultsKey = "app.kadr.editor.userPalette"
+    public static let defaultsKey = "com.bohdanbodnarenko.kadr.editor.userPalette"
 
     public private(set) var colors: [AnnotationColor]
 

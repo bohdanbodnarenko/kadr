@@ -172,7 +172,7 @@ public final class SpeechModelLifecycle: @unchecked Sendable {
     private init() {
         let source = DispatchSource.makeMemoryPressureSource(
             eventMask: [.warning, .critical],
-            queue: DispatchQueue(label: "app.kadr.helper.speech-pressure")
+            queue: DispatchQueue(label: "com.bohdanbodnarenko.kadr.helper.speech-pressure")
         )
         source.setEventHandler { [weak self] in
             self?.unloadIfIdle()

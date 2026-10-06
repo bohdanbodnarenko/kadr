@@ -151,7 +151,7 @@ public struct StagingArea: Sendable {
         getxattr(url.path, Self.retainedAttribute, nil, 0, 0, 0) >= 0
     }
 
-    private static let retainedAttribute = "app.kadr.staging.retained"
+    private static let retainedAttribute = "com.bohdanbodnarenko.kadr.staging.retained"
 
     /// Deletes staged files older than the retention window.
     ///

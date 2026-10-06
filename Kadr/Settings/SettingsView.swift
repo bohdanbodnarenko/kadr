@@ -36,7 +36,7 @@ struct SettingsView: View {
     /// so it is kept here (docs/17 T-SH-8).
     @State private var columnVisibility: NavigationSplitViewVisibility =
         UserDefaults.standard.bool(forKey: SettingsView.sidebarHiddenKey) ? .detailOnly : .all
-    static let sidebarHiddenKey = "app.kadr.settings.sidebarHidden"
+    static let sidebarHiddenKey = "com.bohdanbodnarenko.kadr.settings.sidebarHidden"
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {

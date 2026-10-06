@@ -33,7 +33,7 @@ public final class KeychainConsentStorage: AutomationConsentStorage {
     private let service: String
     private let account = "consent"
 
-    public init(service: String = "app.kadr.automation-consent") {
+    public init(service: String = "com.bohdanbodnarenko.kadr.automation-consent") {
         self.service = service
     }
 

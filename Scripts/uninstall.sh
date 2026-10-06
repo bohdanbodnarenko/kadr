@@ -17,8 +17,8 @@
 #   Scripts/uninstall.sh [--yes] [--remove-app]
 set -euo pipefail
 
-AGENT_ID="app.kadr.Kadr"
-EDITOR_ID="app.kadr.Kadr.Editor"
+AGENT_ID="com.bohdanbodnarenko.kadr"
+EDITOR_ID="com.bohdanbodnarenko.kadr.Editor"
 APP_PATH="/Applications/Kadr.app"
 
 assume_yes=0

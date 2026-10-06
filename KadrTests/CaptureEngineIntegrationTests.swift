@@ -31,7 +31,7 @@ struct CaptureEngineIntegrationTests {
     private func makeEngine() -> CaptureEngine {
         CaptureEngine(
             frontmostApplication: FixedFrontmostApplication(
-                AppIdentity(name: "Test", bundleIdentifier: "app.kadr.tests")
+                AppIdentity(name: "Test", bundleIdentifier: "com.bohdanbodnarenko.kadr.tests")
             )
         )
     }

@@ -152,7 +152,7 @@ final nonisolated class FilePromiseFulfiller: NSObject, NSFilePromiseProviderDel
     /// queues CLAUDE.md rule 5 allows, and it does nothing else.
     private let writeQueue: OperationQueue = {
         let queue = OperationQueue()
-        queue.name = "app.kadr.filePromise"
+        queue.name = "com.bohdanbodnarenko.kadr.filePromise"
         queue.maxConcurrentOperationCount = 1
         return queue
     }()

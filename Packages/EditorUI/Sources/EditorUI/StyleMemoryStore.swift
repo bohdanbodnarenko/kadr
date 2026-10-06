@@ -6,7 +6,7 @@ import Foundation
 /// Stored in `UserDefaults` like `EditorUserPalette`. EditorUI must not import SettingsKit
 /// (docs/04 §2).
 public enum StyleMemoryStore {
-    public static let defaultsKey = "app.kadr.editor.styleMemory"
+    public static let defaultsKey = "com.bohdanbodnarenko.kadr.editor.styleMemory"
 
     public static func load(from defaults: UserDefaults = .standard) -> StyleMemory {
         guard let data = defaults.data(forKey: defaultsKey),

@@ -14,7 +14,7 @@ import Shared
 /// forgot. Done in house, the way LetsMove does it, rather than with a dependency.
 @MainActor
 enum MoveToApplications {
-    static let declinedKey = "app.kadr.declinedMoveToApplications"
+    static let declinedKey = "com.bohdanbodnarenko.kadr.declinedMoveToApplications"
 
     private static let logger = KadrLog.logger(.app)
 

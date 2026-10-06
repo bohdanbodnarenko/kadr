@@ -13,6 +13,6 @@ struct KadrTests {
 
     @Test("Bundle identifier is the one reserved in docs/00")
     func bundleIdentifier() {
-        #expect(Bundle.main.bundleIdentifier == "app.kadr.Kadr")
+        #expect(Bundle.main.bundleIdentifier == "com.bohdanbodnarenko.kadr")
     }
 }

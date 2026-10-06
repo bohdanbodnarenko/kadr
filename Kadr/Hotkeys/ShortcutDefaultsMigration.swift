@@ -17,7 +17,7 @@ import KeyboardShortcuts
 /// Runs once per version, gated by a number in `UserDefaults`:
 /// 1 → the original twenty-four; 2 → five on ⌃⇧ digits; 3 → the island moves to ⇧⌘2.
 enum ShortcutDefaultsMigration {
-    static let versionKey = "app.kadr.shortcutDefaultsVersion"
+    static let versionKey = "com.bohdanbodnarenko.kadr.shortcutDefaultsVersion"
     static let currentVersion = 3
 
     /// The defaults the first builds shipped, by command.

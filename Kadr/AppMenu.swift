@@ -259,5 +259,5 @@ final class AppMenu: NSObject, NSMenuItemValidation {
 }
 
 extension Notification.Name {
-    static let kadrToggleSettingsSidebar = Notification.Name("app.kadr.toggleSettingsSidebar")
+    static let kadrToggleSettingsSidebar = Notification.Name("com.bohdanbodnarenko.kadr.toggleSettingsSidebar")
 }

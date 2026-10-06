@@ -26,7 +26,7 @@ final nonisolated class CameraMachinery: NSObject, AVCaptureVideoDataOutputSampl
     /// sample buffer and an async hop per frame — and, when the encoder fell behind, an
     /// unbounded backlog of retained camera frames where `alwaysDiscardsLateVideoFrames`
     /// would otherwise have dropped them.
-    private let videoQueue = DispatchQueue(label: "app.kadr.recording.camera-video")
+    private let videoQueue = DispatchQueue(label: "com.bohdanbodnarenko.kadr.recording.camera-video")
     private let logger = KadrLog.logger(.recording)
     private let lock = NSLock()
 

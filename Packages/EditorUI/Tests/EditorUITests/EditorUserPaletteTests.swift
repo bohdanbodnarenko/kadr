@@ -6,7 +6,7 @@ import Testing
 @Suite("User color palette")
 struct EditorUserPaletteTests {
     private func isolatedDefaults() throws -> UserDefaults {
-        let suite = "app.kadr.tests.palette.\(UUID().uuidString)"
+        let suite = "com.bohdanbodnarenko.kadr.tests.palette.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         return defaults
