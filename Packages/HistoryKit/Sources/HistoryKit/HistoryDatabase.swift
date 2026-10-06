@@ -39,6 +39,13 @@ enum HistoryDatabase {
                 table.add(column: "original_path", .text)
             }
         }
+        // v3: a bookmark to that file, so a capture the user moved or renamed in Finder is
+        // still found, where the path alone went stale (docs/18 OUT-6).
+        migrator.registerMigration("v3-original-bookmark") { db in
+            try db.alter(table: "capture_records") { table in
+                table.add(column: "original_bookmark", .blob)
+            }
+        }
         return migrator
     }
 
@@ -76,6 +83,7 @@ extension HistoryRecord: FetchableRecord, PersistableRecord {
         byteSize = row["byte_size"]
         originalFilename = row["original_filename"]
         originalPath = row["original_path"]
+        originalBookmark = row["original_bookmark"]
     }
 
     public func encode(to container: inout PersistenceContainer) {
@@ -92,5 +100,6 @@ extension HistoryRecord: FetchableRecord, PersistableRecord {
         container["byte_size"] = byteSize
         container["original_filename"] = originalFilename
         container["original_path"] = originalPath
+        container["original_bookmark"] = originalBookmark
     }
 }
