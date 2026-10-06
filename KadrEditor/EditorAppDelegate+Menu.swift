@@ -1,4 +1,5 @@
 import AppKit
+import EditorUI
 
 extension EditorAppDelegate {
     /// A minimal menu bar: the commands a `.regular` app is expected to have.
@@ -192,6 +193,7 @@ extension EditorAppDelegate {
             action: #selector(EditorWindowController.sendToBack(_:)),
             keyEquivalent: ""
         )
+        editMenu.addItem(makeAlignMenuItem())
         editMenu.addItem(.separator())
         let lock = editMenu.addItem(
             withTitle: String(localized: "Lock Objects"),
@@ -201,6 +203,50 @@ extension EditorAppDelegate {
         lock.keyEquivalentModifierMask = [.command, .shift]
         editItem.submenu = editMenu
         return editItem
+    }
+
+    /// Align and Distribute: one action each, the case carried in the item's tag
+    /// (docs/18 ED-7).
+    private func makeAlignMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: String(localized: "Align"), action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: String(localized: "Align"))
+        let groups: [[(SelectionArrangement.Alignment, String)]] = [
+            [
+                (.left, String(localized: "Left Edges")),
+                (.centerX, String(localized: "Horizontal Centers")),
+                (.right, String(localized: "Right Edges"))
+            ],
+            [
+                (.top, String(localized: "Top Edges")),
+                (.middle, String(localized: "Vertical Centers")),
+                (.bottom, String(localized: "Bottom Edges"))
+            ]
+        ]
+        for group in groups {
+            for (alignment, title) in group {
+                let entry = menu.addItem(
+                    withTitle: title,
+                    action: #selector(EditorWindowController.alignSelection(_:)),
+                    keyEquivalent: ""
+                )
+                entry.tag = alignment.rawValue
+            }
+            menu.addItem(.separator())
+        }
+        let axes: [(SelectionArrangement.Axis, String)] = [
+            (.horizontal, String(localized: "Distribute Horizontally")),
+            (.vertical, String(localized: "Distribute Vertically"))
+        ]
+        for (axis, title) in axes {
+            let entry = menu.addItem(
+                withTitle: title,
+                action: #selector(EditorWindowController.distributeSelection(_:)),
+                keyEquivalent: ""
+            )
+            entry.tag = axis.rawValue
+        }
+        item.submenu = menu
+        return item
     }
 
     private func makeViewMenuItem() -> NSMenuItem {

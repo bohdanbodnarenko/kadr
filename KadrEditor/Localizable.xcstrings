@@ -13,7 +13,13 @@
     "Add Zoom" : {
 
     },
+    "Align" : {
+
+    },
     "Annotation editor" : {
+
+    },
+    "Bottom Edges" : {
 
     },
     "Bring All to Front" : {
@@ -61,6 +67,12 @@
     "Discard Changes" : {
 
     },
+    "Distribute Horizontally" : {
+
+    },
+    "Distribute Vertically" : {
+
+    },
     "Don't Save" : {
 
     },
@@ -103,6 +115,9 @@
     "Hide Others" : {
 
     },
+    "Horizontal Centers" : {
+
+    },
     "If you don’t review your documents, all your changes will be lost." : {
 
     },
@@ -137,6 +152,9 @@
 
     },
     "Keyboard shortcuts" : {
+
+    },
+    "Left Edges" : {
 
     },
     "Lock Objects" : {
@@ -206,6 +224,9 @@
 
     },
     "Review Changes…" : {
+
+    },
+    "Right Edges" : {
 
     },
     "Save" : {
@@ -286,6 +307,9 @@
     "Tools" : {
 
     },
+    "Top Edges" : {
+
+    },
     "Trim End to Playhead" : {
 
     },
@@ -296,6 +320,9 @@
 
     },
     "Undo" : {
+
+    },
+    "Vertical Centers" : {
 
     },
     "View" : {

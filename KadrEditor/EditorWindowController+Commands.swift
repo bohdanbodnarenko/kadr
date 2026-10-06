@@ -70,6 +70,16 @@ extension EditorWindowController {
         model.sendSelectionToBack()
     }
 
+    @objc func alignSelection(_ sender: NSMenuItem) {
+        guard let alignment = SelectionArrangement.Alignment(rawValue: sender.tag) else { return }
+        model.alignSelection(alignment)
+    }
+
+    @objc func distributeSelection(_ sender: NSMenuItem) {
+        guard let axis = SelectionArrangement.Axis(rawValue: sender.tag) else { return }
+        model.distributeSelection(along: axis)
+    }
+
     @objc func toggleInspector(_ sender: Any?) {
         model.isInspectorPresented.toggle()
     }
