@@ -47,6 +47,13 @@
 			remoteGlobalIDString = KADR00000000000000000400;
 			remoteInfo = KadrEditor;
 		};
+		KADR00000000000000001E05 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KADR00000000000000000400;
+			remoteInfo = KadrEditor;
+		};
 		F5F2A2453040394B00A5DC07 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F5F2A22F3040394A00A5DC07 /* Project object */;
@@ -135,6 +142,7 @@
 		F5F2A2373040394A00A5DC07 /* Kadr.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kadr.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5F2A2443040394B00A5DC07 /* KadrTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000E01 /* KadrEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		KADR00000000000000001E01 /* KadrUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KadrUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000401 /* KadrEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KadrEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000501 /* HelperTools.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = HelperTools.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		KADR00000000000000000701 /* kadr */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = kadr; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -154,6 +162,11 @@
 		KADR00000000000000000E02 /* KadrEditorTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = KadrEditorTests;
+			sourceTree = "<group>";
+		};
+		KADR00000000000000001E02 /* KadrUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KadrUITests;
 			sourceTree = "<group>";
 		};
 		KADR00000000000000000402 /* KadrEditor */ = {
@@ -209,6 +222,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000001E07 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		KADR00000000000000000404 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -254,6 +274,7 @@
 				KADR00000000000000000702 /* KadrCLI */,
 				F5F2A2473040394B00A5DC07 /* KadrTests */,
 				KADR00000000000000000E02 /* KadrEditorTests */,
+				KADR00000000000000001E02 /* KadrUITests */,
 				F5F2A2383040394A00A5DC07 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -267,6 +288,7 @@
 				KADR00000000000000000701 /* kadr */,
 				F5F2A2443040394B00A5DC07 /* KadrTests.xctest */,
 				KADR00000000000000000E01 /* KadrEditorTests.xctest */,
+				KADR00000000000000001E01 /* KadrUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -296,6 +318,29 @@
 			productName = KadrEditorTests;
 			productReference = KADR00000000000000000E01 /* KadrEditorTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		KADR00000000000000001E00 /* KadrUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KADR00000000000000001E09 /* Build configuration list for PBXNativeTarget "KadrUITests" */;
+			buildPhases = (
+				KADR00000000000000001E06 /* Sources */,
+				KADR00000000000000001E07 /* Frameworks */,
+				KADR00000000000000001E08 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				KADR00000000000000001E04 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				KADR00000000000000001E02 /* KadrUITests */,
+			);
+			name = KadrUITests;
+			packageProductDependencies = (
+			);
+			productName = KadrUITests;
+			productReference = KADR00000000000000001E01 /* KadrUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		F5F2A2363040394A00A5DC07 /* Kadr */ = {
 			isa = PBXNativeTarget;
@@ -463,6 +508,10 @@
 						CreatedOnToolsVersion = 26.6;
 						TestTargetID = KADR00000000000000000400;
 					};
+					KADR00000000000000001E00 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = KADR00000000000000000400;
+					};
 				};
 			};
 			buildConfigurationList = F5F2A2323040394A00A5DC07 /* Build configuration list for PBXProject "Kadr" */;
@@ -505,12 +554,20 @@
 				KADR00000000000000000700 /* KadrCLI */,
 				F5F2A2433040394B00A5DC07 /* KadrTests */,
 				KADR00000000000000000E00 /* KadrEditorTests */,
+				KADR00000000000000001E00 /* KadrUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		KADR00000000000000000E08 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KADR00000000000000001E08 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -562,6 +619,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		KADR00000000000000001E06 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F5F2A2333040394A00A5DC07 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -604,6 +668,11 @@
 			isa = PBXTargetDependency;
 			target = KADR00000000000000000400 /* KadrEditor */;
 			targetProxy = KADR00000000000000000E05 /* PBXContainerItemProxy */;
+		};
+		KADR00000000000000001E04 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KADR00000000000000000400 /* KadrEditor */;
+			targetProxy = KADR00000000000000001E05 /* PBXContainerItemProxy */;
 		};
 		F5F2A2463040394B00A5DC07 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -654,6 +723,26 @@
 			};
 			name = Debug;
 		};
+		KADR00000000000000001E0A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = KadrEditor;
+			};
+			name = Debug;
+		};
 		KADR00000000000000000E0B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -672,6 +761,26 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KadrEditor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KadrEditor";
+			};
+			name = Release;
+		};
+		KADR00000000000000001E0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TS5WNSVA7W;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.9.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.kadr.KadrUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = KadrEditor;
 			};
 			name = Release;
 		};
@@ -1075,6 +1184,15 @@
 			buildConfigurations = (
 				KADR00000000000000000E0A /* Debug */,
 				KADR00000000000000000E0B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		KADR00000000000000001E09 /* Build configuration list for PBXNativeTarget "KadrUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KADR00000000000000001E0A /* Debug */,
+				KADR00000000000000001E0B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

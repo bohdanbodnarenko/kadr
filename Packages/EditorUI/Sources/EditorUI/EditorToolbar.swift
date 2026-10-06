@@ -57,6 +57,7 @@ struct EditorToolbar: View {
             ) {
                 onExport(.copy)
             }
+            .accessibilityIdentifier(EditorAccessibilityID.copy)
             .disabled(model.isExporting || isCropping)
             // Dragging Copy hands over the flattened image, rendered when dropped: the
             // title-bar proxy is the file on disk, which may predate the edits (docs/18 ED-3).
@@ -78,6 +79,7 @@ struct EditorToolbar: View {
                 onExport(.save)
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(EditorAccessibilityID.save)
             .disabled(model.isExporting || isCropping)
             .help(Text("Save", bundle: .module))
             EditorToolbarButton(

@@ -64,7 +64,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.contentView = hosting
         window.delegate = self
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 520, height: 560)
+        window.contentMinSize = UXLayoutContract.onboardingMinimum
         window.center()
 
         self.window = window

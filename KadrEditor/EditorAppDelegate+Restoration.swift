@@ -12,6 +12,14 @@ extension EditorAppDelegate {
         guard environment["XCTestConfigurationFilePath"] == nil, environment["XCTestBundlePath"] == nil else {
             return
         }
+        // UI tests launch the real app, without the XCTest variables above. They open
+        // their fixture instead of anything this Mac would restore (docs/18 UX-02).
+        guard !UserDefaults.standard.bool(forKey: "KadrUITesting") else {
+            if let fixture = environment["KADR_UI_TEST_DOCUMENT"] {
+                openDocument(URL(fileURLWithPath: fixture))
+            }
+            return
+        }
         Task { @MainActor [weak self] in
             await Task.yield()
             self?.restoreWindows()
@@ -19,7 +27,7 @@ extension EditorAppDelegate {
     }
 
     func rememberOpenWindowsForNextLaunch() {
-        EditorRestoration().remember(openAnnotationDocuments)
+        EditorRestoration().remember(restorableDocuments)
     }
 
     private func restoreWindows() {
@@ -27,7 +35,7 @@ extension EditorAppDelegate {
         let plan = EditorRestoration.plan(
             restorable: EditorRestoration().takeRestorable(),
             recoveries: autosave.pendingRecoveries(),
-            open: Set(openAnnotationDocuments)
+            open: Set(restorableDocuments)
         )
         for url in plan.reopen {
             openDocument(url)

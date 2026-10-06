@@ -258,6 +258,13 @@ final class EditorAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         windows.map(\.documentURL)
     }
 
+    /// Every window that can come back at the next launch: annotation windows and studio
+    /// sessions alike. A session reopens through `open(_:)` like any `.kadrrec`
+    /// (docs/18 T-ED-7).
+    var restorableDocuments: [URL] {
+        openAnnotationDocuments + studioWindows.map(\.sessionDirectory)
+    }
+
     /// Opens a file the way a launch or Finder would, for restoration.
     func openDocument(_ url: URL) {
         open(url)
