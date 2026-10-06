@@ -14,7 +14,7 @@
      xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>Kadr</title>
-    <link>https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml</link>
+    <link>https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml</link>
     <description>Updates for Kadr, the free native macOS screen-capture app.</description>
     <language>en</language>
   </channel>

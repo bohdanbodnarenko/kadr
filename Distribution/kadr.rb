@@ -9,15 +9,15 @@ cask "kadr" do
   version "0.0.0,0"
   sha256 :no_check
 
-  url "https://github.com/kadr-app/kadr/releases/download/v#{version.csv.first}-b#{version.csv.second}/Kadr-#{version.csv.first}.dmg",
-      verified: "github.com/kadr-app/kadr/"
+  url "https://github.com/bohdanbodnarenko/kadr/releases/download/v#{version.csv.first}-b#{version.csv.second}/Kadr-#{version.csv.first}.dmg",
+      verified: "github.com/bohdanbodnarenko/kadr/"
   name "Kadr"
   desc "Native screen-capture app that keeps everything on your Mac"
-  homepage "https://github.com/kadr-app/kadr"
+  homepage "https://github.com/bohdanbodnarenko/kadr"
 
   # The appcast, not GitHub's "latest": it knows the build number the version needs.
   livecheck do
-    url "https://raw.githubusercontent.com/kadr-app/kadr/main/appcast.xml"
+    url "https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml"
     strategy :sparkle do |item|
       "#{item.short_version},#{item.version}"
     end

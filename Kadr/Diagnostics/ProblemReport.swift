@@ -14,9 +14,9 @@ nonisolated enum ProblemReport {
         case mail(String)
     }
 
-    /// PLACEHOLDER: the repository is not public yet (docs/17 T-REL-4). Same owner/name as
-    /// the appcast placeholder, so both change together once the host is decided.
-    static let destination = Destination.issueForm("https://github.com/kadr-app/kadr/issues/new")
+    /// The public repository's issue form. Same owner/name as the appcast feed, so the two
+    /// change together if the repository ever moves (docs/17 T-REL-4).
+    static let destination = Destination.issueForm("https://github.com/bohdanbodnarenko/kadr/issues/new")
 
     /// The issue form's file name in `.github/ISSUE_TEMPLATE/`; its field ids are the
     /// query keys below.
