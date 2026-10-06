@@ -335,6 +335,8 @@ extension StudioRenderer {
                 AVLinearPCMIsFloatKey: false,
                 AVLinearPCMIsNonInterleaved: false
             ])
+            // Keeps a slowed or sped-up clip's voice at its own pitch.
+            output.audioTimePitchAlgorithm = .spectral
             if reader.canAdd(output) {
                 reader.add(output)
                 audio = output

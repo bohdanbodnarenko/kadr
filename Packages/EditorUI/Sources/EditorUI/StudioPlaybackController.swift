@@ -238,6 +238,8 @@ final class StudioPlaybackController {
         }
         let item = AVPlayerItem(asset: copy)
         item.videoComposition = video
+        // As the export does: a slowed or sped-up clip keeps its voice's pitch.
+        item.audioTimePitchAlgorithm = .spectral
         let player = player ?? makePlayer()
         removeObservers()
         seekEpoch += 1

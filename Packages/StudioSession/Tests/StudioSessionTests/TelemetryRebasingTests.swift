@@ -94,17 +94,15 @@ struct TelemetryRebasingTests {
         #expect(abs(times[1] - 5) < 0.001, "a click ten seconds in landed at \(times[1]) rather than 5")
     }
 
-    /// Speed is clamped at 1 — below it the audio is unintelligible and the footage reads
-    /// as broken rather than slow — so a rebase can only ever pull events closer together.
-    /// Asserted so the invariant is stated somewhere the rebasing can see it: a future
-    /// slow-motion clip would need this test rewritten, not silently inverted.
-    @Test("Slower than real time is not in the domain, so nothing spreads apart")
-    func slowMotionIsNotSupported() {
+    /// Slow motion (docs/18 Phase 4) spreads events apart: a click five seconds into a
+    /// half-speed clip is ten seconds into the edit.
+    @Test("A slowed clip spreads events apart")
+    func slowMotionSpreads() {
         let clips = ClipTimeline(clips: [Clip(sourceStart: 0, sourceDuration: 10, speed: 0.5)])
-        #expect(clips.clips.first?.speed == 1, "speed clamps at real time")
+        #expect(clips.clips.first?.speed == 0.5)
 
         let rebased = telemetry(clickTimes: [0, 5]).rebased(to: clips)
-        #expect(abs((rebased.clicks.last?.time ?? -1) - 5) < 0.001)
+        #expect(abs((rebased.clicks.last?.time ?? -1) - 10) < 0.001)
     }
 
     // MARK: - Everything moves together

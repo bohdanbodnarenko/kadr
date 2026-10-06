@@ -251,12 +251,12 @@ struct StudioTransportBar: View {
         .menuIndicator(.hidden)
         .buttonStyle(StudioTransportIconStyle())
         .fixedSize()
-        .help(Text("Play this clip faster", bundle: .module))
+        .help(Text("Play this clip slower or faster", bundle: .module))
         .accessibilityLabel(Text("Clip speed", bundle: .module))
     }
 
     private var speedItems: some View {
-        ForEach([1.0, 1.5, 2.0, 4.0, 8.0], id: \.self) { speed in
+        ForEach([0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0], id: \.self) { speed in
             Button(speed == 1 ? "Normal" : "\(speedLabel(speed))×") {
                 model.setSpeedAtPlayhead(speed)
             }
@@ -285,7 +285,7 @@ struct StudioTransportBar: View {
     }
 
     private func speedLabel(_ speed: Double) -> String {
-        speed == speed.rounded() ? "\(Int(speed))" : String(format: "%.1f", speed)
+        speed.formatted(.number.precision(.fractionLength(0 ... 2)))
     }
 }
 

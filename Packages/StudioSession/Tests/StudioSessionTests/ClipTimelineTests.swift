@@ -127,6 +127,15 @@ struct ClipTimelineTests {
         #expect(Clip(sourceStart: 0, sourceDuration: 1, speed: 0.1).speed == Clip.minimumSpeed)
     }
 
+    @Test("A quarter-speed clip lasts four times as long")
+    func slowMotion() {
+        let clip = Clip(sourceStart: 2, sourceDuration: 3, speed: 0.25)
+        #expect(clip.editedDuration == 12)
+        let timeline = ClipTimeline(clips: [clip])
+        #expect(timeline.sourceTime(forEdited: 4) == 3)
+        #expect(timeline.editedTime(forSource: 3) == 4)
+    }
+
     @Test("A split does not retime either half")
     func splitPreservesSpeed() {
         var timeline = whole()
