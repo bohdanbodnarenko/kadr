@@ -45,4 +45,21 @@ struct EditorRestorationTests {
         #expect(result.reopen == [other])
         #expect(result.offer == [recovered])
     }
+
+    @Test("A studio session comes back with the captures, and is not reopened while open")
+    func studioSessions() {
+        let session = URL(fileURLWithPath: "/Users/me/Movies/Demo.kadrrec", isDirectory: true)
+        let restoration = EditorRestoration(defaults: defaults(keepsWindows: true))
+        restoration.remember([shot, session])
+        let restored = restoration.takeRestorable()
+        #expect(restored.map(\.standardizedFileURL.path) == [shot.path, session.standardizedFileURL.path])
+
+        let reopened = EditorRestoration.plan(
+            restorable: restored,
+            recoveries: [],
+            open: [session],
+            exists: { _ in true }
+        )
+        #expect(reopened.reopen == [shot])
+    }
 }

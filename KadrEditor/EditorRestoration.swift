@@ -1,6 +1,6 @@
 import Foundation
 
-/// Which annotation windows come back at the next launch (docs/18 T-ED-7).
+/// Which annotation and studio windows come back at the next launch (docs/18 T-ED-7).
 ///
 /// The editor is a separate process that exits with its last window, so AppKit's own
 /// restoration never has a chance: quitting with captures open, or a crash, lost the set.

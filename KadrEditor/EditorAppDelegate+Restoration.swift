@@ -19,7 +19,7 @@ extension EditorAppDelegate {
     }
 
     func rememberOpenWindowsForNextLaunch() {
-        EditorRestoration().remember(openAnnotationDocuments)
+        EditorRestoration().remember(restorableDocuments)
     }
 
     private func restoreWindows() {
@@ -27,7 +27,7 @@ extension EditorAppDelegate {
         let plan = EditorRestoration.plan(
             restorable: EditorRestoration().takeRestorable(),
             recoveries: autosave.pendingRecoveries(),
-            open: Set(openAnnotationDocuments)
+            open: Set(restorableDocuments)
         )
         for url in plan.reopen {
             openDocument(url)
