@@ -1,5 +1,6 @@
 import AnnotationModel
 import AppKit
+import ControlKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -76,7 +77,7 @@ struct EditorStylePresetInspector: View {
                 Button(String(localized: "Import Look…", bundle: .module)) { importPreset() }
             } label: {
                 Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 13))
+                    .font(.system(size: KadrType.title))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -216,7 +217,7 @@ private struct EditorLookRow: View {
             Button(action: action) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: KadrType.caption, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                         .opacity(isActive ? 1 : 0)
                         .frame(width: 14)
@@ -237,9 +238,9 @@ private struct EditorLookRow: View {
                     .opacity(isHovering ? 1 : 0)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, KadrSpace.small)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                 .fill(isHovering ? InspectorControlPalette.hoverFill : .clear)
         )
         .padding(.horizontal, -6)

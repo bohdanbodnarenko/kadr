@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import KeyboardShortcuts
 import SettingsKit
 import SwiftUI
@@ -194,7 +195,7 @@ struct MenuBarHintView: View {
             }
             .controlSize(.small)
         }
-        .padding(16)
+        .padding(KadrSpace.xl)
         .frame(width: 320)
     }
 }

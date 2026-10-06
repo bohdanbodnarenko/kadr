@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$@)"
+          }
+        }
+      }
+    },
     "%@ to %@" : {
       "localizations" : {
         "en" : {
@@ -146,6 +156,9 @@
     "Aim on Preview…" : {
 
     },
+    "Allow the canvas to grow" : {
+
+    },
     "Angle" : {
 
     },
@@ -173,10 +186,34 @@
     "Audio and speech" : {
 
     },
+    "Auto-redact" : {
+
+    },
+    "Auto-redact — find emails, cards and keys, then review before blurring" : {
+
+    },
     "Backdrop" : {
 
     },
+    "Background" : {
+
+    },
+    "Background pill" : {
+
+    },
     "Badge size" : {
+
+    },
+    "Beautify" : {
+
+    },
+    "Bleed off the edge" : {
+
+    },
+    "Border" : {
+
+    },
+    "Border color" : {
 
     },
     "Bottom" : {
@@ -291,6 +328,9 @@
     "Copy Without Annotations" : {
 
     },
+    "Copy and Save write this size. The canvas stays at capture resolution." : {
+
+    },
     "Copy the edited recording as %@" : {
 
     },
@@ -339,7 +379,13 @@
     "Delete Selection" : {
 
     },
+    "Delete this look" : {
+
+    },
     "Delete this look?" : {
+
+    },
+    "Depth of Field" : {
 
     },
     "Disable Zoom" : {
@@ -396,6 +442,9 @@
     "Drop everything before or after the playhead" : {
 
     },
+    "Duplicate" : {
+
+    },
     "Edit" : {
 
     },
@@ -423,6 +472,9 @@
     "Export Options" : {
 
     },
+    "Export Size" : {
+
+    },
     "Export the edited recording (⌘E)" : {
 
     },
@@ -436,6 +488,9 @@
 
     },
     "Export…" : {
+
+    },
+    "Fill" : {
 
     },
     "Fill the frame" : {
@@ -504,10 +559,19 @@
     "Hidden" : {
 
     },
+    "Hide Inspector" : {
+
+    },
+    "Hide Inspector (⌥⌘I)" : {
+
+    },
     "Hide the inspector (⌘I)" : {
 
     },
     "Highlight the spoken word" : {
+
+    },
+    "Image" : {
 
     },
     "Images" : {
@@ -531,6 +595,9 @@
     "Install Speech Model…" : {
 
     },
+    "Italic" : {
+
+    },
     "Keep this aim and go back to the transport (↩)" : {
 
     },
@@ -550,6 +617,12 @@
 
     },
     "Listening…" : {
+
+    },
+    "Lock objects" : {
+
+    },
+    "Lock objects in place while drawing (⇧⌘L)" : {
 
     },
     "Long pauses" : {
@@ -588,7 +661,13 @@
     "Motion" : {
 
     },
+    "Move capture to Trash" : {
+
+    },
     "Move to Playhead" : {
+
+    },
+    "Move to Trash" : {
 
     },
     "Mute" : {
@@ -636,6 +715,9 @@
     "Not recorded" : {
 
     },
+    "Nothing selected" : {
+
+    },
     "Numbering" : {
 
     },
@@ -661,6 +743,9 @@
     "Option-click to remove" : {
 
     },
+    "Output" : {
+
+    },
     "Overhead" : {
 
     },
@@ -670,10 +755,22 @@
     "Pause (Space)" : {
 
     },
+    "Perspective" : {
+
+    },
+    "Pick a tool or select an annotation to change how it looks." : {
+
+    },
+    "Pill color" : {
+
+    },
     "Pin" : {
 
     },
     "Place this zoom's frame on the picture itself" : {
+
+    },
+    "Placement" : {
 
     },
     "Play" : {
@@ -748,6 +845,12 @@
     "Redact all text matching…" : {
 
     },
+    "Redo" : {
+
+    },
+    "Redo (⇧⌘Z)" : {
+
+    },
     "Remove" : {
 
     },
@@ -784,6 +887,9 @@
     "Removing the background…" : {
 
     },
+    "Repeat across the image" : {
+
+    },
     "Replace All with Smart Zooms" : {
 
     },
@@ -794,6 +900,12 @@
 
     },
     "Reset Crop" : {
+
+    },
+    "Reset depth of field" : {
+
+    },
+    "Reset perspective" : {
 
     },
     "Resolution" : {
@@ -862,6 +974,9 @@
     "Select a zoom on the timeline to edit it, or press Z to add one at the playhead." : {
 
     },
+    "Shadow" : {
+
+    },
     "Shape" : {
 
     },
@@ -883,6 +998,12 @@
     "Shortcuts" : {
 
     },
+    "Show Inspector" : {
+
+    },
+    "Show Inspector (⌥⌘I)" : {
+
+    },
     "Show Suggested Zooms" : {
 
     },
@@ -898,7 +1019,7 @@
     "Shown" : {
 
     },
-    "Shows or hides the %@ controls" : {
+    "Shows or hides this section’s controls" : {
 
     },
     "Size" : {
@@ -908,6 +1029,9 @@
 
     },
     "Skip" : {
+
+    },
+    "Soften the middle instead" : {
 
     },
     "Soundtrack" : {
@@ -934,7 +1058,13 @@
     "Step through" : {
 
     },
+    "Sticker" : {
+
+    },
     "Stop the export and delete the partly-written file" : {
+
+    },
+    "Stroke" : {
 
     },
     "Stroke width %lld points" : {
@@ -1021,7 +1151,22 @@
     "Trim clip start" : {
 
     },
+    "Underline" : {
+
+    },
+    "Undo" : {
+
+    },
+    "Undo (⌘Z)" : {
+
+    },
     "Unlock" : {
+
+    },
+    "Unlock objects" : {
+
+    },
+    "Unlock objects (⇧⌘L)" : {
 
     },
     "Unlock with ⇧⌘L or the lock in the toolbar" : {
@@ -1040,6 +1185,9 @@
 
     },
     "Watch it from just before it starts" : {
+
+    },
+    "Watermark" : {
 
     },
     "Where the pointer was when this zoom starts" : {

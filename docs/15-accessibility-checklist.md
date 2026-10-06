@@ -8,7 +8,7 @@ and a keyboard-only pass for each flow.
 
 | Surface | Keyboard-only | VoiceOver | Inspector audit | Notes |
 |---|---|---|---|---|
-| Onboarding | code | code | GUI | Escape is not Back; Skip explains capture will not work; RTL via `-KadrRTL` |
+| Onboarding | code | code | GUI | Escape is not Back; Skip explains capture will not work; RTL via `make run-rtl` |
 | Settings | code | code | GUI | View ▸ Show/Hide Sidebar (⌃⌘S); Learn More popovers; value rows adjustable |
 | Quick Access | code | code | GUI | Actions without hover; Share labelled; 20 pt hits |
 | History | code | code | GUI | Search in toolbar; Finder-style selection; Trash |
@@ -41,9 +41,11 @@ to the release evidence.
 
 Launch the agent with:
 
-- `-KadrPseudolocalize` — expand strings ~1.4× at declared minimum window sizes
-- `-KadrPseudolocalize2x` — 2× stress case (docs/14 §6 item 13)
-- `-KadrRTL` — force right-to-left layout in English
+- `make run-pseudo` — the system's double-length pseudolanguage (`-NSDoubleLocalizedStrings YES`):
+  every localized string, AppKit's and SwiftUI's included, doubled — the 2× stress case
+  (docs/14 §6 item 13), checked at declared minimum window sizes
+- `make run-rtl` — right-to-left layout in English (`-AppleTextDirection YES
+  -NSForceRightToLeftWritingDirection YES`)
 
 ## Verified in-sandbox
 

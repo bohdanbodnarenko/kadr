@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 extension QuickAccessCardView {
@@ -9,7 +10,7 @@ extension QuickAccessCardView {
             .foregroundStyle(.white.opacity(0.94))
             .lineLimit(1)
             .truncationMode(.middle)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, KadrSpace.medium)
             .frame(height: 22)
             .background(Capsule().fill(CardGlass.fill))
             .overlay(Capsule().strokeBorder(CardGlass.edge, lineWidth: 0.5))

@@ -186,7 +186,7 @@ struct RecordingNotchIsland: View {
 
             if model.microphoneIsSilent || model.microphoneDropped, model.preRoll == nil {
                 Image(systemName: "mic.slash.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: KadrType.micro, weight: .semibold))
                     .foregroundStyle(.orange)
             }
         }
@@ -197,7 +197,7 @@ struct RecordingNotchIsland: View {
 
     private var clockEar: some View {
         Text(clockText)
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(.system(size: KadrType.body, weight: .semibold, design: .monospaced))
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize()

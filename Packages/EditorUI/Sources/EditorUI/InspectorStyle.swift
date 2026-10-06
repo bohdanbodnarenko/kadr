@@ -58,7 +58,7 @@ extension Font {
     static let inspectorLabel = KadrType.font(KadrType.body)
     static let inspectorValue = KadrType.font(KadrType.body, weight: .medium)
     static let inspectorNumeric = KadrType.numeric(KadrType.body)
-    static let inspectorNote = Font.system(size: 11)
+    static let inspectorNote = Font.system(size: KadrType.caption)
 }
 
 private struct InspectorFieldChrome: ViewModifier {
@@ -101,7 +101,7 @@ extension View {
     func inspectorTextField() -> some View {
         textFieldStyle(.plain)
             .font(.inspectorValue)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, KadrSpace.medium)
             .inspectorField(height: InspectorMetrics.controlHeight, cornerRadius: InspectorMetrics.controlRadius)
     }
 

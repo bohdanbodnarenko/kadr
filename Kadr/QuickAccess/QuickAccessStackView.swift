@@ -48,7 +48,7 @@ struct QuickAccessStackView: View {
 
     /// Slow enough to read, quick enough not to be in the way. No bounce: cards carry a
     /// picture of the user's work, and overshoot on a thumbnail reads as a wobble.
-    static let animation = Animation.smooth(duration: 0.3, extraBounce: 0)
+    static let animation = KadrMotion.settle
 
     @State private var isReflowing = false
     @State private var reflowReset: Task<Void, Never>?
@@ -210,10 +210,10 @@ struct QuickAccessStackView: View {
             VStack(spacing: 2) {
                 ForEach(edges, id: \.element.id) { index, _ in
                     let depth = corner.isBottom ? edges.count - index : index + 1
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                         .fill(.regularMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: KadrRadius.medium, style: .continuous)
                                 .strokeBorder(KadrFill.stroke, lineWidth: 0.5)
                         )
                         .frame(height: QuickAccessCardView.sliverHeight)

@@ -116,8 +116,7 @@ extension View {
                     lineWidth: 0.8
                 )
             }
-            .shadow(color: .black.opacity(0.32), radius: 22, y: 8)
-            .shadow(color: .black.opacity(0.14), radius: 3, y: 1)
+            .kadrShadow(.floating)
         }
     }
 
@@ -127,7 +126,7 @@ extension View {
             .contentShape(Rectangle())
     }
 
-    /// Launch `-KadrRTL` to force right-to-left even in English (docs/14 UX-01.4).
+    /// `make run-rtl` forces right-to-left even in English (docs/14 UX-01.4).
     ///
     /// Without the flag the system's direction is left alone: forcing `.leftToRight`
     /// turned every right-to-left user's Settings backwards (docs/17 T-SH-8).

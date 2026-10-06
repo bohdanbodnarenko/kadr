@@ -1,13 +1,31 @@
+import ControlKit
 import SwiftUI
 
 /// A titled inspector section that is always open — the context the user is working in.
 struct InspectorGroup<Content: View, Accessory: View>: View {
-    let title: String
+    let title: Text
     @ViewBuilder var accessory: () -> Accessory
     @ViewBuilder var content: () -> Content
 
     init(
-        _ title: String,
+        _ title: LocalizedStringKey,
+        @ViewBuilder accessory: @escaping () -> Accessory,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(verbatimTitle: Text(title, bundle: .module), accessory: accessory, content: content)
+    }
+
+    @_disfavoredOverload
+    init(
+        _ title: some StringProtocol,
+        @ViewBuilder accessory: @escaping () -> Accessory,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(verbatimTitle: Text(title), accessory: accessory, content: content)
+    }
+
+    private init(
+        verbatimTitle title: Text,
         @ViewBuilder accessory: @escaping () -> Accessory,
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -19,7 +37,7 @@ struct InspectorGroup<Content: View, Accessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
-                Text(title)
+                title
                     .font(.inspectorHeader)
                     .lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
@@ -41,7 +59,12 @@ struct InspectorGroup<Content: View, Accessory: View>: View {
 }
 
 extension InspectorGroup where Accessory == EmptyView {
-    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
+    init(_ title: LocalizedStringKey, @ViewBuilder content: @escaping () -> Content) {
+        self.init(title, accessory: { EmptyView() }, content: content)
+    }
+
+    @_disfavoredOverload
+    init(_ title: some StringProtocol, @ViewBuilder content: @escaping () -> Content) {
         self.init(title, accessory: { EmptyView() }, content: content)
     }
 }
@@ -58,17 +81,23 @@ struct InspectorDivider: View {
 
 /// A label column and a value, so a stack of rows lines its values up.
 struct InspectorRow<Content: View>: View {
-    let title: String
+    let title: Text
     @ViewBuilder var content: () -> Content
 
-    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
-        self.title = title
+    init(_ title: LocalizedStringKey, @ViewBuilder content: @escaping () -> Content) {
+        self.title = Text(title, bundle: .module)
+        self.content = content
+    }
+
+    @_disfavoredOverload
+    init(_ title: some StringProtocol, @ViewBuilder content: @escaping () -> Content) {
+        self.title = Text(title)
         self.content = content
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(title)
+            title
                 .font(.inspectorLabel)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -82,17 +111,23 @@ struct InspectorRow<Content: View>: View {
 
 /// A label above content that needs the full width — swatches, grids.
 struct InspectorStackedRow<Content: View>: View {
-    let title: String
+    let title: Text
     @ViewBuilder var content: () -> Content
 
-    init(_ title: String, @ViewBuilder content: @escaping () -> Content) {
-        self.title = title
+    init(_ title: LocalizedStringKey, @ViewBuilder content: @escaping () -> Content) {
+        self.title = Text(title, bundle: .module)
+        self.content = content
+    }
+
+    @_disfavoredOverload
+    init(_ title: some StringProtocol, @ViewBuilder content: @escaping () -> Content) {
+        self.title = Text(title)
         self.content = content
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            title
                 .font(.inspectorLabel)
                 .foregroundStyle(.secondary)
             content()
@@ -103,23 +138,29 @@ struct InspectorStackedRow<Content: View>: View {
 
 /// A statement and a switch at the trailing edge.
 struct InspectorToggleRow: View {
-    let title: String
+    let title: Text
     @Binding var isOn: Bool
 
-    init(_ title: String, isOn: Binding<Bool>) {
-        self.title = title
+    init(_ title: LocalizedStringKey, isOn: Binding<Bool>) {
+        self.title = Text(title, bundle: .module)
+        _isOn = isOn
+    }
+
+    @_disfavoredOverload
+    init(_ title: some StringProtocol, isOn: Binding<Bool>) {
+        self.title = Text(title)
         _isOn = isOn
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(title)
+            title
                 .font(.inspectorLabel)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityHidden(true)
             Spacer(minLength: 8)
-            Toggle(title, isOn: $isOn)
+            Toggle(isOn: $isOn) { title }
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)
@@ -130,24 +171,31 @@ struct InspectorToggleRow: View {
 
 /// A statement and a colour well at the trailing edge.
 struct InspectorColorRow: View {
-    let title: String
+    let title: Text
     @Binding var selection: Color
     var supportsOpacity = true
 
-    init(_ title: String, selection: Binding<Color>, supportsOpacity: Bool = true) {
-        self.title = title
+    init(_ title: LocalizedStringKey, selection: Binding<Color>, supportsOpacity: Bool = true) {
+        self.title = Text(title, bundle: .module)
+        _selection = selection
+        self.supportsOpacity = supportsOpacity
+    }
+
+    @_disfavoredOverload
+    init(_ title: some StringProtocol, selection: Binding<Color>, supportsOpacity: Bool = true) {
+        self.title = Text(title)
         _selection = selection
         self.supportsOpacity = supportsOpacity
     }
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(title)
+            title
                 .font(.inspectorLabel)
                 .lineLimit(1)
                 .accessibilityHidden(true)
             Spacer(minLength: 8)
-            ColorPicker(title, selection: $selection, supportsOpacity: supportsOpacity)
+            ColorPicker(selection: $selection, supportsOpacity: supportsOpacity) { title }
                 .labelsHidden()
         }
         .frame(minHeight: InspectorMetrics.controlHeight)
@@ -266,7 +314,7 @@ private struct InspectorButtonBody: View {
             .font(.inspectorValue)
             .lineLimit(1)
             .foregroundStyle(isProminent ? Color.white : Color.primary)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, KadrSpace.large)
             .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: InspectorMetrics.controlHeight)
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(isProminent ? Color.clear : InspectorControlPalette.border, lineWidth: 0.5))
@@ -288,8 +336,21 @@ private struct InspectorButtonBody: View {
 /// A small glyph action for a section header: reset, duplicate, delete.
 struct InspectorIconButton: View {
     let systemName: String
-    let help: String
+    let help: Text
     let action: () -> Void
+
+    init(systemName: String, help: LocalizedStringKey, action: @escaping () -> Void) {
+        self.systemName = systemName
+        self.help = Text(help, bundle: .module)
+        self.action = action
+    }
+
+    @_disfavoredOverload
+    init(systemName: String, help: some StringProtocol, action: @escaping () -> Void) {
+        self.systemName = systemName
+        self.help = Text(help)
+        self.action = action
+    }
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var isHovering = false
@@ -297,7 +358,7 @@ struct InspectorIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: KadrType.caption, weight: .semibold))
                 .foregroundStyle(isHovering && isEnabled ? Color.primary : Color.secondary)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(isHovering && isEnabled ? InspectorControlPalette.hoverFill : .clear))
@@ -313,14 +374,19 @@ struct InspectorIconButton: View {
 
 /// Secondary explanation under a control.
 struct InspectorNote: View {
-    let text: String
+    let text: Text
 
-    init(_ text: String) {
-        self.text = text
+    init(_ text: LocalizedStringKey) {
+        self.text = Text(text, bundle: .module)
+    }
+
+    @_disfavoredOverload
+    init(_ text: some StringProtocol) {
+        self.text = Text(text)
     }
 
     var body: some View {
-        Text(text)
+        text
             .font(.inspectorNote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -331,17 +397,30 @@ struct InspectorNote: View {
 /// What a pane says when it has nothing to show, instead of being blank.
 struct InspectorEmptyState: View {
     let symbol: String
-    let title: String
-    let message: String
+    let title: Text
+    let message: Text
+
+    init(symbol: String, title: LocalizedStringKey, message: LocalizedStringKey) {
+        self.symbol = symbol
+        self.title = Text(title, bundle: .module)
+        self.message = Text(message, bundle: .module)
+    }
+
+    @_disfavoredOverload
+    init(symbol: String, title: some StringProtocol, message: some StringProtocol) {
+        self.symbol = symbol
+        self.title = Text(title)
+        self.message = Text(message)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(.system(size: 22))
                 .foregroundStyle(.tertiary)
-            Text(title)
+            title
                 .font(.inspectorValue)
-            Text(message)
+            message
                 .font(.inspectorNote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

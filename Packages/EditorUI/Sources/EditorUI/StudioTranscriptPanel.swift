@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Shared
 import StudioRender
 import StudioSession
@@ -134,7 +135,7 @@ struct StudioTranscriptPanel: View {
                             Text(label(for: group.track))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
-                                .padding(.top, 6)
+                                .padding(.top, KadrSpace.small)
                         }
                         // Paragraph-sized rows, so the stack is lazy over a long transcript and
                         // a new active word re-renders the one row it is in (docs/18 STU-15).

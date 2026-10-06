@@ -38,7 +38,7 @@ struct ThumbnailImage: View {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.94), .black.opacity(0.32))
-                    .shadow(color: .black.opacity(0.28), radius: 8, y: 2)
+                    .kadrShadow(.banner)
             }
         }
         .task(id: "\(url.path)-\(revision)") {
@@ -150,8 +150,8 @@ private struct CardBarButtonBody: View {
             .background(Circle().fill(Color.white.opacity(fill)))
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : KadrMotion.press, value: isHovering)
+            .animation(reduceMotion ? nil : KadrMotion.press, value: configuration.isPressed)
             .onHover { isHovering = $0 && isEnabled }
     }
 
@@ -190,11 +190,11 @@ private struct CardCircleButtonBody: View {
             .frame(width: diameter, height: diameter)
             .background(Circle().fill(isHovering ? CardGlass.hoverFill : CardGlass.fill))
             .overlay(Circle().strokeBorder(CardGlass.edge, lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            .kadrShadow(.glyph)
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: isHovering)
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : KadrMotion.press, value: isHovering)
+            .animation(reduceMotion ? nil : KadrMotion.press, value: configuration.isPressed)
             .onHover { isHovering = $0 }
     }
 }

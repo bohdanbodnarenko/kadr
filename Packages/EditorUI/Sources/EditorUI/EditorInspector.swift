@@ -1,4 +1,5 @@
 import AnnotationModel
+import ControlKit
 import SwiftUI
 
 /// Per-tool style and canvas controls (docs/03 §3, docs/14 UX-30).
@@ -30,7 +31,7 @@ struct EditorInspector: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(.bottom, 16)
+            .padding(.bottom, KadrSpace.xl)
         }
         .safeAreaInset(edge: .top, spacing: 0) { paneSwitcher }
         // A pane swap is a page turn, not a morph: animating it slid rows across each other.

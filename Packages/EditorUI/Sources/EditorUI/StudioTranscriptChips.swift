@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import Shared
 import StudioRender
 import StudioSession
@@ -94,15 +95,15 @@ struct TranscriptChip: View, Equatable {
                 .underline(isFiller && !isCut, pattern: .dot, color: .orange)
                 .strikethrough(isCut, color: .secondary.opacity(0.6))
                 .foregroundStyle(isCut ? Color.secondary.opacity(0.45) : Color.primary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, KadrSpace.xs)
                 .padding(.vertical, 1)
-                .background(background, in: RoundedRectangle(cornerRadius: 4))
+                .background(background, in: RoundedRectangle(cornerRadius: KadrRadius.small))
                 // Shape as well as tint (docs/14 UX-34): selected words are outlined and
                 // the spoken word carries a bar, so neither depends on telling two
                 // accent shades apart.
                 .overlay {
                     if isSelected || match == .current {
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: KadrRadius.small)
                             .strokeBorder(isSelected ? Color.accentColor : Color.orange, lineWidth: 1.5)
                     }
                 }

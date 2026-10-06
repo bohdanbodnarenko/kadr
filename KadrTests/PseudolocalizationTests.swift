@@ -1,27 +1,20 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Kadr
 
 @Suite("Pseudolocalization")
 struct PseudolocalizationTests {
-    @Test("Expansion is longer than the source and wraps the text")
-    func expandsToAboutOnePointFour() {
-        let source = "Capture Area"
-        let expanded = Pseudolocalization.expand(source)
-        #expect(expanded.hasPrefix("⟦"))
-        #expect(expanded.hasSuffix("⟧"))
-        #expect(expanded.contains(source))
-        #expect(expanded.count > source.count)
-        #expect(Double(expanded.count) >= Double(source.count) * 1.3)
+    @Test("The double-length model matches what Foundation renders")
+    func doubledMatchesFoundation() {
+        // "Cancel Cancel" is what `-NSDoubleLocalizedStrings YES` gives for AppKit's Cancel.
+        #expect(Pseudolocalization.doubled("Cancel") == "Cancel Cancel")
     }
 
-    @Test("A 2× expansion is longer than 1.4×")
-    func expandsToDoubleLength() {
-        let source = "Capture Area"
-        let defaultExpand = Pseudolocalization.expand(source, factor: 1.4)
-        let doubled = Pseudolocalization.expand(source, factor: 2.0)
-        #expect(doubled.count > defaultExpand.count)
-        #expect(Double(doubled.count) >= Double(source.count) * 1.9)
+    @Test("Kadr reads the system's pseudolanguage defaults, not arguments of its own")
+    func systemDefaults() {
+        #expect(KadrText.doubleLengthDefault == "NSDoubleLocalizedStrings")
+        #expect(KadrText.rightToLeftDefault == "NSForceRightToLeftWritingDirection")
     }
 
     @Test("Plural strings distinguish one from many")

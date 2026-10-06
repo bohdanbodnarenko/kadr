@@ -1,4 +1,5 @@
 import CaptureCore
+import ControlKit
 import KeyboardShortcuts
 import SettingsKit
 import SwiftUI
@@ -35,7 +36,7 @@ struct OnboardingView: View {
             }
             Divider()
             footer
-                .padding(16)
+                .padding(KadrSpace.xl)
         }
         .frame(minWidth: 520, minHeight: 560)
         .kadrLayoutDirection()
@@ -101,7 +102,7 @@ struct OnboardingView: View {
                         }
                     }
                 }
-                .padding(4)
+                .padding(KadrSpace.xs)
             }
 
             Text("Or click the Kadr icon in the menu bar for every capture mode. "
@@ -128,7 +129,7 @@ struct OnboardingView: View {
                     Button("Restart Kadr", action: model.relaunch)
                         .buttonStyle(.borderedProminent)
                 }
-                .padding(12)
+                .padding(KadrSpace.large)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
@@ -168,7 +169,7 @@ struct OnboardingView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
-                .padding(4)
+                .padding(KadrSpace.xs)
             }
 
             Text("Microphone and camera stay off until you choose them for a recording. "
@@ -242,7 +243,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
-                .padding(12)
+                .padding(KadrSpace.large)
                 .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -277,9 +278,9 @@ struct OnboardingView: View {
                     .scaledToFill()
                     .frame(width: 76, height: 48)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: KadrRadius.medium))
             } else {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: KadrRadius.medium)
                     .fill(.quaternary)
                     .frame(width: 76, height: 48)
             }

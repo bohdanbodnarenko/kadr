@@ -1,3 +1,4 @@
+import ControlKit
 import HistoryKit
 import SwiftUI
 
@@ -34,9 +35,9 @@ struct HistoryCell: View {
                 }
             }
             .frame(height: 96)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: KadrRadius.large))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: KadrRadius.large)
                     .strokeBorder(
                         isSelected ? Color.accentColor : Color.primary.opacity(0.08),
                         lineWidth: isSelected ? 3 : 1
@@ -44,9 +45,9 @@ struct HistoryCell: View {
             )
             .overlay {
                 if isFocused {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: KadrRadius.large)
                         .strokeBorder(Color.primary.opacity(0.55), lineWidth: 1, antialiased: true)
-                        .padding(2)
+                        .padding(KadrSpace.xxs)
                 }
             }
 

@@ -153,9 +153,9 @@ struct FeedbackBanner: View {
                     .controlSize(.small)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .kadrChrome(cornerRadius: 8)
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
+        .kadrChrome(cornerRadius: KadrRadius.large)
         .onHover { isHovered = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(status.kind == .error ? .isStaticText : [])
@@ -171,7 +171,7 @@ struct FeedbackBanner: View {
                 onDismiss()
             }
         }
-        .kadrAnimation(.snappy(duration: 0.2), value: status.id)
+        .kadrAnimation(KadrMotion.snap, value: status.id)
     }
 
     private var symbol: String {

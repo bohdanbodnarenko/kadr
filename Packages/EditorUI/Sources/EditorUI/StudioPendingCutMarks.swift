@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// The cuts Tidy proposes, drawn over the clips before anything is applied
@@ -29,7 +30,7 @@ struct PendingCutMarks: View {
     }
 
     private func mark(selected: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 3)
+        let shape = RoundedRectangle(cornerRadius: KadrRadius.small)
         return shape
             .fill(Color.red.opacity(selected ? 0.22 : 0))
             .overlay {

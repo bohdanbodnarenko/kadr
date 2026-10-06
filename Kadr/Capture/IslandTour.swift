@@ -1,3 +1,4 @@
+import ControlKit
 import SwiftUI
 
 /// One page of the island's first-open tour (docs/03 §1.4).
@@ -94,7 +95,7 @@ final class IslandTourModel {
     func move(by delta: Int) -> Bool {
         let next = index + delta
         guard steps.indices.contains(next) else { return false }
-        withAnimation(AccessibilityChrome.animation(.smooth(duration: 0.28))) {
+        withAnimation(AccessibilityChrome.animation(KadrMotion.settle)) {
             index = next
         }
         return true
@@ -128,7 +129,7 @@ struct IslandTourView: View {
             .clipped()
             controls
         }
-        .padding(16)
+        .padding(KadrSpace.xl)
         .frame(width: 300)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tip \(model.index + 1) of \(model.steps.count)")

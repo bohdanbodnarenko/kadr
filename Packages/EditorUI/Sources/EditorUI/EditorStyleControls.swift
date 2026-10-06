@@ -108,14 +108,14 @@ struct EditorSwatchStrip: View {
 struct EditorCopiedToast: View {
     var body: some View {
         Label(String(localized: "Copied", bundle: .module), systemImage: "checkmark.circle.fill")
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: KadrType.title, weight: .semibold))
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.vertical, KadrSpace.medium)
             .background(.regularMaterial, in: Capsule())
             .overlay {
                 Capsule().strokeBorder(KadrFill.stroke, lineWidth: 0.5)
             }
-            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+            .kadrShadow(.raised)
     }
 }
 

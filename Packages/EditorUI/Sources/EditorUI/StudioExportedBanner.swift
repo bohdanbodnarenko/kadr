@@ -1,4 +1,5 @@
 import AppKit
+import ControlKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -44,10 +45,10 @@ struct StudioExportedBanner: View {
             .accessibilityLabel(Text("Dismiss", bundle: .module))
         }
         .controlSize(.small)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator))
+        .padding(.horizontal, KadrSpace.large)
+        .padding(.vertical, KadrSpace.medium)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: KadrRadius.large))
+        .overlay(RoundedRectangle(cornerRadius: KadrRadius.large).strokeBorder(.separator))
         .padding(.horizontal, 10)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("Exported \(url.lastPathComponent)", bundle: .module))
@@ -61,7 +62,7 @@ extension View {
             if let url = model.lastExportedURL, FileManager.default.fileExists(atPath: url.path) {
                 StudioExportedBanner(url: url) { model.lastExportedURL = nil }
                     .frame(maxWidth: 460)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, KadrSpace.large)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
