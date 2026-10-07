@@ -945,6 +945,11 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-weak_framework",
+					ScreenCaptureKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr;
 				KADR_APPCAST_URL = "https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml";
 				KADR_GIT_COMMIT = unknown;
@@ -984,6 +989,11 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.9.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-weak_framework",
+					ScreenCaptureKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.bohdanbodnarenko.kadr;
 				KADR_APPCAST_URL = "https://raw.githubusercontent.com/bohdanbodnarenko/kadr/main/appcast.xml";
 				KADR_GIT_COMMIT = unknown;
