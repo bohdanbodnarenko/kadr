@@ -35,7 +35,7 @@ struct RecordingBarTooltipLayer: View {
         )
     }
 
-    static func clampedCentreX(
+    nonisolated static func clampedCentreX(
         controlMidX: CGFloat, pillWidth: CGFloat, barWidth: CGFloat, overhang: CGFloat
     ) -> CGFloat {
         let half = pillWidth / 2
