@@ -52,6 +52,12 @@ export PATH := $(CURDIR)/$(TOOLS):$(PATH)
 # A package's tests finish in seconds to a couple of minutes; past this the run is hung, and
 # Scripts/watchdog.sh samples the test process and fails rather than waiting forever.
 TEST_TIMEOUT ?= 900
+# Packages whose tests run AVFoundation or Vision work that blocks threads synchronously.
+# In parallel on a small machine (CI's 3-core runners) they use up Swift's cooperative
+# thread pool and deadlock: Scripts/watchdog.sh caught StudioRender stuck in
+# AVAssetReader and VisionServices in VNRecognizeTextRequest. Serial, they take seconds.
+SERIAL_TEST_PACKAGES := StudioRender VisionServices
+test_flags = $(if $(filter $(1),$(SERIAL_TEST_PACKAGES)),--no-parallel)
 SWIFTLINT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftlint) swiftlint)
 SWIFTFORMAT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftformat) swiftformat)
 
@@ -124,13 +130,14 @@ test: test-packages test-app test-editor ## Run every test
 test-packages: ## Run every package's tests
 	@for package in $(PACKAGES); do \
 		printf '\n== %s ==\n' "$$package"; \
-		( cd Packages/$$package && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test ) || exit 1; \
+		flags=""; case " $(SERIAL_TEST_PACKAGES) " in *" $$package "*) flags="--no-parallel";; esac; \
+		( cd Packages/$$package && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test $$flags ) || exit 1; \
 	done
 
 # One package, for CI's matrix: `make test-package PACKAGE=Shared`.
 test-package: ## Run one package's tests (PACKAGE=Shared)
 	@test -n "$(PACKAGE)" || { printf 'Set PACKAGE, e.g. make test-package PACKAGE=Shared\n' >&2; exit 2; }
-	@cd Packages/$(PACKAGE) && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test
+	@cd Packages/$(PACKAGE) && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test $(call test_flags,$(PACKAGE))
 
 # Not `-quiet`: it suppresses the test summary, which is the entire output anybody wants
 # from a test run. The build targets keep it; this one cannot.
