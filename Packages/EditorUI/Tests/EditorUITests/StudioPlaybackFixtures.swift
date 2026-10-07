@@ -44,10 +44,28 @@ enum StudioPlaybackFixtures {
     ) async throws -> Bool {
         let deadline = ContinuousClock.now + timeout
         while !condition() {
-            guard ContinuousClock.now < deadline else { return false }
+            guard ContinuousClock.now < deadline else {
+                return try await graceCheck(condition)
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
         return true
+    }
+
+    /// A last look after the deadline, a few turns of the main actor apart.
+    ///
+    /// On a loaded CI machine the main thread can stall for longer than the whole timeout.
+    /// When it frees up, this loop wakes first, finds the deadline gone and would give up,
+    /// before the work it was waiting for (also queued on the main actor) gets its turn.
+    /// Every EditorUI timing test failed at the same instant on CI for exactly that reason.
+    static func graceCheck(_ condition: () -> Bool) async throws -> Bool {
+        for _ in 0 ..< 20 {
+            if condition() {
+                return true
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        return condition()
     }
 
     private static func writeMovie(seconds: Double, to url: URL) async throws {

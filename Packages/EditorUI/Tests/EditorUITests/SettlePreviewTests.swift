@@ -38,7 +38,9 @@ struct SettlePreviewTests {
             }
             try? await Task.sleep(for: .milliseconds(5))
         }
-        return condition()
+        // A stalled main thread can outlast the deadline; give the queued settle task its
+        // turn before deciding (StudioPlaybackFixtures.graceCheck says why).
+        return await (try? StudioPlaybackFixtures.graceCheck(condition)) ?? condition()
     }
 
     @Test("A burst of changes costs exactly one render")

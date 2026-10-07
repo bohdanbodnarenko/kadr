@@ -69,7 +69,13 @@ struct VisionClientTests {
         #expect(text.localizedCaseInsensitiveContains("Kadr"), "helper returned \(text.debugDescription)")
     }
 
-    @Test("A typical region comes back inside the one-second budget (docs/03 §1.7)")
+    /// Measured on real Macs only. CI's virtual machines have no Neural Engine and share
+    /// their cores, so a hardware budget judged there measures the runner, not Kadr; the
+    /// device rows in docs/12 cover it.
+    @Test(
+        "A typical region comes back inside the one-second budget (docs/03 §1.7)",
+        .disabled(if: ProcessInfo.processInfo.environment["CI"] != nil, "hardware budget; not meaningful on a CI VM")
+    )
     func withinBudget() async throws {
         let client = VisionClient()
         defer { client.disconnect() }
