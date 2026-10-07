@@ -46,6 +46,14 @@ SWIFTLINT_VERSION := 0.65.1
 SWIFTFORMAT_VERSION := 0.63.0
 TOOLS := $(DERIVED)/tools
 export PATH := $(CURDIR)/$(TOOLS):$(PATH)
+# Called by path, not by name: make runs a recipe line without shell metacharacters itself,
+# looking the command up on the PATH it started with, so the export above does not reach it.
+# That is how CI downloaded the pinned SwiftLint and then could not find it.
+# A package's tests finish in seconds to a couple of minutes; past this the run is hung, and
+# Scripts/watchdog.sh samples the test process and fails rather than waiting forever.
+TEST_TIMEOUT ?= 900
+SWIFTLINT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftlint) swiftlint)
+SWIFTFORMAT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftformat) swiftformat)
 
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
@@ -116,13 +124,13 @@ test: test-packages test-app test-editor ## Run every test
 test-packages: ## Run every package's tests
 	@for package in $(PACKAGES); do \
 		printf '\n== %s ==\n' "$$package"; \
-		( cd Packages/$$package && swift test ) || exit 1; \
+		( cd Packages/$$package && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test ) || exit 1; \
 	done
 
 # One package, for CI's matrix: `make test-package PACKAGE=Shared`.
 test-package: ## Run one package's tests (PACKAGE=Shared)
 	@test -n "$(PACKAGE)" || { printf 'Set PACKAGE, e.g. make test-package PACKAGE=Shared\n' >&2; exit 2; }
-	@cd Packages/$(PACKAGE) && swift test
+	@cd Packages/$(PACKAGE) && $(CURDIR)/Scripts/watchdog.sh $(TEST_TIMEOUT) swift test
 
 # Not `-quiet`: it suppresses the test summary, which is the entire output anybody wants
 # from a test run. The build targets keep it; this one cannot.
@@ -169,12 +177,12 @@ test-ui: ## Run the editor's UI tests (needs a logged-in session; not in CI)
 # MARK: - Static checks
 
 lint: ## SwiftLint and SwiftFormat, both read-only
-	@[ "$$(swiftlint version)" = "$(SWIFTLINT_VERSION)" ] || \
-		printf 'warning: SwiftLint %s, pinned %s (make lint-tools)\n' "$$(swiftlint version)" "$(SWIFTLINT_VERSION)" >&2
-	@[ "$$(swiftformat --version)" = "$(SWIFTFORMAT_VERSION)" ] || \
-		printf 'warning: SwiftFormat %s, pinned %s (make lint-tools)\n' "$$(swiftformat --version)" "$(SWIFTFORMAT_VERSION)" >&2
-	@swiftlint lint --strict
-	@swiftformat --lint .
+	@[ "$$($(SWIFTLINT) version)" = "$(SWIFTLINT_VERSION)" ] || \
+		printf 'warning: SwiftLint %s, pinned %s (make lint-tools)\n' "$$($(SWIFTLINT) version)" "$(SWIFTLINT_VERSION)" >&2
+	@[ "$$($(SWIFTFORMAT) --version)" = "$(SWIFTFORMAT_VERSION)" ] || \
+		printf 'warning: SwiftFormat %s, pinned %s (make lint-tools)\n' "$$($(SWIFTFORMAT) --version)" "$(SWIFTFORMAT_VERSION)" >&2
+	@$(SWIFTLINT) lint --strict
+	@$(SWIFTFORMAT) --lint .
 
 lint-tools: ## Download the pinned SwiftLint and SwiftFormat into build/tools
 	@mkdir -p $(TOOLS)
@@ -185,12 +193,12 @@ lint-tools: ## Download the pinned SwiftLint and SwiftFormat into build/tools
 		https://github.com/nicklockwood/SwiftFormat/releases/download/$(SWIFTFORMAT_VERSION)/swiftformat.zip
 	@unzip -oq $(TOOLS)/swiftformat.zip swiftformat -d $(TOOLS)
 	@rm -f $(TOOLS)/*.zip
-	@swiftlint version && swiftformat --version
+	@$(SWIFTLINT) version && $(SWIFTFORMAT) --version
 
 format: format-fix ## Rewrite sources with SwiftFormat
 
 format-fix:
-	@swiftformat .
+	@$(SWIFTFORMAT) .
 
 check: check-layering check-size ## The architecture and size gates
 
