@@ -16,17 +16,19 @@ jobs:
   # failure mode of a second list is that nobody notices it is short.
   discover:
     name: Find the packages
+    timeout-minutes: 5
     runs-on: macos-26
     outputs:
       packages: ${{ steps.list.outputs.packages }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: list
         run: echo "packages=$(make packages-json)" >> "$GITHUB_OUTPUT"
 
   # docs/04 §2: "CI builds packages in parallel."
   packages:
     name: ${{ matrix.package }}
+    timeout-minutes: 25
     needs: discover
     runs-on: macos-26
     strategy:
@@ -34,7 +36,7 @@ jobs:
       matrix:
         package: ${{ fromJSON(needs.discover.outputs.packages) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Show toolchain
         run: swift --version && xcodebuild -version
       - name: Test ${{ matrix.package }}
@@ -42,9 +44,10 @@ jobs:
 
   app:
     name: Build agent app
+    timeout-minutes: 60
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Show toolchain
         run: xcodebuild -version
       - name: Build workspace
@@ -85,10 +88,11 @@ jobs:
   # otherwise never exercised (docs/18 X-7).
   macos14:
     name: Agent tests on macOS 14
+    timeout-minutes: 30
     needs: app
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           name: agent-tests
@@ -98,9 +102,10 @@ jobs:
 
   static:
     name: Lint and architecture checks
+    timeout-minutes: 15
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install the pinned SwiftLint and SwiftFormat
         run: make lint-tools
       - name: Lint and format check
