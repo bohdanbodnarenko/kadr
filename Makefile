@@ -72,7 +72,7 @@ SWIFTFORMAT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftformat) swiftformat
 UNSIGNED := CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
 
 .PHONY: help build build-editor release install uninstall run run-pseudo run-rtl test test-packages test-package \
-        test-app test-editor test-ui test-app-build test-app-run dmg lint lint-tools format format-fix check check-layering \
+        test-app test-editor test-ui test-app-build test-app-run smoke-launch dmg lint lint-tools format format-fix check check-layering \
         check-size check-strings strings size-gate perf packages packages-json all clean
 
 help: ## Show the available commands
@@ -167,6 +167,9 @@ test-app: ## Run the agent app's tests
 test-app-build: ## Build the agent app's tests without running them
 	@xcodebuild build-for-testing -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP) $(UNSIGNED)
+
+smoke-launch: ## Launch the built agent and editor and check they stay running (CI's macOS 14 check)
+	@Scripts/smoke-launch.sh $(DERIVED)/Build/Products/Debug/Kadr.app
 
 test-app-run: ## Run tests built by test-app-build (on this or another Mac)
 	@set -o pipefail; $(CI_TEST_ENV) xcodebuild test-without-building -xctestrun "$$(ls $(DERIVED)/Build/Products/*.xctestrun | head -1)" \

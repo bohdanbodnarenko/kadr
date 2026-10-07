@@ -88,11 +88,11 @@ jobs:
           path: perf-results.json
           if-no-files-found: warn
 
-  # The deployment target. Its runners cannot build with the current SDK, so this runs the
-  # bundle the app job built; several surfaces branch on macOS 26, and the older branch was
-  # otherwise never exercised (docs/18 X-7).
+  # The deployment target. Its runners cannot build with the current SDK, so this launches
+  # the app the app job built: a symbol from a newer macOS linked as required stops Kadr
+  # starting there, and nothing else would notice (docs/18 X-7).
   macos14:
-    name: Agent tests on macOS 14
+    name: Launches on macOS 14
     timeout-minutes: 30
     needs: app
     runs-on: macos-14
@@ -105,10 +105,12 @@ jobs:
         run: mkdir -p build/Build && tar -xzf agent-tests.tar.gz -C build/Build
       - name: Show toolchain
         run: sw_vers && xcodebuild -version
-      - name: Run the agent tests
-        run: make test-app-run
-      # A crash at launch says only "terminated at launch" in xcodebuild's output; the
-      # reason (a missing library or symbol on the older OS) is in the crash report.
+      # Launch, not the unit tests: the newest Xcode on macOS 14 is too old to load a test
+      # bundle built with today's Swift Testing. Launching is what found the real bug here,
+      # a macOS 26 symbol that stopped Kadr starting on 14 and 15.
+      - name: Launch the agent and the editor
+        run: make smoke-launch
+      # The smoke check prints the dyld reason itself; the full report is here if needed.
       - name: Print crash reports
         if: failure()
         run: |
