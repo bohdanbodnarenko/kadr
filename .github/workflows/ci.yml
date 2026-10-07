@@ -58,11 +58,16 @@ jobs:
         run: make test-editor
       - name: Build the agent tests for the macOS 14 run
         run: make test-app-build
+      # Tarred first: upload-artifact drops Unix permissions and symlinks, so the bundle
+      # arrived with no executable bits and broken framework links, and launchd refused to
+      # start the test runner ("Launchd job spawn failed").
+      - name: Pack the built tests
+        run: tar -czf agent-tests.tar.gz -C build/Build Products
       - name: Hand the built tests to the macOS 14 job
         uses: actions/upload-artifact@v4
         with:
           name: agent-tests
-          path: build/Build/Products
+          path: agent-tests.tar.gz
           retention-days: 1
       # The archive, not the build product: `xcodebuild build` plus a strip is not what
       # ships, and measuring it reported 16 MB for a release that downloads at 12.9 MB.
@@ -96,7 +101,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: agent-tests
-          path: build/Build/Products
+      - name: Unpack the built tests
+        run: mkdir -p build/Build && tar -xzf agent-tests.tar.gz -C build/Build
       - name: Run the agent tests
         run: make test-app-run
 
