@@ -60,6 +60,11 @@ SERIAL_TEST_PACKAGES := StudioRender VisionServices
 # xcodebuild hands a hosted test only the variables prefixed TEST_RUNNER_, so CI's own
 # `CI=true` is forwarded explicitly; tests that judge hardware budgets skip on a CI VM.
 CI_TEST_ENV := $(if $(CI),TEST_RUNNER_CI=$(CI))
+# What a release is built with, on the command line because that is the only place that
+# reaches the local packages, where most of the code is. Apple silicon only, optimised for
+# size: universal and -O shipped a 22 MB DMG against PRD §8's 15 MB; this ships ~11.5 MB.
+# Scripts/release.sh passes the same two settings.
+RELEASE_SIZE_SETTINGS := ARCHS=arm64 SWIFT_OPTIMIZATION_LEVEL=-Osize
 test_flags = $(if $(filter $(1),$(SERIAL_TEST_PACKAGES)),--no-parallel)
 SWIFTLINT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftlint) swiftlint)
 SWIFTFORMAT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftformat) swiftformat)
@@ -232,7 +237,7 @@ check-strings: ## Fail if the String Catalogs are out of step with the last buil
 # budget for a release that ships at 12.9 MB.
 size-gate: ## The real size budget: archive the app and measure the DMG it ships as
 	@xcodebuild archive -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Release \
-		-archivePath $(ARCHIVE) -quiet $(UNSIGNED)
+		-archivePath $(ARCHIVE) -quiet $(UNSIGNED) $(RELEASE_SIZE_SETTINGS)
 	@Scripts/check-size.sh $(ARCHIVE)
 
 # Separate from `check` because it runs the app and waits half a minute; `all` leaves it

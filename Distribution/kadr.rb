@@ -25,6 +25,7 @@ cask "kadr" do
 
   # Sparkle handles its own updates, so Homebrew should not fight it.
   auto_updates true
+  depends_on arch: :arm64
   depends_on macos: ">= :sonoma"
 
   app "Kadr.app"

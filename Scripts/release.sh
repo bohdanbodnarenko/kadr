@@ -126,6 +126,8 @@ xcodebuild archive \
     -configuration Release \
     -archivePath "$ARCHIVE" \
     -destination 'generic/platform=macOS' \
+    ARCHS=arm64 \
+    SWIFT_OPTIMIZATION_LEVEL=-Osize \
     MARKETING_VERSION="$VERSION" \
     CURRENT_PROJECT_VERSION="$BUILD" \
     KADR_GIT_COMMIT="$COMMIT" \

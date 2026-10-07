@@ -90,7 +90,7 @@ Explicitly **not** in MVP: recording, scrolling capture, backgrounds, history.
 ## 7. Platform & compatibility
 
 - **Minimum macOS 14 (Sonoma).** Rationale: `SCScreenshotManager` + `SCContentSharingPicker` (14.0), Vision instance masks (14.0), `@Observable` (14.0). Fallback-free codebase beats supporting 12/13 with dual paths. Recording uses `SCStream`+`AVAssetWriter` on 14 and can adopt `SCRecordingOutput`/mic-in-SCK/HDR on 15+ behind availability checks.
-- Apple Silicon native + Intel (universal binary) through Phase 2; re-evaluate Intel at Phase 3 by download stats.
+- Apple Silicon only (decided 2026-10-07). The universal binary shipped a 22 MB DMG against the 15 MB budget below once the docs/18 polish landed; Apple-silicon-only with size-optimised Swift ships about 11.5 MB. Intel Macs (2018–2020) are not supported.
 - Localization-ready from v1 (String Catalogs); English at launch, community translations after.
 
 ## 8. Performance requirements (CI-enforced budgets)
@@ -135,4 +135,4 @@ Engineering strategy to meet these (details in doc 04): AppKit-first shell with 
 2. gifski (AGPL) as bundled CLI vs pure-Swift GIF encoder quality tradeoff.
 3. History storage format: flat files + SQLite index vs Core Data vs GRDB — proposal in doc 04 (§ persistence) is files + SQLite (GRDB).
 4. Whether Phase 2 URL scheme mirrors CleanShot's verb names for drop-in Raycast compatibility, or defines its own with an alias layer.
-5. Intel support end date.
+5. ~~Intel support end date.~~ Resolved: Apple silicon only from the first public release (2026-10-07).
