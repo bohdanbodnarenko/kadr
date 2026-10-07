@@ -58,7 +58,7 @@ struct CaptureEngineIntegrationTests {
         }
     }
 
-    @Test("Freezing every display fits the 80 ms budget (docs/04 §4.2)")
+    @Test("Freezing every display fits the 80 ms budget (docs/04 §4.2)", .judgedOnRealMacs)
     func freezeIsFast() async throws {
         let engine = makeEngine()
         // Warm the framework up; the budget is about steady-state, not first-touch.
@@ -136,7 +136,7 @@ struct CaptureEngineIntegrationTests {
 /// These need a Screen Recording grant and a display, so they share the opt-in switch
 /// described above. They are the half of the performance suite that
 /// `Scripts/check-perf.sh` cannot cover, because a script cannot capture the screen.
-@Suite("Capture latency budgets", .enabled(if: integrationEnabled))
+@Suite("Capture latency budgets", .enabled(if: integrationEnabled), .judgedOnRealMacs)
 struct CaptureLatencyTests {
     private func makeEngine() -> CaptureEngine {
         CaptureEngine(

@@ -145,7 +145,7 @@ struct TelemetryClockTests {
     /// trip, not the encoding — so the fix is asking it four times a second rather than
     /// sixty. The gate is loose enough to survive a loaded machine and far tighter than the
     /// several hundred microseconds a per-sample lookup costs.
-    @Test("A pointer sample is cheap once the cursor has been seen")
+    @Test("A pointer sample is cheap once the cursor has been seen", .judgedOnRealMacs)
     func steadyStateSampleIsCheap() {
         let recorder = recorder()
 
