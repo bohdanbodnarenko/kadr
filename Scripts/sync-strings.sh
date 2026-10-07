@@ -32,7 +32,10 @@ pairs=(
 for catalog in Packages/*/Sources/*/Resources/Localizable.xcstrings; do
     [[ -e "$catalog" ]] || continue
     package="$(echo "$catalog" | cut -d/ -f2)"
-    pairs+=("$catalog:$package.build/Debug/$package-t.build")
+    # The package's whole Debug folder, not one target inside it: Xcode 27 compiles a
+    # package into `<Package>-t.build`, the Xcode on CI's runners names it otherwise, and
+    # only the compiling target holds .stringsdata, so nothing is counted twice.
+    pairs+=("$catalog:$package.build/Debug")
 done
 
 for pair in "${pairs[@]}"; do
