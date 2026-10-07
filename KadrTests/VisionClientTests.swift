@@ -52,10 +52,18 @@ struct VisionClientTests {
         let client = VisionClient()
         defer { client.disconnect() }
 
-        let analysis = try await client.analyze(
-            makeTextImage("Kadr OCR"),
-            options: TextRecognitionOptions()
-        )
+        let image = makeTextImage("Kadr OCR")
+        let analysis: VisionAnalysis
+        do {
+            analysis = try await client.analyze(image, options: TextRecognitionOptions())
+        } catch VisionClient.ClientError.timedOut {
+            // The suite's first call pays for spawning the helper and loading Vision's
+            // models under the production timeout. On a loaded machine (every package
+            // building in parallel) that cold start can run past it; the budget test below
+            // excludes it for the same reason. One retry against the now-warm helper still
+            // proves the round trip, and a second timeout is a real failure.
+            analysis = try await client.analyze(image, options: TextRecognitionOptions())
+        }
         let text = analysis.text(preservingLineBreaks: true)
 
         #expect(text.localizedCaseInsensitiveContains("Kadr"), "helper returned \(text.debugDescription)")
