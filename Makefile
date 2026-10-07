@@ -57,6 +57,9 @@ TEST_TIMEOUT ?= 900
 # thread pool and deadlock: Scripts/watchdog.sh caught StudioRender stuck in
 # AVAssetReader and VisionServices in VNRecognizeTextRequest. Serial, they take seconds.
 SERIAL_TEST_PACKAGES := StudioRender VisionServices
+# xcodebuild hands a hosted test only the variables prefixed TEST_RUNNER_, so CI's own
+# `CI=true` is forwarded explicitly; tests that judge hardware budgets skip on a CI VM.
+CI_TEST_ENV := $(if $(CI),TEST_RUNNER_CI=$(CI))
 test_flags = $(if $(filter $(1),$(SERIAL_TEST_PACKAGES)),--no-parallel)
 SWIFTLINT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftlint) swiftlint)
 SWIFTFORMAT = $(firstword $(wildcard $(CURDIR)/$(TOOLS)/swiftformat) swiftformat)
@@ -148,7 +151,7 @@ test-package: ## Run one package's tests (PACKAGE=Shared)
 # GNU Make 3.81 ignores .SHELLFLAGS (it arrived in 3.82), so the flag above never
 # reached this recipe.
 test-app: ## Run the agent app's tests
-	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
+	@set -o pipefail; $(CI_TEST_ENV) xcodebuild test -workspace $(WORKSPACE) -scheme $(SCHEME) -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
 		-only-testing:KadrTests $(STAMP) $(UNSIGNED) \
 		| { grep -E '✔|✘|Test run|error:' || true; }
@@ -161,14 +164,14 @@ test-app-build: ## Build the agent app's tests without running them
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) -quiet $(STAMP) $(UNSIGNED)
 
 test-app-run: ## Run tests built by test-app-build (on this or another Mac)
-	@set -o pipefail; xcodebuild test-without-building -xctestrun "$$(ls $(DERIVED)/Build/Products/*.xctestrun | head -1)" \
+	@set -o pipefail; $(CI_TEST_ENV) xcodebuild test-without-building -xctestrun "$$(ls $(DERIVED)/Build/Products/*.xctestrun | head -1)" \
 		-destination 'platform=macOS' -only-testing:KadrTests \
 		| { grep -E '✔|✘|Test run|error:' || true; }
 
 # Same shape as test-app, hosted in the editor: save, rebind, open routing and the menus
 # are seams no package test reaches (docs/18 X-6).
 test-editor: ## Run the editor app's tests
-	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme $(EDITOR_SCHEME) -configuration Debug \
+	@set -o pipefail; $(CI_TEST_ENV) xcodebuild test -workspace $(WORKSPACE) -scheme $(EDITOR_SCHEME) -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) \
 		-only-testing:KadrEditorTests $(STAMP) $(UNSIGNED) \
 		| { grep -E '✔|✘|Test run|error:' || true; }
@@ -177,7 +180,7 @@ test-editor: ## Run the editor app's tests
 # need a logged-in session with the runner allowed under Accessibility. Not part of
 # `make test` or CI for that reason.
 test-ui: ## Run the editor's UI tests (needs a logged-in session; not in CI)
-	@set -o pipefail; xcodebuild test -workspace $(WORKSPACE) -scheme KadrUITests -configuration Debug \
+	@set -o pipefail; $(CI_TEST_ENV) xcodebuild test -workspace $(WORKSPACE) -scheme KadrUITests -configuration Debug \
 		-destination 'platform=macOS' -derivedDataPath $(DERIVED) $(STAMP) \
 		| { grep -E 'Test Case|passed|failed|error:|Accessibility audit' || true; }
 

@@ -267,7 +267,15 @@ struct StudioRendererTests {
 
     // MARK: - Throughput (docs/10 R1.2 / R2.7)
 
-    @Test("Export is faster than realtime and linear in duration")
+    /// A throughput budget, so it is judged on real Macs: CI's shared virtual machines
+    /// measure the runner, not the renderer (the same rule as the OCR budget).
+    @Test(
+        "Export is faster than realtime and linear in duration",
+        .disabled(
+            if: !(ProcessInfo.processInfo.environment["CI"] ?? "").isEmpty,
+            "throughput budget; not meaningful on a CI VM"
+        )
+    )
     func exportThroughputAndLinearity() async throws {
         let folder = Media.scratch()
         defer { try? FileManager.default.removeItem(at: folder) }

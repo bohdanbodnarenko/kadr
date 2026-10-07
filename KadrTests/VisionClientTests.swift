@@ -74,7 +74,10 @@ struct VisionClientTests {
     /// device rows in docs/12 cover it.
     @Test(
         "A typical region comes back inside the one-second budget (docs/03 §1.7)",
-        .disabled(if: ProcessInfo.processInfo.environment["CI"] != nil, "hardware budget; not meaningful on a CI VM")
+        .disabled(
+            if: !(ProcessInfo.processInfo.environment["CI"] ?? "").isEmpty,
+            "hardware budget; not meaningful on a CI VM"
+        )
     )
     func withinBudget() async throws {
         let client = VisionClient()
