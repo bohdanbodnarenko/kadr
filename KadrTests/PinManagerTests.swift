@@ -199,7 +199,12 @@ struct PinManagerTests {
         #expect(manager.hasPendingSave)
         #expect(!FileManager.default.fileExists(atPath: storeURL.path), "nothing is written mid-gesture")
 
-        try await Task.sleep(for: PinManager.saveDebounce + .milliseconds(400))
+        // Polled rather than slept: on a loaded machine the debounce fires late, and a fixed
+        // sleep turned "late" into "never" on CI.
+        let settled = ContinuousClock.now + PinManager.saveDebounce + .seconds(5)
+        while manager.hasPendingSave, ContinuousClock.now < settled {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(!manager.hasPendingSave)
         let deadline = ContinuousClock.now + .seconds(2)
         while PinStore(fileURL: storeURL).load().isEmpty, ContinuousClock.now < deadline {
