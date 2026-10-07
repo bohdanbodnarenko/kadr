@@ -45,7 +45,7 @@ enum CounterRendering {
         context.setFillColor(spec.fill.cgColor)
         context.fillEllipse(in: rect)
 
-        let font = CTFontCreateWithName(fontName as CFString, fontSize(for: spec), nil)
+        let font = TextLayout.font(named: fontName, size: fontSize(for: spec))
         let attributed = NSAttributedString(string: spec.label, attributes: [
             .init(kCTFontAttributeName as String): font,
             .init(kCTForegroundColorAttributeName as String): spec.textColor.cgColor

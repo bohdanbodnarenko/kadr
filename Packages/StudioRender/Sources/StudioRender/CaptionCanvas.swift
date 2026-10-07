@@ -1,10 +1,39 @@
 import CoreGraphics
 import CoreText
 import Foundation
+import os
 import Shared
 
 /// The keystroke and speech caption pill (docs/09 U3.2, docs/13 T2.2).
 enum CaptionCanvas {
+    /// The caption font at one size, cached and created one at a time.
+    ///
+    /// Every caption frame of an export asked the system font service for the UI font, from
+    /// every render thread at once; under load that service can leave all of them waiting
+    /// indefinitely, the hang AnnotationRender's TextLayout had (and StudioRender's tests
+    /// hit on CI).
+    static func font(ofSize size: CGFloat) -> CTFont {
+        fontCache.withLock { cache in
+            if let font = cache[size] {
+                return font
+            }
+            let font = FontBox(value: CTFontCreateUIFontForLanguage(.system, size, nil)
+                ?? CTFontCreateWithName("Helvetica" as CFString, size, nil))
+            if cache.count >= 32 {
+                cache.removeAll(keepingCapacity: true)
+            }
+            cache[size] = font
+            return font
+        }.value
+    }
+
+    /// `CTFont` is immutable and documented as safe to use from any thread.
+    private struct FontBox: @unchecked Sendable {
+        let value: CTFont
+    }
+
+    private static let fontCache = OSAllocatedUnfairLock(initialState: [CGFloat: FontBox]())
+
     static func image(
         text: String,
         fontSize: CGFloat,
@@ -15,8 +44,7 @@ enum CaptionCanvas {
         maxWidth: CGFloat? = nil
     ) -> CGImage? {
         guard !text.isEmpty else { return nil }
-        let font = CTFontCreateUIFontForLanguage(.system, fontSize, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, fontSize, nil)
+        let font = Self.font(ofSize: fontSize)
         let attributed = Self.attributed(
             text: text,
             font: font,

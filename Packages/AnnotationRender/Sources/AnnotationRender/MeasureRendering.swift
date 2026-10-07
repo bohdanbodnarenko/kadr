@@ -69,11 +69,7 @@ enum MeasureRendering {
     /// The readout, as CoreText attributes — no AppKit, so the export path can run
     /// anywhere (docs/04 §6).
     static func attributedLabel(_ spec: MeasureSpec, imageScale: CGFloat) -> NSAttributedString {
-        let font = CTFontCreateWithName(
-            spec.labelStyle.fontName as CFString,
-            spec.labelStyle.fontSize,
-            nil
-        )
+        let font = TextLayout.font(named: spec.labelStyle.fontName, size: spec.labelStyle.fontSize)
         return NSAttributedString(string: spec.readout(scale: imageScale), attributes: [
             .init(kCTFontAttributeName as String): font,
             .init(kCTForegroundColorAttributeName as String): spec.labelStyle.color.cgColor

@@ -26,7 +26,7 @@ enum WatermarkCompositor {
         let fontSize = spec.fontSize.resolved(shortestEdge: shortestEdge)
         guard fontSize > 0 else { return }
 
-        let font = CTFontCreateWithName(fontName as CFString, fontSize, nil)
+        let font = TextLayout.font(named: fontName, size: fontSize)
         let attributed = NSAttributedString(string: spec.text, attributes: [
             .init(kCTFontAttributeName as String): font,
             .init(kCTForegroundColorAttributeName as String): spec.color.cgColor

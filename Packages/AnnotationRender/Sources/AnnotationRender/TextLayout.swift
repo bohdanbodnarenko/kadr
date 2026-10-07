@@ -29,12 +29,18 @@ public enum TextLayout {
     /// threads asking for variants at once could leave every one of them waiting on that
     /// service indefinitely, which is what hung the AnnotationRender tests.
     public static func font(for style: TextStyle) -> CTFont {
-        let key = FontKey(name: style.fontName, size: style.fontSize, bold: style.isBold, italic: style.isItalic)
+        font(named: style.fontName, size: style.fontSize, bold: style.isBold, italic: style.isItalic)
+    }
+
+    /// A font by name, through the same cache, for the counter, measure and watermark
+    /// labels, which build fonts on render threads too.
+    public static func font(named name: String, size: CGFloat, bold: Bool = false, italic: Bool = false) -> CTFont {
+        let key = FontKey(name: name, size: size, bold: bold, italic: italic)
         return fontCache.withLock { cache in
             if let font = cache[key] {
                 return font
             }
-            let font = FontBox(value: resolveFont(for: style))
+            let font = FontBox(value: resolveFont(for: key))
             if cache.count >= maximumCachedFonts {
                 cache.removeAll(keepingCapacity: true)
             }
@@ -59,17 +65,17 @@ public enum TextLayout {
     private static let maximumCachedFonts = 64
     private static let fontCache = OSAllocatedUnfairLock(initialState: [FontKey: FontBox]())
 
-    private static func resolveFont(for style: TextStyle) -> CTFont {
-        let base = CTFontCreateWithName(style.fontName as CFString, style.fontSize, nil)
+    private static func resolveFont(for key: FontKey) -> CTFont {
+        let base = CTFontCreateWithName(key.name as CFString, key.size, nil)
         var traits: CTFontSymbolicTraits = []
-        if style.isBold {
+        if key.bold {
             traits.insert(.boldTrait)
         }
-        if style.isItalic {
+        if key.italic {
             traits.insert(.italicTrait)
         }
         guard !traits.isEmpty,
-              let styled = CTFontCreateCopyWithSymbolicTraits(base, style.fontSize, nil, traits, traits)
+              let styled = CTFontCreateCopyWithSymbolicTraits(base, key.size, nil, traits, traits)
         else {
             return base
         }
